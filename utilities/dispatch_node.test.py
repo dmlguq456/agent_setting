@@ -265,6 +265,10 @@ class MainMaterializationTest(unittest.TestCase):
         self.assertIn("supported", argv)
         self.assertIn("--parent", argv)
         self.assertIn("owner", argv)
+        self.assertEqual(argv[argv.index("--worker-type") + 1], "stage")
+        self.assertEqual(argv[argv.index("--assigned-contract") + 1], "code-execute")
+        self.assertEqual(argv[argv.index("--model-role") + 1], "fast implementer")
+        self.assertNotIn("--worker-role", argv)
 
     def test_harness_affinity_field_forwarded_into_wrapper_argv(self):
         node = make_node()

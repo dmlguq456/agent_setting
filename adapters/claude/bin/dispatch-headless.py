@@ -134,8 +134,9 @@ def parser() -> argparse.ArgumentParser:
         "--parent-cwd",
         default=os.environ.get("AGENT_DISPATCH_PARENT_CWD") or None,
     )
-    p.add_argument("--worker-role")
+    p.add_argument("--worker-role", help="legacy compatibility metadata; not bootstrap identity")
     p.add_argument("--worker-type", choices=("owner", "stage", "review", "support"))
+    p.add_argument("--assigned-contract")
     p.add_argument("--owner", dest="capability_owner")
     p.add_argument("--route-file")
     p.add_argument("--route-id")
@@ -293,8 +294,10 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
     args.assigned_contract = assigned_contract(
         capability=args.capability,
         worker_type=args.worker_type,
-        worker_role=args.worker_role,
         route_node=args.route_node,
+        completion_gate=args.completion_gate,
+        explicit=args.assigned_contract,
+        root=ROOT,
     )
     profile_note = (
         f"masked specialization profile={args.profile}; its CLAUDE.md contains only the runtime attach layer and selected specialization"
@@ -335,9 +338,10 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         f"- depth: {args.depth}\n"
         f"- worker_type: {args.worker_type}\n"
         f"- assigned_contract: {args.assigned_contract}\n"
+        f"- route_node: {args.route_node or '-'}\n"
+        f"- model_role: {getattr(args, 'resolved_model_settings', {}).get('role') or args.model_role or '-'}\n"
         f"- parent: {args.parent_slug or '-'}\n"
         f"- parent_session_id: {args.parent_session_id or '-'}\n"
-        f"- worker_role: {args.worker_role or '-'}\n"
         f"- owner: {args.capability_owner or '-'}\n"
         f"- owner_harness: {args.owner_harness or '-'}\n"
         f"- worktree: {args.worktree}\n"
@@ -461,6 +465,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     if args.worker_role:
         pipe += f",worker_role={args.worker_role}"
     pipe += f",worker_type={args.worker_type}"
+    pipe += f",assigned_contract={args.assigned_contract}"
     if args.capability_owner:
         pipe += f",owner={args.capability_owner}"
     if args.owner_harness:
@@ -945,8 +950,8 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_SELF_SLUG": args.slug,
             "AGENT_DISPATCH_PARENT_SLUG": args.parent_slug or "",
             "AGENT_DISPATCH_PARENT_SESSION_ID": args.parent_session_id or "",
-            "AGENT_DISPATCH_WORKER_ROLE": args.worker_role or "",
             "AGENT_DISPATCH_WORKER_TYPE": args.worker_type,
+            "AGENT_DISPATCH_ASSIGNED_CONTRACT": args.assigned_contract,
             "AGENT_DISPATCH_OWNER": args.capability_owner or "",
             "AGENT_DISPATCH_OWNER_HARNESS": args.owner_harness or "",
             "AGENT_ARTIFACT_ROOT": args.artifact_root,
@@ -959,6 +964,10 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_CURRENT_TRANSPORT": "headless",
             "AGENT_DISPATCH_CURRENT_SANDBOX": "adapter-default",
         })
+        if args.worker_role:
+            env["AGENT_DISPATCH_WORKER_ROLE"] = args.worker_role
+        else:
+            env.pop("AGENT_DISPATCH_WORKER_ROLE", None)
         if args.profile:
             env["CLAUDE_CONFIG_DIR"] = str(instance_dir)
         if (args.launch_lifecycle == DETACHED
@@ -1057,6 +1066,7 @@ def main(argv: list[str]) -> int:
     print(f"parent_session_id={args.parent_session_id or '-'}")
     print(f"worker_role={args.worker_role or '-'}")
     print(f"worker_type={args.worker_type}")
+    print(f"assigned_contract={args.assigned_contract}")
     print(f"owner={args.capability_owner or '-'}")
     print(f"owner_harness={args.owner_harness or '-'}")
     print(f"route_file={args.route_file or '-'}")

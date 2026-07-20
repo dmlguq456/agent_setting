@@ -49,7 +49,7 @@ SHARED_LOG_DIR=$3
 common=(--worktree "$PWD" --jobs "$SHARED_JOBS" --log-dir "$SHARED_LOG_DIR"
   --slug "$OWNER_SLUG" --capability autopilot-code --mode dev/refactor
   --intensity standard --depth 1 --parent-session-id "$PARENT_SESSION_ID"
-  --worker-role capability-owner --owner autopilot-code
+  --worker-type owner --assigned-contract autopilot-code --owner autopilot-code
   --owner-harness "$PARENT_ADAPTER" --inherit-model-settings)
 case "$PARENT_ADAPTER" in
   claude) "$AGENT_HOME/adapters/claude/bin/dispatch-headless.py" --register "${common[@]}" ;;

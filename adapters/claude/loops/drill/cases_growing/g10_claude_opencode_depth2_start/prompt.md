@@ -13,7 +13,8 @@ dispatch 요구사항:
 - `printf 'OWNER_SLUG=%s\nCHILD_SLUG=%s\n' "$OWNER_SLUG" "$CHILD_SLUG" > .dispatch/g10_slugs.env`를 남겨라.
 - depth-1 owner 등록은 `.dispatch/register_owner.sh "$OWNER_SLUG" "$SHARED_JOBS" "$SHARED_LOG_DIR"`만 사용하고 stdout/stderr를 `dispatch_wrapper_output.txt`에 누적해라. owner는 `--start`하지 마라. 등록 직후 `.dispatch/g10_parent.env`를 다시 source해 wrapper가 확정한 실제 `PARENT_SESSION_ID`를 이후 child 등록에 사용해라.
 - `opencode_depth2_prompt.md`를 `sed`로 복사하면서 marker의 `parent=xh-parent`만 `parent=$OWNER_SLUG`로 바꿔 `.dispatch/opencode_depth2_prompt.runtime.md`를 만들어라.
-- OpenCode child는 `$AGENT_HOME/adapters/opencode/bin/preflight.sh dispatch --start`와 다음 args로 시작하고 출력을 같은 wrapper 파일에 누적해라: `--worktree "$PWD" --jobs "$SHARED_JOBS" --log-dir "$SHARED_LOG_DIR" --slug "$CHILD_SLUG" --capability code-test --mode qa/test --intensity standard --depth 2 --parent "$OWNER_SLUG" --parent-session-id "$PARENT_SESSION_ID" --worker-role verifier --owner autopilot-code --owner-harness "$PARENT_ADAPTER" --inherit-model-settings --prompt-file "$PWD/.dispatch/opencode_depth2_prompt.runtime.md"`.
+- OpenCode child는 `$AGENT_HOME/adapters/opencode/bin/preflight.sh dispatch --start`와 다음 args로 시작하고 출력을 같은 wrapper 파일에 누적해라: `--worktree "$PWD" --jobs "$SHARED_JOBS" --log-dir "$SHARED_LOG_DIR" --slug "$CHILD_SLUG" --capability code-test --mode qa/test --intensity standard --depth 2 --parent "$OWNER_SLUG" --parent-session-id "$PARENT_SESSION_ID" --worker-type review --assigned-contract code-test --owner autopilot-code --owner-harness "$PARENT_ADAPTER" --inherit-model-settings --prompt-file "$PWD/.dispatch/opencode_depth2_prompt.runtime.md"`.
+- owner와 child의 새 registry row에는 `worker_role`이 없어야 한다.
 - child가 prompt marker를 응답해야 한다. parent가 marker나 child log를 위조하지 마라.
 - owner/child를 직접 harvest하거나 `done`으로 바꾸지 마라. runner의 `assert.sh`가 live 계층을 판정한 뒤 두 row를 수확한다.
 - `claude -p`, `codex exec`, `opencode run`을 직접 호출하지 마라.

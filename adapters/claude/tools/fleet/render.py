@@ -1091,7 +1091,13 @@ def _entry_skill(j):
     as the child's own work.
     """
     if max(1, int(getattr(j, "depth", 1) or 1)) >= 2:
-        assigned = getattr(j, "route_node", None) or getattr(j, "key", None)
+        owner = getattr(j, "capability_owner", None)
+        contract = getattr(j, "assigned_contract", None)
+        assigned = (
+            contract
+            if contract and _strip_autopilot(contract) != _strip_autopilot(owner or "")
+            else getattr(j, "route_node", None) or getattr(j, "key", None)
+        )
         return _compact_dispatch_name(_strip_autopilot(assigned), _PROFILE_MAX)
     cap = _strip_autopilot(getattr(j, "capability_owner", None) or "")
     key = getattr(j, "key", None)
@@ -1106,7 +1112,8 @@ def _entry_skill(j):
 def _dispatch_role_suffix(j, max_width=None):
     # qa is data-only now (kept in --json): the retired qa axis left the display entirely
     # (user 2026-07-16 — rigor derives from intensity, CONVENTIONS §1.1).
-    raw_role = getattr(j, "worker_role", None)
+    worker_type = getattr(j, "worker_type", None)
+    raw_role = worker_type if worker_type in {"owner", "stage", "review", "support"} else getattr(j, "worker_role", None)
     if getattr(j, "key", None) in _LOOPS_KEYS and raw_role == getattr(j, "slug", None):
         raw_role = None
     # A capability name is not a role (user 2026-07-20: "code가 표시가 되어있는데 굳이
@@ -1164,12 +1171,12 @@ def _dispatch_stage_label(j):
     route_node = getattr(j, "route_node", None)
     if route_node:
         return _compact_dispatch_name(route_node, 14)
-    label, suffix = _stage_role_label(getattr(j, "worker_role", None))
+    label, suffix = _stage_role_label(getattr(j, "assigned_contract", None))
     if label is None:
-        # codex writer parity (user 2026-07-20): its depth-2 rows carry a persona
-        # ('plan-team') in worker_role, but the job's `key` IS the stage capability
-        # (SD-F1) — same fallback keeps the name-zone stage label across harnesses.
         label, suffix = _stage_role_label(getattr(j, "key", None))
+    if label is None:
+        # Legacy rows may only carry the old overloaded worker_role.
+        label, suffix = _stage_role_label(getattr(j, "worker_role", None))
     if label is None:
         return None
     return label + suffix

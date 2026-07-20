@@ -69,7 +69,9 @@ class WorkerDispatchPromptTest(unittest.TestCase):
                     "2",
                     "--parent",
                     "owner",
-                    "--worker-role",
+                    "--worker-type",
+                    "stage",
+                    "--assigned-contract",
                     "code-test",
                     "--prompt-text",
                     "CUSTOM ASSIGNMENT",
@@ -91,6 +93,8 @@ class WorkerDispatchPromptTest(unittest.TestCase):
                 self.assertEqual(prompt.count("# Portable Worker Kernel"), 1)
                 self.assertEqual(prompt.count("# Worker Type:"), 1)
                 self.assertIn("# Worker Type: Stage", prompt)
+                self.assertIn("- assigned_contract: code-test", prompt)
+                self.assertNotIn("- worker_role:", prompt)
                 self.assertIn("CUSTOM ASSIGNMENT", prompt)
                 self.assertIn("artifact: <canonical path | ->", prompt)
                 self.assertIn("verdict: PASS | FAIL | BLOCKED", prompt)
@@ -106,7 +110,8 @@ class WorkerDispatchPromptTest(unittest.TestCase):
                 args=module.parser().parse_args([
                     "--worktree","/work/repo","--slug","stage","--capability","code-test",
                     "--mode","dev/backend","--intensity","standard","--depth","2",
-                    "--parent","owner","--worker-role","code-test","--prompt-text","TASK",*model,
+                    "--parent","owner","--worker-type","stage",
+                    "--assigned-contract","code-test","--prompt-text","TASK",*model,
                 ])
                 args.attempt_id="att-promptheartbeat01";args.route_id="rt-prompt";args.route_node="test"
                 args.artifact_root="/artifacts"

@@ -162,6 +162,10 @@ def expect(row, **expected):
         got = meta.get(key)
         require(got == value, f"{row['slug']} metadata {key}={got!r}, want {value!r}")
 
+def expect_absent(row, *keys):
+    for key in keys:
+        require(key not in row["meta"], f"{row['slug']} legacy metadata must be absent: {key}")
+
 owner = one(owner_slug)
 expect(
     owner,
@@ -172,13 +176,15 @@ expect(
     depth="1",
     harness=parent_adapter,
     parent_sid=parent_session_id,
-    worker_role="capability-owner",
+    worker_type="owner",
+    assigned_contract="autopilot-code",
     owner="autopilot-code",
     owner_harness=parent_adapter,
     model_source="inherit",
     model_role="inherit",
     model="inherit",
 )
+expect_absent(owner, "worker_role")
 
 child = one(child_slug)
 expect(
@@ -191,7 +197,8 @@ expect(
     harness="opencode",
     parent=owner_slug,
     parent_sid=parent_session_id,
-    worker_role="verifier",
+    worker_type="review",
+    assigned_contract="code-test",
     owner="autopilot-code",
     owner_harness=parent_adapter,
     model_source="inherit",
@@ -199,6 +206,7 @@ expect(
     model="inherit",
     variant="inherit",
 )
+expect_absent(child, "worker_role")
 
 jobs = dispatch.collect(jobs_path=jobs_path)
 fleet_owner = [
@@ -208,7 +216,8 @@ fleet_owner = [
     and j.mode == "dev/refactor"
     and j.depth == 1
     and j.harness == parent_adapter
-    and j.worker_role == "capability-owner"
+    and j.worker_type == "owner"
+    and j.assigned_contract == "autopilot-code"
     and j.capability_owner == "autopilot-code"
     and j.parent_sid == parent_session_id
 ]
@@ -221,6 +230,9 @@ fleet_child = [
     and j.is_child
     and j.parent_sid == parent_session_id
     and j.capability_owner == "autopilot-code"
+    and j.worker_type == "review"
+    and j.assigned_contract == "code-test"
+    and j.worker_role is None
 ]
 require(fleet_owner, f"fleet parse missing {parent_adapter} depth-1 owner")
 require(fleet_child, f"fleet parse missing OpenCode depth-2 child linked to {parent_adapter} owner")

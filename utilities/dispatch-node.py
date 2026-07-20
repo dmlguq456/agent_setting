@@ -3,6 +3,8 @@
 import argparse, json, os, subprocess, sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "utilities"))
+from worker_bootstrap import assigned_contract, worker_type_for_kind
 ROLE_MODE={"deep maker":"dev/refactor","fast implementer":"dev/backend","deep reviewer":"qa/test","fast reviewer":"qa/review","fast writer":"docs/writing","deep orchestrator":"ops/orchestration","orchestrator":"ops/orchestration"}
 
 # SD-66 fix-forward: deterministic dispatch_evidence -> wrapper-argument binding
@@ -137,6 +139,15 @@ def strip_leading_separator(adapter_args):
     return adapter_args[1:] if adapter_args[:1] == ["--"] else adapter_args
 
 
+def has_model_selection(adapter_args):
+    tokens = strip_leading_separator(adapter_args)
+    return any(
+        token in {"--model-role", "--model", "--inherit-model-settings"}
+        or token.startswith(("--model-role=", "--model=", "--inherit-model-settings="))
+        for token in tokens
+    )
+
+
 def collect_explicit_evidence(tokens, flags):
     """Scan trailing adapter args for `--flag value` and `--flag=value` forms.
 
@@ -209,7 +220,12 @@ def main():
  if node["kind"]=="resource-runner": print("resource_runner="+str(ROOT/"utilities/resource-runner.py")+"\nroute_node="+a.node); return
  print("completion_marker="+str(Path(os.environ.get("AGENT_HOME", ROOT))/".dispatch/completion"/route["route_id"]/(node["id"]+".json")))
  wrapper=ROOT/"adapters"/a.adapter/"bin"/"dispatch-headless.py"
- argv=[sys.executable,str(wrapper),"--"+a.action,"--worktree",route["cwd"],"--slug",a.slug,"--capability",route["capability"],"--mode",ROLE_MODE.get(node.get("role"),"ops/orchestration"),"--qa",a.qa,"--intensity",route["effective_intensity"],"--depth",str(node.get("depth",1)),"--worker-role",node["kind"],"--owner",route["capability"],"--route-file",str(Path(a.route).resolve()),"--route-id",route["route_id"],"--route-hash",route["route_hash"],"--route-node",node["id"],"--registry-digest",route["registry_digest"],"--write-scope",";".join(node["write_scope"]),"--completion-gate",node["completion_gate"],"--prompt-text",a.prompt_text]
+ try:
+  worker_type=worker_type_for_kind(node["kind"])
+ except ValueError as e:
+  raise SystemExit(str(e))
+ contract=assigned_contract(capability=route["capability"],worker_type=worker_type,route_node=node["id"],completion_gate=node.get("completion_gate"),root=ROOT)
+ argv=[sys.executable,str(wrapper),"--"+a.action,"--worktree",route["cwd"],"--slug",a.slug,"--capability",route["capability"],"--mode",ROLE_MODE.get(node.get("role"),"ops/orchestration"),"--qa",a.qa,"--intensity",route["effective_intensity"],"--depth",str(node.get("depth",1)),"--worker-type",worker_type,"--assigned-contract",contract,"--owner",route["capability"],"--route-file",str(Path(a.route).resolve()),"--route-id",route["route_id"],"--route-hash",route["route_hash"],"--route-node",node["id"],"--registry-digest",route["registry_digest"],"--write-scope",";".join(node["write_scope"]),"--completion-gate",node["completion_gate"],"--prompt-text",a.prompt_text]
  affinity=node.get("harness_affinity")
  if affinity: argv += ["--harness-affinity",affinity]
  if node.get("depth")==2:
@@ -224,5 +240,7 @@ def main():
    print("check=failed"); print(f"reason={e.reason}")
    for k,v in e.fields.items(): print(f"{k}={v}")
    raise SystemExit(65)
+ if not has_model_selection(a.adapter_args):
+  argv += ["--model-role",node.get("role","fast implementer")]
  argv += strip_leading_separator(a.adapter_args); raise SystemExit(subprocess.run(argv).returncode)
 if __name__=="__main__": main()

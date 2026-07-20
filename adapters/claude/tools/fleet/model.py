@@ -232,7 +232,9 @@ class DispatchJob:
     depth: int = 1                      # dispatch tree depth: 1 capability owner, 2 bounded sub-worker
     parent_slug: Optional[str] = None   # parent dispatch slug for depth-2 rows
     intensity: Optional[str] = None     # direct|quick|standard|strong|thorough|adversarial
-    worker_role: Optional[str] = None   # planner/verifier/adversary/etc.
+    worker_type: Optional[str] = None   # owner | stage | review | support bootstrap overlay
+    assigned_contract: Optional[str] = None  # exact portable Skill/contract assigned to worker
+    worker_role: Optional[str] = None   # legacy compatibility metadata; never canonical identity
     capability_owner: Optional[str] = None  # owning capability slug/name for sub-workers
     effort: Optional[str] = None        # dispatch runtime effort (pipe `effort=`; None = parent-inherit)
     model_role: Optional[str] = None    # Portable model role from pipe model_role=.

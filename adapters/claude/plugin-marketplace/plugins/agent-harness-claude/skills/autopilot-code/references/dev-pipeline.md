@@ -6,7 +6,7 @@ Use independent plan review only when selected by the graph: UI or visual risk â
 
 ### Standard+ Stage Dispatch
 
-The depth-1 owner is a thin conductor. Dispatch each durable stage as a depth-2 headless session with `adapters/claude/bin/dispatch-headless.py --depth 2 --parent <conductor-slug> --worker-role code-<stage> --owner autopilot-code --model-role <portable-stage-role>`. Codex and OpenCode use their adapter-native dispatch wrappers.
+The depth-1 owner is a thin conductor. Dispatch each durable stage as a depth-2 headless session with `adapters/claude/bin/dispatch-headless.py --depth 2 --parent <conductor-slug> --worker-type stage --assigned-contract code-<stage> --owner autopilot-code --model-role <portable-stage-role>`. Codex and OpenCode use their adapter-native dispatch wrappers.
 
 The prompt carries only subskill name, absolute input paths, output contract, intensity, and slug. It never carries plan bodies or prior-stage conversation. Each stage reads files; the conductor reads only verdict and gate state. Register every stage in `.dispatch/jobs.log`, monitor liveness, and keep conductor plus active stages at or below five processes. One-line or no-artifact micro-stages stay inline.
 
@@ -50,7 +50,7 @@ For case 3, record reasoning in `plans/<slug>/_internal/metrics.md`; an unrecord
 
 #### Usage-Aware Cross-Harness Routing
 
-Before dispatch, run `sh <agent-home>/utilities/usage-check.sh`. It reports per-harness `ok`, `limited(<reset>)`, or `unknown`; `ok` means no known block, not guaranteed capacity. Avoid limited runtimes, honor explicit `HARNESS_CAPACITY_BIAS`, otherwise balance limit avoidance, task fit, and spread. Prefer a different model family for test or review than for implementation when feasible. Preserve `depth`, `parent`, `worker_role`, `harness`, `owner_harness`, and `parent_sid` metadata across runtimes.
+Before dispatch, run `sh <agent-home>/utilities/usage-check.sh`. It reports per-harness `ok`, `limited(<reset>)`, or `unknown`; `ok` means no known block, not guaranteed capacity. Avoid limited runtimes, honor explicit `HARNESS_CAPACITY_BIAS`, otherwise balance limit avoidance, task fit, and spread. Prefer a different model family for test or review than for implementation when feasible. Preserve `depth`, `parent`, `worker_type`, `assigned_contract`, `model_role`, `harness`, `owner_harness`, and `parent_sid` metadata across runtimes.
 
 If a stage dies immediately from usage, session, or authentication limits, the wrapper closes its row as `done,note=dead-<reason>` and records reset time when known. The wrapper does not retry; the conductor decides redispatch or cross-harness failover.
 
@@ -68,7 +68,7 @@ REPORTS_DIR=.agent_reports; [ -d .claude_reports ] && [ ! -d .agent_reports ] &&
 python3 "$AGENT_HOME/adapters/claude/bin/dispatch-headless.py" --start \
   --worktree "$PWD" --slug <cycle-slug> \
   --capability code-plan --mode dev --intensity <intensity> \
-  --depth 2 --parent <cycle-slug> --worker-role code-plan --owner autopilot-code \
+  --depth 2 --parent <cycle-slug> --worker-type stage --assigned-contract code-plan --owner autopilot-code \
   --model-role "deep maker" --profile code-plan \
   --prompt-text "<sub-skill contract + absolute input paths + output contract + slug>"
 ```
@@ -97,7 +97,7 @@ The self-check is inline because it writes no new durable artifact. An independe
 
 ### Step 3: code-execute
 
-For standard+, dispatch a depth-2 session with `--capability code-execute --worker-role code-execute --model-role "fast implementer" --profile code-execute`. Pass the absolute `plan/plan.md` path, poll, and harvest. Fallback to in-session only under the closed rules above.
+For standard+, dispatch a depth-2 session with `--capability code-execute --worker-type stage --assigned-contract code-execute --model-role "fast implementer" --profile code-execute`. Pass the absolute `plan/plan.md` path, poll, and harvest. Fallback to in-session only under the closed rules above.
 
 Read plan frontmatter after harvest:
 
@@ -107,7 +107,7 @@ Read plan frontmatter after harvest:
 
 ### Step 4: code-test
 
-For standard+, dispatch with `--capability code-test --worker-role code-test --model-role "fast reviewer" --profile code-test`; strong+ may select a deeper reviewer. Pass plan verification and checklist paths. Poll and read `test_logs/test_report.md` from disk. code-test is read-only and never hotfixes.
+For standard+, dispatch with `--capability code-test --worker-type stage --assigned-contract code-test --model-role "fast reviewer" --profile code-test`; strong+ may select a deeper reviewer. Pass plan verification and checklist paths. Poll and read `test_logs/test_report.md` from disk. code-test is read-only and never hotfixes.
 
 quick reports verify-lite failure without retry. Other graphs may open at most one pipeline-level retry:
 
@@ -126,7 +126,7 @@ quick reports verify-lite failure without retry. Other graphs may open at most o
 
 ### Step 5: code-report
 
-For standard+, dispatch with `--capability code-report --worker-role code-report --model-role "fast writer" --profile code-report`. Pass plan, checklist, dev logs, test logs, and review paths. Poll and read the report path and headline from disk. Use the closed fallback when needed.
+For standard+, dispatch with `--capability code-report --worker-type stage --assigned-contract code-report --model-role "fast writer" --profile code-report`. Pass plan, checklist, dev logs, test logs, and review paths. Poll and read the report path and headline from disk. Use the closed fallback when needed.
 
 ### Step 6: Pipeline Summary
 

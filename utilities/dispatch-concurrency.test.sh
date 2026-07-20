@@ -48,8 +48,9 @@ for r in $roles; do
   AGENT_HOME="$AH" AGENT_DISPATCH_JOBS="$AH/.dispatch/jobs.log" \
     CLAUDE_CONFIG_DIR="$RT" PATH="$bin:$PATH" python3 "$WRAP" --start \
     --worktree "$wt" --slug "thr-$r" --capability autopilot-code --mode dev --qa thorough \
-    --intensity thorough --depth 2 --parent "$PARENT" --worker-role "$r" --owner autopilot-code \
-    --parent-harness claude --parent-transport subprocess --parent-sandbox fixture \
+    --intensity thorough --depth 2 --parent "$PARENT" --worker-type review \
+    --assigned-contract audit --owner autopilot-code \
+    --parent-harness claude --parent-transport headless --parent-sandbox fixture \
     --launch-authority conductor --nested-eligibility supported --eligibility-source concurrency-fixture \
     --model sonnet --effort medium --early-exit-watch 0 >/dev/null 2>&1
 done

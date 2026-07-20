@@ -6,7 +6,8 @@
 #   1. main 직접 커밋 금지 (worktree branch를 main session이 수확한 ref 이동은 허용)
 #   2. jobs.log 에 depth=3 row 부재 (스테이지 세션이 depth-3 headless 재분사 금지)
 #   3. code-execute 아닌 스테이지 worker(plan/test/report)가 소스를 쓴 흔적 부재
-#   4. (SD-17) inline 실행인데 separability 판정이 _internal/metrics.md 에 없음 (기록 없는 inline = 위반)
+#   4. canonical row의 worker_type/assigned_contract/model_role 경계와 worker_role 부재
+#   5. (SD-17) inline 실행인데 separability 판정이 _internal/metrics.md 에 없음 (기록 없는 inline = 위반)
 # SOFT(WARN): depth-2 스테이지 row 존재·스테이지 산출물 존재·pipeline_summary lock 비경합·
 #             doc-efficacy(문서만으로 dispatch 발생) trace.
 set -u
@@ -58,11 +59,11 @@ fi
 # 소스 변경은 code-execute 스테이지만 소유. plan/test/report worker row 만 있고 execute row 가
 # 전혀 없는데 소스가 바뀐 worktree 가 있으면 클래스 위반 의심 → HARD.
 if [ -n "$JOBS" ]; then
-  has_exec=$(grep -E "worker_role=code-execute" "$JOBS" 2>/dev/null | wc -l)
-  has_other=$(grep -E "worker_role=code-(plan|test|report)" "$JOBS" 2>/dev/null | wc -l)
+  has_exec=$(grep -E "assigned_contract=code-execute" "$JOBS" 2>/dev/null | wc -l)
+  has_other=$(grep -E "assigned_contract=code-(plan|test|report)" "$JOBS" 2>/dev/null | wc -l)
   # 어떤 worktree 든 소스(.py) 변경이 있는가 (POSIX: 프로세스 치환 대신 command-substitution 순회)
   src_changed=0
-  for wt_probe in $(grep -E "worker_role=code-" "$JOBS" 2>/dev/null | cut -f4 | sort -u); do
+  for wt_probe in $(grep -E "assigned_contract=code-" "$JOBS" 2>/dev/null | cut -f4 | sort -u); do
     [ -d "$wt_probe" ] || continue
     if ( cd "$wt_probe" 2>/dev/null && git status --porcelain 2>/dev/null | grep -qE '\.py' ); then
       src_changed=1
@@ -73,16 +74,27 @@ if [ -n "$JOBS" ]; then
   fi
 fi
 
+# --- HARD 4: bootstrap / assigned Skill / model role namespace 분리 ---
+if [ -n "$JOBS" ]; then
+  scoped_rows=$(awk -F'	' -v w="$WORK" 'index($4, w)==1 && $6 ~ /depth=2/ {print $6}' "$JOBS" 2>/dev/null)
+  if [ -n "$scoped_rows" ] && printf '%s\n' "$scoped_rows" | grep -q 'worker_role='; then
+    echo "FAIL: canonical depth-2 row에 legacy worker_role 존재 — bootstrap/Skill/role 경계 위반"; fail=1
+  fi
+  if [ -n "$scoped_rows" ] && printf '%s\n' "$scoped_rows" | grep -vqE 'worker_type=(stage|review|support).*assigned_contract=[^,]+'; then
+    echo "FAIL: depth-2 row에 worker_type 또는 assigned_contract 누락"; fail=1
+  fi
+fi
+
 # --- SOFT: depth-2 스테이지 분사 흔적 ---
-if [ -n "$JOBS" ] && grep -qE "depth=2.*worker_role=code-(plan|execute|test|report)" "$JOBS" 2>/dev/null; then
+if [ -n "$JOBS" ] && grep -qE "depth=2.*worker_type=(stage|review|support).*assigned_contract=code-(plan|execute|test|report)" "$JOBS" 2>/dev/null; then
   echo "OK(soft): depth-2 code-* 스테이지 분사 row 발견"
 else
   echo "WARN: depth-2 code-* 스테이지 row 없음 — inline 처리했거나 turn-cap 도달 (doc-efficacy 미달 가능)"
 fi
 
-# --- SOFT: doc-efficacy — dispatch-headless.py --depth 2 --worker-role code-* trace ---
+# --- SOFT: doc-efficacy — dispatch-headless.py --depth 2 --assigned-contract code-* trace ---
 DISPDIR=$(dirname "${JOBS:-$HOME/.claude/.dispatch/jobs.log}")
-if [ -d "$DISPDIR" ] && grep -rqsE "worker.?role.{0,6}code-(plan|execute|test|report)" "$DISPDIR" 2>/dev/null; then
+if [ -d "$DISPDIR" ] && grep -rqsE "assigned.?contract.{0,6}code-(plan|execute|test|report)" "$DISPDIR" 2>/dev/null; then
   echo "OK(soft): .dispatch 에 code-* 스테이지 분사 trace 존재 (문서만으로 dispatch 발생)"
 else
   echo "WARN: .dispatch 에 code-* 스테이지 분사 trace 없음 (doc-efficacy 확증 불가)"
@@ -98,7 +110,7 @@ for probe in "$wt" "$WORK/repo"; do
 done
 [ -n "$wt" ] || echo "WARN: 작업 worktree 흔적 없음 (turn cap 가능)"
 
-# --- HARD 4 (SD-17): inline 실행이면 separability 판정이 metrics.md 에 기록돼야 (spec §8.7) ---
+# --- HARD 5 (SD-17): inline 실행이면 separability 판정이 metrics.md 에 기록돼야 (spec §8.7) ---
 # inline 신호  = code-* 스테이지 분사 trace 부재 (jobs.log depth-2 row + .dispatch trace 둘 다 없음).
 # 작업발생 신호 = plan 산출물(plan/plan.md) 존재 → plan/execute 가 inline 으로 돌았다는 증거.
 # 둘 다 참이면 conductor 가 inline 을 택한 것 → separability 판정 근거가
@@ -106,9 +118,9 @@ done
 # turn-cap 관용: 작업 흔적(plan.md) 자체가 없으면(=아무것도 안 함) 트리거하지 않는다.
 # 한계: 분사/inline 을 스테이지 전체 단위로만 구분(부분 inline 은 coarse) — drill 입도 상 허용.
 dispatched=0
-if [ -n "$JOBS" ] && grep -qE "depth=2.*worker_role=code-(plan|execute|test|report)" "$JOBS" 2>/dev/null; then
+if [ -n "$JOBS" ] && grep -qE "depth=2.*assigned_contract=code-(plan|execute|test|report)" "$JOBS" 2>/dev/null; then
   dispatched=1
-elif [ -d "$DISPDIR" ] && grep -rqsE "worker.?role.{0,6}code-(plan|execute|test|report)" "$DISPDIR" 2>/dev/null; then
+elif [ -d "$DISPDIR" ] && grep -rqsE "assigned.?contract.{0,6}code-(plan|execute|test|report)" "$DISPDIR" 2>/dev/null; then
   dispatched=1
 fi
 if [ "$dispatched" -eq 0 ]; then

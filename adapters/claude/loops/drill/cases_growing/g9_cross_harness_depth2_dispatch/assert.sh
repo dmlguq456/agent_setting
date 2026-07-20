@@ -110,6 +110,10 @@ def expect(row, **expected):
         got = meta.get(key)
         require(got == value, f"{row['slug']} metadata {key}={got!r}, want {value!r}")
 
+def expect_absent(row, *keys):
+    for key in keys:
+        require(key not in row["meta"], f"{row['slug']} legacy metadata must be absent: {key}")
+
 require(len(rows) >= 3, f"expected at least 3 wrapper rows, got {len(rows)}")
 for row in rows:
     require(row["status"] in {"open", "running"}, f"{row['slug']} not live status: {row['status']}")
@@ -126,12 +130,14 @@ expect(
     intensity="thorough",
     depth="1",
     harness="codex",
-    worker_role="capability-owner",
+    worker_type="owner",
+    assigned_contract="autopilot-code",
     owner="autopilot-code",
     owner_harness="codex",
     model="gpt-5.4-mini",
     reasoning="medium",
 )
+expect_absent(owner, "worker_role")
 # Owner is depth-1 and gets rebound to the real Codex thread id at launch, so it
 # is checked only for a well-formed SID (best-effort match, not exact equality);
 # both depth-2 children still assert exact drill-parent-session below.
@@ -152,12 +158,14 @@ expect(
     harness="claude",
     parent="xh-depth2-owner",
     parent_sid="drill-parent-session",
-    worker_role="verifier",
+    worker_type="review",
+    assigned_contract="code-test",
     owner="autopilot-code",
     owner_harness="codex",
     model="sonnet",
     effort="medium",
 )
+expect_absent(claude, "worker_role")
 
 opencode = one("xh-depth2-opencode-plan-review")
 expect(
@@ -170,12 +178,14 @@ expect(
     harness="opencode",
     parent="xh-depth2-owner",
     parent_sid="drill-parent-session",
-    worker_role="planner",
+    worker_type="review",
+    assigned_contract="code-plan",
     owner="autopilot-code",
     owner_harness="codex",
     model="opencode/test",
     variant="low",
 )
+expect_absent(opencode, "worker_role")
 
 jobs = dispatch.collect(jobs_path=jobs_path)
 fleet_owner = [
@@ -185,7 +195,8 @@ fleet_owner = [
     and j.mode == "dev/refactor"
     and j.depth == 1
     and j.harness == "codex"
-    and j.worker_role == "capability-owner"
+    and j.worker_type == "owner"
+    and j.assigned_contract == "autopilot-code"
     and j.capability_owner == "autopilot-code"
     and j.parent_sid and re.fullmatch(r"[A-Za-z0-9_.:-]+", j.parent_sid)
 ]
@@ -195,6 +206,9 @@ require(fleet_owner, "fleet parse missing autopilot-code codex depth-1 owner")
 require({"claude", "opencode"}.issubset(harnesses), f"fleet parse missing cross-harness depth2 children: {sorted(harnesses)}")
 require(all(j.is_child for j in children), "fleet parse did not mark depth2 children as child jobs")
 require(all(j.parent_sid == "drill-parent-session" for j in children), "fleet parse lost parent session linkage")
+require(all(j.worker_type == "review" for j in children), "fleet parse lost review bootstrap type")
+require({j.assigned_contract for j in children} == {"code-plan", "code-test"}, "fleet parse lost assigned stage contracts")
+require(all(j.worker_role is None for j in [*fleet_owner, *children]), "fleet accepted legacy worker_role from canonical rows")
 print("PASS: wrapper rows and fleet collector preserve depth-1/depth-2 cross-harness linkage")
 PY
 

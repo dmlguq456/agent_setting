@@ -15,6 +15,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_lifecycle import DETACHED, FOREGROUND_SCOPED, select_launch_lifecycle  # noqa: E402
+from worker_bootstrap import assigned_contract, worker_type_for_kind  # noqa: E402
 
 ORDER = ["same-harness-headless", "cross-harness-headless", "native-subagent", "inline"]
 
@@ -253,6 +254,14 @@ def wrapper_command(
     if harness not in {"codex", "claude", "opencode"} or not wrapper.is_file():
         raise ValueError(f"unsupported child harness: {harness}")
     lifecycle = getattr(args, "launch_lifecycle", DETACHED)
+    worker_type = worker_type_for_kind(node["kind"])
+    contract = assigned_contract(
+        capability=route["capability"],
+        worker_type=worker_type,
+        route_node=node["id"],
+        completion_gate=node.get("completion_gate"),
+        root=ROOT,
+    )
     command = [
         sys.executable,
         str(wrapper),
@@ -265,7 +274,8 @@ def wrapper_command(
         "--intensity", route["effective_intensity"],
         "--depth", "2",
         "--parent", args.parent,
-        "--worker-role", args.worker_role or node.get("role", node["id"]),
+        "--worker-type", worker_type,
+        "--assigned-contract", contract,
         "--owner", route["capability"],
         "--owner-harness", row["parent_harness"],
         "--route-file", str(args.route),
@@ -286,6 +296,10 @@ def wrapper_command(
         "--eligibility-failure-class", row.get("failure_class") or "-",
         "--fallback-ordinal", str(ordinal),
     ]
+    # Backward-compatible explicit metadata only. Canonical route dispatch
+    # never synthesizes a worker_role from topology kind, node, or model role.
+    if args.worker_role:
+        command += ["--worker-role", args.worker_role]
     if harness in {"codex", "claude"}:
         command += ["--launch-lifecycle", lifecycle]
         if lifecycle == FOREGROUND_SCOPED:

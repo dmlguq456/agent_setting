@@ -74,8 +74,10 @@ worker after approval.
 
 Check `preflight.sh headless [--check] <worktree>`. Launch only registered jobs
 through `preflight.sh dispatch --dry-run|--register|--start` with explicit
-worktree, slug, capability, mode, QA, intensity, depth, parent, worker role,
-owner, agent, and model/variant choice or inheritance. Monitor
+worktree, slug, capability, assigned contract/route node, mode, QA, intensity,
+depth, parent, worker type, owner, agent, and model/variant choice or
+inheritance. `worker_role` is legacy read-only metadata, not bootstrap or
+Skill identity. Monitor
 `preflight.sh liveness [jobs.log]`; harvest via `preflight.sh harvest`.
 Conductors use `dispatch-chain` to invoke checked same/cross-harness depth-2
 adapter wrappers directly. Dispatch contract v3 atomically claims one stable

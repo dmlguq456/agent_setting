@@ -36,10 +36,13 @@ class FallbackTest(unittest.TestCase):
   self.assertIn("launch_authority=conductor",result.stdout); self.assertIn("broker_lifecycle=retired",result.stdout)
  def test_wrapper_command_projects_selected_lifecycle_to_codex_and_claude(self):
   path=self.route(same_status="supported"); route=json.loads(path.read_text()); node=route["nodes"][0]
-  args=SimpleNamespace(action="dry-run",slug="stage",parent="owner",mode="dev/refactor",qa="standard",worker_role="code-plan",model_role="deep maker",prompt_file=None,jobs=self.jobs,route=path,launch_lifecycle="foreground-scoped",foreground_timeout=123.0)
+  args=SimpleNamespace(action="dry-run",slug="stage",parent="owner",mode="dev/refactor",qa="standard",worker_role=None,model_role="deep maker",prompt_file=None,jobs=self.jobs,route=path,launch_lifecycle="foreground-scoped",foreground_timeout=123.0)
   for ordinal,harness in ((1,"codex"),(2,"claude")):
    row=self.tuple(harness,"supported")
    command=F.wrapper_command(args,route,node,row,ordinal,"att-test")
+   self.assertEqual(command[command.index("--worker-type")+1],"stage")
+   self.assertEqual(command[command.index("--assigned-contract")+1],"code-plan")
+   self.assertNotIn("--worker-role",command)
    self.assertIn("--launch-lifecycle",command)
    self.assertEqual(command[command.index("--launch-lifecycle")+1],"foreground-scoped")
    self.assertEqual(command[command.index("--foreground-timeout")+1],"123.0")

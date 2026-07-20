@@ -1042,6 +1042,7 @@ class DepthTwoRegistryMetadataTest(unittest.TestCase):
                 "child-worker",
                 "capability=autopilot-code,mode=verify,qa=adversarial,"
                 "depth=2,harness=codex,parent=owner-job,parent_sid=codex-main,intensity=adversarial,"
+                "worker_type=review,assigned_contract=code-test,"
                 "worker_role=verifier,owner=autopilot-code",
             ])
             with open(jobs_log, "w") as f:
@@ -1065,6 +1066,8 @@ class DepthTwoRegistryMetadataTest(unittest.TestCase):
             self.assertIsNone(job.parent_cwd)
             self.assertTrue(job.is_child)
             self.assertEqual(job.intensity, "adversarial")
+            self.assertEqual(job.worker_type, "review")
+            self.assertEqual(job.assigned_contract, "code-test")
             self.assertEqual(job.worker_role, "verifier")
             self.assertEqual(job.capability_owner, "autopilot-code")
 

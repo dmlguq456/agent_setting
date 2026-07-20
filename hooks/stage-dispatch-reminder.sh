@@ -67,13 +67,13 @@ print(json.dumps(out, ensure_ascii=False))' "$1"
 
 emit_reminder() { # $1=skill
   self="${AGENT_DISPATCH_SELF_SLUG:-\$AGENT_DISPATCH_SELF_SLUG}"
-  msg="📌 stage-dispatch: this session is a depth-1 conductor (intensity=${AGENT_DISPATCH_INTENSITY:-?}). Dispatch ${1} with dispatch-headless.py --depth 2 --parent ${self} --worker-role ${1}, then harvest it with dispatch-wait (dev-pipeline steps 1-7). Invoke the Skill in-session only for direct inline work, a quick one-shot worker, or a runtime fallback where headless dispatch is unavailable."
+  msg="📌 stage-dispatch: this session is a depth-1 conductor (intensity=${AGENT_DISPATCH_INTENSITY:-?}). Dispatch ${1} with dispatch-headless.py --depth 2 --parent ${self} --worker-type stage --assigned-contract ${1}, then harvest it with dispatch-wait (dev-pipeline steps 1-7). Invoke the Skill in-session only for direct inline work, a quick one-shot worker, or a runtime fallback where headless dispatch is unavailable."
   _json_wrap context "$msg"
 }
 
 emit_deny() { # $1=skill
   self="${AGENT_DISPATCH_SELF_SLUG:-\$AGENT_DISPATCH_SELF_SLUG}"
-  msg="⛔ stage-dispatch denied: a depth-1 conductor (intensity=${AGENT_DISPATCH_INTENSITY:-?}) invoked ${1} in-session. At standard+ intensity, dispatch the stage as depth-2 headless work with dispatch-headless.py --depth 2 --parent ${self} --worker-role ${1}, then harvest it with dispatch-wait. A legitimate inline case such as a self-modification cycle requires the orchestrator to set STAGE_DISPATCH_INLINE_OK=1 when launching; the conductor cannot grant itself an exception (§8.6.3)."
+  msg="⛔ stage-dispatch denied: a depth-1 conductor (intensity=${AGENT_DISPATCH_INTENSITY:-?}) invoked ${1} in-session. At standard+ intensity, dispatch the stage as depth-2 headless work with dispatch-headless.py --depth 2 --parent ${self} --worker-type stage --assigned-contract ${1}, then harvest it with dispatch-wait. A legitimate inline case such as a self-modification cycle requires the orchestrator to set STAGE_DISPATCH_INLINE_OK=1 when launching; the conductor cannot grant itself an exception (§8.6.3)."
   if [ "$HOOK_MODE" -eq 1 ]; then
     _json_wrap deny "$msg"
     exit 0

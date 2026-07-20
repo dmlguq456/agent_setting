@@ -379,6 +379,31 @@ class OptsDialHierarchyTest(unittest.TestCase):
         self.assertEqual(self._dial(j), "research(strong)")
         self.assertEqual(render._dispatch_stage_label(j), "research")
 
+    def test_authoritative_contract_and_worker_type_replace_legacy_role(self):
+        child = DispatchJob(
+            key="code",
+            slug="s",
+            depth=2,
+            intensity="strong",
+            worker_type="stage",
+            assigned_contract="code-test",
+            worker_role="deep maker",
+            capability_owner="autopilot-code",
+            route_node="test",
+        )
+        owner = DispatchJob(
+            key="code",
+            slug="o",
+            depth=1,
+            mode="dev/refactor",
+            intensity="strong",
+            worker_type="owner",
+            worker_role="deep maker",
+            capability_owner="autopilot-code",
+        )
+        self.assertEqual(self._dial(child), "code-test(strong)")
+        self.assertEqual(self._dial(owner), "code(dev/refactor·strong·owner)")
+
     def test_entry_and_environment_tail_without_knobs(self):
         j = DispatchJob(key="code", slug="s", depth=1, profile="layer2")
         self.assertEqual(self._dial(j), "code / layer2")

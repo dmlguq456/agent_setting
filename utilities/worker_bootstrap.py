@@ -7,6 +7,12 @@ import re
 from pathlib import Path
 
 WORKER_TYPES = ("owner", "stage", "review", "support")
+WORKER_KIND_TYPES = {
+    "capability-owner": "owner",
+    "pipeline-stage": "stage",
+    "review-worker": "review",
+    "map-worker": "support",
+}
 REVIEW_MARKERS = (
     "review",
     "reviewer",
@@ -50,7 +56,12 @@ def resolve_worker_type(
     route_node: str | None = None,
     profile_type: str | None = None,
 ) -> str:
-    """Resolve one worker type; explicit/profile declarations beat fallback inference."""
+    """Resolve one bootstrap type.
+
+    Canonical route writers pass ``explicit`` from the topology node kind.
+    ``worker_role`` remains a final legacy-reader fallback only; it is not a
+    portable session-bootstrap field.
+    """
     for candidate in (explicit, profile_type):
         if candidate:
             if candidate not in WORKER_TYPES:
@@ -58,12 +69,27 @@ def resolve_worker_type(
             return candidate
     if depth == 1:
         return "owner"
-    signal = " ".join(filter(None, (worker_role, route_node))).lower()
+    signal = (route_node or "").lower()
     if any(marker in signal for marker in REVIEW_MARKERS):
         return "review"
     if signal:
         return "stage"
+    # Compatibility for pre-worker_type commands and registry fixtures. New
+    # writers must not use this branch.
+    legacy_signal = (worker_role or "").lower()
+    if any(marker in legacy_signal for marker in REVIEW_MARKERS):
+        return "review"
+    if legacy_signal:
+        return "stage"
     return "support"
+
+
+def worker_type_for_kind(kind: str) -> str:
+    """Map portable topology kind to the one worker bootstrap overlay."""
+    try:
+        return WORKER_KIND_TYPES[kind]
+    except KeyError as exc:
+        raise ValueError(f"unsupported headless worker kind: {kind}") from exc
 
 
 def render_worker_bootstrap(root: Path, worker_type: str) -> str:
@@ -78,12 +104,25 @@ def render_worker_bootstrap(root: Path, worker_type: str) -> str:
 
 
 def assigned_contract(
-    *, capability: str, worker_type: str, worker_role: str | None, route_node: str | None
+    *,
+    capability: str,
+    worker_type: str,
+    route_node: str | None,
+    completion_gate: str | None = None,
+    explicit: str | None = None,
+    root: Path | None = None,
 ) -> str:
-    """Resolve the one capability/stage Skill a worker should read."""
-    if worker_type in {"stage", "review"}:
-        if worker_role and worker_role.startswith("code-"):
-            return worker_role
+    """Resolve the assigned portable contract without consulting worker role.
+
+    A completion gate names the stage contract when that contract exists in
+    the portable catalog. Otherwise the entry capability remains the readable
+    contract and the immutable route node supplies the narrower assignment.
+    """
+    if explicit:
+        return explicit
+    if worker_type in {"stage", "review", "support"}:
+        if completion_gate and root and (root / "capabilities" / f"{completion_gate}.md").is_file():
+            return completion_gate
         if route_node and route_node.lower() in STAGE_NODE_CONTRACT:
             return STAGE_NODE_CONTRACT[route_node.lower()]
     return capability
