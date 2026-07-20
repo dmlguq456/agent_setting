@@ -19,6 +19,7 @@ GENERATORS = [
     ("entry-skill-layer", "tools/sync-entry-skill-layer.py"),
     ("skill-invocation-policy", "tools/sync-skill-invocation-policy.py"),
     ("manifest-and-catalogs", "tools/build-manifest.py"),
+    ("hub-page", "tools/render-hub.py"),
     ("claude-skill-metadata", "adapters/claude/bin/sync-native-metadata.py"),
     ("claude-plugin", "adapters/claude/bin/sync-native-plugin.py"),
     ("codex-skills", "adapters/codex/bin/sync-native-skills.py"),
