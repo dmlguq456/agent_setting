@@ -1102,21 +1102,15 @@ def _dispatch_role_suffix(j, max_width=None):
                     raw_role = bare[len(d) + 1:]
                     break
     role = _short_role(raw_role)
-    intensity = _short_level(getattr(j, "intensity", None))
-    parts = []
-    if intensity:
-        parts.append(("intensity", intensity))
-    if role:
-        parts.append(("role", role))
-    if max_width is not None:
-        # F-9(c) width-drop priority: intensity before role. Drops whole components instead
-        # of silently tail-cutting the joined string (which used to chop words mid-token).
-        for kind in ("intensity", "role"):
-            joined = "/".join(t for _k, t in parts)
-            if len(joined) <= max_width:
-                break
-            parts = [(k, t) for k, t in parts if k != kind]
-    return "/".join(t for _k, t in parts)
+    # intensity left this suffix for the dial's paren knob group (user 2026-07-20
+    # hierarchical dial, _opts_segs) — it is a BEHAVIOUR axis, not part of the
+    # environment tail this function feeds.
+    if not role:
+        return ""
+    if max_width is not None and len(role) > max_width:
+        # F-9(c): drop the whole component instead of tail-cutting it mid-token.
+        return ""
+    return role
 
 
 def _dispatch_profile(j):
@@ -1141,26 +1135,36 @@ def _dispatch_stage_label(j):
 
 
 def _opts_segs(j):
-    """F-15a options column — the job's (mode · profile) dial, relocated OUT of the name
-    zone into its own dim slot between the model cell and the stage breadcrumb (P0-1/R2: the
-    name zone is identity-only now). qa left this dial with the retired qa axis (user
-    2026-07-16 — rigor derives from intensity, CONVENTIONS §1.1)."""
-    profile = _dispatch_profile(j)
+    """F-15a options column — HIERARCHICAL dial (user 2026-07-20: "계층적으로
+    code (mode inten) / boot 순"). Three axes, three visual levels instead of the flat
+    '·' chain that mixed them: the entry skill heads the dial, its behaviour knobs
+    (mode·intensity) ride in a dim paren group, and the environment tail
+    (profile home / role suffix) is set off by ' / '. A depth-2 worker has no entry
+    (its identity lives in the name zone), so its knobs render bare. qa left this dial
+    with the retired qa axis (user 2026-07-16 — rigor derives from intensity,
+    CONVENTIONS §1.1)."""
+    entry = _entry_skill(j)
+    knobs = "·".join(t for t in (j.mode, _short_level(getattr(j, "intensity", None))) if t)
+    tail = _dispatch_profile(j)
     parts = []
     w = 0
-    # user 2026-07-20: the entry skill LEADS the dial — 'code·dev·strong', not the mode
-    # first with the capability buried (or duplicated) in the role suffix.
-    entry = _entry_skill(j)
+
+    def _add(text, key):
+        nonlocal w
+        parts.append((text, key))
+        w += len(text)
+
     if entry:
-        parts.append((entry, "name_dim")); w += len(entry)
-    if j.mode:
+        _add(entry, "name_dim")
+    if knobs:
+        if entry:
+            _add(" (", "dim"); _add(knobs, "dim"); _add(")", "dim")
+        else:
+            _add(knobs, "dim")
+    if tail:
         if parts:
-            parts.append(("·", "dim")); w += 1
-        parts.append((j.mode, "dim")); w += len(j.mode)
-    if profile:
-        if parts:
-            parts.append(("·", "dim")); w += 1
-        parts.append((profile, "dim")); w += len(profile)
+            _add(" / ", "dim")
+        _add(tail, "dim")
     return parts, w
 
 

@@ -295,5 +295,36 @@ class TitleCapTest(unittest.TestCase):
         self.assertLessEqual(len(name_text), render._TITLE_MAX)
 
 
+class OptsDialHierarchyTest(unittest.TestCase):
+    """user 2026-07-20: "계층적으로 code (mode inten) / boot 순" — the dial reads
+    capability (behaviour knobs) / environment, not a flat '·' chain mixing the axes."""
+
+    @staticmethod
+    def _dial(j):
+        segs, w = render._opts_segs(j)
+        text = "".join(t for t, _k in segs)
+        assert w == len(text), "declared width must match rendered text"
+        return text
+
+    def test_full_hierarchy(self):
+        j = DispatchJob(key="code", slug="s", depth=1, mode="dev",
+                        intensity="standard", profile="boot")
+        self.assertEqual(self._dial(j), "code (dev·std) / boot")
+
+    def test_depth2_worker_has_bare_knobs_no_entry(self):
+        # identity lives in the name zone for a depth-2 worker — no entry head, no parens.
+        j = DispatchJob(key="code", slug="s", depth=2, mode="dev", intensity="strong")
+        self.assertEqual(self._dial(j), "dev·strong")
+
+    def test_entry_and_environment_tail_without_knobs(self):
+        j = DispatchJob(key="code", slug="s", depth=1, profile="layer2")
+        self.assertEqual(self._dial(j), "code / layer2")
+
+    def test_intensity_left_the_profile_tail(self):
+        # pre-hierarchy the tail rendered 'boot/std' — the knob now rides in the parens only.
+        j = DispatchJob(key="code", slug="s", depth=1, intensity="standard", profile="boot")
+        self.assertEqual(self._dial(j), "code (std) / boot")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

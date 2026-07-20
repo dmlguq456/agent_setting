@@ -60,11 +60,12 @@ class RenderDispatchPresentationTest(unittest.TestCase):
         self.assertEqual(len(render._dispatch_prefix(nested)), 6)
 
     def test_dispatch_role_suffix_has_no_qa_token(self):
-        # qa axis retired (CONVENTIONS §1.1) — the options dial shows intensity/role only.
+        # qa axis retired (CONVENTIONS §1.1); intensity moved to the dial's paren knob
+        # group (2026-07-20 hierarchical dial) — this suffix is the ROLE tail only now.
         job = DispatchJob(key="plan", worker_role="planner", intensity="thorough")
         suffix = render._dispatch_role_suffix(job)
 
-        self.assertEqual(suffix, "thr/planner")
+        self.assertEqual(suffix, "planner")
         self.assertNotIn("qa:", suffix)
 
     def test_dispatch_two_line_compacts_long_session_name(self):
@@ -860,7 +861,7 @@ class DepthTwoRegistryMetadataTest(unittest.TestCase):
         text = "\n".join("".join(part for part, _key in line) for line in lines if line)
 
         self.assertIn("agent_setting/", text)
-        self.assertIn("loop/drill·g9", text)
+        self.assertIn("loop/drill / g9", text)
         self.assertNotIn("drill:g9", text)
 
     def test_parent_cwd_fallback_groups_drill_temp_job_without_matching_sid(self):
@@ -876,7 +877,7 @@ class DepthTwoRegistryMetadataTest(unittest.TestCase):
         text = "\n".join("".join(part for part, _key in line) for line in lines if line)
 
         self.assertIn("agent_setting/", text)
-        self.assertIn("loop/drill·g9", text)
+        self.assertIn("loop/drill / g9", text)
         self.assertNotIn("drill:g9", text)
         self.assertNotIn(" main", text)
 
@@ -912,7 +913,7 @@ class DepthTwoRegistryMetadataTest(unittest.TestCase):
                                     narrow=False, malformed=0, layout="wide")
         text = "\n".join("".join(part for part, _key in line) for line in lines if line)
         self.assertIn("agent_setting/", text)
-        self.assertIn("loop/drill·g9", text)
+        self.assertIn("loop/drill / g9", text)
         self.assertNotIn("drill:g9", text)
 
     def test_dispatch_child_session_marker_does_not_hide_parent_cwd(self):
