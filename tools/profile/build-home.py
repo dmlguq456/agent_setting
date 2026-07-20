@@ -259,9 +259,23 @@ def build_instance(agent_home, name, harness, worker_type, fragments, expose, sl
     # declared case today; session state (projects/, sessions/, .statusline/)
     # is deliberately never linked so it stays instance-isolated).
 
-    # credentials shared, never duplicated/mutated.
-    creds_src = agent_home / ".credentials.json"
-    if creds_src.exists():
+    # credentials shared, never duplicated/mutated. The source is the RUNTIME config
+    # home, not the repo: in the split layout (AGENT_HOME=~/agent_setting, runtime
+    # ~/.claude) `agent_home/.credentials.json` never exists, so every profiled child
+    # spawned logged-out (jobs.log note=dead-auth 2026-07-19 r1b — depth-2 stage
+    # dispatch silently degraded to inline). Same shape as the codex wrapper, which
+    # links auth.json from CODEX_HOME with a ~/.codex fallback. CLAUDE_CONFIG_DIR is
+    # consulted first so a profiled parent's own (linked) credential resolves through.
+    if harness == "claude":
+        env_home = os.environ.get("CLAUDE_CONFIG_DIR")
+        creds_src = first_existing(
+            *([Path(env_home) / ".credentials.json"] if env_home else []),
+            Path.home() / ".claude" / ".credentials.json",
+            agent_home / ".credentials.json",   # legacy AGENT_HOME=~/.claude layout
+        )
+    else:
+        creds_src = first_existing(agent_home / ".credentials.json")
+    if creds_src is not None:
         if link(creds_src, instance_dir / ".credentials.json"):
             link_count += 1
 
