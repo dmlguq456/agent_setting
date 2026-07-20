@@ -225,6 +225,8 @@ class DispatchJob:
     status: Optional[str] = None        # raw jobs.log status (open/running/...)
     liveness: str = "unknown"
     profile: Optional[str] = None       # dispatch profile name (masked config home) — None = main home
+    artifact_root: Optional[str] = None  # registry artifact_root meta — a source-only worktree
+                                         # (OPERATIONS §5.10) writes plans/ THERE, not under cwd
     branch: Optional[str] = None        # git branch override — demo fixtures; None = compute from cwd
     depth: int = 1                      # dispatch tree depth: 1 capability owner, 2 bounded sub-worker
     parent_slug: Optional[str] = None   # parent dispatch slug for depth-2 rows

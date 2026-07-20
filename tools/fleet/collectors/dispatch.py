@@ -541,14 +541,23 @@ def _is_code_job(key=None, capability=None, worker_role=None):
     return (key or "").startswith("code") or (capability or "") == "autopilot-code" or (worker_role or "").startswith("code-")
 
 
-def _find_plan_dir(jcwd, slug, key=None, capability=None, worker_role=None):
+def _find_plan_dir(jcwd, slug, key=None, capability=None, worker_role=None,
+                   artifact_root=None):
     """Locate the plans/*_<slug>/ folder for (jcwd, slug): exact `_<slug>` suffix match,
     else the folder with max hyphen-token overlap (skipping done folders). abs path or None.
-    Extracted from live_stage (REFACTOR, behavior-preserving — see plan Step 1.3)."""
+    Extracted from live_stage (REFACTOR, behavior-preserving — see plan Step 1.3).
+
+    `artifact_root` (registry meta) wins over the cwd heuristic: a SOURCE-ONLY worktree
+    (OPERATIONS §5.10) has no reports dir of its own — its plans/ live in the primary
+    checkout's root the wrapper recorded. Without this, an inline conductor's breadcrumb
+    never left `pre` (user 2026-07-20: "fleet이 여전히 pre에만 깜빡이는거야?")."""
     if not _is_code_job(key, capability, worker_role) or not jcwd or not slug:
         return None
-    ar = ".agent_reports" if os.path.isdir(os.path.join(jcwd, ".agent_reports")) else ".claude_reports"
-    base = os.path.join(jcwd, ar, "plans")
+    if artifact_root and os.path.isdir(os.path.join(artifact_root, "plans")):
+        base = os.path.join(artifact_root, "plans")
+    else:
+        ar = ".agent_reports" if os.path.isdir(os.path.join(jcwd, ".agent_reports")) else ".claude_reports"
+        base = os.path.join(jcwd, ar, "plans")
     try:
         cand = sorted(d for d in os.listdir(base) if d.endswith("_" + slug))
     except OSError:
@@ -579,11 +588,12 @@ def _find_plan_dir(jcwd, slug, key=None, capability=None, worker_role=None):
     return os.path.join(base, cand[-1])
 
 
-def live_stage(jcwd, slug, fallback, capability=None, worker_role=None):
+def live_stage(jcwd, slug, fallback, capability=None, worker_role=None, artifact_root=None):
     """Derive plan→exec→test→done from plans/*_<slug>/ artifacts; fallback = argv key."""
     if not jcwd or not slug:
         return fallback
-    pd = _find_plan_dir(jcwd, slug, fallback, capability, worker_role)
+    pd = _find_plan_dir(jcwd, slug, fallback, capability, worker_role,
+                        artifact_root=artifact_root)
     if not pd:
         return fallback
     if os.path.exists(os.path.join(pd, "pipeline_summary.md")):
@@ -871,7 +881,8 @@ def _scan_processes():
             is_child = env.get("AGENT_SESSION_ROLE", "").lower() == "worker" or env.get("CLAUDE_CODE_CHILD_SESSION") == "1" or bool(parent_slug or parent_sid)
             q, qsrc = effective_qa(qa, None, jcwd, slug, key)
             jobs.append(DispatchJob(
-                key=key, stage=live_stage(jcwd, slug, key), mode=mode, qa=q,
+                key=key, stage=live_stage(jcwd, slug, key,
+                                          artifact_root=env.get("AGENT_ARTIFACT_ROOT")), mode=mode, qa=q,
                 elapsed_min=etime_to_min(etime), slug=slug, cwd=jcwd,
                 parent_sid=parent_sid, parent_slug=parent_slug, is_child=is_child,
                 qa_source=qsrc, source="proc", harness="claude",
@@ -1010,6 +1021,7 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None, registry_priority=0):
             route_file=meta.get("route_file"), route_id=meta.get("route_id"),
             route_hash=meta.get("route_hash"), route_node=meta.get("route_node"),
             attempt_id=meta.get("attempt_id"),
+            artifact_root=meta.get("artifact_root"),
             registry_order=registry_order,
             registry_priority=registry_priority,
         ))
@@ -1235,7 +1247,8 @@ def collect(jobs_path=None, harness_filter=None):
                 j.proc_start = procscan.read_proc_start(pid)   # identity, not just a number
                 consumed.add(pid)
                 j.model = _claude_job_model(str(pid), j.cwd)
-                j.stage = live_stage(j.cwd, j.slug, j.key, j.capability_owner, j.worker_role)
+                j.stage = live_stage(j.cwd, j.slug, j.key, j.capability_owner, j.worker_role,
+                                     artifact_root=j.artifact_root)
     now = time.time()
     # F-18a correlation merges proc evidence onto canonical registry rows BEFORE
     # classification, so every row is decided exactly once, by the single classifier.
@@ -1249,7 +1262,8 @@ def collect(jobs_path=None, harness_filter=None):
     # Avoid leaving a static queued/running placeholder forever.
     for j in jobs:
         if j.source == "jobs" and j.cwd and j.liveness == "working":
-            j.stage = live_stage(j.cwd, j.slug, j.key, j.capability_owner, j.worker_role)
+            j.stage = live_stage(j.cwd, j.slug, j.key, j.capability_owner, j.worker_role,
+                                     artifact_root=j.artifact_root)
     # stash malformed count on the module for the render header (optional signal)
     collect.last_malformed = malformed
     # F-28a (§3.3) — terminal route-node evidence, stashed the same way `last_malformed` is

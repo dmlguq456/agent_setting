@@ -138,6 +138,28 @@ class WorkingRegistryStageInductionTest(unittest.TestCase):
                 f.write("ok\n")
             self.assertEqual(dispatch.live_stage(tmp, "code-run", "code-test", "autopilot-code", "code-test"), "test")
 
+    def test_source_only_worktree_stage_derives_via_artifact_root(self):
+        # user 2026-07-20 "fleet이 여전히 pre에만 깜빡이는거야?" — a source-only worktree
+        # (OPERATIONS §5.10) has no reports dir of its own; the registry's artifact_root
+        # meta must win over the cwd heuristic or an inline conductor never leaves `pre`.
+        with tempfile.TemporaryDirectory() as tmp:
+            wt = os.path.join(tmp, "wt")            # source-only: NO .agent_reports here
+            os.makedirs(wt)
+            root = os.path.join(tmp, "primary", ".claude_reports")
+            plan = os.path.join(root, "plans", "2026-07-20_reading-face-r8", "plan")
+            os.makedirs(plan)
+            with open(os.path.join(plan, "plan.md"), "w") as f:
+                f.write("p\n")
+            self.assertEqual(
+                dispatch.live_stage(wt, "v95-reading-face-r8-resume", "code",
+                                    "autopilot-code", artifact_root=root),
+                "plan")
+            # without the meta the old heuristic still falls back to the argv key
+            self.assertEqual(
+                dispatch.live_stage(wt, "v95-reading-face-r8-resume", "code",
+                                    "autopilot-code"),
+                "code")
+
 
 class WideRowNoParentheticalTagTest(unittest.TestCase):
 
