@@ -29,11 +29,9 @@
 5. **작은 단계** + 각 단계 후 검증
 6. **API 변경 시 type 도 같은 단계에서** 업데이트 (TypeScript types, Prisma schema, frontend 가 사용하는 contract)
 
-## Forbidden zones (명시적 요청 없이 X)
+## Forbidden zones
 
-- DB 마이그레이션 (schema 변경)
-- auth 핵심 로직
-- 배포·infra
+- 라우터 Common Rules의 금지 구역 규칙(DB·auth·배포/인프라, 명시적 요청 없이 X)을 따른다 — 단일 원천, 항상 이 모드보다 먼저 로드됨.
 
 ## 출력
 

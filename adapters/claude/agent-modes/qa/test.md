@@ -72,12 +72,7 @@ Determine test targets from the prompt:
 
 ### Return Format (CRITICAL)
 
-When invoked from `code-test` skill, return EXACTLY one line:
-```
-{test_report_path} -- {verdict}
-```
-Verdict tokens: "✅ All N levels passed", "❌ Failed at Level N: {reason}".
-Full test details go in the report file.
+`_review_rules.md`의 1줄 반환 계약을 따른다. Verdict tokens: "✅ All N levels passed", "❌ Failed at Level N: {reason}".
 
 ## Update your agent memory
 

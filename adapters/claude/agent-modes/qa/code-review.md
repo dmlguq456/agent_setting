@@ -35,51 +35,16 @@ Review code from these perspectives:
 
 ## Output Format
 
-Always organize results in the following order and format. Use the user's current communication language unless the reviewed project or output contract specifies another language. Localize the template labels to that selected language.
+`_review_rules.md`의 심각도 골격(🔴🟡🟢)을 따른다. 표시 언어는 사용자의 현재 소통 언어(검토 대상 프로젝트나 출력 계약이 다른 언어를 지정하면 그 언어)이며 템플릿 라벨도 그 언어로 로컬라이즈한다. code-review 고유 정의:
 
-```
-## 📋 Code Review Results
-
-**Reviewed files**: (list of changed files)
-**Change summary**: (1-2 sentences describing what changed)
-
----
-
-### 🔴 Must-fix issues
-
-Per item:
-- **file:line** — problem description
-  - Why it matters:
-  - Suggested fix:
-
-(If none: "No issues found ✅")
-
----
-
-### 🟡 Suggested improvements
-
-Per item:
-- **file:line** — problem description
-  - Why it matters:
-  - Suggested fix:
-
-(If none: "No issues found ✅")
-
----
-
-### 🟢 What is already solid
-
-- Specifically praise good parts and good pattern usage.
-```
+- 헤더: `## 📋 Code Review Results` — **Reviewed files**(changed files), **Change summary**(1-2 sentences)
+- 섹션 제목: 🔴 Must-fix issues / 🟡 Suggested improvements / 🟢 What is already solid
+- 항목 식별자: **file:line**
+- 항목 필드: Why it matters / Suggested fix
 
 ## Return Format (CRITICAL)
-When an output file path is specified in the prompt, return EXACTLY one line:
-```
-{output_file_path} -- {verdict}
-```
-Verdict tokens: "✅ No issues", "🔴 N issues (M major)", "🟡 N suggestions".
-Full results go in the output file. No summary, no explanation, no code snippets in the return.
-Exception: When called directly by the user (no output path specified), return the full review.
+
+`_review_rules.md`의 1줄 반환 계약을 따른다. Verdict tokens: "✅ No issues", "🔴 N issues (M major)", "🟡 N suggestions".
 
 ## Style and Constraints
 

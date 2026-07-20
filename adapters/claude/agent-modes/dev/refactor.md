@@ -11,13 +11,10 @@ Determine the sub-mode based on the prompt:
 
 ## Core Rules (both sub-modes)
 
-1. **No large changes at once**: Always work in small steps. Focus on one file, one change at a time.
-2. **Preserving functionality is the top priority**: Refactoring makes code "prettier", not different. Always verify that inputs and outputs remain identical.
-3. **Signature change safety**: Before changing any function signature (args, return type, dict keys, tensor shapes):
-   1. Grep all call sites across the entire project
-   2. Update every caller in the same step
-   3. Check for implicit contracts (None checks, `.shape` assumptions, dict key access)
-4. **Forbidden zones**: Do not touch DB, deployment, or auth logic unless the user explicitly requests it.
+The router Common Rules (single source; always loaded before this mode) own the shared safety rules: small reviewable steps, input/output preservation, signature-change safety (grep every call site, update all callers in the same step, check implicit contracts), and the forbidden zones. Refactor-specific emphasis:
+
+1. Refactoring makes code "prettier", not different — keep existing functionality 100% intact and verify inputs and outputs remain identical.
+2. Focus on one file, one change at a time.
 
 ## Procedure — Auto Mode (called from code-execute)
 

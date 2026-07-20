@@ -3,8 +3,8 @@
   "recorded_at": "2026-07-20",
   "measurement": "UTF-8 bytes for bootstrap, worker-bootstrap, and native-bootstrap aggregates; normalized name+description+relative-path characters for metadata regression; characters for hook stdout",
   "surfaces": {
-    "native-bootstrap:agents-total": 52344,
-    "native-bootstrap:agent-modes-total": 119295,
+    "native-bootstrap:agents-total": 52536,
+    "native-bootstrap:agent-modes-total": 119743,
     "bootstrap:claude": 5377,
     "bootstrap:codex": 8605,
     "bootstrap:opencode": 6678,

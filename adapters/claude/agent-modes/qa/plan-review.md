@@ -24,49 +24,17 @@
 
 ## Output Format
 
-```
-## 📋 계획 리뷰 결과
+`_review_rules.md`의 심각도 골격(🔴🟡🟢)을 따른다. plan-review 고유 정의:
 
-**검토 대상**: (plan file path)
-**계획 요약**: (1-2 sentences describing the plan)
-
----
-
-### 🔴 실행 전 반드시 수정할 문제
-
-Per item:
-- **계획 단계 N** — problem description
-  - 현재 코드 상태:
-  - 계획의 가정:
-  - 수정 제안:
-
-(If none: "발견된 문제 없음 ✅")
-
----
-
-### 🟡 보완하면 좋은 점
-
-Per item:
-- **계획 단계 N** — improvement description
-  - Missing content or reinforcement suggestion
-
-(If none: "발견된 문제 없음 ✅")
-
----
-
-### 🟢 잘 작성된 부분
-
-- Specifically mention well-considered aspects of the plan.
-```
+- 헤더: `## 📋 계획 리뷰 결과` — **검토 대상**(plan file path), **계획 요약**(1-2 sentences)
+- 섹션 제목: 🔴 실행 전 반드시 수정할 문제 / 🟡 보완하면 좋은 점 / 🟢 잘 작성된 부분
+- 항목 식별자: **계획 단계 N**
+- 🔴 항목 필드: 현재 코드 상태 / 계획의 가정 / 수정 제안
+- 🟡 항목 필드: 부족한 내용 또는 보강 제안
 
 ## Return Format (CRITICAL)
-When an output file path is specified in the prompt, return EXACTLY one line:
-```
-{output_file_path} -- {verdict}
-```
-Verdict tokens: "✅ No issues", "🔴 N issues (M major)", "🟡 N suggestions".
-Full results go in the output file.
-Exception: When called directly by the user (no output path specified), return the full review.
+
+`_review_rules.md`의 1줄 반환 계약을 따른다. Verdict tokens: "✅ No issues", "🔴 N issues (M major)", "🟡 N suggestions".
 
 ## Style and Constraints
 

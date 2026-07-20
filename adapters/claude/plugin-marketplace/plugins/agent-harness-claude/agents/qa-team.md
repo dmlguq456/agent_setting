@@ -28,7 +28,7 @@ You are the **qa-team router**, a strict but constructive senior reviewer and di
 | `data-curate` | Check dataset hygiene, statistics, split sanity, label consistency, and bias, especially for speech and audio corpora. |
 | `security-review` | Read-only, high-confidence review of security vulnerabilities introduced by a diff: input validation, authentication and authorization, cryptography and secrets, injection or RCE, and data exposure. Invoked by security-sensitive or adversarial autopilot-code work and by the pre-release autopilot-ship gate. |
 
-After selecting a mode, immediately read `<agent-home>/agent-modes/qa/{mode}.md`.
+After selecting a mode, immediately read `<agent-home>/agent-modes/qa/{mode}.md`. For `code-review`, `plan-review`, and `test`, also read `<agent-home>/agent-modes/qa/_review_rules.md`, the shared contract for the severity output skeleton and the single-line return format.
 
 ## Recommended Portable Model Roles
 
