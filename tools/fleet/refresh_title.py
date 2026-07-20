@@ -75,11 +75,37 @@ TITLE: a short identity tag for this work session — English, 3-6 words, never 
 than 40 characters. Name the concrete work, not a generic category. No quotes, no
 trailing period. If the excerpt is unreadable or empty, output the single word:
 untitled.
-NOW: one sentence, in the conversation's own language, describing what the session
+NOW: one sentence, in {now_lang}, describing what the session
 is doing RIGHT NOW — never more than 80 characters. If you cannot tell, output the
 single word: unknown.
 
 No explanations, no other lines, nothing before TITLE: or after the NOW: line."""
+
+# NOW-line language (user 2026-07-20: "요약이 언제는 영어고 언제는 한글") — the subtitle is
+# an OPERATOR artifact (audience-language first, roles/response-policy.md), so it must not
+# follow each transcript's dominant language: headless workers read English-heavy, and the
+# per-conversation rule flipped the board row by row. FLEET_NOW_LANG names the language
+# outright; else a NON-English locale decides (an en locale is no signal — boxes like this
+# one host non-en operators under LANG=en_US); else the old per-conversation rule stands
+# (portable default — no hardcoded audience).
+_LANG_WORDS = {"ko": "Korean", "ja": "Japanese", "zh": "Chinese", "de": "German",
+               "fr": "French", "es": "Spanish", "pt": "Portuguese", "it": "Italian",
+               "ru": "Russian"}
+
+
+def _now_lang():
+    explicit = (os.environ.get("FLEET_NOW_LANG") or "").strip()
+    if explicit:
+        return explicit
+    loc = (os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES")
+           or os.environ.get("LANG") or "")
+    code = loc.split(".")[0].split("_")[0].lower()
+    return _LANG_WORDS.get(code, "")
+
+
+def _prompt(delta):
+    return PROMPT_TEMPLATE.format(
+        delta=delta, now_lang=_now_lang() or "the conversation's own language")
 
 _TITLE_LINE_RE = re.compile(r"^\s*TITLE\s*:\s*(.*)$", re.IGNORECASE)
 _NOW_LINE_RE = re.compile(r"^\s*NOW\s*:\s*(.*)$", re.IGNORECASE)
@@ -629,7 +655,7 @@ def main(argv=None):
             titles.sweep()
             return 0
 
-        output = run_worker(PROMPT_TEMPLATE.format(delta=delta), capacity_held=True)
+        output = run_worker(_prompt(delta), capacity_held=True)
         title = validate_title(output)
         if title and title.lower() == "untitled":
             title = None

@@ -736,5 +736,36 @@ class ValidatorHardeningTest(unittest.TestCase):
             self.assertNotIn("x" * 200, text)
 
 
+class NowLangTest(unittest.TestCase):
+    """user 2026-07-20: "요약이 언제는 영어고 언제는 한글" — the NOW subtitle language is
+    pinned per operator (env → non-en locale), not per transcript."""
+
+    def _with_env(self, **env):
+        from unittest import mock
+        cleared = {k: None for k in ("FLEET_NOW_LANG", "LC_ALL", "LC_MESSAGES", "LANG")}
+        cleared.update(env)
+        patch = {k: v for k, v in cleared.items() if v is not None}
+        drop = [k for k, v in cleared.items() if v is None]
+        ctx = mock.patch.dict(os.environ, patch)
+        ctx.start()
+        for k in drop:
+            os.environ.pop(k, None)
+        self.addCleanup(ctx.stop)
+
+    def test_env_override_wins(self):
+        self._with_env(FLEET_NOW_LANG="Korean", LANG="en_US.UTF-8")
+        self.assertEqual(rt._now_lang(), "Korean")
+        self.assertIn("in Korean,", rt._prompt("d"))
+
+    def test_non_english_locale_decides(self):
+        self._with_env(LANG="ko_KR.UTF-8")
+        self.assertEqual(rt._now_lang(), "Korean")
+
+    def test_english_locale_is_no_signal_keeps_conversation_rule(self):
+        self._with_env(LANG="en_US.UTF-8")
+        self.assertEqual(rt._now_lang(), "")
+        self.assertIn("in the conversation's own language,", rt._prompt("d"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
