@@ -28,6 +28,7 @@ from dispatch_contract import (  # noqa: E402
     close_attempt_row_if,
     resolve_agent_home,
 )
+from codex_dispatch_terminal import inspect_terminal_log  # noqa: E402
 
 KINDS = {"registry", "tool", "file", "artifact", "test", "terminal"}
 
@@ -328,6 +329,53 @@ def watchdog(args, now):
             write_json(wd_path, state)
             return state
         if verdict["state"] == "dead":
+            terminal = inspect_terminal_log(metadata.get("log_file"))
+            terminal_note = terminal.get("failure_note") if terminal else ""
+            if terminal_note and args.apply:
+                def still_exact(fields):
+                    row_meta = meta(fields[5])
+                    return (
+                        fields[1] in {"open", "running"}
+                        and row_meta.get("pid") == metadata.get("pid")
+                        and row_meta.get("pid_start") == metadata.get("pid_start")
+                        and row_meta.get("log_file") == metadata.get("log_file")
+                    )
+
+                closed = close_attempt_row_if(
+                    args.jobs,
+                    args.attempt_id,
+                    terminal_note,
+                    still_exact,
+                    evidence={
+                        "detected_by": "progress-terminal-handoff",
+                        "failure_class": terminal["failure_class"],
+                        "terminal_event": terminal["terminal_event"],
+                        "log_file": terminal["log_file"],
+                    },
+                )
+                if not closed:
+                    refreshed = exact_row(args.jobs, args.attempt_id)
+                    closed = bool(
+                        refreshed and refreshed[1].get("note") == terminal_note
+                    )
+                if not closed:
+                    state.update({
+                        "action": "fail-closed-terminal-identity",
+                        "observed_at": now,
+                    })
+                    write_json(wd_path, state)
+                    return state
+                state.update({
+                    "action": terminal_note,
+                    "terminal_action": terminal_note,
+                    "observed_at": now,
+                    "verdict": "dead",
+                    "failure_class": terminal["failure_class"],
+                    "classifier_source": ATTEMPT_CLASSIFIER_SOURCE,
+                    "fingerprint": fingerprint,
+                })
+                write_json(wd_path, state)
+                return state
             # Natural child exit is a terminal observation, not a watchdog
             # identity failure. Harvest owns the success/failure verdict.
             state.update({"action": "process-exited", "terminal_action": "process-exited",

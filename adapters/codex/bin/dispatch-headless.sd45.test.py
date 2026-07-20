@@ -107,6 +107,75 @@ class CodexSD45InternalProbe(unittest.TestCase):
         run.assert_not_called()
 
 
+class CodexSandboxMountShape(unittest.TestCase):
+    def args(self, transport):
+        return argparse.Namespace(
+            sandbox="workspace-write",
+            launch_lifecycle="foreground-scoped",
+            depth=2,
+            parent_harness="codex",
+            parent_transport=transport,
+            parent_sandbox="workspace-write",
+        )
+
+    def test_tracked_file_shape_fails_before_sandbox_launch(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.dict(os.environ, {"AGENT_DISPATCH_CHILD": "1"}):
+            worktree = Path(tmp)
+            target = worktree / ".codex"
+            target.write_text("")
+            invalid = WH.invalid_codex_mount_target(
+                self.args("codex-exec-headless"), worktree
+            )
+        self.assertEqual(invalid, target)
+
+    def test_canonical_nested_headless_disables_inner_mount_sandbox(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.dict(os.environ, {"AGENT_DISPATCH_CHILD": "1"}):
+            worktree = Path(tmp)
+            (worktree / ".codex").write_text("")
+            args = self.args("headless")
+            self.assertEqual(WH.effective_runtime_sandbox(args), "danger-full-access")
+            self.assertIsNone(WH.invalid_codex_mount_target(args, worktree))
+
+    def test_directory_shape_is_valid_with_workspace_sandbox(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.dict(os.environ, {"AGENT_DISPATCH_CHILD": "1"}):
+            worktree = Path(tmp)
+            (worktree / ".codex").mkdir()
+            self.assertIsNone(
+                WH.invalid_codex_mount_target(
+                    self.args("codex-exec-headless"), worktree
+                )
+            )
+
+    def test_dry_run_rejects_file_before_registry_creation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            worktree = base / "repo"
+            worktree.mkdir()
+            subprocess.run(["git", "init", "-q", str(worktree)], check=True)
+            (worktree / ".codex").write_text("")
+            jobs = base / "jobs.log"
+            result = subprocess.run(
+                [
+                    sys.executable, str(ROOT / "adapters/codex/bin/dispatch-headless.py"),
+                    "--dry-run", "--worktree", str(worktree), "--slug", "mount-shape",
+                    "--capability", "autopilot-code", "--mode", "debug",
+                    "--model", "gpt-test", "--reasoning", "low",
+                    "--jobs", str(jobs),
+                ],
+                text=True,
+                capture_output=True,
+                env={**os.environ, "AGENT_HOME": str(ROOT)},
+            )
+            self.assertEqual(result.returncode, 65, result.stdout + result.stderr)
+            output = result.stdout + result.stderr
+            self.assertIn("invalid-worktree-codex-mount-target", output)
+            self.assertIn("child_spawned=0", output)
+            self.assertFalse(jobs.exists())
+
+
 class CodexSD45(unittest.TestCase):
  def test_route_consumer_and_scope_refusal(self):
   with tempfile.TemporaryDirectory() as td:

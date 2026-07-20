@@ -2,6 +2,7 @@
 import importlib.util, json, os, subprocess, sys, tempfile, unittest
 from types import SimpleNamespace
 from pathlib import Path
+from unittest import mock
 
 ROOT=Path(__file__).resolve().parents[1]
 S=importlib.util.spec_from_file_location("route",ROOT/"utilities/capability-route.py"); R=importlib.util.module_from_spec(S); S.loader.exec_module(R)
@@ -62,6 +63,19 @@ class FallbackTest(unittest.TestCase):
   for node in route["nodes"]: node["dispatch_fallback"][2]["candidates"][0]["status"]="unsupported"
   route["route_hash"]=R.route_hash(route); route["route_id"]="rt-"+route["route_hash"].split(":",1)[1][:16]; path.write_text(json.dumps(route))
   result=self.run_chain(path,"--failed-tuple",same,"--failed-tuple",cross); self.assertEqual(result.returncode,79,result.stdout+result.stderr); self.assertIn("selected_hop=inline",result.stdout)
+  self.assertIn("route_reuse=required",result.stdout)
+  self.assertIn("route_id="+route["route_id"],result.stdout)
+ def test_process_exit_without_marker_advances_fallback(self):
+  args=SimpleNamespace(jobs=self.jobs,progress_window_seconds=1,watchdog_max_windows=2)
+  route={"route_id":"rt-fixture"}
+  node={"id":"plan"}
+  seed=mock.Mock(returncode=0,stdout="",stderr="")
+  exited=mock.Mock(returncode=0,stdout="action=process-exited\nterminal_action=process-exited\n",stderr="")
+  with mock.patch.object(F.subprocess,"run",side_effect=[seed,exited]):
+   state,fields=F.watch_launched_attempt(
+    args,route,node,"att-process-exit",{"child_pid":"1","child_pid_start":"2"})
+  self.assertEqual(state,"fallback")
+  self.assertEqual(fields["terminal_action"],"process-exited")
  def test_attempt_identity_is_stable_across_actions(self):
   path=self.route(); first=self.run_chain(path); second=self.run_chain(path)
   def attempt(out): return next(line.split("=",1)[1] for line in out.splitlines() if line.startswith("attempt_id="))

@@ -5,6 +5,7 @@
 > · **v16 2026-07-16** (사용자 하네스 기본값 config — SD-66 `profiles/dispatch-defaults.yaml` 신설, SD-OPEN-3 가중 정책의 사용자-선언 해소, SD-22 stage-affinity의 데이터 외부화, depth-1 owner 허용집합 [claude,codex], OpenCode relief-only)
 > · **v17 2026-07-19** (재시도 계보·config 봉인 — mutation 노드 재시도의 first-parent 계보 검증(SD-67), dispatch-defaults의 route record 봉인 배선(SD-68 — SD-66 2단계 유보 해제))
 > · **v18 2026-07-19** (conductor 생존·Codex linked-worktree mutation 경계·completion marker↔attempt row 결합 — SD-69~71)
+> · **v19 2026-07-20** (transient PID namespace lifecycle — foreground-scoped wrapper·outer-sandbox 경계·exact parent·unmatched depth-2 visibility, SD-72) · **v19 reliability minor 2026-07-20** (sandbox-init terminal handoff·canonical transport·same-route fallback·exact-attempt liveness)
 > 컴포넌트: `agent_setting` repo 의 **autopilot 파이프 디스패치 토폴로지 개정** — 각 sub-skill 스테이지(code-plan / code-execute / code-test / code-report)를 `standard+` 에서 **기본으로 별개 headless 세션**으로 분사하는 계약. 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 와 무관한 독립 청사진. 이 폴더(`spec/stage-dispatch/`)가 자체 SoT.
 > 입력(1순위 근거):
 > - **사용자 결정 (2026-07-10 확정)**: "스킬 단위의 처리가 분사해서 할 것을 기본 지침으로 했으면 한다. 어차피 산출물 기반 소통인데." — 입도 = sub-skill 스테이지 단위, 적용 = `standard+`, 이는 2026-07-06 depth 재설계 기본값의 명시적 반전.
@@ -983,12 +984,20 @@ conductor는 same-harness 실패 후 cross-harness 평가를 건너뛰고 inline
   산다는 명시적 checked assertion이며 이 경우 detached를 유지한다.
 - foreground-scoped wrapper는 child process group에 SIGINT/SIGTERM을 전달하고,
   bounded timeout이면 group을 TERM→KILL 순으로 종료한다. nonzero exit, signal,
-  timeout은 exact attempt row 하나만 typed `dead-*`로 마감한다. exit 0은
-  completion-marker harvest가 row를 마감하도록 open 상태를 보존한다.
+  timeout은 exact attempt row 하나만 typed `dead-*`로 마감한다. exit 0 자체는
+  성공 증거가 아니다. exact completion marker가 있으면 성공으로 마감하고,
+  exact attempt log의 최종 `turn.completed` handoff가 `BLOCKED`/`FAIL`이면 marker가
+  없어도 typed failure로 즉시 마감한다. bwrap `.codex` bind-mount 실패는
+  `dead-sandbox-init`이다. 둘 다 없을 때만 completion-marker harvest race를 위해
+  open 상태를 보존한다.
 - checked Codex `headless/workspace-write` parent 안의 foreground Codex child는
   unsupported nested mount setup을 피하려고 inner runtime sandbox만
   `danger-full-access`로 선택한다. outer workspace-write가 권한 경계로 유지되며
   wrapper output/attempt row에 effective runtime sandbox를 기록한다.
+- dispatch tuple의 canonical transport는 `headless|interactive`이며
+  `codex-exec-headless` 같은 adapter runtime-surface label은 route evidence가 아니다.
+  inner sandbox가 활성인 worktree의 `.codex`가 파일 또는 symlink이면 wrapper는
+  registry claim과 child spawn 전에 구조화 실패한다.
 - standard+ Codex owner의 outer sandbox에는 기존 harness `.core-grounding`과
   Claude `session-env` scratch directory만 추가로 writable하게 투영한다. 따라서
   adapter write gate와 Codex→Claude Bash 초기화가 동작하되 두 runtime home의
@@ -1001,6 +1010,10 @@ conductor는 same-harness 실패 후 cross-harness 평가를 건너뛰고 inline
   cross-harness가 같은 selector를 소비하며 native subagent는 대체 경로가 아니다.
 - registry attempt identity, heartbeat/watchdog, capacity failover,
   completion-marker binding, fallback order는 lifecycle 선택과 직교하며 불변이다.
+  exact attempt의 terminal observation은 과거 heartbeat/PID보다 우선하고,
+  canonical attempt identity가 있는 행은 cwd-wide transcript mtime으로 ALIVE를
+  합성하지 않는다. inline fallback은 새 route를 만들지 않고 같은
+  route/node/completion gate를 이어 쓴다.
 
 **acceptance**: ① host/remounted-proc namespace fixture에서 lifecycle 판정이
 결정론적이다 ② namespace 밖과 long-lived override는 detached를 유지한다
@@ -1010,6 +1023,9 @@ foreground-scoped를 기록한다 ④ timeout/signal/nonzero가 exact row만 typ
 typed handoff, exact marker, terminal row까지 완주한다 ⑥ parent mismatch가 등록 전
 거부되고 unmatched depth-2 row가 Fleet orphan으로 표시된다 ⑦ 기존 dispatch/route/
 liveness/Fleet/projection/boundary suite가 회귀 없이 통과한다.
+⑧ `.codex` tracked-file 및 첫 command 전 bwrap 실패 fixture에서 child 0 또는
+exact `dead-sandbox-init`, 최종 open row 0, liveness ALIVE 0이며 same-route fallback과
+Fleet current view가 stale refs attempt를 현재 단계로 채택하지 않는다.
 
 ## 14. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
 

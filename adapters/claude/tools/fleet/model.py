@@ -157,6 +157,7 @@ class Session:
     session_reasoning_output_tokens: Optional[int] = None
     session_total_tokens: Optional[int] = None
     status: Optional[str] = None        # raw harness status (claude idle/shell/busy)
+    task_lifecycle: Optional[str] = None  # exact Codex task_started/task_complete/turn_aborted
     mtime: Optional[float] = None       # newest transcript/db mtime (epoch sec) for liveness
     liveness: str = "unknown"
     # --- F-25/F-26 registry first-class fields (all Optional → absent harness = None) ---
@@ -440,11 +441,12 @@ def deterministic_progress_fingerprint(ev_in):
         "file_signature": ev_in.get("file_signature"),
         "artifact_signature": ev_in.get("artifact_signature"),
         "test_result": ev_in.get("test_result"),
+        "terminal_observation": ev_in.get("terminal_observation"),
     }
     present = {key: value for key, value in scoped.items() if value not in (None, "", {})}
     if not any(key in present for key in (
         "registry_transition", "heartbeat", "tool", "file_signature",
-        "artifact_signature", "test_result",
+        "artifact_signature", "test_result", "terminal_observation",
     )):
         return ""
     payload = json.dumps(present, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
@@ -469,18 +471,54 @@ def _matching_attempt_heartbeat(ev_in):
     return heartbeat
 
 
+def _matching_attempt_terminal(ev_in):
+    """Return exact attempt-scoped terminal infrastructure evidence."""
+
+    terminal = ev_in.get("terminal_observation")
+    identity = ("attempt_id", "route_id", "route_node")
+    if not isinstance(terminal, dict) or any(not ev_in.get(key) for key in identity):
+        return None
+    if any(terminal.get(key) != ev_in.get(key) for key in identity):
+        return None
+    action = terminal.get("terminal_action")
+    if not isinstance(action, str) or not (
+        action in {"process-exited", "registry-terminal", "completed-marker"}
+        or action.startswith("dead-")
+    ):
+        return None
+    return terminal
+
+
 def classify_attempt_evidence(ev_in, now=None):
     """Pure F-25 exact-attempt verdict shared by all dispatch surfaces.
 
-    Return ``None`` for legacy rows lacking both identity halves.  Otherwise
-    return an auditable verdict containing exact PID/start and deterministic
-    progress evidence.  This function never reads the process table itself.
+    Return ``None`` only when neither an exact PID/start pair nor canonical
+    attempt/route identity is available. Otherwise return an auditable verdict
+    with deterministic progress evidence. This function never reads the process
+    table itself.
     """
-    if ev_in.get("pid") is None or not ev_in.get("proc_start"):
+    identity = ("attempt_id", "route_id", "route_node")
+    has_process_identity = ev_in.get("pid") is not None and bool(ev_in.get("proc_start"))
+    if not has_process_identity and any(not ev_in.get(key) for key in identity):
         return None
     heartbeat = _matching_attempt_heartbeat(ev_in)
+    terminal = _matching_attempt_terminal(ev_in)
     pid_scope = ev_in.get("pid_scope")
-    if pid_scope == "namespace-local":
+    if terminal:
+        completed = (
+            terminal.get("terminal_action") == "completed-marker"
+            or terminal.get("note") == "completed-marker"
+        )
+        state, source = ("done" if completed else "dead"), "terminal-observation"
+        rule = (
+            "exact attempt has completion-marker terminal evidence"
+            if completed
+            else f"exact attempt observed terminal action {terminal['terminal_action']}"
+        )
+    elif not has_process_identity:
+        state, source = "unknown", "registry"
+        rule = "exact registered attempt has no process identity"
+    elif pid_scope == "namespace-local":
         if heartbeat and heartbeat.get("phase") == "terminal":
             state, source = "done", "heartbeat"
             rule = "namespace-local attempt emitted an exact terminal heartbeat"
@@ -516,6 +554,7 @@ def classify_attempt_evidence(ev_in, now=None):
         "proc_start": ev_in.get("proc_start"),
         "actual_proc_start": ev_in.get("actual_proc_start"),
         "heartbeat": ev_in.get("heartbeat"),
+        "terminal_observation": terminal,
         "registry_transition": ev_in.get("registry_transition"),
         "progress_fingerprint": deterministic_progress_fingerprint(ev_in),
         "observed_at": now,
@@ -540,8 +579,9 @@ def _is_unused(state, ev_in):
 def classify_session(ev_in, now, stale_min=SESSION_STALE_MIN, key=None):
     """(state, evidence). ev_in = collected evidence, never a live probe (hermetic).
 
-    Recognized keys: pid_alive, proc_start_match, orphan, status, mtime, transcript,
-    started_at, updated_at, activity_ms, harness, pid, proc_start, fd_owner, is_worker.
+    Recognized keys: pid_alive, proc_start_match, orphan, status, task_lifecycle,
+    mtime, transcript, started_at, updated_at, activity_ms, harness, pid,
+    proc_start, fd_owner, is_worker.
     """
     def out(state, tier, source, rule):
         if key is None:
@@ -565,6 +605,13 @@ def classify_session(ev_in, now, stale_min=SESSION_STALE_MIN, key=None):
     status = ev_in.get("status")
     st = _session_status_state(status)
     m = ev_in.get("mtime")
+
+    lifecycle = ev_in.get("task_lifecycle")
+    if ev_in.get("harness") == "codex" and st is None:
+        if lifecycle == "task_started":
+            return out("working", 2, "codex-lifecycle", "latest exact Codex task is started")
+        if lifecycle in {"task_complete", "turn_aborted"}:
+            return out("idle", 2, "codex-lifecycle", f"latest exact Codex task is {lifecycle}")
 
     if m is None:
         # No recency signal at all → lean on the registry, else idle.
@@ -634,7 +681,7 @@ def classify_job(ev_in, now, key=None):
     # that exact attempt immediately.  Legacy rows without both identity halves keep
     # the mtime fallback below.
     exact = classify_attempt_evidence(ev_in, now)
-    if exact and exact["state"] != "unknown":
+    if exact:
         state, evidence = out(exact["state"], exact["tier"], exact["source"], exact["rule"])
         evidence["classifier_source"] = exact["classifier_source"]
         evidence["attempt"] = exact

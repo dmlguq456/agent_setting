@@ -358,8 +358,13 @@ def watch_launched_attempt(args, route, node, attempt_id, launch_fields):
             return "capacity", last
         if last.get("terminal_action") == "dead-no-progress":
             return "fallback", last
-        if last.get("terminal_action") in {"process-exited", "registry-terminal"}:
-            return "terminal", last
+        if last.get("terminal_action") == "process-exited":
+            return "fallback", last
+        if last.get("terminal_action") == "registry-terminal":
+            terminal = terminal_attempt_state(
+                args.jobs, route["route_id"], node["id"], attempt_id
+            )
+            return terminal if terminal is not None else ("fail-closed", last)
         return "observed", last
 
     # Establish a file/heartbeat fingerprint before the first deadline. This
@@ -698,6 +703,11 @@ def main() -> int:
             print("selected_hop=inline")
             print(f"reason={hop['reason_enum']}")
             print("fleet_visibility=none")
+            print("route_reuse=required")
+            print(f"route_id={route['route_id']}")
+            print(f"route_node={node['id']}")
+            print(f"route_file={args.route}")
+            print(f"completion_gate={node['completion_gate']}")
             print("attempt_trace=" + "|".join(attempts))
             print("prior_attempt_ids=" + ",".join(x for values in prior_failures.values() for x in values))
             if direct_failures:

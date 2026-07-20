@@ -710,7 +710,7 @@ class CodexAttemptIdentityTest(unittest.TestCase):
         self.assertEqual(state, "done")
         self.assertIn("terminal heartbeat", job.state_evidence["attempt"]["rule"])
 
-    def test_namespace_local_stale_heartbeat_falls_back_without_host_pid_death(self):
+    def test_namespace_local_stale_heartbeat_never_uses_cwd_transcript(self):
         with tempfile.TemporaryDirectory() as tmp:
             heartbeat_dir = os.path.join(tmp, ".dispatch", "heartbeats")
             os.makedirs(heartbeat_dir)
@@ -727,8 +727,34 @@ class CodexAttemptIdentityTest(unittest.TestCase):
                  mock.patch("fleet.collectors.dispatch.os.path.exists", return_value=False):
                 state = dispatch._dispatch_liveness(job, now=1000.0, track=False)
 
-        self.assertEqual(state, "working")
-        self.assertEqual(job.state_evidence["tier"], 3)
+        self.assertEqual(state, "unknown")
+        self.assertEqual(job.state_evidence["tier"], 2)
+        self.assertEqual(job.state_evidence["attempt"]["state"], "unknown")
+
+    def test_namespace_local_process_exit_beats_fresh_unrelated_transcript(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            heartbeat_dir = os.path.join(tmp, ".dispatch", "heartbeats")
+            watchdog_dir = os.path.join(tmp, ".dispatch", "watchdog")
+            os.makedirs(heartbeat_dir)
+            os.makedirs(watchdog_dir)
+            attempt = "att-namespace-exited"
+            with open(os.path.join(heartbeat_dir, attempt + ".json"), "w", encoding="utf-8") as out:
+                json.dump({"attempt_id": attempt, "route_id": "rt-a", "route_node": "test",
+                           "phase": "launch", "sequence": 1, "updated_at": 995}, out)
+            with open(os.path.join(watchdog_dir, attempt + ".json"), "w", encoding="utf-8") as out:
+                json.dump({"terminal_action": "process-exited", "observed_at": 996}, out)
+            job = DispatchJob(key="code-test", slug="namespace", cwd="/work/wt",
+                              source="jobs", status="open", harness="codex", pid=437,
+                              proc_start="777", pid_scope="namespace-local",
+                              attempt_id=attempt, route_id="rt-a", route_node="test")
+            with mock.patch.object(dispatch, "_registry_home", return_value=tmp), \
+                 mock.patch.object(dispatch, "_job_transcript_signal", return_value="working"), \
+                 mock.patch("fleet.collectors.dispatch.os.path.exists", return_value=False):
+                state = dispatch._dispatch_liveness(job, now=1000.0, track=False)
+
+        self.assertEqual(state, "dead")
+        self.assertEqual(job.state_evidence["attempt"]["source"], "terminal-observation")
+        self.assertIn("process-exited", job.state_evidence["attempt"]["rule"])
 
     def test_legacy_row_without_process_identity_keeps_rollout_fallback(self):
         job = DispatchJob(key="code-test", slug="legacy", cwd="/work/wt",
@@ -738,6 +764,18 @@ class CodexAttemptIdentityTest(unittest.TestCase):
 
         self.assertEqual(state, "working")
         self.assertEqual(job.state_evidence["tier"], 3)
+
+    def test_exact_registered_attempt_without_pid_ignores_cwd_transcript(self):
+        job = DispatchJob(key="code-test", slug="registered", cwd="/work/wt",
+                          source="jobs", status="open", harness="codex",
+                          attempt_id="att-registered-no-pid",
+                          route_id="rt-a", route_node="test")
+        with mock.patch.object(dispatch, "_job_transcript_signal", return_value="working"):
+            state = dispatch._dispatch_liveness(job, now=1000.0, track=False)
+
+        self.assertEqual(state, "unknown")
+        self.assertEqual(job.state_evidence["tier"], 2)
+        self.assertIn("no process identity", job.state_evidence["rule"])
 
     def test_latest_retry_owns_route_node_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:

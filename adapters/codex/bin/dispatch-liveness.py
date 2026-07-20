@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import anchored_capacity_failure  # noqa: E402
+from codex_dispatch_terminal import inspect_terminal_log  # noqa: E402
 from tools.fleet.model import (  # noqa: E402
     ATTEMPT_CLASSIFIER_SOURCE,
     classify_attempt_evidence,
@@ -141,27 +142,55 @@ def attempt_heartbeat(agent_home: Path, metadata: dict[str, str]) -> dict | None
         return None
 
 
+def attempt_terminal_observation(
+    agent_home: Path, metadata: dict[str, str]
+) -> dict | None:
+    attempt = metadata.get("attempt_id", "").replace("/", "_")
+    route = metadata.get("route_id")
+    node = metadata.get("route_node")
+    if not attempt or not route or not node:
+        return None
+    path = agent_home / ".dispatch" / "watchdog" / f"{attempt}.json"
+    try:
+        if path.stat().st_size > 8192:
+            return None
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(value, dict) or not value.get("terminal_action"):
+        return None
+    return {
+        **value,
+        "attempt_id": metadata["attempt_id"],
+        "route_id": route,
+        "route_node": node,
+    }
+
+
 def recorded_attempt_state(metadata: dict[str, str], now: float, agent_home: Path) -> dict | None:
     pid = metadata.get("pid", "")
     expected = metadata.get("pid_start", "")
-    if not pid.isdigit() or not expected:
+    if not all(metadata.get(key) for key in ("attempt_id", "route_id", "route_node")):
         return None
-    proc = Path("/proc") / pid
+    numeric_pid = int(pid) if pid.isdigit() else None
+    proc = Path("/proc") / pid if numeric_pid is not None else None
     alive = False
     actual = ""
-    try:
-        actual_start = (proc / "stat").read_text(encoding="utf-8").split()[21]
-        actual = actual_start
-        alive = True
-    except (OSError, IndexError):
-        pass
+    if proc is not None:
+        try:
+            actual_start = (proc / "stat").read_text(encoding="utf-8").split()[21]
+            actual = actual_start
+            alive = True
+        except (OSError, IndexError):
+            pass
     return classify_attempt_evidence({
-        "pid": int(pid), "proc_start": expected, "actual_proc_start": actual,
+        "pid": numeric_pid, "proc_start": expected, "actual_proc_start": actual,
         "pid_alive": alive, "proc_start_match": bool(alive and actual == expected),
         "pid_scope": metadata.get("pid_scope"),
         "attempt_id": metadata.get("attempt_id"), "route_id": metadata.get("route_id"),
         "route_node": metadata.get("route_node"),
         "heartbeat": attempt_heartbeat(agent_home, metadata),
+        "terminal_observation": attempt_terminal_observation(agent_home, metadata),
     }, now)
 
 
@@ -294,6 +323,20 @@ def main(argv: list[str]) -> int:
             open_n += 1
             label = slug or "?"
             metadata = parse_metadata(pipe)
+            terminal = inspect_terminal_log(metadata.get("log_file"))
+            if (
+                metadata.get("attempt_id")
+                and metadata.get("route_id")
+                and metadata.get("route_node")
+                and terminal
+                and terminal.get("failure_note")
+            ):
+                print(
+                    f"EXITED   {label} - exact {terminal['terminal_event']} "
+                    f"{terminal['verdict']} ({terminal['failure_note']}) [open: {ts}]"
+                )
+                suspect += 1
+                continue
             exact = recorded_attempt_state(metadata, now, agent_home)
             if exact and exact["state"] == "working":
                 detail = ("namespace-local exact heartbeat" if exact.get("pid_scope") == "namespace-local"
@@ -315,6 +358,13 @@ def main(argv: list[str]) -> int:
                 continue
             if exact and exact["state"] == "done":
                 print(f"COMPLETED {label} - namespace-local terminal heartbeat awaits registry reconciliation [open: {ts}]")
+                suspect += 1
+                continue
+            if exact and exact["state"] == "unknown":
+                print(
+                    f"SUSPECT  {label} - exact attempt has no fresh or terminal evidence; "
+                    f"cwd-wide transcripts ignored [open: {ts}]"
+                )
                 suspect += 1
                 continue
             # Profile jobs live under their isolated home. Non-profile nested workers

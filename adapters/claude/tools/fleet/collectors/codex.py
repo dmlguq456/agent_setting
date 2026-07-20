@@ -728,6 +728,8 @@ def enrich(sess):
         sess.mtime = os.path.getmtime(path)
     except OSError:
         sess.mtime = None
+    lifecycle = _latest_task_lifecycle(path)
+    sess.task_lifecycle = lifecycle[0] if lifecycle else None
     tc = _tail_token_count(path)
     if tc:
         _apply_token_count(sess, tc)

@@ -18,6 +18,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / "utilities")]
 from tools.fleet.model import ATTEMPT_CLASSIFIER_SOURCE, classify_attempt_evidence  # noqa: E402
 from dispatch_contract import (close_attempt_row_if, reconcile_local_registry,
                                resolve_agent_home)  # noqa: E402
+from codex_dispatch_terminal import inspect_terminal_log  # noqa: E402
 _cleanup_spec = importlib.util.spec_from_file_location("worktree_cleanup", ROOT / "utilities/worktree-cleanup.py")
 cleanup = importlib.util.module_from_spec(_cleanup_spec)
 sys.modules[_cleanup_spec.name] = cleanup
@@ -75,6 +76,28 @@ def attempt_heartbeat(home, meta):
         return None
 
 
+def attempt_terminal_observation(home, meta):
+    attempt = (meta.get("attempt_id") or "").replace("/", "_")
+    route, node = meta.get("route_id"), meta.get("route_node")
+    if home is None or not attempt or not route or not node:
+        return None
+    path = home / ".dispatch" / "watchdog" / f"{attempt}.json"
+    try:
+        if path.stat().st_size > 8192:
+            return None
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(value, dict) or not value.get("terminal_action"):
+        return None
+    return {
+        **value,
+        "attempt_id": meta["attempt_id"],
+        "route_id": route,
+        "route_node": node,
+    }
+
+
 def proc_inputs(row, home=None):
     meta = row["meta"]; raw = meta.get("pid", "")
     pid = int(raw) if raw.isdigit() else None; expected = meta.get("pid_start", "")
@@ -88,7 +111,8 @@ def proc_inputs(row, home=None):
             "pid_scope": meta.get("pid_scope"),
             "attempt_id": meta.get("attempt_id"), "route_id": meta.get("route_id"),
             "route_node": meta.get("route_node"),
-            "heartbeat": attempt_heartbeat(home, meta)}
+            "heartbeat": attempt_heartbeat(home, meta),
+            "terminal_observation": attempt_terminal_observation(home, meta)}
 
 
 def timestamp(value):
@@ -290,20 +314,32 @@ def resume_boundary(route_file, incomplete_nodes):
 
 def classify(row, args, newest_orders, rows=None):
     if row["status"] not in OPEN: return "terminal", "already-terminal", None
+    meta = row["meta"]
+    terminal = inspect_terminal_log(meta.get("log_file"))
+    if (
+        meta.get("attempt_id")
+        and meta.get("route_id")
+        and meta.get("route_node")
+        and terminal
+        and terminal.get("failure_note")
+    ):
+        return (
+            "terminal-handoff",
+            f"{terminal['terminal_event']}:{terminal['verdict']}",
+            terminal["failure_note"],
+        )
     exact = classify_attempt_evidence(proc_inputs(row, args.agent_home), args.now)
     if exact and exact["state"] == "working": return "active", exact["rule"], None
     if exact and exact["state"] == "done": return "terminal-heartbeat", exact["rule"], "completed-terminal-heartbeat"
     if exact and exact["state"] == "dead":
         if _marker_backed_repair(row, args.agent_home):
             return "marker-backed-stale", "completed-marker-linkage", "completed-marker"
-        meta = row["meta"]
         if (rows is not None and meta.get("worker_type") == "owner"
                 and not meta.get("route_node")):
             incomplete, record_status = route_incomplete(row, args.agent_home, rows)
             if record_status == "ok" and incomplete and has_orphaned_dependents(row, rows, incomplete, args):
                 return "orphan", "dead-parent-orphaned", "dead-parent-orphaned"
         return "exact-dead", exact["rule"], "dead-exact-pid"
-    meta = row["meta"]
     key = (meta.get("route_id"), meta.get("route_node"))
     if all(key) and newest_orders.get(key) == row["order"]:
         proven, reason = terminal_marker(row, args.agent_home)

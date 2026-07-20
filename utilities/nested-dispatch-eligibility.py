@@ -14,6 +14,8 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "utilities"))
+from dispatch_contract import CANONICAL_PARENT_TRANSPORTS  # noqa: E402
 
 
 def auth_check(child_harness: str, worktree: str | Path | None = None) -> tuple[bool, str]:
@@ -78,6 +80,12 @@ def command_check(child_harness: str, worktree: str) -> tuple[str, str, str]:
 def evaluate(args: argparse.Namespace) -> dict[str, str]:
     if args.launch_authority == "ancestor-broker":
         status, source, failure = "unsupported", "dispatch-contract-v3", "launch-broker-retired"
+    elif args.parent_transport not in CANONICAL_PARENT_TRANSPORTS:
+        status, source, failure = (
+            "unsupported",
+            "dispatch-contract-v3",
+            "noncanonical-parent-transport",
+        )
     elif (
         args.parent_harness == "codex"
         and args.parent_transport == "headless"

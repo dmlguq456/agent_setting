@@ -2533,9 +2533,18 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
         job_children = {}  # parent dispatch slug -> [depth-2 jobs]
         orphans = []       # project-level fallback (parent dead/off-screen/no-env)
         loops_jobs = []    # no-parent-is-normal (cron loops) — no orphan marker
+        visible_parent_slugs = {
+            j.slug for j in group_jobs
+            if j.slug and max(1, int(getattr(j, "depth", 1) or 1)) < 2
+        }
         for j in group_jobs:
             if getattr(j, "parent_slug", None) and getattr(j, "depth", 1) >= 2:
-                job_children.setdefault(j.parent_slug, []).append(j)
+                if j.parent_slug in visible_parent_slugs:
+                    job_children.setdefault(j.parent_slug, []).append(j)
+                else:
+                    # A malformed/stale parent edge must not make a live depth-2 row
+                    # disappear from Fleet. Surface it as a project-level orphan.
+                    orphans.append(j)
             elif j.is_child and j.parent_sid and j.parent_sid in shown_sids:
                 children.setdefault(j.parent_sid, []).append(j)
             elif j.is_child and getattr(j, "parent_cwd", None):

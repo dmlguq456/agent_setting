@@ -58,6 +58,16 @@ class NestedEligibilityTest(unittest.TestCase):
             "codex-owner-network-contract+direct-auth+headless-check",
         )
 
+    def test_runtime_surface_label_is_not_a_transport_tuple_value(self):
+        with tempfile.TemporaryDirectory() as worktree, \
+             mock.patch.object(N, "command_check") as checked:
+            args = self.args(worktree)
+            args.parent_transport = "codex-exec-headless"
+            row = N.evaluate(args)
+        self.assertEqual(row["status"], "unsupported")
+        self.assertEqual(row["failure_class"], "noncanonical-parent-transport")
+        checked.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

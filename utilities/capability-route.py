@@ -11,7 +11,12 @@ DEFAULTS_SPEC = importlib.util.spec_from_file_location("dispatch_defaults", ROOT
 DEFAULTS = importlib.util.module_from_spec(DEFAULTS_SPEC); DEFAULTS_SPEC.loader.exec_module(DEFAULTS)
 VALID_AFFINITY = DEFAULTS.AFFINITY_VALUES | {"unspecified"}
 sys.path.insert(0, str(ROOT/"utilities"))
-from dispatch_contract import resolve_agent_home, close_attempt_row, DispatchContractError
+from dispatch_contract import (
+    CANONICAL_PARENT_TRANSPORTS,
+    DispatchContractError,
+    close_attempt_row,
+    resolve_agent_home,
+)
 ORDER = {"direct":0,"quick":1,"standard":2,"strong":3,"thorough":4,"adversarial":5}
 TRACKING = {"tracked", "untracked"}
 GATE_FIELDS = {"spec_read", "drift_verdict", "workflow_mode", "artifact_guard"}
@@ -76,6 +81,8 @@ def _validate_dispatch_evidence(evidence, contract_version=DISPATCH_CONTRACT_VER
         if contract_version==DISPATCH_CONTRACT_VERSION:
             if row["launch_authority"] != "conductor":
                 raise ValueError("v3 dispatch evidence requires conductor launch authority")
+            if row["parent_transport"] not in CANONICAL_PARENT_TRANSPORTS:
+                raise ValueError("v3 dispatch evidence requires canonical parent transport")
             if any(row.get(key) for key in BROKER_FIELDS):
                 raise ValueError("v3 dispatch evidence must not carry broker fields")
         elif contract_version==2:

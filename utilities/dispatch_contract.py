@@ -18,6 +18,7 @@ from typing import Callable
 
 ELIGIBILITY = {"supported", "unsupported", "unknown"}
 LAUNCH_AUTHORITIES = {"conductor", "ancestor-broker"}
+CANONICAL_PARENT_TRANSPORTS = {"headless", "interactive"}
 _MODULE_ROOT = Path(__file__).resolve().parents[1]
 _CAPACITY_TERMINAL_RE = re.compile(
     r"(?:error\s*[:\-]\s*)?(?:selected\s+)?model(?:\s+[A-Za-z0-9._:/-]+)?\s+"
@@ -221,6 +222,11 @@ def validate_nested_eligibility(
         raise DispatchContractError("invalid-launch-authority", launch_authority)
     if status not in ELIGIBILITY:
         raise DispatchContractError("invalid-nested-eligibility", status)
+    if parent_transport not in CANONICAL_PARENT_TRANSPORTS and parent_transport != "unknown":
+        raise DispatchContractError(
+            "invalid-parent-transport",
+            f"{parent_transport}; expected one of {sorted(CANONICAL_PARENT_TRANSPORTS)}",
+        )
     missing = [
         name
         for name, value in (

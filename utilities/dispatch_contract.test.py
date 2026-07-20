@@ -29,6 +29,10 @@ class DispatchContractTest(unittest.TestCase):
   with self.assertRaises(D.DispatchContractError) as caught:
    D.validate_nested_eligibility(depth=2,action="start",parent_harness="codex",parent_transport="headless",parent_sandbox="workspace-write",child_harness="codex",launch_authority="conductor",status="unknown",source="fixture")
   self.assertEqual(caught.exception.reason,"nested-child-spawn-unknown")
+ def test_runtime_surface_label_is_rejected_as_parent_transport(self):
+  with self.assertRaises(D.DispatchContractError) as caught:
+   D.validate_nested_eligibility(depth=2,action="start",parent_harness="codex",parent_transport="codex-exec-headless",parent_sandbox="workspace-write",child_harness="codex",launch_authority="conductor",status="supported",source="fixture")
+  self.assertEqual(caught.exception.reason,"invalid-parent-transport")
  def test_launch_broker_is_retired(self):
   with tempfile.TemporaryDirectory() as td:
    root=Path(td); jobs=root/"jobs.log"

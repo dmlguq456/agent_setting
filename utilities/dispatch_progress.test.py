@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import importlib.util
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -126,6 +127,41 @@ class ProgressTest(unittest.TestCase):
         state=P.watchdog(self.args(),10)
         self.assertEqual(state["terminal_action"],"process-exited")
         self.assertNotIn("fail-closed",state["action"])
+
+    def test_exit_zero_blocked_sandbox_init_closes_exact_attempt(self):
+        log = self.base / "stage.attempt.codex.jsonl"
+        rows = [
+            {"type": "turn.started"},
+            {"type": "item.completed", "item": {
+                "type": "command_execution", "exit_code": 1,
+                "aggregated_output": (
+                    "bwrap: Can't bind mount /bindfile123 on "
+                    "/newroot/work/repo/.codex: Unable to mount source on "
+                    "destination: No such file or directory\n"
+                ),
+            }},
+            {"type": "item.completed", "item": {
+                "type": "agent_message",
+                "text": (
+                    "artifact: -\nverdict: BLOCKED\n"
+                    "blocker: Runtime sandbox cannot start commands."
+                ),
+            }},
+            {"type": "turn.completed"},
+        ]
+        log.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
+        self.jobs.write_text(self.jobs.read_text().replace(
+            f"write_scope={self.scope}",
+            f"write_scope={self.scope},log_file={log}",
+        ))
+        P.heartbeat(self.args(), 0)
+        self.proc.terminate()
+        self.proc.wait(timeout=3)
+        state = P.watchdog(self.args(apply=True), 10)
+        self.assertEqual(state["terminal_action"], "dead-sandbox-init")
+        row = self.jobs.read_text()
+        self.assertNotIn("\topen\t", row)
+        self.assertIn("note=dead-sandbox-init", row)
 
     def test_codex_preflight_projects_stage_heartbeat(self):
         command=[str(ROOT/"adapters/codex/bin/preflight.sh"),"stage-heartbeat",

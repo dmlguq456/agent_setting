@@ -332,6 +332,30 @@ def _attempt_heartbeat(attempt_id):
         return None
 
 
+def _attempt_terminal_observation(attempt_id, route_id, route_node):
+    if not attempt_id or not route_id or not route_node:
+        return None
+    path = os.path.join(
+        _registry_home(), ".dispatch", "watchdog",
+        str(attempt_id).replace("/", "_") + ".json",
+    )
+    try:
+        if os.path.getsize(path) > 8192:
+            return None
+        with open(path, encoding="utf-8") as handle:
+            value = json.load(handle)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(value, dict) or not value.get("terminal_action"):
+        return None
+    return {
+        **value,
+        "attempt_id": attempt_id,
+        "route_id": route_id,
+        "route_node": route_node,
+    }
+
+
 def _dispatch_liveness(job, now, track=True):
     """Job → state string. Signature/return preserved; the verdict now comes from the
     single F-25 classifier. Stamps `job.state_evidence` as a side effect.
@@ -371,6 +395,9 @@ def _dispatch_liveness(job, now, track=True):
         "route_node": job.route_node,
         "registry_transition": {"status": job.status},
         "heartbeat": _attempt_heartbeat(job.attempt_id),
+        "terminal_observation": _attempt_terminal_observation(
+            job.attempt_id, job.route_id, job.route_node
+        ),
         # A loop proc row is decided by tier-2 evidence; skip the mtime probe entirely
         # (it was never consulted on that path pre-F-25 either).
         "transcript": None if is_loop else _job_transcript_signal(job, now),

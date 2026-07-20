@@ -1,6 +1,7 @@
 # agent-fleet-dashboard — Spec (PRD)
 
 > mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · **v2 2026-07-10** (drift 흡수 + stage-dispatch 관제 parity + UI 가독성 개선) · **v3 2026-07-12** (minor 5건[F-14~F-19] 흡수 승격 — §4.7 분리 신설 + audit 🟡 3건 반영: §3 `--demo` 등재·§9 모듈 트리 현행화. 근거 = `_internal/audit/audit_2026-07-12T0910.md`) · **v4 2026-07-13** (F-20 dynamic Codex rate-window contract) · **v5 2026-07-13** (F-21 Codex native title + cross-harness fleet title provider. Claude-only refresher 계약 폐기) · **v6 2026-07-14** (F-22 responsive titles + F-23 recursive-storm containment) · **v7 2026-07-15** (F-24 portable worker attribution + unique Codex rollout ownership) · **v8 2026-07-15** (F-25~F-28 — 상태 판정 단일 모델·interactive 세션 레지스트리 1급·제한적 세션 제어[Non-goal 반전]·분사 정책 연동 계약. 근거 = 사용자 결정 4건: "fleet 직접 세션 제어"·"반쪽짜리 해소, 전향적 확장"·"버그가 아니라 판정 기준 자체가 불안정"·"분사 정책과 연동되는 가장 중요한 UI") · **v9 2026-07-15** (minor 6건 흡수 + audit 🟡 2건 해소[어휘 매핑 표·§10 다이어그램] + F-27 마우스 1급 재설계 + F-30 종착 비전 등재 "dispatch·서브에이전트 처리 과정 시각화". 근거 = `_internal/audit/audit_2026-07-15T1734.md` + 사용자 방향 2건) · **v10 2026-07-15** (F-28 구현 확정 + F-30 처리-과정 뷰 설계 확정 — 전제였던 stage-dispatch topology registry·route record·broker가 v11 구현으로 main 착륙[`f5f3949f`], 실측 record 스키마 기반) · **v11 2026-07-17** (두-평면 실험 폐기 후 채택분 등재 — F-29 스트립·비동기 판정 개정 + F-19 레포별 카드 행 + F-17 분사 세션 요약 전면 적용 + §4.10 F-32~F-34[분사 제목 입양·harness(model·effort) 통합·표시 문법 정리]. 근거 = 사용자 결정 연쇄 2026-07-16 "전부 다 버리고, 메모리 쪽과 서브 에이전트 쪽만 기존의 fleet에" 외 다수. 구현 선행·등재 후행 — 사용자 명시 이연의 사후 소급, 코드 실측 기준)
+> · **v12 reliability minor 2026-07-20** (exact dispatch terminal evidence·namespace heartbeat expiry·Codex task lifecycle 우선·unmatched depth-2 canonical parity)
 > 컴포넌트: `agent_setting` repo 의 **별도 내부 도구** — 기존 `spec/prd.md`(Unified Memory System)와 무관, 이 폴더(`spec/agent-fleet-dashboard/`)가 자체 청사진.
 > 입력(1순위 근거): `research/agent-fleet-dashboard/00_prior_art.md`(build-vs-adopt·herdr·렌더스택) · `research/agent-fleet-dashboard/01_tap_mechanics.md`(하네스별 tap·discovery·liveness, file-cited)
 > **v2 추가 입력**: `spec/stage-dispatch/prd.md`(SD-1~9 — 스테이지 단위 depth-2 headless 분사 계약, §9-13 fleet 표시 = Phase 2 잔여) · 현행 `tools/fleet/` 코드 전수 실측(2026-07-10 Explore, file:line-cited) · 사용자 관찰("워크플로우를 못 따라감 + UI 아쉬운 점 다수").
@@ -241,6 +242,14 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 - **F-25 (세션·잡 상태 판정의 단일 상태 모델)** ★ v8 핵심 — "기준 불안정" 해소.
   - **문제**: 상태 판정이 층층이 쌓인 사고별 휴리스틱에 분산돼 있다 — proc scan, transcript/rollout mtime 창(15min), slug 상관 dedup(F-18a), `open`→queued 매핑과 worktree mtime 유도(F-15), env 마커(F-18b/F-24), rollout fd 소유권(F-24). 각각은 정당하나 **우선순위·충돌 규칙이 코드 암묵**이라 같은 세션이 tick마다 다른 기준으로 분류될 수 있고, 사용자는 "왜 이 상태인가"를 검증할 수 없다.
   - **계약**: 단일 분류기(`model.py` 소유)가 모든 세션/잡의 상태를 결정한다. 입력 소스 우선순위를 규범으로 고정: **(1) 명시 registry 상태**(jobs.log status, `~/.claude/sessions` status) > **(2) 강한 프로세스 증거**(exact pid + `/proc` start-time, rollout fd 소유권, `AGENT_SESSION_ROLE` 등 env 마커) > **(3) mtime 휴리스틱**(최후, 유도값 표시 `~` 접두 유지). 하위 소스는 상위 소스와 모순될 때 절대 이기지 못한다.
+  - **exact lifecycle 보강(v12)**: registered dispatch는 exact
+    `attempt_id+route_id+route_node`의 terminal watchdog/log observation이 과거
+    heartbeat·PID·cwd mtime보다 우선한다. canonical attempt identity가 있으면
+    evidence가 stale/unknown이어도 cwd-wide transcript로 `working`을 합성하지 않는다.
+    interactive Codex session은 검증된 최신 `task_started`/`task_complete`/
+    `turn_aborted`를 mtime보다 먼저 사용하며 terminal lifecycle은 hysteresis 없이
+    즉시 `idle`이다. 이는 registered dispatch와 in-session/native activity를 같은
+    행으로 합치는 규칙이 아니라 두 표면의 독립적인 exact evidence 계약이다.
   - **어휘 정합 — 규범 매핑 표 [v9 삽입, audit 🟡 해소]**: 표시층은 아래 표를 임의 재해석하지 않는다. 구현 상수는 `model.py` 한곳(`SESSION_WORK_SEC=60s`, `SESSION_STALE_MIN=48h`, `JOB_STALE_MIN=15min`, `UNUSED_ACTIVITY_MS=2000ms`).
 
     **세션** (위 tier 우선순위 하에서):
@@ -252,6 +261,8 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
     | registry `status=busy` | 1 | `working` |
     | registry `status=idle/shell` + transcript 부재 + `updatedAt-startedAt ≤ 2000ms` | 1 | `unused` — **stale 창 면제**(mtime이 스폰 시각 고정이므로; 살아있는 한 유지, v8 minor #4) |
     | registry `status=idle/shell` (사용 이력 있음) | 1 | `idle` |
+    | Codex exact `task_started` | 2 | `working` |
+    | Codex exact `task_complete/turn_aborted` | 2 | `idle` (즉시) |
     | transcript 침묵 > 48h (registry busy/idle이어도) | 3 | `stale` — **하위 tier가 상위를 이기는 유일한 규범 예외**(48h 침묵 세션을 working으로 보이는 것이 더 나쁨; v8 사이클 D1 명문화). unused는 면제 |
     | transcript 활동 < 60s | 3 | `working` |
     | 그 외 | 3 | `idle` |
@@ -266,6 +277,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
     | `done` | `done` | |
     | `killed` / `cancelled` | `killed` | cancelled는 어휘 통합, raw는 evidence에 보존 |
     | (liveness 유도) 15min 침묵 / pid 사망 | `stale` / `dead` | dispatch는 `--all` 무관 항상 노출 |
+    | exact terminal watchdog/log | `done` / `dead` | heartbeat·PID·mtime보다 우선, 즉시 |
 
     **hysteresis**: 하향 전이(`working→stale`, `idle→stale`)는 tier-3 유도에만 300초 dwell 적용, 상향(활동 재개)과 `dead/killed/done`은 즉시. tier-1 명시 선언은 dwell로 지연되지 않는다.
   - **플래핑 방지 hysteresis**: 상태 하향 전이(working→idle, idle→stale)는 임계 시간 지속 시에만, 상향 전이(활동 재개)는 즉시. 임계값은 상수 한곳(`model.py`)에 모으고 tick 간 직전 상태를 참조해 경계 진동을 흡수한다.

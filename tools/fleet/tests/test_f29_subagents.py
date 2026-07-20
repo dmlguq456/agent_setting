@@ -226,6 +226,28 @@ class CodexSubagentTest(unittest.TestCase):
                      [{"id": "child", "lifecycle": "turn_aborted"}])
             self.assertFalse(codex._thread_subagents(tmp)["parent"][0].active)
 
+    def test_ordinary_codex_session_enrich_exposes_terminal_lifecycle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rollout = os.path.join(
+                tmp,
+                "rollout-2026-07-20T00-00-00-"
+                "01234567-89ab-cdef-0123-456789abcdef.jsonl",
+            )
+            with open(rollout, "w", encoding="utf-8") as out:
+                for event in ("task_started", "task_complete"):
+                    out.write(json.dumps({
+                        "type": "event_msg",
+                        "payload": {"type": event, "turn_id": "turn-1"},
+                    }) + "\n")
+            sess = Session(harness="codex", pid=4321, cwd=tmp)
+            codex._PROC_PATHS[sess.pid] = rollout
+            with mock.patch.object(codex, "_config_model_effort", return_value=(None, None)), \
+                 mock.patch.object(codex, "_thread_titles", return_value={}), \
+                 mock.patch.object(codex, "_thread_subagents", return_value={}), \
+                 mock.patch.object(codex, "_tail_token_count", return_value=None):
+                codex.enrich(sess)
+        self.assertEqual(sess.task_lifecycle, "task_complete")
+
     def test_closed_edge_is_done_without_a_rollout(self):
         with tempfile.TemporaryDirectory() as tmp:
             self._db(tmp, [("parent", "child", "closed")],

@@ -87,6 +87,7 @@ def collect_evidence(sess):
         "proc_start_match": match,
         "orphan": bool(sess.orphan),
         "status": sess.status,
+        "task_lifecycle": getattr(sess, "task_lifecycle", None),
         "mtime": sess.mtime,
         # `_has_transcript` is set by the claude enricher; other harnesses fall back to
         # "an mtime exists at all", which is the same signal they had pre-F-25.

@@ -45,6 +45,7 @@ from worker_bootstrap import (  # noqa: E402
     render_worker_bootstrap,
     resolve_worker_type,
 )
+from codex_dispatch_terminal import inspect_terminal_log  # noqa: E402
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 # Verification rigor is derived from intensity — CONVENTIONS §1.1 mapping table (SoT).
 # `--qa` is no longer a user-facing axis; optional, derived from --intensity when omitted.
@@ -501,6 +502,17 @@ def effective_runtime_sandbox(args: argparse.Namespace) -> str:
     ):
         return "danger-full-access"
     return args.sandbox
+
+
+def invalid_codex_mount_target(args: argparse.Namespace, worktree: Path) -> Path | None:
+    """Return an invalid `.codex` destination when Codex will mount a sandbox."""
+
+    target = worktree / ".codex"
+    if effective_runtime_sandbox(args) == "danger-full-access":
+        return None
+    if target.is_symlink() or (target.exists() and not target.is_dir()):
+        return target
+    return None
 
 
 def nested_owner_writable_dirs(args: argparse.Namespace) -> tuple[Path, ...]:
@@ -1105,6 +1117,15 @@ def main(argv: list[str]) -> int:
         return fail("worktree-not-found", 66, worktree=args.worktree)
     if subprocess.run(["git", "-C", args.worktree, "rev-parse", "--is-inside-work-tree"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
         return fail("not-a-git-worktree", 65, worktree=args.worktree)
+    invalid_mount = invalid_codex_mount_target(args, worktree)
+    if invalid_mount is not None:
+        return fail(
+            "invalid-worktree-codex-mount-target",
+            65,
+            detail=".codex must be a directory while the Codex sandbox is enabled",
+            path=str(invalid_mount),
+            child_spawned="0",
+        )
     try:
         args.artifact_root = resolve_artifact_root(args.worktree)
     except ValueError as e:
@@ -1331,6 +1352,23 @@ def main(argv: list[str]) -> int:
                 close_job_row(
                     jobs, args.slug, args.worktree, outcome.failure, "", args.attempt_id
                 )
+            else:
+                terminal = inspect_terminal_log(log_path)
+                args.terminal_verdict = terminal.get("verdict") if terminal else None
+                terminal_note = terminal.get("failure_note") if terminal else ""
+                if terminal_note:
+                    close_attempt_row(
+                        jobs,
+                        args.attempt_id,
+                        terminal_note,
+                        evidence={
+                            "detected_by": "foreground-terminal-handoff",
+                            "failure_class": terminal["failure_class"],
+                            "terminal_event": terminal["terminal_event"],
+                            "log_file": str(log_path),
+                        },
+                    )
+                    args.worker_failure = terminal_note
         else:
             # SD-15: detached launches retain the short early-death watch.
             death = watch_early_death(proc, log_path, args.early_exit_watch)
@@ -1387,6 +1425,7 @@ def main(argv: list[str]) -> int:
     print(f"runtime_sandbox={effective_runtime_sandbox(args)}")
     print(f"worker_exit={getattr(args, 'worker_exit', '-')}")
     print(f"worker_failure={getattr(args, 'worker_failure', None) or '-'}")
+    print(f"terminal_verdict={getattr(args, 'terminal_verdict', None) or '-'}")
     print(f"require_hook_trust={1 if args.require_hook_trust else 0}")
     print(f"nested_headless_network={1 if args.nested_headless_network else 0}")
     print(f"nested_codex_home={args.nested_codex_home_path or '-'}")

@@ -25,6 +25,34 @@ class RegistryTest(unittest.TestCase):
   applied=self.invoke("reconcile","--attempt","att-dead000001","--apply");self.assertEqual(json.loads(applied.stdout)["closed"],1)
   text=self.jobs.read_text();self.assertIn("note=dead-exact-pid",text);self.assertIn("\topen\t/r\t/w\tactive\t",text);self.assertIn("\topen\t/r\t/w\tother\t",text)
   again=self.invoke("reconcile","--attempt","att-dead000001","--apply");self.assertEqual(json.loads(again.stdout)["closed"],0)
+ def test_terminal_handoff_closes_namespace_attempt_without_watchdog(self):
+  attempt="att-sandbox-terminal";route="rt-sandbox";node="refs";log=self.base/"exact.jsonl"
+  events=[
+   {"type":"item.completed","item":{"type":"command_execution","exit_code":1,
+    "aggregated_output":"bwrap: Can't bind mount /bindfile on /newroot/w/.codex: Unable to mount source on destination: No such file or directory\n"}},
+   {"type":"item.completed","item":{"type":"agent_message",
+    "text":"artifact: -\nverdict: BLOCKED\nblocker: sandbox unavailable"}},
+   {"type":"turn.completed"},
+  ]
+  log.write_text("\n".join(json.dumps(event) for event in events)+"\n")
+  with self.jobs.open("a") as out:
+   out.write(f"2026-07-16T00:00:03Z\topen\t/r\t/w\tsandbox\t"
+             f"route_id={route},route_node={node},attempt_id={attempt},"
+             f"pid=437,pid_start=1,pid_scope=namespace-local,log_file={log}\n")
+  liveness=subprocess.run(
+   [sys.executable,str(ROOT/"adapters/codex/bin/dispatch-liveness.py"),str(self.jobs)],
+   capture_output=True,text=True,
+   env={**os.environ,"AGENT_HOME":str(self.base),"CODEX_SESSIONS":str(self.base/"missing")},
+  )
+  self.assertEqual(liveness.returncode,3,liveness.stdout+liveness.stderr)
+  self.assertIn("EXITED   sandbox",liveness.stdout)
+  self.assertIn("dead-sandbox-init",liveness.stdout)
+  self.assertNotIn("ALIVE    sandbox",liveness.stdout)
+  applied=self.invoke("reconcile","--attempt",attempt,"--apply")
+  record=json.loads(applied.stdout)
+  self.assertEqual(record["closed"],1)
+  self.assertEqual(record["decisions"][0]["category"],"terminal-handoff")
+  self.assertIn("note=dead-sandbox-init",self.jobs.read_text())
  def test_codex_preflight_projects_current_and_dry_reconcile(self):
   pre=ROOT/"adapters/codex/bin/preflight.sh"
   current=subprocess.run([str(pre),"dispatch-current","--jobs",str(self.jobs),"--route","r1","--agent-home",str(self.base)],capture_output=True,text=True,env={**os.environ,"AGENT_HOME":str(ROOT)})

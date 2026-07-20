@@ -138,6 +138,34 @@ class HysteresisSequenceTest(FixtureBase):
         self.assertEqual(state, "dead")          # working → dead with no dwell
         self.assertIsNone(ev["hysteresis"])
 
+    def test_codex_task_complete_bypasses_mtime_and_working_idle_dwell(self):
+        key = ("s", "codex", 9002, "9000002")
+        base = {
+            "harness": "codex", "pid": 9002, "pid_alive": True,
+            "proc_start": "9000002", "proc_start_match": True,
+            "orphan": False, "status": None, "mtime": 999.0,
+            "transcript": True, "task_lifecycle": "task_started",
+        }
+        state, _ = model.classify_session(base, 1000.0, key=key)
+        self.assertEqual(state, "working")
+        completed = dict(base, task_lifecycle="task_complete", mtime=1000.5)
+        state, ev = model.classify_session(completed, 1001.0, key=key)
+        self.assertEqual(state, "idle")
+        self.assertEqual(ev["tier"], 2)
+        self.assertEqual(ev["source"], "codex-lifecycle")
+        self.assertIsNone(ev["hysteresis"])
+
+    def test_explicit_registry_status_still_outranks_codex_lifecycle(self):
+        value = {
+            "harness": "codex", "pid": 9003, "pid_alive": True,
+            "proc_start": "9000003", "proc_start_match": True,
+            "orphan": False, "status": "busy", "mtime": 999.0,
+            "transcript": True, "task_lifecycle": "task_complete",
+        }
+        state, ev = model.classify_session(value, 1000.0)
+        self.assertEqual(state, "working")
+        self.assertEqual(ev["tier"], 1)
+
 
 class TrackerLifecycleTest(FixtureBase):
     """R7 — singleton state must not leak or grow unbounded."""
