@@ -1,0 +1,189 @@
+*** Begin Patch
+*** Update File: .agent_reports/spec/prd.md
+@@
+ > · **v18 2026-07-14** (Cluster L — background-model storm containment: atomic global slots, rolling start budget, kill switch, adapter/runtime projection parity)
+ > · **v19 2026-07-15** (D-42 — main-session-only model lifecycle and explicit worker bootstrap boundary)
++> · **v20 2026-07-20** (D-43 — on-call incident-to-proposal bridge with live corroboration, exact-key recurrence, and human-state ceiling)
+ > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`).
+@@
+ ### 5.14.2 D-42 — Main-session-only model lifecycle and worker bootstrap
+ - Only an interactive, user-facing main session owns automatic model-backed lifecycle work: SessionStart memory injection, prompt-time briefing/turn-nudge, SessionEnd sync+curation, Fleet title summarization, and main-pane status publication. Registered headless dispatches, loop/drill runs, title workers, distillers/curators, and runtime-native subagents are workers and never trigger another automatic model session.
+ - `AGENT_SESSION_ROLE=worker` is the portable launch marker. Adapter compatibility markers (`AGENT_DISPATCH_CHILD=1`, nonempty `AGENT_DISPATCH_DEPTH`, `CLAUDE_CODE_CHILD_SESSION=1`, nonempty `OPENCODE_DISPATCH_SLUG`, `FLEET_TITLE_REFRESH=1`, and `MEM_DISTILL=1`) also force worker behavior. A main marker or default must never override any worker marker.
+ - Worker bootstrap retains deterministic safety and task-contract surfaces: write/core/spec/artifact/worktree/permission guards, capability/mode/QA routing, explicit status/prompt-signal calls, file-only handoff, liveness, and verification. It omits automatic memory injection, briefing, turn counters, SessionEnd sync/curation, title generation, token-budget commentary, and interactive-pane state publication. Memory recall remains an explicit acting-agent decision.
+ - Every repo-owned background model launcher and all three dispatch wrappers set the portable worker marker before process creation. Runtime hooks and preflight session-end/turn-nudge commands enforce the same boundary independently so a stale wrapper or inherited compatibility environment fails closed. Worker lifecycle hooks are silent no-ops and do not advance counters, markers, stamps, or memory state.
+ - Regression is hermetic and uses no live model: worker-marker cases assert zero worker invocations and zero lifecycle state writes; main-session cases preserve current behavior; runtime projection and physical Claude hook copies are hash-checked after activation.
++
++## 5.15 Cluster M — On-call incident promotion (v20, 2026-07-20)
++
++### 5.15.1 D-43 — Memory leads, live evidence, exact-key recurrence
++- An on-call worker may read bounded recent memory mutation events as discovery leads. It must read a selected record in full and corroborate the claim against current source, tests, logs, artifacts, or runtime evidence. Memory is never proposal evidence by itself and remains unchanged.
++- The acting agent authors one stable, one-line incident identity. Deterministic proposal code compares only that exact key under the inbox lock. A match appends bounded recurrence evidence and the incoming context fingerprint without changing state, approval provenance, or the stored base; ambiguous duplicates fail closed.
++- Named automated collectors (`loop:*`) require an incident key and may advance only to `reproduced` or `proposed`. A collector-bound reproduction requires current context and may rebase only a proposal that has never crossed the human-review boundary. Manual actor behavior remains compatible with the v1 proposal CLI.
++- Reviewed and terminal proposals accept recurrence evidence without reopening. Named collectors cannot defer, reject, review, adopt, impersonate `human:*`, activate realizations, edit source/generated output/runtime config, run another model session, or mutate memory. This bounded inbox operation therefore preserves D-42.
++- Evidence and top-level history are bounded to 128 items. The on-call report preserves the worklog approval parser contract: each promoted incident is one `## ` finding block containing proposal ID, state, ingest result, live corroboration, and next human decision.
+
+ ## [library] 공개 API (v3 + v4 추가)
+@@
+ - **v19 신규 (D-42 — main/worker lifecycle boundary, §5.14)**:
+   - **D-42**: automatic model-backed lifecycle belongs only to the interactive main session. All dispatch/title/distill/loop workers export `AGENT_SESSION_ROLE=worker`; compatibility markers also fail closed. Workers keep deterministic safety and task routing but never inject memory/briefing, increment distill counters, run SessionEnd sync/curation, summarize titles, publish main-pane state, or emit token-budget context.
++- **v20 신규 (D-43 — on-call incident promotion, §5.15)**:
++  - **D-43**: recent memory mutations are agent-evaluated leads only. Full-body read plus live corroboration precede a guarded offline proposal write; exact incident keys append bounded recurrence evidence, named collectors stop at `proposed`, and no collector may cross a prior human decision or run automatic memory lifecycle.
+
+ ## Next (구현 순서 — autopilot-code, 본 v5 입력)
+*** Update File: .agent_reports/spec/pipeline_state.yaml
+@@
+ phases:
+   spec: done               # v3 PRD 확정 (D-1~7 lock — DB화·저장소분리·통합강화)
+   scaffolding: pending
+-  dev: in_progress         # v18 D-41 complete (39 dispatch tests); unrelated historical clusters remain tracked
+-last_updated: 2026-07-14  # v18: background-model storm containment. snapshot v17
++  dev: in_progress         # v20 D-43 complete; unrelated historical clusters remain tracked
++last_updated: 2026-07-20  # v20: on-call incident-to-proposal bridge. snapshot v19
+@@
+   - D-40: Cluster K(v17) — semantic memory 판단은 acting agent 소유; automatic prompt recall/classification 폐기, 결정론 코드는 mechanical safety/retrieval infrastructure에 한정
+   - D-41: Cluster L(v18) — automatic distill global cost boundary: atomic concurrency slots(default 2/max 4), rolling 10-minute starts(default 4/max 8), .distill-disable, stale recovery, adapter/runtime hash parity
++  - D-42: v19 — automatic model-backed lifecycle belongs only to the interactive main session; dispatch/title/distill/loop/native-subagent workers fail closed against injection, counters, sync, curation, and recursive model starts
++  - D-43: v20 — on-call may promote full-read, live-corroborated memory leads into the offline proposal inbox using exact incident keys; recurrence is bounded and state-preserving, and named collectors stop at proposed without crossing human decisions
+*** Update File: .agent_reports/spec/pipeline_summary.md
+@@
+ - 구현 검증: dispatch suite 39/39, shell syntax, adapter-boundary 통과. canonical/Claude/runtime 세 물리 경로 중 Claude adapter와 runtime copy는 byte-identical하며 canonical delta baseline을 갱신했다. production `.distill-disable`은 유지한다.
++
++### v18 → v19 (2026-07-15, update mode — main/worker lifecycle boundary, snapshot `_internal/versions/v18/`)
++- **D-42**: automatic model-backed lifecycle를 interactive main session으로 제한하고 모든 dispatch/title/distill/loop/native-subagent launcher에 worker marker를 강제했다.
++- Worker는 safety/routing/verification guard는 유지하되 memory injection, briefing, counters, SessionEnd sync/curation, title generation, main-pane publication을 수행하지 않는다.
++
++### v19 → v20 (2026-07-20, update mode — on-call incident proposal bridge, snapshot `_internal/versions/v19/`)
++- **D-43**: memory mutation은 candidate lead일 뿐이며 full-body read와 current live corroboration 뒤에만 offline proposal inbox로 승격한다.
++- Agent-authored exact incident key recurrence는 lock 안에서 bounded evidence/history를 append하고 기존 state, human decision, base context를 보존한다.
++- Named collector는 current-context-bound `reproduced`와 `proposed`까지만 가능하며 prior human-review boundary를 넘지 못한다. On-call worker는 memory lifecycle, source/runtime mutation, activation, nested model session을 수행하지 않는다.
++- 현행 7/15 worklog approvals contract를 보존해 promoted incident 한 건을 proposal ID가 포함된 `## ` finding block 한 건으로 보고한다.
+*** Update File: .agent_reports/spec/self-improvement-governance/prd.md
+@@
+-> mode: **library + cli** · 작성 2026-07-14 · v1
++> mode: **library + cli** · 작성 2026-07-14 · v2 (on-call promotion bridge, 2026-07-20)
+@@
+ 4. official update 후 과거 승인을 자동 승계하지 않는다.
+ 5. evidence inbox는 runtime discovery, plugin cache, repo source 밖에 둔다.
++6. on-call은 memory를 후보 신호로 읽고 live evidence로 교차검증한 뒤, 같은
++   incident를 중복 proposal로 늘리지 않고 기존 record에 recurrence evidence를
++   누적한다.
+@@
+ `proposed -> reviewed`, terminal decision, realization `active` 전이는 현재 context가
+ stored base와 byte-equivalent canonical fingerprint일 때만 가능하다. Mismatch는
+ `stale` 판정이며 proposal을 `reproduced` 또는 `deferred`로 되돌려야 한다.
++Recurrence ingest 자체는 base를 바꾸지 않는다. Named collector가 current context에
++묶인 `reproduced` 전이를 수행할 때만, 그리고 proposal이 human-review boundary를
++한 번도 넘지 않았을 때만 base를 갱신한다. 이후 review는 그 reproduction
++context와 byte-equivalent해야 한다. Manual actor의 기존 reproduced 동작은 바꾸지
++않는다.
+@@
+ - `check`: 현재 context와 stored base의 freshness 비교; read-only
+ - `show`, `list`: read-only inspection
++
++Named automated collector(`actor=loop:*`)는 `observe --incident-key <key>`를
++사용한다. `incident-key`는 acting agent가 live evidence를 해석해 선택하는 안정적인
++one-line identity다. 결정론적 CLI는 의미 유사도를 판정하지 않고 exact key만
++비교한다. 같은 key가 이미 존재하면 새 proposal을 만들지 않고 bounded incident
++evidence, occurrence count, incoming context fingerprint를 기존 record에 append한다.
++기존 state, title, summary, approval provenance, base context는 바꾸지 않는다. 동일
++key가 여러 record에 존재하면 자동 선택하지 않고 ambiguous error로 중단한다.
++Named collector의 state target은 `reproduced` 또는 `proposed`뿐이다. Collector-bound
++`reproduced`는 current `--context`를 필수로 받고, prior human decision이 없는
++proposal의 pre-review base만 갱신한다.
+@@
+ - CLI는 source, generated output, runtime config, activation state를 수정하는 명령을
+   제공하지 않는다.
+
+-## 6. Reconciliation
++## 6. On-call promotion bridge
++
++On-call은 최근 memory write event와 full record body를 incident discovery input으로
++사용할 수 있다. Memory는 현재 사실이나 proposal evidence의 SoT가 아니며 다음
++순서를 지킨다.
++
++1. `mem log --json`에서 최근 memory mutation을 읽고, acting agent가 관련 record를
++   선택한다. type, strength, keyword, 고정 threshold는 승격 규칙이 아니다.
++2. 선택한 ID는 `mem show`로 전문을 읽는다.
++3. 현재 source, test output, loop log, artifact 또는 runtime evidence에서 memory
++   claim을 교차검증한다. live corroboration이 없으면 proposal로 승격하지 않는다.
++4. Agent가 stable incident key를 정하고 `observe --incident-key`를 호출한다.
++5. source/runtime을 수정하지 않는 bounded local fixture로 재현되면 current context를
++   명시해 `reproduced`로 전이한다. candidate invariant·영향·rollback evidence까지
++   준비되면 `proposed`로 진행할 수 있다. 재현 불가면 `observed`에 머문다.
++6. morning report에는 promoted incident마다 proposal ID가 포함된 `## ` finding
++   block 하나를 쓰고 state, ingest result, live evidence, next human decision을
++   기록한다.
++
++자동 범위는 `proposed`까지다. On-call은 network probe, headless runtime, drill,
++source/generated projection, plugin, runtime config, Git mutation, memory mutation,
++nested model session을 실행하지 않는다. `reviewed`, terminal decision, realization
++activation은 기존 human approval gate를 그대로 따른다. Human-reviewed proposal의
++같은 incident가 다시 발생해도 evidence만 append하고 state를 reopen하거나
++덮어쓰지 않는다.
++
++## 7. Reconciliation
+@@
+-## 7. Non-goals
++## 8. Non-goals
+
+ - self-edit 또는 automatic adoption
+-- cron/hook/session lifecycle 연결
++- prompt/session hook을 통한 per-turn proposal 분류·생성
++- on-call이 memory를 truth로 간주하거나 의미 판단을 keyword/threshold에 위임
+ - runtime/plugin auto-update 제어
+@@
+-## 8. Acceptance criteria
++## 9. Acceptance criteria
+@@
+ 7. 테스트 전후 실제 runtime config/plugin tree가 byte-unchanged다.
+ 8. 기존 generator, adapter boundary, installer/runtime activation 회귀가 통과한다.
++9. exact incident key recurrence는 proposal을 늘리지 않고 evidence/history만 append한다.
++10. 다른 key는 별도 proposal이며, ambiguous duplicate key는 fail closed한다.
++11. evidence와 top-level history는 각각 128 items를 넘지 않는다.
++12. on-call contract는 memory 전문과 live corroboration을 요구하고 자동 범위를
++    `proposed`로 제한한다.
++13. recurrence는 reviewed/terminal state를 자동 변경하거나 reopen하지 않는다.
++14. named collector는 non-promotion transition이나 prior human decision 이후의
++    rebase를 수행하지 못하며, manual reproduced semantics는 유지된다.
+
+-## 9. 후속 단계
++## 10. 후속 단계
+
+-v1은 비활성 governance foundation만 제공한다. Loop 자동 수집, UI, scheduled
+-runtime-watch 연결, source diff 생성, activation automation은 각각 별도 proposal과
+-승인된 spec/code cycle이 필요하다.
++v2는 on-call의 memory→proposal 승격을 연결한다. UI, scheduled runtime-watch 연결,
++source diff 생성, activation automation은 각각 별도 proposal과 승인된 spec/code
++cycle이 필요하다.
+*** Update File: .agent_reports/spec/self-improvement-governance/pipeline_state.yaml
+@@
+-updated: 2026-07-14
++updated: 2026-07-20
+@@
+-  next: keep inactive; future loop wiring requires a new reviewed proposal
++  next: review proposal IDs produced by future on-call runs; adoption stays a separate cycle
+@@
+   - runtime or plugin fingerprint changes require revalidation
++  - on-call may promote memory-backed incidents only after full-body read and live corroboration
++  - exact incident keys append bounded recurrence evidence without changing human-owned state
++  - named collectors stop at proposed and cannot cross a prior human decision
+*** Update File: .agent_reports/spec/self-improvement-governance/pipeline_summary.md
+@@
+ - Passed lifecycle, adaptation, generation, runtime activation, extension, and managed release regressions without changing runtime-owned state.
++
++## 2026-07-20 — v2 on-call promotion specification
++
++- Allowed the scheduled on-call agent to use recent memory mutations as discovery leads only.
++- Required full-body memory reads and current source/log/test/runtime corroboration before promotion.
++- Chose agent-authored exact incident keys; deterministic code only deduplicates exact matches.
++- Limited named collectors to `reproduced` and `proposed`, with no transition after a prior human decision.
++- Preserved the worklog approval parser contract by reporting each promoted incident as one `## ` finding block.
++
++## 2026-07-20 — v2 implementation
++
++- Connected on-call discovery to the offline proposal inbox without adding an apply, memory lifecycle, nested-model, or activation path.
++- Added exact-key recurrence under the existing inbox lock, including concurrent collector coverage, ambiguous-key fail-closed behavior, and a 128-item evidence/history ceiling.
++- Preserved proposal state and base context on ingest; only a current-context-bound collector reproduction may rebase a never-reviewed proposal, while manual actor behavior remains compatible.
++- Synchronized Claude loop projection and Codex/OpenCode manual loop metadata with the canonical contract.
++- Passed proposal, generation, projection, adaptation, skill, portable-guard, runtime activation, extension, and release regressions without changing runtime-owned state.
+*** End Patch
