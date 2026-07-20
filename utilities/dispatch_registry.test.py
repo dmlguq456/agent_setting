@@ -91,6 +91,17 @@ class RegistryTest(unittest.TestCase):
   applied=self.invoke("reconcile","--attempt",attempt,"--apply")
   record=json.loads(applied.stdout);self.assertEqual(record["closed"],1);self.assertEqual(record["decisions"][0]["category"],"terminal-heartbeat")
   self.assertIn("note=completed-terminal-heartbeat",self.jobs.read_text())
+ def test_codex_liveness_accepts_visible_namespace_pid_without_route_or_heartbeat(self):
+  import importlib.util
+  path=ROOT/"adapters/codex/bin/dispatch-liveness.py"
+  spec=importlib.util.spec_from_file_location("dispatch_liveness_test",path)
+  module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  start=(Path("/proc")/str(self.proc.pid)/"stat").read_text().split()[21]
+  state=module.recorded_attempt_state(
+   {"attempt_id":"att-visible-no-route","pid":str(self.proc.pid),"pid_start":start,
+    "pid_scope":"namespace-local"},time.time(),self.base)
+  self.assertEqual(state["state"],"working")
+  self.assertEqual(state["source"],"proc")
 
 
 class MixedRegistryTest(unittest.TestCase):

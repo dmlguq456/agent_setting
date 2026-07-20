@@ -690,6 +690,22 @@ class CodexAttemptIdentityTest(unittest.TestCase):
         self.assertEqual(job.state_evidence["attempt"]["source"], "heartbeat")
         self.assertEqual(job.state_evidence["attempt"]["pid_scope"], "namespace-local")
 
+    def test_namespace_local_visible_pid_is_live_without_route_or_heartbeat(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            job = DispatchJob(key="code-execute", slug="namespace-visible", cwd="/work/wt",
+                              source="jobs", status="open", harness="codex", pid=437,
+                              proc_start="777", pid_scope="namespace-local",
+                              attempt_id="att-namespace-visible")
+            with mock.patch.object(dispatch, "_registry_home", return_value=tmp), \
+                 mock.patch.object(dispatch, "_job_transcript_signal", return_value="stale"), \
+                 mock.patch("fleet.collectors.dispatch.os.path.exists", return_value=True), \
+                 mock.patch.object(dispatch.procscan, "read_proc_start", return_value="777"):
+                state = dispatch._dispatch_liveness(job, now=1000.0, track=False)
+
+        self.assertEqual(state, "working")
+        self.assertEqual(job.state_evidence["attempt"]["source"], "proc")
+        self.assertIn("visible and live", job.state_evidence["attempt"]["rule"])
+
     def test_namespace_local_terminal_heartbeat_is_done(self):
         with tempfile.TemporaryDirectory() as tmp:
             heartbeat_dir = os.path.join(tmp, ".dispatch", "heartbeats")

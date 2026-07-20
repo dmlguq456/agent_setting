@@ -2694,7 +2694,11 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                              if k.liveness == "working" and getattr(k, "route_node", None)]
             if active_routed:
                 return active_routed[0].route_node
-            kids = [(k, _stage_role_label(getattr(k, "worker_role", None))[0]) for k in depth2]
+            # Some checked Codex dispatches carry a portable persona
+            # (`development`) in worker_role while the job key is the actual stage
+            # capability (`code-execute`). Reuse the row-label resolver so the
+            # conductor and its child cannot disagree about the active stage.
+            kids = [(k, _dispatch_stage_label(k)) for k in depth2]
             kids = [(k, label) for k, label in kids if label is not None]
             if not kids:
                 return None

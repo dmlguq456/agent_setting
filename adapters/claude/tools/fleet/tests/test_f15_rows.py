@@ -217,6 +217,27 @@ class FoldingTest(unittest.TestCase):
         self.assertNotIn("plan fleet-ui-v2-plan", text)
         self.assertNotIn("test fleet-ui-v2-test", text)
 
+    def test_portable_persona_child_is_visible_and_drives_exec_without_show_all(self):
+        conductor = DispatchJob(key="code", slug="agent-home-code-owner", depth=1,
+                                liveness="working", stage="plan",
+                                worker_role="capability-owner")
+        child = DispatchJob(key="code-execute", slug="agent-first-home-code-execute",
+                            depth=2, parent_slug="agent-home-code-owner",
+                            worker_role="development", liveness="working")
+        render.set_show_all(False)
+        try:
+            lines = render._build_lines([], [conductor, child], section="dispatch",
+                                        narrow=False, malformed=0, layout="wide",
+                                        term_width=240)
+        finally:
+            render.set_show_all(False)
+        text = "\n".join("".join(t for t, _key in line) for line in lines if line)
+        exec_keys = [key for line in lines if line for t, key in line if t == "exec"]
+        plan_keys = [key for line in lines if line for t, key in line if t == "plan✓"]
+        self.assertIn("exec agent-first-home-c", text)
+        self.assertTrue(any(key in ("stg1_on", "stg1_off") for key in exec_keys))
+        self.assertEqual(plan_keys, ["stg0_off"])
+
     def test_dead_children_fold_to_alert_by_default(self):
         conductor = DispatchJob(key="code", slug="fleet-ui-v2", depth=1, liveness="idle",
                                 stage="exec", worker_role="capability-owner")

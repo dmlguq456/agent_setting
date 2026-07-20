@@ -11,3 +11,7 @@
 - [x] Add regression fixtures and preserve completion-marker race coverage.
 - [x] Run focused and broad relevant verification.
 - [x] Write pipeline summary.
+- [x] Treat a visible exact namespace-local PID/start pair as live without requiring a heartbeat.
+- [x] Derive conductor stage from the depth-2 capability when its portable worker role is generic.
+- [x] Verify the live agent-note depth-2 exec row and exec breadcrumb without the `a` toggle.
+- [x] Wire the incident regression into the full drill's deterministic conformance pre-stage.

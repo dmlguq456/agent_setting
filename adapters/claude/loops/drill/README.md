@@ -4,6 +4,11 @@ Drill is the golden set for verifying that critical agent behavior still works a
 
 > **Three verification layers:** a **drill** is an in-loop regression test of agent behavior. **Conformance** is deterministic verification through `hooks/portable-guards.test.sh` and `tools/check-adaptation-boundary.sh`, with exact assertions and no agent. A **guard** deterministically enforces an invariant through a hook script. `core/HOOKS.md §Verification Layers` is the source of this distinction. Anything that can be deterministic, such as hook output shape, belongs in conformance rather than a drill; see the deterministic-first rule in §0.5.
 
+The drill conformance pre-stage includes the Fleet depth-2 live-projection
+regression: a route-less namespace-local worker with exact PID/start evidence
+must be `working`, visible without the `a` toggle, and drive its conductor's
+active stage from `code-execute` to `exec`.
+
 ## Running Drills
 
 ```bash

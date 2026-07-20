@@ -522,6 +522,9 @@ def classify_attempt_evidence(ev_in, now=None):
         if heartbeat and heartbeat.get("phase") == "terminal":
             state, source = "done", "heartbeat"
             rule = "namespace-local attempt emitted an exact terminal heartbeat"
+        elif ev_in.get("pid_alive") is True and ev_in.get("proc_start_match") is True:
+            state, source = "working", "proc"
+            rule = "namespace-local attempt pid/start-time is visible and live"
         elif heartbeat and now is not None and now - float(heartbeat["updated_at"]) <= ATTEMPT_HEARTBEAT_LIVE_SEC:
             state, source = "working", "heartbeat"
             rule = "namespace-local attempt has a fresh exact heartbeat"

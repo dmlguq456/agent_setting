@@ -3826,6 +3826,27 @@ check_language_neutrality_contract() {
   done
 }
 
+check_fleet_depth2_liveness_regression() {
+  # Full drill runs this script as its mandatory deterministic conformance
+  # pre-stage. Keep the 2026-07-20 live incident fixed at all three boundaries:
+  # the shared classifier, default Fleet projection, and Codex liveness CLI.
+  out="${TMPDIR:-/tmp}/fleet-depth2-liveness-regression-$$.log"
+  if ! PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT/tools" python3 -m unittest \
+    fleet.tests.test_dispatch.CodexAttemptIdentityTest.test_namespace_local_visible_pid_is_live_without_route_or_heartbeat \
+    fleet.tests.test_f15_rows.FoldingTest.test_portable_persona_child_is_visible_and_drives_exec_without_show_all \
+    >"$out" 2>&1; then
+    fail_msg "Fleet depth-2 classifier/default-view conformance regression"
+    sed -n '1,160p' "$out"
+  fi
+  if ! PYTHONDONTWRITEBYTECODE=1 python3 utilities/dispatch_registry.test.py \
+    RegistryTest.test_codex_liveness_accepts_visible_namespace_pid_without_route_or_heartbeat \
+    >"$out" 2>&1; then
+    fail_msg "Codex liveness route-less namespace-local conformance regression"
+    sed -n '1,160p' "$out"
+  fi
+  rm -f "$out"
+}
+
 check_projection_symlinks claude_setting
 check_projection_symlinks codex_setting
 check_projection_symlinks opencode_setting
@@ -3890,6 +3911,7 @@ check_bootstrap_byte_budget
 check_sibling_adapter_contract
 check_worker_bootstrap_contract
 check_language_neutrality_contract
+check_fleet_depth2_liveness_regression
 check_legacy_root_links
 warn_concrete_runtime_terms
 

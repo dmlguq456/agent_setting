@@ -170,8 +170,6 @@ def attempt_terminal_observation(
 def recorded_attempt_state(metadata: dict[str, str], now: float, agent_home: Path) -> dict | None:
     pid = metadata.get("pid", "")
     expected = metadata.get("pid_start", "")
-    if not all(metadata.get(key) for key in ("attempt_id", "route_id", "route_node")):
-        return None
     numeric_pid = int(pid) if pid.isdigit() else None
     proc = Path("/proc") / pid if numeric_pid is not None else None
     alive = False
@@ -339,8 +337,11 @@ def main(argv: list[str]) -> int:
                 continue
             exact = recorded_attempt_state(metadata, now, agent_home)
             if exact and exact["state"] == "working":
-                detail = ("namespace-local exact heartbeat" if exact.get("pid_scope") == "namespace-local"
-                          else f"recorded pid {exact['pid']} running")
+                detail = (
+                    "namespace-local exact heartbeat"
+                    if exact.get("source") == "heartbeat"
+                    else f"recorded pid {exact['pid']} running"
+                )
                 print(f"ALIVE    {label} ({detail}; classifier={ATTEMPT_CLASSIFIER_SOURCE})")
                 alive += 1
                 continue
