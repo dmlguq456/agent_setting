@@ -1083,12 +1083,16 @@ def _strip_autopilot(name):
 
 
 def _entry_skill(j):
-    """The depth-1 conductor's ENTRY capability, short form ('autopilot-code' → 'code') —
-    leads the options dial (user 2026-07-20: entry skill 종류가 mode 앞에). None when it
-    would duplicate what the row already says: depth-2 workers carry their stage label in
-    the name zone, and a mode like 'loop/drill' already names its own entry."""
+    """Skill identity for the options dial.
+
+    A depth-1 row names its entry capability. A depth-2 row instead names the
+    assigned stage: route node when present, otherwise the registered capability
+    key. This prevents inherited owner mode (``dev/refactor``) from masquerading
+    as the child's own work.
+    """
     if max(1, int(getattr(j, "depth", 1) or 1)) >= 2:
-        return None
+        assigned = getattr(j, "route_node", None) or getattr(j, "key", None)
+        return _compact_dispatch_name(_strip_autopilot(assigned), _PROFILE_MAX)
     cap = _strip_autopilot(getattr(j, "capability_owner", None) or "")
     key = getattr(j, "key", None)
     skill = cap or (key if key in _PIPE_STAGES else None)
@@ -1157,6 +1161,9 @@ def _dispatch_stage_label(j):
     just their own slug."""
     if max(1, int(getattr(j, "depth", 1) or 1)) < 2:
         return None
+    route_node = getattr(j, "route_node", None)
+    if route_node:
+        return _compact_dispatch_name(route_node, 14)
     label, suffix = _stage_role_label(getattr(j, "worker_role", None))
     if label is None:
         # codex writer parity (user 2026-07-20): its depth-2 rows carry a persona
@@ -1173,15 +1180,20 @@ def _opts_segs(j):
     code (mode inten) / boot 순"). Three axes, three visual levels instead of the flat
     '·' chain that mixed them: the entry skill heads the dial, its behaviour knobs
     (mode·intensity) ride in a dim paren group, and the environment tail
-    (profile home / role suffix) is set off by ' / '. A depth-2 worker has no entry
-    (its identity lives in the name zone), so its knobs render bare. qa left this dial
-    with the retired qa axis (user 2026-07-16 — rigor derives from intensity,
-    CONVENTIONS §1.1)."""
+    (profile home / role suffix) is set off by ' / '. A depth-2 worker names its
+    assigned stage skill and keeps only worker-local intensity/profile: inherited
+    owner mode and internal personas (qa/development/maker) are not child identity.
+    qa left this dial with the retired qa axis (user 2026-07-16 — rigor derives
+    from intensity, CONVENTIONS §1.1)."""
+    depth = max(1, int(getattr(j, "depth", 1) or 1))
     entry = _entry_skill(j)
-    knob_items = [t for t in (j.mode, _short_level(getattr(j, "intensity", None))) if t]
+    if depth >= 2:
+        knob_items = [t for t in (_short_level(getattr(j, "intensity", None)),) if t]
+    else:
+        knob_items = [t for t in (j.mode, _short_level(getattr(j, "intensity", None))) if t]
     # the worker ROLE is a behaviour knob too (who the worker acts as), not environment —
     # it rides the paren group's last slot (user 2026-07-20: "owner의 위치가 애매").
-    role = _dispatch_role_suffix(
+    role = "" if depth >= 2 else _dispatch_role_suffix(
         j, max_width=max(0, _PROFILE_MAX - sum(len(t) + 1 for t in knob_items)))
     if role:
         knob_items.append(role)

@@ -16,8 +16,8 @@
   activity separation; did not duplicate its separately owned cross-capability
   DAG/process-view work.
 - verification:
-  - Fleet canonical full suite: `720 passed`
-  - Fleet Claude-mirror focused suite: `114 passed`
+  - Fleet canonical full suite: `721 passed`
+  - Fleet Claude-mirror focused suite: `127 passed`
   - dispatch registry/liveness suite: `18 passed`
   - route/contract group: `62 passed`
   - progress/fallback/completion/registry group: `56 passed`
@@ -26,5 +26,6 @@
   - Fleet live `--once` smoke: passed
   - live agent-note default view: depth-2 `exec` visible, parent `exec` active
   - full-drill conformance pre-stage Fleet regression: passed
+  - live depth-specific skill identity: depth-1 entry retained; depth-2 route/capability shown
   - adaptation boundary: passed
   - runtime doctor/projection: passed

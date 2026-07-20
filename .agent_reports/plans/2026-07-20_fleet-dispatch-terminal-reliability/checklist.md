@@ -15,3 +15,5 @@
 - [x] Derive conductor stage from the depth-2 capability when its portable worker role is generic.
 - [x] Verify the live agent-note depth-2 exec row and exec breadcrumb without the `a` toggle.
 - [x] Wire the incident regression into the full drill's deterministic conformance pre-stage.
+- [x] Show each depth-2 worker's assigned skill instead of repeating its depth-1 mode.
+- [x] Remove internal QA/development/model personas from depth-2 display metadata.

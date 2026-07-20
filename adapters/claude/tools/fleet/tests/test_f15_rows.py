@@ -223,6 +223,7 @@ class FoldingTest(unittest.TestCase):
                                 worker_role="capability-owner")
         child = DispatchJob(key="code-execute", slug="agent-first-home-code-execute",
                             depth=2, parent_slug="agent-home-code-owner",
+                            mode="dev/refactor", intensity="strong",
                             worker_role="development", liveness="working")
         render.set_show_all(False)
         try:
@@ -235,6 +236,8 @@ class FoldingTest(unittest.TestCase):
         exec_keys = [key for line in lines if line for t, key in line if t == "exec"]
         plan_keys = [key for line in lines if line for t, key in line if t == "plan✓"]
         self.assertIn("exec agent-first-home-c", text)
+        self.assertIn("code-execute(strong)", text)
+        self.assertNotIn("dev/refactor·strong·development", text)
         self.assertTrue(any(key in ("stg1_on", "stg1_off") for key in exec_keys))
         self.assertEqual(plan_keys, ["stg0_off"])
 
@@ -364,10 +367,17 @@ class OptsDialHierarchyTest(unittest.TestCase):
                         intensity="standard", profile="boot")
         self.assertEqual(self._dial(j), "code(dev·std) / boot")
 
-    def test_depth2_worker_has_bare_knobs_no_entry(self):
-        # identity lives in the name zone for a depth-2 worker — no entry head, no parens.
-        j = DispatchJob(key="code", slug="s", depth=2, mode="dev", intensity="strong")
-        self.assertEqual(self._dial(j), "dev·strong")
+    def test_depth2_worker_shows_assigned_skill_not_parent_mode(self):
+        j = DispatchJob(key="code-test", slug="s", depth=2, mode="dev/refactor",
+                        intensity="strong", worker_role="qa")
+        self.assertEqual(self._dial(j), "code-test(strong)")
+
+    def test_depth2_route_node_is_the_assigned_skill(self):
+        j = DispatchJob(key="spec", slug="s", depth=2, mode="dev/refactor",
+                        intensity="strong", worker_role="deep maker",
+                        route_node="research")
+        self.assertEqual(self._dial(j), "research(strong)")
+        self.assertEqual(render._dispatch_stage_label(j), "research")
 
     def test_entry_and_environment_tail_without_knobs(self):
         j = DispatchJob(key="code", slug="s", depth=1, profile="layer2")
@@ -404,7 +414,7 @@ class OptsDialHierarchyTest(unittest.TestCase):
         j = DispatchJob(key="code-plan", slug="s", depth=2, harness="codex",
                         mode="dev/refactor", intensity="strong", worker_role="plan-team",
                         capability_owner="autopilot-code")
-        self.assertEqual(self._dial(j), "dev/refactor·strong")
+        self.assertEqual(self._dial(j), "code-plan(strong)")
         self.assertEqual(render._dispatch_stage_label(j), "plan")
         j2 = DispatchJob(key="code", slug="s", depth=1, worker_role="deep maker",
                          capability_owner="autopilot-code", mode="dev")

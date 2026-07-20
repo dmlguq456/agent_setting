@@ -36,6 +36,13 @@ agent-behavior failure, its three-boundary regression now runs in
 pre-stage of a full drill. It checks the classifier, default Fleet rendering,
 and Codex liveness CLI without launching an agent or spending model tokens.
 
+The depth-2 options cell now reports the worker's assigned stage skill rather
+than inherited depth-1 metadata. Route-backed workers use `route_node`
+(`research(strong)`), while route-less workers use their registered capability
+key (`code-test(strong)`). Parent mode and internal personas such as `qa`,
+`development`, and `deep maker` stay in JSON evidence but no longer appear as
+child identity.
+
 ## Evidence
 
 - The real incident log
@@ -60,6 +67,10 @@ and Codex liveness CLI without launching an agent or spending model tokens.
 - Dispatch registry/liveness suite: 18 tests passed.
 - The drill conformance entrypoint passed with the new Fleet regression enabled;
   the token-spending behavioral drill was intentionally not auto-run.
+- Live Fleet verified `code(dev/refactor·strong·owner)` for depth 1 alongside
+  `research(strong)` and `code-test(strong)` for their depth-2 workers.
+- Fleet canonical full suite: 721 tests passed; related Claude mirror suite:
+  127 tests passed.
 
 ## Scope Notes
 

@@ -1157,7 +1157,7 @@ class TolerantPipeParsingTest(unittest.TestCase):
 
 
 class StageWorkerRenderTest(unittest.TestCase):
-    """SD-F1 — depth-2 code-* stage workers render human stage labels, not raw worker_role."""
+    """SD-F1/F-15 — child name is humanized; its options cell names the assigned skill."""
 
     def test_stage_worker_rows_render_stage_labels(self):
         cases = [
@@ -1172,16 +1172,16 @@ class StageWorkerRenderTest(unittest.TestCase):
             # old fixture used key="code" (the depth-1 conductor's track key), which masked the
             # D1 raw-prefix leak since "code: " looks like a legitimate label already.
             job = DispatchJob(key=worker_role, slug="stage-job", depth=2, worker_role=worker_role,
-                              liveness="working")
+                              intensity="strong", liveness="working")
             lines = render._build_lines([], [job], section="both", narrow=False, malformed=0,
                                         layout="wide")
             text = "\n".join("".join(part for part, _key in line) for line in lines if line)
-            self.assertIn(label, text)
-            self.assertNotIn(worker_role.replace("-", "_"), text)
+            self.assertIn(label + " stage-job", text)
+            self.assertIn(worker_role + "(strong)", text)
             # the raw capability key must never leak as a breadcrumb prefix (D1) — only its
-            # humanized _STAGE_ROLE label (asserted above) may appear.
+            # humanized _STAGE_ROLE label may drive the micro-status. It is intentionally
+            # present in the options cell as the child's assigned skill.
             self.assertNotIn(worker_role + ":", text)
-            self.assertNotIn(worker_role, text)
 
     def test_g_case_prefix_general_rule_matches_known_drill_cases(self):
         # N1 — the general rule replacing the removed g6/g9 hardcoded _ROLE_SHORT entries must
