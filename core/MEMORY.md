@@ -40,6 +40,24 @@ There is no deterministic promote/skip classifier. The acting agent judges wheth
 
 Purely deterministic monitors may surface candidates but cannot promote, skip, merge, or prune based on semantic rules. A user-directed post-it flow or an agent-backed distiller or curator may perform the mutation. The script then enforces only the mechanical action contract and recovery boundary.
 
+#### D-43 — On-call incident-to-proposal bridge
+
+An agent-backed on-call loop may use bounded recent memory mutation events only
+as incident leads. It must read any selected record in full and corroborate the
+claim against current source, tests, logs, artifacts, or runtime evidence
+before sending it to the offline improvement proposal inbox. Memory remains
+unchanged and is never sufficient evidence by itself.
+
+The acting agent chooses one stable incident identity. Deterministic proposal
+code may compare that identity exactly, append bounded recurrence evidence
+under the inbox lock, and fail closed on ambiguous duplicates; it must not infer
+semantic equivalence. A named automated collector may create `observed` and
+advance only through `reproduced` to `proposed`. It cannot change a reviewed or
+terminal decision, impersonate a human approver, edit source or runtime state,
+or activate a realization. This bounded task operation is not automatic memory
+lifecycle: the on-call worker does not inject, curate, sync, consume, or mutate
+memory, preserving D-42.
+
 ### §7.4. Recall — On-Demand Retrieval
 
 `mem inject` may provide a bounded SessionStart summary of working, durable, and profile records. The default cap remains 2,000 characters or 15 bullets. When more history could materially help, the agent chooses a query and invokes the read-only retrieval helper. Retrieval is information access, not handoff consumption: `show`, explicit recall/full, and SessionStart injection do not change `delivery_state`; only `mem consume <id>` does. Bounded telemetry distinguishes `explicit-recall`, `show`, `session-inject`, and `consume` without storing raw prompts.

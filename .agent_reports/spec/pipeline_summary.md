@@ -136,3 +136,13 @@ Claude Code와 Codex의 동시 진단을 교차검증해 “저장은 되지만 
 - worker가 끝나도 10분간 유지되는 start leases(default 4/hard max 8)를 추가해, slot이 열릴 때 backlog가 순차 drain되는 지속 토큰 소비를 제한한다.
 - `.distill-disable`을 entry/acquired-boundary에서 재확인하고, stale slot/lock과 expired budget을 회수한다. 12-session concurrent wave + slot-open second wave + kill-switch를 sleeping stub으로 검증하며 live model은 호출하지 않는다.
 - 구현 검증: dispatch suite 39/39, shell syntax, adapter-boundary 통과. canonical/Claude/runtime 세 물리 경로 중 Claude adapter와 runtime copy는 byte-identical하며 canonical delta baseline을 갱신했다. production `.distill-disable`은 유지한다.
+
+### v18 → v19 (2026-07-15, update mode — main/worker lifecycle boundary, snapshot `_internal/versions/v18/`)
+- **D-42**: automatic model-backed lifecycle를 interactive main session으로 제한하고 모든 dispatch/title/distill/loop/native-subagent launcher에 worker marker를 강제했다.
+- Worker는 safety/routing/verification guard는 유지하되 memory injection, briefing, counters, SessionEnd sync/curation, title generation, main-pane publication을 수행하지 않는다.
+
+### v19 → v20 (2026-07-20, update mode — on-call incident proposal bridge, snapshot `_internal/versions/v19/`)
+- **D-43**: memory mutation은 candidate lead일 뿐이며 full-body read와 current live corroboration 뒤에만 offline proposal inbox로 승격한다.
+- Agent-authored exact incident key recurrence는 lock 안에서 bounded evidence/history를 append하고 기존 state, human decision, base context를 보존한다.
+- Named collector는 current-context-bound `reproduced`와 `proposed`까지만 가능하며 prior human-review boundary를 넘지 못한다. On-call worker는 memory lifecycle, source/runtime mutation, activation, nested model session을 수행하지 않는다.
+- 현행 7/15 worklog approvals contract를 보존해 promoted incident 한 건을 proposal ID가 포함된 `## ` finding block 한 건으로 보고한다.

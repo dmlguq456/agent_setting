@@ -15,3 +15,19 @@
 - Added bounded evidence copies, path isolation, locking, and atomic records.
 - Added core/loop ownership contracts and Claude collapsed projection; Codex and OpenCode native projection is explicitly deferred.
 - Passed lifecycle, adaptation, generation, runtime activation, extension, and managed release regressions without changing runtime-owned state.
+
+## 2026-07-20 — v2 on-call promotion specification
+
+- Allowed the scheduled on-call agent to use recent memory mutations as discovery leads only.
+- Required full-body memory reads and current source/log/test/runtime corroboration before promotion.
+- Chose agent-authored exact incident keys; deterministic code only deduplicates exact matches.
+- Limited named collectors to `reproduced` and `proposed`, with no transition after a prior human decision.
+- Preserved the worklog approval parser contract by reporting each promoted incident as one `## ` finding block.
+
+## 2026-07-20 — v2 implementation
+
+- Connected on-call discovery to the offline proposal inbox without adding an apply, memory lifecycle, nested-model, or activation path.
+- Added exact-key recurrence under the existing inbox lock, including concurrent collector coverage, ambiguous-key fail-closed behavior, and a 128-item evidence/history ceiling.
+- Preserved proposal state and base context on ingest; only a current-context-bound collector reproduction may rebase a never-reviewed proposal, while manual actor behavior remains compatible.
+- Synchronized Claude loop projection and Codex/OpenCode manual loop metadata with the canonical contract.
+- Passed proposal, generation, projection, adaptation, skill, portable-guard, runtime activation, extension, and release regressions without changing runtime-owned state.

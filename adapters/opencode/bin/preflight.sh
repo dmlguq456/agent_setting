@@ -562,11 +562,11 @@ source=loops/oncall.md
 status=manual-contract
 runtime_surface=opencode-loop-guidance
 trigger=external-scheduler-or-manual
-action=read-only-report
-output=notes/oncall/<date>.md
+action=corroborated-offline-proposal-evidence-and-report
+output=notes/oncall/<date>.md plus offline proposal evidence
 executable_projection=unsupported-runtime-script
 fallback=read-source-and-report-in-main-session
-note=OpenCode may follow the portable oncall guide manually; do not run the Claude-coupled loop script as an OpenCode-native executable.
+note=OpenCode may follow the portable oncall guide manually and use only its guarded offline proposal CLI path; do not run the Claude-coupled loop script as an OpenCode-native executable.
 EOF
         ;;
       study)

@@ -11,7 +11,6 @@
 > · **v17 2026-07-14** (agent-owned semantic memory judgment: automatic prompt classification/recall injection retired; deterministic code is limited to mechanical safety and retrieval infrastructure)
 > · **v18 2026-07-14** (Cluster L — background-model storm containment: atomic global slots, rolling start budget, kill switch, adapter/runtime projection parity)
 > · **v19 2026-07-15** (D-42 — main-session-only model lifecycle and explicit worker bootstrap boundary)
-> · **v20 2026-07-20** (D-43 — on-call incident-to-proposal bridge with live corroboration, exact-key recurrence, and human-state ceiling)
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`).
 > **방향(사용자 확정 2026-06-15)**: "대공사 OK, 보수적 현상유지 X, 제대로·깔끔·근본부터." Hermes 메모리 적극 결합 + 중복 cut + DB-SoT.
 
@@ -327,15 +326,6 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 - Every repo-owned background model launcher and all three dispatch wrappers set the portable worker marker before process creation. Runtime hooks and preflight session-end/turn-nudge commands enforce the same boundary independently so a stale wrapper or inherited compatibility environment fails closed. Worker lifecycle hooks are silent no-ops and do not advance counters, markers, stamps, or memory state.
 - Regression is hermetic and uses no live model: worker-marker cases assert zero worker invocations and zero lifecycle state writes; main-session cases preserve current behavior; runtime projection and physical Claude hook copies are hash-checked after activation.
 
-## 5.15 Cluster M — On-call incident promotion (v20, 2026-07-20)
-
-### 5.15.1 D-43 — Memory leads, live evidence, exact-key recurrence
-- An on-call worker may read bounded recent memory mutation events as discovery leads. It must read a selected record in full and corroborate the claim against current source, tests, logs, artifacts, or runtime evidence. Memory is never proposal evidence by itself and remains unchanged.
-- The acting agent authors one stable, one-line incident identity. Deterministic proposal code compares only that exact key under the inbox lock. A match appends bounded recurrence evidence and the incoming context fingerprint without changing state, approval provenance, or the stored base; ambiguous duplicates fail closed.
-- Named automated collectors (`loop:*`) require an incident key and may advance only to `reproduced` or `proposed`. A collector-bound reproduction requires current context and may rebase only a proposal that has never crossed the human-review boundary. Manual actor behavior remains compatible with the v1 proposal CLI.
-- Reviewed and terminal proposals accept recurrence evidence without reopening. Named collectors cannot defer, reject, review, adopt, impersonate `human:*`, activate realizations, edit source/generated output/runtime config, run another model session, or mutate memory. This bounded inbox operation therefore preserves D-42.
-- Evidence and top-level history are bounded to 128 items. The on-call report preserves the worklog approval parser contract: each promoted incident is one `## ` finding block containing proposal ID, state, ingest result, live corroboration, and next human decision.
-
 ## [library] 공개 API (v3 + v4 추가)
 ```
 mem_write / mem_recall / mem_index_rebuild / mem_inject / mem_sync / mem_export(dump|profile) / mem_import / mem_migrate / mem_lifecycle / mem_project
@@ -406,8 +396,6 @@ v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 b
   - **D-41**: all automatic distill paths share an atomic global concurrency pool(default 2/hard max 4), persistent 10-minute start budget(default 4/hard max 8), `.distill-disable` kill switch, stale-lease recovery, and adapter/runtime hash parity. Per-session locks remain necessary but are explicitly insufficient as a global cost boundary.
 - **v19 신규 (D-42 — main/worker lifecycle boundary, §5.14)**:
   - **D-42**: automatic model-backed lifecycle belongs only to the interactive main session. All dispatch/title/distill/loop workers export `AGENT_SESSION_ROLE=worker`; compatibility markers also fail closed. Workers keep deterministic safety and task routing but never inject memory/briefing, increment distill counters, run SessionEnd sync/curation, summarize titles, publish main-pane state, or emit token-budget context.
-- **v20 신규 (D-43 — on-call incident promotion, §5.15)**:
-  - **D-43**: recent memory mutations are agent-evaluated leads only. Full-body read plus live corroboration precede a guarded offline proposal write; exact incident keys append bounded recurrence evidence, named collectors stop at `proposed`, and no collector may cross a prior human decision or run automatic memory lifecycle.
 
 ## Next (구현 순서 — autopilot-code, 본 v5 입력)
 1. **Cluster A (파일 메커니즘 제거, Option 2)** 먼저 — 사용자 지적 incoherence 해소:

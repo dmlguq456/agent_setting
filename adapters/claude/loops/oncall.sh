@@ -1,6 +1,7 @@
 #!/bin/bash
-# Nightly read-only reconnaissance loop, invoked from crontab.
-# Produces one notes/oncall report and never edits or commits source.
+# Nightly reconnaissance loop, invoked from crontab.
+# Produces one notes/oncall report and may ingest bounded proposal evidence;
+# it never edits or commits source, runtime config, plugins, or memory.
 set -u
 AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/.claude}}"
 LOOP_DIR="$AGENT_HOME/loops"
