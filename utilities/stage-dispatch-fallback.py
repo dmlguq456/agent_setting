@@ -130,6 +130,35 @@ def registry_has_attempt(jobs: Path, attempt_id: str) -> bool:
     return False
 
 
+def terminal_attempt_state(
+    jobs: Path, route_id: str, node_id: str, attempt_id: str
+) -> tuple[str, dict[str, str]] | None:
+    """Classify an exact terminal row that may win the launch-heartbeat race."""
+
+    row = next(
+        (
+            item for item in registry_rows(jobs, route_id, node_id)
+            if item.get("attempt_id") == attempt_id and item.get("_status") == "done"
+        ),
+        None,
+    )
+    if row is None:
+        return None
+    note = row.get("note", "")
+    fields = {
+        "action": "registry-terminal",
+        "terminal_action": "registry-terminal",
+        "note": note or "unknown",
+    }
+    if note == "completed-marker":
+        return "terminal", fields
+    if note == "dead-capacity":
+        return "capacity", {**fields, "failure_class": "capacity"}
+    if note.startswith("dead-"):
+        return "fallback", fields
+    return "fail-closed", fields
+
+
 def native_child_proof(args: argparse.Namespace, route: dict, node: dict) -> str:
     """Return the proof source for a real route-owned native child, else ''."""
     if args.native_attempt_id and registry_has_attempt(args.jobs, args.native_attempt_id):
@@ -306,6 +335,16 @@ def watch_launched_attempt(args, route, node, attempt_id, launch_fields):
          "--evidence", f"pid={launch_fields.get('child_pid', '-')};start={launch_fields.get('child_pid_start', '-')}"],
         cwd=ROOT, text=True, capture_output=True, check=False, env=direct_env())
     if seed.returncode:
+        # A foreground-scoped wrapper returns only after the worker exits. The
+        # worker can therefore close its exact row before this late launch
+        # heartbeat is attempted. Preserve fail-closed behavior for every
+        # other seed failure, but let the authoritative terminal row win this
+        # completion race.
+        terminal = terminal_attempt_state(
+            args.jobs, route["route_id"], node["id"], attempt_id
+        )
+        if terminal is not None and terminal[0] != "fail-closed":
+            return terminal
         return "fail-closed", output_fields(seed.stdout + seed.stderr)
     def observe():
         result = subprocess.run(common[:2] + ["watchdog"] + common[2:] +

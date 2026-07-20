@@ -75,4 +75,28 @@ class CapacityTest(unittest.TestCase):
   with mock.patch.object(F.subprocess,"run",side_effect=[seed,observed]):
    state,fields=F.watch_launched_attempt(self.args,self.route,self.node,"att-late-capacity",{"child_pid":"1","child_pid_start":"1"})
   self.assertEqual(state,"capacity");self.assertEqual(fields["failure_class"],"capacity")
+ def test_terminal_row_wins_when_launch_heartbeat_loses_completion_race(self):
+  seed=subprocess.CompletedProcess(
+   [],65,stdout="check=failed\nreason=heartbeat-phase-regression\n",stderr="")
+  self.jobs.write_text(
+   "2026-07-20T00:00:00Z\tdone\t/r\t/w\ts\t"
+   "route_id=r,route_node=test,attempt_id=att-completed-race,"
+   "note=completed-marker\n")
+  self.args.action="start";self.args.progress_window_seconds=10
+  with mock.patch.object(F.subprocess,"run",return_value=seed) as run:
+   state,fields=F.watch_launched_attempt(
+    self.args,self.route,self.node,"att-completed-race",
+    {"child_pid":"1","child_pid_start":"1"})
+  self.assertEqual(state,"terminal")
+  self.assertEqual(fields["terminal_action"],"registry-terminal")
+  run.assert_called_once()
+ def test_launch_heartbeat_failure_without_terminal_evidence_stays_closed(self):
+  seed=subprocess.CompletedProcess(
+   [],65,stdout="check=failed\nreason=heartbeat-phase-regression\n",stderr="")
+  with mock.patch.object(F.subprocess,"run",return_value=seed):
+   state,fields=F.watch_launched_attempt(
+    self.args,self.route,self.node,"att-no-terminal-evidence",
+    {"child_pid":"1","child_pid_start":"1"})
+  self.assertEqual(state,"fail-closed")
+  self.assertEqual(fields["reason"],"heartbeat-phase-regression")
 if __name__=="__main__":unittest.main()
