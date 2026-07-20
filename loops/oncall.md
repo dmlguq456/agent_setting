@@ -1,6 +1,14 @@
-# Overnight Patrol — Read-Only Inspection and Reporting
+# Overnight Patrol — Inspection, Evidence Promotion, and Reporting
 
-The on-call loop only inspects and reports. It must not edit, commit, or push anything; its sole permitted write is one report file. The morning discussion desk under D-26 handles findings. Reversible, unambiguous work may then run unattended with full disclosure; everything else requires user discussion under D-25 and `loops/README.md`.
+The on-call loop inspects and reports. Its only additional mutation is bounded
+evidence ingestion through `tools/improvement/proposals.py`; it must not edit,
+commit, push, install, activate, or directly write proposal records, source,
+generated projections, plugins, runtime config, or memory. Temporary context
+and evidence files may be created only to call the guarded inbox CLI and must
+be removed before exit. The morning discussion desk under D-26 handles human
+decisions. Reversible, unambiguous work may then run unattended with full
+disclosure; everything else requires user discussion under D-25 and
+`loops/README.md`.
 
 ## Checks
 
@@ -16,7 +24,42 @@ The on-call loop only inspects and reports. It must not edit, commit, or push an
 6. **Note-loop health and success:** if the latest `=== note run` in `<agent-home>/loops/note.log` is more than 26 hours old, report a likely cron, authentication, or timeout failure. Also inspect its exit state: `=== exit N ===` with nonzero N, or a failure marker such as `401`, `invalid authentication`, `SyntaxError`, `=== FAILED after`, or `=== ABORT:`, is actionable even if the run is recent.
 7. **Study-loop health and success:** if the latest `=== study run` in `<agent-home>/loops/study.log` is more than eight days old, report a likely failure for the weekly Sunday job. Apply the same nonzero-exit and failure-marker checks as the note loop. This prevents recurrence of the 2026-06-21 incident in which study failed immediately with 401 but a timestamp-only check missed it.
 8. **Dispatch jobs:** list every open entry in `<agent-home>/.dispatch/jobs.log`, the registry defined by `core/OPERATIONS.md §5.10`. Flag a likely orphan when its worktree path no longer exists or the job is older than 24 hours. Flag likely lack of progress when the worktree exists but neither commits nor artifact-root `plans/*/dev_logs` changed in the last 24 hours. Report only; process termination and worktree cleanup require a separate decision.
-9. **Memory promotion candidates:** perform an agent judgment over commits and artifact changes from roughly the previous 36 hours in `<agent-home>` and work repositories. Surface only one or two especially useful candidates that appear worth retaining, such as a reusable procedure, preference, correction, convention, or lesson. `core/MEMORY.md §7` is canonical: these are contextual considerations, not deterministic categories or a scoring rule. Do not store anything; present candidates for a user-directed `/post-it` or `mem add` flow. Omit the section when no clear candidate exists. Behavioral contract changes belong in instruction documents, not memory.
+9. **Memory-to-proposal promotion:** use recent memory mutations only as
+   discovery leads for harness, instruction, loop, or runtime-adapter incidents.
+   Run `python3 <agent-home>/tools/memory/mem.py log --limit 100 --json`, apply
+   agent judgment to timestamps and content, and select at most one or two
+   plausible incidents from roughly the previous 36 hours. For every selected
+   ID, run `python3 <agent-home>/tools/memory/mem.py show <id>` and read the full
+   body. Type, strength, keywords, and fixed thresholds are not promotion
+   rules. Then cross-check the claim against current source, tests, loop logs,
+   artifacts, or a local runtime probe. Memory alone is never evidence; omit
+   the candidate when live corroboration is absent.
+
+   For a corroborated incident, prepare bounded temporary `context.json` and
+   `incident.md` files. Populate every strict context field from current local
+   evidence. When official runtime documentation was not checked, say so
+   honestly in `docs_fingerprint` (for example,
+   `unverified:runtime-watch-required`) rather than inventing freshness. Choose
+   one stable, semantic incident identity and run:
+
+   ```text
+   python3 <agent-home>/tools/improvement/proposals.py observe \
+     --actor loop:oncall --incident-key <key> \
+     --title <title> --summary <summary> \
+     --context <context.json> --evidence <incident.md>
+   ```
+
+   The exact key either creates `observed` or appends recurrence evidence to
+   the existing proposal without changing its state. If a bounded, local,
+   no-network reproduction is possible without source/runtime mutation,
+   transition with `--actor loop:oncall --context <context.json>` to
+   `reproduced`; this explicit reproduction is what may rebase a stale proposal
+   that has never crossed the human-review boundary. If an inactive invariant,
+   affected source surface, rollback, and fixture evidence are also complete,
+   transition to `proposed`. Stop there. Do not run headless sessions, drills,
+   network probes, or runtime/plugin changes, and never supply `human:*` actors
+   or approval references. If recurrence lands on a reviewed or terminal
+   proposal, append evidence only and report the unchanged state.
 10. **Retired check:** do not scan post-it files with regex. The removed `post-it.md` model is obsolete. Session-end `mem sync` and `mem lifecycle --apply` own working-tier expiration, currently at `WORKING_TTL_DAYS=21`; durable consolidation candidates belong to memory lifecycle reporting rather than an on-call reimplementation.
 11. **Complete memory-store diagnosis under D-39:** run `python3 <agent-home>/tools/memory/mem.py doctor`. It performs nine read-only deterministic checks: integrity, FTS consistency, schema invariants, working-tier size, stale pending records, durable soft ceiling, graveyard consistency, dump freshness, and worker health. Say nothing on exit 0. Copy `[WARN]` or `[FAIL]` items into the report on exits 1 or 2. Do not take corrective action; deletion, consolidation, merge, and graduation remain owned by the session-end curator under D-18. This is distinct from the legacy file-index checker `tools/memory/index-check.sh`.
 12. **Runtime-watch freshness:** check syntax for `<agent-home>/loops/runtime-watch.sh` and the newest report time under `/home/nas/user/Uihyeop/notes/runtime-watch/`. If no report exists within seven days or a recent runtime-policy change is plausible, recommend `runtime-watch --run`. On-call must not itself run network probes, drills, headless sessions, or policy edits. Route interpretation of official primary sources and policy changes into a separate `autopilot-spec`/`autopilot-code` cycle.
@@ -27,6 +70,11 @@ Tag a reproducible runtime-behavior violation—such as a commit during merge, w
 
 ## Report
 
-- Write a concise report to `/home/nas/user/Uihyeop/notes/oncall/<YYYY-MM-DD>.md` in the user's established communication language. Use one or two lines per item, include repository path and branch, and add one recommended action.
-- Always write the heartbeat file, even when there are no findings. Use an equivalent of `# Overnight Patrol — <date>\nNo anomalies; all 12 checks passed.` in that communication language. A missing file indicates loop failure, not a clean patrol.
+- Write a concise report to `/home/nas/user/Uihyeop/notes/oncall/<YYYY-MM-DD>.md` in the user's established communication language.
+- **One finding = one `## ` heading block** (worklog approvals contract, 2026-07-15): the approvals queue splits reports on exactly-two-hash headings and tracks each block's lifecycle via ✅/❌ markers written back onto the heading line. Findings outside a `## ` block never surface as actionable items. Format: `## <one-line finding — include repository path and branch>` followed by one or two body lines ending with one recommended action. Do not pre-mark headings; markers are written by the approval flow.
+- For each promoted incident, use one finding block whose heading includes the
+  proposal ID. Its body reports state, `ingest_result` (`created` or
+  `evidence-appended`), live corroboration, and the next human decision. Never
+  copy a full memory body into the report.
+- Always write the heartbeat file, even when there are no findings. Use an equivalent of `# Overnight Patrol — <date>\nNo anomalies; all 12 checks passed.` in that communication language, with **no `## ` headings** so a clean patrol contributes zero queue items. A missing file indicates loop failure, not a clean patrol.
 - Report facts only. Do not invent numbers or exaggerate; omission is better than a false entry.

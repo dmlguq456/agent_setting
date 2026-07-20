@@ -53,6 +53,21 @@ It is intentionally outside the repository, runtime homes, managed releases,
 plugin caches, and runtime discovery. Candidate evidence becomes a tracked
 fixture only after adoption through the normal spec/code cycle.
 
+## On-call source
+
+On-call may use recent memory mutations to discover possible incidents, but it
+must read the full entry and corroborate the claim against current local
+evidence before calling `observe`. Memory is a lead, never proposal evidence.
+Named collectors use a stable `--incident-key`; an exact match appends bounded
+recurrence evidence without changing the existing proposal state. A new key
+creates `observed`. On-call may advance only through `reproduced` and
+`proposed`, and must never supply a `human:*` actor or approval reference.
+Reviewed and terminal records keep their state when recurrence evidence lands.
+Recurrence does not rebase context by itself. A fresh, context-bound
+`reproduced` transition may rebase only a proposal that has never crossed the
+human-review boundary, so later human review evaluates the version that was
+actually reproduced.
+
 ## Reconciliation
 
 When runtime-watch detects an official change:

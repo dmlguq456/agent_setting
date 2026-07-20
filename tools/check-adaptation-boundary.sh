@@ -1157,6 +1157,7 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'loop-info)' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'loop-info <oncall|note|study|drill|runtime-watch>' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'source=loops/oncall.md' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'action=corroborated-offline-proposal-evidence-and-report' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'source=loops/study.md' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'source=loops/runtime-watch.md' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'action=deterministic-probe-and-proposal-report-only' adapters/codex/bin/preflight.sh \
@@ -2218,6 +2219,7 @@ check_opencode_bin_wrappers() {
   if ! grep -Fq 'loop-info)' adapters/opencode/bin/preflight.sh \
     || ! grep -Fq 'loop-info <oncall|note|study|drill|runtime-watch>' adapters/opencode/bin/preflight.sh \
     || ! grep -Fq 'source=loops/oncall.md' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'action=corroborated-offline-proposal-evidence-and-report' adapters/opencode/bin/preflight.sh \
     || ! grep -Fq 'source=loops/study.md' adapters/opencode/bin/preflight.sh \
     || ! grep -Fq 'source=loops/runtime-watch.md' adapters/opencode/bin/preflight.sh \
     || ! grep -Fq 'action=deterministic-probe-and-proposal-report-only' adapters/opencode/bin/preflight.sh \

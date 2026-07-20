@@ -47,12 +47,16 @@ Every incident starts from a strict JSON context:
 
 ```bash
 python3 tools/improvement/proposals.py observe \
+  --actor loop:oncall \
+  --incident-key runtime-projection:generated-installed-divergence \
   --title "plugin/runtime conflict" \
   --summary "generated and installed content disagree" \
   --context context.json \
   --evidence incident.md
 
 python3 tools/improvement/proposals.py transition <id> reproduced \
+  --actor loop:oncall \
+  --context context.json \
   --evidence reproduction.md
 
 python3 tools/improvement/proposals.py transition <id> reviewed \
@@ -69,11 +73,25 @@ Approval references are provenance, not authentication. They make an explicit
 human decision auditable; they do not give this tool permission to edit source
 or activate a plugin. Actual adoption uses the normal spec/code/release cycle.
 
+Named automated collectors such as `loop:oncall` must provide a semantic
+`--incident-key`. Exact-key recurrence appends bounded evidence and increments
+the occurrence count while preserving the existing proposal state, title,
+summary, and base context. Different keys create different proposals; ambiguous
+duplicate keys fail closed. Collector automation may stop at `proposed` only;
+the CLI rejects any other collector target and will not let a collector resume
+a proposal that has crossed the human-review boundary. Human review remains the
+only path to reviewed or terminal states. Recurrence alone preserves the
+original base fingerprint. A named collector must bind `reproduced` to a current
+`--context`; that explicit reproduction is the only eligible pre-review step
+that rebases the proposal for later freshness checks.
+
 ## Deliberate omissions
 
 The CLI has no command for applying a patch, editing settings, installing or
 enabling plugins, changing hooks, mutating generated output, committing, or
-releasing. It is not connected to cron or runtime session hooks.
+releasing. The on-call agent may invoke only the evidence-ingestion and bounded
+pre-review transitions described above; no cron or runtime hook calls an apply
+or activation path.
 
 ## Verification
 

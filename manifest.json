@@ -1088,8 +1088,8 @@
       "mono": "oncall",
       "type": "time",
       "schedule": "Cron at 05:37",
-      "blurb": "Overnight patrol; detect and report anomalies only",
-      "output_path": "`notes/oncall/<date>.md`",
+      "blurb": "Overnight patrol; corroborate at most two memory-backed harness incidents and exact-deduplicate evidence into the proposal inbox, then report",
+      "output_path": "`notes/oncall/<date>.md` plus offline proposal evidence",
       "layer": "L3"
     },
     {
