@@ -30,9 +30,9 @@ def base_tuple(child_harness, status="supported", probe_source="fixture-check", 
 
 
 def make_fallback(claude=None, codex=None, opencode=None):
-    fallback = [{"ordinal": 1, "hop": "same-harness-headless", "candidates": [claude or base_tuple("claude")]}]
+    fallback = [{"ordinal": 1, "fallback_hop": "same-harness-headless", "candidates": [claude or base_tuple("claude")]}]
     cross = [c for c in (codex, opencode) if c is not None] or [base_tuple("codex"), base_tuple("opencode")]
-    fallback.append({"ordinal": 2, "hop": "cross-harness-headless", "candidates": cross})
+    fallback.append({"ordinal": 2, "fallback_hop": "cross-harness-headless", "candidates": cross})
     return fallback
 
 
@@ -41,10 +41,10 @@ def make_node(depth=2, dispatch_fallback=None):
         "id": "execute",
         "kind": "pipeline-stage",
         "role": "fast implementer",
-        "depth": depth,
+        "dispatch_depth": depth,
         "write_scope": ["source/**"],
         "completion_gate": "code-execute",
-        "dispatch_fallback": dispatch_fallback if dispatch_fallback is not None else make_fallback(),
+        "fallback_hops": dispatch_fallback if dispatch_fallback is not None else make_fallback(),
     }
 
 
@@ -88,7 +88,7 @@ class SelectCheckedTupleTest(unittest.TestCase):
 
     def test_ambiguous_candidate_fails_loudly(self):
         node = make_node(dispatch_fallback=[
-            {"ordinal": 2, "hop": "cross-harness-headless",
+            {"ordinal": 2, "fallback_hop": "cross-harness-headless",
              "candidates": [base_tuple("codex"), base_tuple("codex", probe_source="second-check")]},
         ])
         route = make_route(node)
@@ -112,7 +112,7 @@ class SelectCheckedTupleTest(unittest.TestCase):
 
     def test_no_eligible_fallback_for_adapter_fails_loudly(self):
         node = make_node(dispatch_fallback=[
-            {"ordinal": 1, "hop": "same-harness-headless", "candidates": [base_tuple("claude")]},
+            {"ordinal": 1, "fallback_hop": "same-harness-headless", "candidates": [base_tuple("claude")]},
         ])
         route = make_route(node)
         with self.assertRaises(N.DispatchNodeError) as ctx:
@@ -307,7 +307,7 @@ class MainMaterializationTest(unittest.TestCase):
 
     def test_depth2_materialization_exits_65_on_missing_evidence(self):
         node = make_node(dispatch_fallback=[
-            {"ordinal": 1, "hop": "same-harness-headless", "candidates": [base_tuple("claude")]},
+            {"ordinal": 1, "fallback_hop": "same-harness-headless", "candidates": [base_tuple("claude")]},
         ])
         route = make_route(node, tuples=[])
         with tempfile.TemporaryDirectory() as td:

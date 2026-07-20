@@ -54,7 +54,7 @@ dh = importlib.util.module_from_spec(spec); spec.loader.exec_module(dh)
 
 d1 = dh.parser().parse_args([
     "--worktree", "/work/repo", "--slug", "owner", "--capability", "autopilot-code",
-    "--mode", "debug", "--depth", "1", "--parent", "synthetic-owner",
+    "--mode", "debug", "--dispatch-depth", "1", "--parent", "synthetic-owner",
     "--parent-session-id", "synthetic-thread",
 ])
 dh._bind_runtime_parent(d1)
@@ -62,7 +62,7 @@ print(f"D1={d1.parent_session_id}:{d1.parent_slug or '-'}")
 
 d2 = dh.parser().parse_args([
     "--worktree", "/work/repo", "--slug", "stage", "--capability", "code-plan",
-    "--mode", "debug", "--depth", "2", "--parent", "real-owner",
+    "--mode", "debug", "--dispatch-depth", "2", "--parent", "real-owner",
     "--parent-session-id", "owner-thread",
 ])
 dh._bind_runtime_parent(d2)
@@ -89,7 +89,7 @@ jobs = AH / ".dispatch" / "jobs.log"
 logs = AH / ".dispatch" / "logs"
 
 def row(slug, wt, attempt=""):
-    pipe = f"capability=code-plan,mode=dev,qa=standard,intensity=standard,depth=2,harness=codex,parent=cx,worker_role=code-plan,owner=autopilot-code,model=gpt-5.6-sol"
+    pipe = f"capability=code-plan,mode=dev,qa=standard,intensity=standard,attempt_schema_version=2,dispatch_depth=2,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless,harness=codex,parent=cx,worker_role=code-plan,owner=autopilot-code,model=gpt-5.6-sol"
     if attempt:
         pipe += f",attempt_id={attempt}"
     with jobs.open("a", encoding="utf-8") as f:

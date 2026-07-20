@@ -2,20 +2,20 @@
 
 Evaluate a completed checkpoint from the latest setup experiment or from `--parent <slug>` for reevaluation or new data.
 
-> **Stage dispatch:** use the contract in `setup-procedure.md`. Apply the `WORKFLOW §0.3` pre-execution gate before E2. At standard+, group separable stages into workers by write ownership per the eval execution topology in `capabilities/autopilot-lab.md`, and dispatch them as depth-2 headless sessions with file-only handoff. Each team reads only artifact paths such as `metrics.jsonl`, `REPORT.md`, and research inputs, never earlier conversational context. Running a separable stage inline requires the recorded reason in `_RUNLOG` or the experiment `_internal/` (`OPERATIONS §5.10` inline exceptions).
+> **Stage dispatch:** use the contract in `setup-procedure.md`. Apply the `WORKFLOW §0.3` pre-execution gate before E2. At standard+, group separable stages into workers by write ownership per the eval execution topology in `capabilities/autopilot-lab.md`, and dispatch them as dispatch-depth-2 headless sessions with file-only handoff. Each team reads only artifact paths such as `metrics.jsonl`, `REPORT.md`, and research inputs, never earlier conversational context. Running a separable stage inline requires the recorded reason in `_RUNLOG` or the experiment `_internal/` (`OPERATIONS §5.10` inline exceptions).
 
 #### Eval stage-worker mapping
 
 | Stage | In-session team | Input artifacts | Output artifacts | Write class |
 |---|---|---|---|---|
-| E2 execution (eval worker) | 테스트팀, functional | `eval.py` and checkpoint | Metric values in `run.json best` plus `metrics.jsonl` | Dispatched depth 2 |
-| E3-2 plot / E3-5 media (media worker) | 자료팀, figure-gen | `metrics.jsonl`, audio outputs | `figures/*.{png,pdf}`, playback `report/*.html` | Dispatched depth 2 |
-| E3-3 compare | 연구팀, research-survey | `REPORT.md`, `research/`, and `analysis_project/paper/` | Comparison section in `REPORT.md` | Dispatched depth 2 |
-| E3-4/E3-5 report assembly (report worker) | 편집팀 or draft handoff | metrics, figures, STORY inputs | `REPORT.md`, `STORY.md`, `summary.md` | Dispatched depth 2 |
-| Independent verification | 품질관리팀, read-only | Final artifacts | Verdict record under `_internal/` | Dispatched depth 2, read-only |
+| E2 execution (eval worker) | 테스트팀, functional | `eval.py` and checkpoint | Metric values in `run.json best` plus `metrics.jsonl` | Dispatched dispatch depth 2 |
+| E3-2 plot / E3-5 media (media worker) | 자료팀, figure-gen | `metrics.jsonl`, audio outputs | `figures/*.{png,pdf}`, playback `report/*.html` | Dispatched dispatch depth 2 |
+| E3-3 compare | 연구팀, research-survey | `REPORT.md`, `research/`, and `analysis_project/paper/` | Comparison section in `REPORT.md` | Dispatched dispatch depth 2 |
+| E3-4/E3-5 report assembly (report worker) | 편집팀 or draft handoff | metrics, figures, STORY inputs | `REPORT.md`, `STORY.md`, `summary.md` | Dispatched dispatch depth 2 |
+| Independent verification | 품질관리팀, read-only | Final artifacts | Verdict record under `_internal/` | Dispatched dispatch depth 2, read-only |
 | Spec/note sync | `autopilot-spec` update, `autopilot-note` | Final results | Spec snapshot, note rows | After results are final |
 
-The depth-1 owner integrates worker outputs, resolves cross-stage conflicts, and stays in the flow: liveness watching and harvest belong to the same work (`OPERATIONS §5.10` SD-14), not a fire-and-forget dispatch.
+The dispatch-depth-1 owner integrates worker outputs, resolves cross-stage conflicts, and stays in the flow: liveness watching and harvest belong to the same work (`OPERATIONS §5.10` SD-14), not a fire-and-forget dispatch.
 
 Do not let stages write the same file concurrently without the OPERATIONS §5.8 `.pipeline-lock`. `_RUNLOG.md` is an append-only timeline exception: S3-2 appends the experiment row, and E3-4 updates only that row rather than appending another.
 

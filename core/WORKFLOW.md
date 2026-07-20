@@ -189,8 +189,8 @@ criterion, destructive risk, or touched external system.
 
 Before approval, choose from compact manifest routing metadata and §0.2; do not
 load the full entry Skill body or its references merely to propose a route. At
-`standard+`, the depth-1 owner reads the selected capability contract and each
-depth-2 worker reads only its stage contract. `direct` or `quick` acting
+`standard+`, the dispatch-depth-1 owner reads the selected capability contract and each
+dispatch-depth-2 worker reads only its stage contract. `direct` or `quick` acting
 sessions read the detail they need after approval. If a runtime automatically
 injects a selected Skill body into main, do not duplicate that read; record the
 runtime limitation rather than claiming total-token savings.
@@ -219,10 +219,10 @@ Autopilot entrypoints choose `intensity`; verification rigor is derived from it 
 | Request shape | Default | Routing |
 |---|---|---|
 | One-off answer, typo, rename, or explicit no-artifact work | `direct` | No plan stage, plan check, or durable plan |
-| Small localized change that misses at least one atomic-direct predicate and has no promotion signal | `quick` | Depth-1 one-shot owner with orient-lite, micro-plan, plan-check-lite, focused verification, and concise report; no depth 2 |
-| Work with a promotion signal or separable durable stages | `standard` | Durable plan/checklist; thin depth-1 conductor dispatches capability-defined stages with file-only handoff and may open a bounded verifier or planner when separable |
-| Important multi-file or risk-bearing work | `strong` | Standard stage dispatch plus one depth-2 check at the riskiest point |
-| Complex cross-domain or cross-harness work | `thorough` | Bounded depth-2 perspective and verifier workers |
+| Small localized change that misses at least one atomic-direct predicate and has no promotion signal | `quick` | Registered-headless dispatch-depth-1 one-shot owner with orient-lite, micro-plan, plan-check-lite, focused verification, and concise report; no dispatch depth 2 |
+| Work with a promotion signal or separable durable stages | `standard` | Durable plan/checklist; thin dispatch-depth-1 conductor dispatches capability-defined stages with file-only handoff and may open a bounded verifier or planner when separable |
+| Important multi-file or risk-bearing work | `strong` | Standard stage dispatch plus one dispatch-depth-2 check at the riskiest point |
+| Complex cross-domain or cross-harness work | `thorough` | Bounded dispatch-depth-2 perspective and verifier workers |
 | High-stakes, irreversible, security, or external-facing work | `adversarial` | Thorough plus an explicit adversary, failure-mode, or security pass |
 
 Only `direct` has no plan. Every other autopilot graph includes a plan check, but independent QA is not repeated after every sub-stage by default. `CONVENTIONS §1` is canonical for the graph.
@@ -280,14 +280,14 @@ under §0.4, and internal routing is automatic. Portable model roles come from
 | `analyze-project` | One capability analyzing code, paper, or document mode itself |
 | `autopilot-spec` | Planning role for PRD, material role for research import, and setup logic for hosting and CI/CD |
 | `autopilot-design` | Design maker and critic plus material web-image-search |
-| `autopilot-code` | Direct is depth-0 inline. Quick is one depth-1 owner running orient-lite → micro-plan → plan-check-lite → produce → focused verification → concise report. At `standard+`, independently dispatch planning, implementation, code-review/test, and task-aware plan review; visual work uses a design critic, while research and code use research review. |
+| `autopilot-code` | Direct is dispatch-depth-0 inline. Quick is one registered-headless dispatch-depth-1 one-shot owner running orient-lite → micro-plan → plan-check-lite → produce → focused verification → concise report. At `standard+`, independently dispatch planning, implementation, code-review/test, and task-aware plan review; visual work uses a design critic, while research and code use research review. |
 | `autopilot-code` in app mode | General code flow plus design critique at plan review and after render, DB migration safety, and automatic deploy after an authorized push |
 | `autopilot-draft` | Material figure/data/reference work, writing implementation, editorial polish, and research fact-check |
 | `autopilot-refine` | Reuse the draft roles plus editorial review |
 | `autopilot-lab` | Setup uses research plan review, implementation scaffold, and QA smoke tests. Evaluation uses functional QA, figure generation, and research survey; at `standard+`, checkpoint evaluation, media generation, report assembly, and independent verification dispatch as stage workers under the eval execution topology in `capabilities/autopilot-lab.md`. The actual long-running training run is asynchronous and human-gated through RUNLOG ⏳ rather than a stage-worker dispatch. |
 | `analyze-user` | Cross-project material collection plus editorial review |
 
-For every durable stage at `standard+`, use an independent headless session under `OPERATIONS §5.10`; the named team roles run inside that session, and the depth-1 conductor passes only artifact paths. Direct stays depth 0 and quick stays a depth-1 one-shot.
+For every durable stage at `standard+`, use an independent headless session under `OPERATIONS §5.10`; the named team roles run inside that session, and the dispatch-depth-1 conductor passes only artifact paths. Direct stays dispatch depth 0 and quick stays one registered-headless dispatch-depth-1 one-shot owner.
 
 Each entrypoint is an explicit unit of intent. The §0.4 confirmation is the
 single top-level route handshake. Capability-local review controls such as
@@ -333,7 +333,7 @@ In a spec-backed project, a later fix or feature—especially in a new session�
 1. **Refresh analysis when needed:** if `analysis_project/code/` is stale or the domain is unfamiliar, run incremental `analyze-project --mode code` first.
 2. **Require a spec:** when absent, route to `autopilot-spec` before development. A single throwaway is the only exception, and repetition should graduate to a spec.
 3. **Check spec drift before code:** compare the request with `spec/prd.md`. A route, schema/entity, UI-flow, external integration, migration, or existing code drift is spec-significant and routes through `autopilot-spec` update with a snapshot under `_internal/versions/v{N}/`. Proceed autonomously and report when drift is clear; ask when it is genuinely ambiguous. Record “no spec impact” for within-spec implementation details. `autopilot-code` repeats this verdict in preflight Step 0 as a backstop.
-4. **Run `autopilot-code`:** intensity selects the graph. Direct performs inline production plus sanity/report. Quick uses one depth-1 session for micro-plan, plan-check-lite, focused verification, and report with no depth 2. Only `standard+` creates a durable `plans/<date>_<slug>/` cycle. Derived rigor never creates a separate plan cycle by itself.
+4. **Run `autopilot-code`:** intensity selects the graph. Direct performs inline production plus sanity/report. Quick uses one registered-headless dispatch-depth-1 one-shot owner for micro-plan, plan-check-lite, focused verification, and report with no dispatch depth 2. Only `standard+` creates a durable `plans/<date>_<slug>/` cycle. Derived rigor never creates a separate plan cycle by itself.
 
 These rules close three gaps: a broken trail caused by over-creating plans for quick work, spec drift that bypasses versioned spec update, and blind editing in a new session. Both `autopilot-spec` and `autopilot-code` are iterable; post-build change is another invocation of the same capability, not a new workflow family.
 # Capability route topology

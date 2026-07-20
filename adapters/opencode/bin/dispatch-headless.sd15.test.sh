@@ -58,7 +58,7 @@ jobs = AH / ".dispatch" / "jobs.log"
 logs = AH / ".dispatch" / "logs"
 
 def row(slug, wt, attempt=""):
-    pipe = "capability=code-plan,mode=dev,qa=standard,intensity=standard,depth=2,harness=opencode,parent=oc,worker_role=code-plan,owner=autopilot-code,model=openai/gpt-5"
+    pipe = "capability=code-plan,mode=dev,qa=standard,intensity=standard,attempt_schema_version=2,dispatch_depth=2,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless,harness=opencode,parent=oc,worker_role=code-plan,owner=autopilot-code,model=openai/gpt-5"
     if attempt:
         pipe += f",attempt_id={attempt}"
     with jobs.open("a", encoding="utf-8") as f:

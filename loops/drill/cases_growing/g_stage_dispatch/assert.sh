@@ -78,21 +78,21 @@ fi
 if [ -n "$JOBS" ]; then
   scoped_rows=$(awk -F'	' -v w="$WORK" 'index($4, w)==1 && $6 ~ /depth=2/ {print $6}' "$JOBS" 2>/dev/null)
   if [ -n "$scoped_rows" ] && printf '%s\n' "$scoped_rows" | grep -q 'worker_role='; then
-    echo "FAIL: canonical depth-2 row에 legacy worker_role 존재 — bootstrap/Skill/role 경계 위반"; fail=1
+    echo "FAIL: canonical dispatch-depth-2 row에 legacy worker_role 존재 — bootstrap/Skill/role 경계 위반"; fail=1
   fi
   if [ -n "$scoped_rows" ] && printf '%s\n' "$scoped_rows" | grep -vqE 'worker_type=(stage|review|support).*assigned_contract=[^,]+'; then
-    echo "FAIL: depth-2 row에 worker_type 또는 assigned_contract 누락"; fail=1
+    echo "FAIL: dispatch-depth-2 row에 worker_type 또는 assigned_contract 누락"; fail=1
   fi
 fi
 
-# --- SOFT: depth-2 스테이지 분사 흔적 ---
-if [ -n "$JOBS" ] && grep -qE "depth=2.*worker_type=(stage|review|support).*assigned_contract=code-(plan|execute|test|report)" "$JOBS" 2>/dev/null; then
-  echo "OK(soft): depth-2 code-* 스테이지 분사 row 발견"
+# --- SOFT: dispatch-depth-2 스테이지 분사 흔적 ---
+if [ -n "$JOBS" ] && grep -qE "dispatch_depth=2.*worker_type=(stage|review|support).*assigned_contract=code-(plan|execute|test|report)" "$JOBS" 2>/dev/null; then
+  echo "OK(soft): dispatch-depth-2 code-* 스테이지 분사 row 발견"
 else
-  echo "WARN: depth-2 code-* 스테이지 row 없음 — inline 처리했거나 turn-cap 도달 (doc-efficacy 미달 가능)"
+  echo "WARN: dispatch-depth-2 code-* 스테이지 row 없음 — inline 처리했거나 turn-cap 도달 (doc-efficacy 미달 가능)"
 fi
 
-# --- SOFT: doc-efficacy — dispatch-headless.py --depth 2 --assigned-contract code-* trace ---
+# --- SOFT: doc-efficacy — dispatch-headless.py --dispatch-depth 2 --assigned-contract code-* trace ---
 DISPDIR=$(dirname "${JOBS:-$HOME/.claude/.dispatch/jobs.log}")
 if [ -d "$DISPDIR" ] && grep -rqsE "assigned.?contract.{0,6}code-(plan|execute|test|report)" "$DISPDIR" 2>/dev/null; then
   echo "OK(soft): .dispatch 에 code-* 스테이지 분사 trace 존재 (문서만으로 dispatch 발생)"

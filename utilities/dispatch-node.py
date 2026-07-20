@@ -8,7 +8,7 @@ from worker_bootstrap import assigned_contract, worker_type_for_kind
 ROLE_MODE={"deep maker":"dev/refactor","fast implementer":"dev/backend","deep reviewer":"qa/test","fast reviewer":"qa/review","fast writer":"docs/writing","deep orchestrator":"ops/orchestration","orchestrator":"ops/orchestration"}
 
 # SD-66 fix-forward: deterministic dispatch_evidence -> wrapper-argument binding
-# for depth-2 route nodes (PRD §13.7.6, acceptance ③). Only same/cross-harness
+# for dispatch-depth-2 route nodes (PRD §13.7.6, acceptance ③). Only same/cross-harness
 # headless fallback hops carry a checked tuple; native-subagent/inline hops are
 # not wrapper dispatch and are never consulted here.
 FALLBACK_HOPS = {"same-harness-headless", "cross-harness-headless"}
@@ -48,7 +48,7 @@ def _normalized_failure_class(row):
 def select_checked_tuple(route, node, adapter):
     """Pick the one supported checked tuple for `adapter` at this node.
 
-    Walks the node's `dispatch_fallback` entries in ascending ordinal order,
+    Walks the node's `fallback_hops` entries in ascending ordinal order,
     considering only same/cross-harness-headless hops whose candidate
     `child_harness` equals `adapter`. The first ordinal offering a candidate
     for this adapter is authoritative; it must be unambiguous, `supported`,
@@ -57,7 +57,7 @@ def select_checked_tuple(route, node, adapter):
     normalized failure_class; `probe_time` is deliberately excluded).
     """
     fallbacks = sorted(
-        (f for f in node.get("dispatch_fallback", []) if f.get("hop") in FALLBACK_HOPS),
+        (f for f in node.get("fallback_hops", []) if f.get("fallback_hop") in FALLBACK_HOPS),
         key=lambda f: f.get("ordinal", 0),
     )
     for entry in fallbacks:
@@ -100,7 +100,7 @@ def select_checked_tuple(route, node, adapter):
 def current_parent_identity(environ=None):
     """Return the actual launching runtime identity exported by its wrapper.
 
-    No variables means a depth-0/manual caller with no runtime identity to
+    No variables means a dispatch-depth-0/manual caller with no runtime identity to
     validate. A partial identity is never usable evidence and fails closed.
     """
     environ = os.environ if environ is None else environ
@@ -180,7 +180,7 @@ def collect_explicit_evidence(tokens, flags):
 
 
 def bind_dispatch_evidence(route, node, adapter, adapter_args, parent_identity=None):
-    """Return the wrapper flags to append for a depth-2 route node's --start.
+    """Return the wrapper flags to append for a dispatch-depth-2 route node's --start.
 
     Never silently overwrites a caller-supplied evidence flag: an explicit
     value equal to the record is accepted without duplication, and any
@@ -225,11 +225,11 @@ def main():
  except ValueError as e:
   raise SystemExit(str(e))
  contract=assigned_contract(capability=route["capability"],worker_type=worker_type,route_node=node["id"],completion_gate=node.get("completion_gate"),root=ROOT)
- argv=[sys.executable,str(wrapper),"--"+a.action,"--worktree",route["cwd"],"--slug",a.slug,"--capability",route["capability"],"--mode",ROLE_MODE.get(node.get("role"),"ops/orchestration"),"--qa",a.qa,"--intensity",route["effective_intensity"],"--depth",str(node.get("depth",1)),"--worker-type",worker_type,"--assigned-contract",contract,"--owner",route["capability"],"--route-file",str(Path(a.route).resolve()),"--route-id",route["route_id"],"--route-hash",route["route_hash"],"--route-node",node["id"],"--registry-digest",route["registry_digest"],"--write-scope",";".join(node["write_scope"]),"--completion-gate",node["completion_gate"],"--prompt-text",a.prompt_text]
+ argv=[sys.executable,str(wrapper),"--"+a.action,"--worktree",route["cwd"],"--slug",a.slug,"--capability",route["capability"],"--mode",ROLE_MODE.get(node.get("role"),"ops/orchestration"),"--qa",a.qa,"--intensity",route["effective_intensity"],"--dispatch-depth",str(node.get("dispatch_depth",1)),"--worker-type",worker_type,"--assigned-contract",contract,"--owner",route["capability"],"--route-file",str(Path(a.route).resolve()),"--route-id",route["route_id"],"--route-hash",route["route_hash"],"--route-node",node["id"],"--registry-digest",route["registry_digest"],"--write-scope",";".join(node["write_scope"]),"--completion-gate",node["completion_gate"],"--prompt-text",a.prompt_text]
  affinity=node.get("harness_affinity")
  if affinity: argv += ["--harness-affinity",affinity]
- if node.get("depth")==2:
-  if not a.parent: raise SystemExit("depth-2 route node requires --parent")
+ if node.get("dispatch_depth")==2:
+  if not a.parent: raise SystemExit("dispatch-depth-2 route node requires --parent")
   argv += ["--parent",a.parent]
   try:
    argv += bind_dispatch_evidence(

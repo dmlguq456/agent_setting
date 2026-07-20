@@ -21,7 +21,7 @@ Adapters may expose this capability through native commands, skill files, prompt
 
 ## Assurance Contract
 
-This sub-capability follows `core/CONVENTIONS.md §1`: plan-check and review rigor is derived from intensity rather than independently selected. `code-plan` is used for durable `standard+` code work cycles; `direct` skips it and `quick` is handled by a depth-1 one-shot worker with its inline micro-plan plus `plan-check-lite`. Independent plan review is selected by intensity/risk and is not repeated after every sub-stage by default.
+This sub-capability follows `core/CONVENTIONS.md §1`: plan-check and review rigor is derived from intensity rather than independently selected. `code-plan` is used for durable `standard+` code work cycles; `direct` skips it and `quick` is handled by one registered-headless dispatch-depth-1 one-shot owner with its inline micro-plan plus `plan-check-lite`. Independent plan review is selected by intensity/risk and is not repeated after every sub-stage by default.
 
 
 ## Artifact Ownership

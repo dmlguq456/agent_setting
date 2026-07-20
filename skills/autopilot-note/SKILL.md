@@ -28,7 +28,7 @@ before approval.
 
 ## Post-approval owner contract
 
-After approval, direct/quick sessions and the `standard+` depth-1 owner load
+After approval, direct/quick sessions and the `standard+` dispatch-depth-1 owner load
 `capabilities/autopilot-note.md`, then use the Reference Index below. Assigned
 stage workers load only their assigned stage contracts.
 
@@ -36,7 +36,7 @@ stage workers load only their assigned stage contracts.
 
 | File | Load when | Obligation |
 |---|---|---|
-| [`references/owner-execution.md`](references/owner-execution.md) | After approval, by the selected direct/quick session or depth-1 owner | Read the complete execution procedure before material work. This is the router's only post-approval reference edge. |
+| [`references/owner-execution.md`](references/owner-execution.md) | After approval, by the selected direct/quick session or dispatch-depth-1 owner | Read the complete execution procedure before material work. This is the router's only post-approval reference edge. |
 
 ## Guard pointer
 

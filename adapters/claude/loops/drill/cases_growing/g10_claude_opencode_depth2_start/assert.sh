@@ -1,5 +1,5 @@
 #!/bin/bash
-# hard: selected-adapter depth-1 owner must start an OpenCode depth-2 worker through wrappers.
+# hard: selected-adapter dispatch-depth-1 owner must start an OpenCode dispatch-depth-2 worker through wrappers.
 set -u
 WORK=$1
 T=$2
@@ -82,7 +82,7 @@ else
   grep -q 'OPENCODE_DEPTH2_VERIFIER_PASS' "$OC_PROMPT_COPY" || { echo "FAIL: OpenCode child prompt marker 누락"; fail=1; }
 fi
 
-marker="OPENCODE_DEPTH2_VERIFIER_PASS parent=$OWNER_SLUG owner_harness=$PARENT_ADAPTER depth=2"
+marker="OPENCODE_DEPTH2_VERIFIER_PASS parent=$OWNER_SLUG owner_harness=$PARENT_ADAPTER dispatch_depth=2"
 deadline=$((SECONDS + 240))
 while [ $SECONDS -lt $deadline ]; do
   if [ -f "$OC_LOG" ] && grep -q 'OPENCODE_DEPTH2_VERIFIER_PASS' "$OC_LOG"; then
@@ -104,7 +104,7 @@ elif ! grep -Fq "owner_harness=$PARENT_ADAPTER" "$OC_LOG"; then
   echo "FAIL: OpenCode child log에 selected owner_harness marker 없음"
   fail=1
 else
-  echo "PASS: OpenCode depth-2 child emitted verifier marker"
+  echo "PASS: OpenCode dispatch-depth-2 child emitted verifier marker"
 fi
 
 PYTHONPATH="$HARNESS_ROOT/tools" REPO="$REPO" JOBS="$JOBS" OWNER_SLUG="$OWNER_SLUG" CHILD_SLUG="$CHILD_SLUG" PARENT_ADAPTER="$PARENT_ADAPTER" PARENT_SESSION_ID="$PARENT_SESSION_ID" python3 - <<'PY' || fail=1
@@ -166,6 +166,13 @@ def expect_absent(row, *keys):
     for key in keys:
         require(key not in row["meta"], f"{row['slug']} legacy metadata must be absent: {key}")
 
+def expect_attempt(row):
+    attempt = row["meta"].get("attempt_id")
+    require(
+        bool(attempt) and attempt.startswith("att-"),
+        f"{row['slug']} missing current attempt_id: {attempt!r}",
+    )
+
 owner = one(owner_slug)
 expect(
     owner,
@@ -173,7 +180,12 @@ expect(
     mode="dev/refactor",
     qa="standard",
     intensity="standard",
-    depth="1",
+    attempt_schema_version="2",
+    dispatch_depth="1",
+    transport="headless",
+    execution_surface="registered-headless",
+    registered_worker="1",
+    fallback_hop="same-harness-headless",
     harness=parent_adapter,
     parent_sid=parent_session_id,
     worker_type="owner",
@@ -184,16 +196,27 @@ expect(
     model_role="inherit",
     model="inherit",
 )
+expect_attempt(owner)
 expect_absent(owner, "worker_role")
 
 child = one(child_slug)
+child_hop = (
+    "same-harness-headless"
+    if parent_adapter == "opencode"
+    else "cross-harness-headless"
+)
 expect(
     child,
     capability="code-test",
     mode="qa/test",
     qa="standard",
     intensity="standard",
-    depth="2",
+    attempt_schema_version="2",
+    dispatch_depth="2",
+    transport="headless",
+    execution_surface="registered-headless",
+    registered_worker="1",
+    fallback_hop=child_hop,
     harness="opencode",
     parent=owner_slug,
     parent_sid=parent_session_id,
@@ -206,6 +229,7 @@ expect(
     model="inherit",
     variant="inherit",
 )
+expect_attempt(child)
 expect_absent(child, "worker_role")
 
 jobs = dispatch.collect(jobs_path=jobs_path)
@@ -234,9 +258,9 @@ fleet_child = [
     and j.assigned_contract == "code-test"
     and j.worker_role is None
 ]
-require(fleet_owner, f"fleet parse missing {parent_adapter} depth-1 owner")
-require(fleet_child, f"fleet parse missing OpenCode depth-2 child linked to {parent_adapter} owner")
-print(f"PASS: fleet collector preserves {parent_adapter} depth-1 -> OpenCode depth-2 linkage")
+require(fleet_owner, f"fleet parse missing {parent_adapter} dispatch-depth-1 owner")
+require(fleet_child, f"fleet parse missing OpenCode dispatch-depth-2 child linked to {parent_adapter} owner")
+print(f"PASS: fleet collector preserves {parent_adapter} dispatch-depth-1 -> OpenCode dispatch-depth-2 linkage")
 PY
 
 if [ "$fail" -eq 0 ]; then

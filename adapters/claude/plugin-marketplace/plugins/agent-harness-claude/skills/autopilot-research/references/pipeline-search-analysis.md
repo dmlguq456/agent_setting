@@ -1,6 +1,6 @@
 ## Pipeline
 
-> **Stage-dispatch contract** (`standard+`, OPERATIONS §5.10 ③④, SD-1, SD-2): dispatch each durable stage as an independent depth-2 headless session. The named team runs inside that stage. The depth-1 conductor passes artifact paths and reads verdicts or status only; each stage reads inputs from files. Keep `direct`, `quick`, and micro-stages inline. Dispatch depth-gated stages only when their depth condition is met. Stage sessions must not redispatch because depth 3+ is forbidden.
+> **Stage-dispatch contract** (`standard+`, OPERATIONS §5.10 ③④, SD-1, SD-2): dispatch each durable stage as an independent dispatch-depth-2 headless session. The named team runs inside that stage. The dispatch-depth-1 conductor passes artifact paths and reads verdicts or status only; each stage reads inputs from files. Keep `direct`, `quick`, and micro-stages inline. Dispatch depth-gated stages only when their depth condition is met. Stage sessions must not redispatch because dispatch depth 3+ is forbidden.
 
 | Stage | In-session team | Inputs | Outputs | Write class |
 |---|---|---|---|---|

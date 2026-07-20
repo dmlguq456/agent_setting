@@ -15,6 +15,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_lifecycle import DETACHED, FOREGROUND_SCOPED, select_launch_lifecycle  # noqa: E402
+from dispatch_contract import DispatchContractError, validate_attempt_metadata  # noqa: E402
 from worker_bootstrap import assigned_contract, worker_type_for_kind  # noqa: E402
 
 ORDER = ["same-harness-headless", "cross-harness-headless", "native-subagent", "inline"]
@@ -53,8 +54,8 @@ def load_node(route_path: Path, node_id: str) -> tuple[dict, dict]:
     node = next((row for row in route.get("nodes", []) if row.get("id") == node_id), None)
     if not node:
         raise ValueError(f"unknown route node: {node_id}")
-    chain = node.get("dispatch_fallback")
-    if not isinstance(chain, list) or [row.get("hop") for row in chain] != ORDER:
+    chain = node.get("fallback_hops")
+    if not isinstance(chain, list) or [row.get("fallback_hop") for row in chain] != ORDER:
         raise ValueError("route node lacks checked ordered fallback")
     return route, node
 
@@ -162,6 +163,24 @@ def terminal_attempt_state(
 
 def native_child_proof(args: argparse.Namespace, route: dict, node: dict) -> str:
     """Return the proof source for a real route-owned native child, else ''."""
+
+    def valid_native_axes(meta):
+        expected={
+            "codex":"codex-native-subagent",
+            "claude":"claude-subagent",
+        }.get(meta.get("harness"))
+        if not expected or meta.get("execution_surface") != expected:
+            return False
+        try:
+            validate_attempt_metadata(meta)
+        except DispatchContractError:
+            return False
+        return (
+            meta.get("dispatch_depth")==str(node["dispatch_depth"])
+            and meta.get("registered_worker") in {"0","false"}
+            and meta.get("fallback_hop")=="native-subagent"
+        )
+
     if args.native_attempt_id and registry_has_attempt(args.jobs, args.native_attempt_id):
         for line in args.jobs.read_text(encoding="utf-8", errors="replace").splitlines():
             fields = line.split("\t")
@@ -171,6 +190,7 @@ def native_child_proof(args: argparse.Namespace, route: dict, node: dict) -> str
             if (meta.get("attempt_id") == args.native_attempt_id
                     and meta.get("route_id") == route["route_id"]
                     and meta.get("route_node") == node["id"]
+                    and valid_native_axes(meta)
                     and meta.get("pid", "").isdigit() and meta.get("pid_start")):
                 pid = int(meta["pid"])
                 try:
@@ -190,7 +210,7 @@ def native_child_proof(args: argparse.Namespace, route: dict, node: dict) -> str
                 and record.get("route_hash") == route["route_hash"]
                 and record.get("route_node") == node["id"] and producer):
             for item in registry_rows(args.jobs, route["route_id"], node["id"]):
-                if item.get("attempt_id") == producer:
+                if item.get("attempt_id") == producer and valid_native_axes(item):
                     return "route-owned-artifact"
     return ""
 
@@ -272,7 +292,7 @@ def wrapper_command(
         "--mode", args.mode,
         "--qa", args.qa,
         "--intensity", route["effective_intensity"],
-        "--depth", "2",
+        "--dispatch-depth", "2",
         "--parent", args.parent,
         "--worker-type", worker_type,
         "--assigned-contract", contract,
@@ -295,6 +315,9 @@ def wrapper_command(
         "--eligibility-source", row["probe_source"],
         "--eligibility-failure-class", row.get("failure_class") or "-",
         "--fallback-ordinal", str(ordinal),
+        "--fallback-hop", ORDER[ordinal - 1],
+        "--execution-surface", "registered-headless",
+        "--registered-worker", "1",
     ]
     # Backward-compatible explicit metadata only. Canonical route dispatch
     # never synthesizes a worker_role from topology kind, node, or model role.
@@ -535,6 +558,13 @@ def main() -> int:
 
     try:
         args.route = args.route.resolve()
+        raw_route = json.loads(args.route.read_text(encoding="utf-8"))
+        raw_contract = raw_route.get("dispatch_contract_version") or raw_route.get("broker_contract_version")
+        if raw_contract != 3:
+            return fail(
+                "legacy-broker-route-read-only",76,
+                contract_version=str(raw_contract or 1),child_spawned="0",
+            )
         route, node = load_node(args.route, args.node)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         return fail("invalid-fallback-route", 65, detail=str(exc))
@@ -555,9 +585,9 @@ def main() -> int:
     failed_tuples = set(args.failed_tuple) | set(prior_failures)
     attempts: list[str] = []
     direct_failures: list[dict[str, str]] = []
-    for hop in node["dispatch_fallback"]:
+    for hop in node["fallback_hops"]:
         ordinal = int(hop["ordinal"])
-        if hop["hop"] in {"same-harness-headless", "cross-harness-headless"}:
+        if hop["fallback_hop"] in {"same-harness-headless", "cross-harness-headless"}:
             for row in hop.get("candidates", []):
                 key = tuple_key(row)
                 unsupported = row.get("status") != "supported" or row.get("launch_authority") != "conductor"
@@ -578,7 +608,7 @@ def main() -> int:
                     )
                     if retry_state in {"success", "existing"}:
                         print("check=ok")
-                        print(f"selected_hop={hop['hop']}")
+                        print(f"selected_hop={hop['fallback_hop']}")
                         print(f"fallback_ordinal={ordinal}")
                         print(f"child_harness={row['child_harness']}")
                         print("capacity_retry=1")
@@ -658,7 +688,7 @@ def main() -> int:
                                         attempt_trace="|".join(attempts))
                     if early != "capacity":
                         print("check=ok")
-                        print(f"selected_hop={hop['hop']}")
+                        print(f"selected_hop={hop['fallback_hop']}")
                         print(f"fallback_ordinal={ordinal}")
                         print(f"child_harness={row['child_harness']}")
                         print("launch_authority=conductor")
@@ -680,7 +710,7 @@ def main() -> int:
                     )
                     if retry_state in {"success", "existing"}:
                         print("check=ok")
-                        print(f"selected_hop={hop['hop']}")
+                        print(f"selected_hop={hop['fallback_hop']}")
                         print(f"fallback_ordinal={ordinal}")
                         print(f"child_harness={row['child_harness']}")
                         print("capacity_retry=1")
@@ -698,13 +728,19 @@ def main() -> int:
                         )
                     failed_tuples.add(key)
                     # Exactly one retry. A second capacity death descends through SD-50.
-        elif hop["hop"] == "native-subagent":
+        elif hop["fallback_hop"] == "native-subagent":
             candidate = next((row for row in hop.get("candidates", []) if row.get("status") == "supported"), None)
             if candidate:
                 proof = native_child_proof(args, route, node)
                 if proof:
                     print("check=degraded")
                     print("selected_hop=native-subagent")
+                    surface={"codex":"codex-native-subagent","claude":"claude-subagent"}.get(candidate["harness"])
+                    if not surface:
+                        return fail("unsupported-native-execution-surface",76,child_spawned="0")
+                    print(f"execution_surface={surface}")
+                    print("registered_worker=0")
+                    print("fallback_hop=native-subagent")
                     print("fleet_visibility=degraded")
                     print(f"native_harness={candidate['harness']}")
                     print(f"child_proof={proof}")
@@ -715,6 +751,9 @@ def main() -> int:
         else:
             print("check=degraded")
             print("selected_hop=inline")
+            print("execution_surface=inline")
+            print("registered_worker=0")
+            print("fallback_hop=inline")
             print(f"reason={hop['reason_enum']}")
             print("fleet_visibility=none")
             print("route_reuse=required")

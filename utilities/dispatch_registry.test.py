@@ -1,8 +1,22 @@
 #!/usr/bin/env python3
-import hashlib, json, os, subprocess, sys, tempfile, time, unittest
+import hashlib, importlib.util, json, os, subprocess, sys, tempfile, time, unittest
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]; SCRIPT=ROOT/"utilities/dispatch-registry.py"
+CURRENT_ATTEMPT_CONTRACT=(
+ "attempt_schema_version=2,dispatch_depth=2,transport=headless,"
+ "execution_surface=registered-headless,registered_worker=1,"
+ "fallback_hop=same-harness-headless"
+)
+def currentize_registry(path):
+ if not path.is_file(): return
+ rows=[]
+ for line in path.read_text().splitlines():
+  fields=line.split("\t")
+  if len(fields)==6 and "attempt_schema_version=" not in fields[5]:
+   fields[5]+=("," if fields[5] else "")+CURRENT_ATTEMPT_CONTRACT
+  rows.append("\t".join(fields))
+ path.write_text("\n".join(rows)+("\n" if rows else ""))
 class RegistryTest(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory(); self.base=Path(self.tmp.name); self.jobs=self.base/"jobs.log"
@@ -12,10 +26,12 @@ class RegistryTest(unittest.TestCase):
    "2026-07-16T00:00:01Z\topen\t/r\t/w\tdead\troute_id=r1,route_node=report,attempt_id=att-dead000001,parent_sid=s1,pid=99999999,pid_start=1",
    "2026-07-16T00:00:02Z\topen\t/r\t/w\tother\troute_id=r2,route_node=test,attempt_id=att-other00001,parent_sid=s2,pid=99999998,pid_start=1"]
   self.jobs.write_text("\n".join(rows)+"\n")
+  currentize_registry(self.jobs)
  def tearDown(self):
   if self.proc.poll() is None:self.proc.kill()
   self.proc.wait();self.tmp.cleanup()
  def invoke(self,*args):
+  currentize_registry(self.jobs)
   return subprocess.run([sys.executable,str(SCRIPT),*args,"--jobs",str(self.jobs),"--agent-home",str(self.base)],capture_output=True,text=True)
  def test_current_filters_before_totals(self):
   r=self.invoke("current","--route","r1");self.assertEqual(r.returncode,0,r.stdout+r.stderr);data=json.loads(r.stdout)
@@ -37,8 +53,9 @@ class RegistryTest(unittest.TestCase):
   log.write_text("\n".join(json.dumps(event) for event in events)+"\n")
   with self.jobs.open("a") as out:
    out.write(f"2026-07-16T00:00:03Z\topen\t/r\t/w\tsandbox\t"
-             f"route_id={route},route_node={node},attempt_id={attempt},"
-             f"pid=437,pid_start=1,pid_scope=namespace-local,log_file={log}\n")
+              f"route_id={route},route_node={node},attempt_id={attempt},"
+              f"pid=437,pid_start=1,pid_scope=namespace-local,log_file={log}\n")
+  currentize_registry(self.jobs)
   liveness=subprocess.run(
    [sys.executable,str(ROOT/"adapters/codex/bin/dispatch-liveness.py"),str(self.jobs)],
    capture_output=True,text=True,
@@ -128,17 +145,29 @@ class MixedRegistryTest(unittest.TestCase):
    f"{old}\topen\t{repo}\t/x\tactive\tparent_sid=s1,route_id=r1,route_node=active,route_hash=h1,attempt_id=att-active-mixed,pid={self.proc.pid},pid_start={start}",
    f"{old}\topen\t{repo}\t/x\tdead\tparent_sid=s1,route_id=r1,route_node=dead,route_hash=h1,attempt_id=att-dead-mixed,pid=99999991,pid_start=1",
    f"{old}\topen\t{repo}\t{self.merged}\tmerged\tparent_sid=s1,route_id=r1,route_node=merged,route_hash=h1,attempt_id=att-merged-mixed",
-   f"{old}\topen\t{repo}\t/x\tstale\tparent_sid=s1,route_id=r1,route_node=stale,route_hash=h-stale,attempt_id=att-stale-mixed,completion_gate=code-test",
+   f"{old}\topen\t{repo}\t/x\tstale\tparent_sid=s1,route_id=r1,route_node=stale,route_hash=h-stale,registry_digest=gd-stale,attempt_id=att-stale-mixed,completion_gate=code-test",
    f"{old}\topen\t{repo}\t{self.unsafe}\tunsafe\tparent_sid=s1,route_id=r1,route_node=unsafe,route_hash=h1,attempt_id=att-unsafe-mixed",
    f"{old}\topen\t{repo}\t/x\tunrelated\tparent_sid=s2,route_id=r2,route_node=other,route_hash=h2,attempt_id=att-other-mixed,pid=99999992,pid_start=1",
   ]
   self.jobs.write_text("\n".join(rows)+"\n")
+  currentize_registry(self.jobs)
   evidence=self.base/"stale-evidence.md";evidence.write_text("complete")
   marker_dir=self.home/".dispatch/completion/r1";marker_dir.mkdir(parents=True)
-  marker={"route_id":"r1","route_hash":"h-stale","node_id":"stale","completion_gate":"code-test",
+  marker={"schema_version":2,"route_id":"r1","route_hash":"h-stale","registry_digest":"gd-stale",
+   "node_id":"stale","attempt_id":"att-stale-mixed","dispatch_depth":2,"transport":"headless",
+   "execution_surface":"registered-headless","registered_worker":True,
+   "fallback_hop":"same-harness-headless","completion_gate":"code-test","sequence":1,
    "evidence":{"path":str(evidence),"sha256":hashlib.sha256(evidence.read_bytes()).hexdigest()},
    "completed_at":"2026-07-16T00:00:00Z"}
   (marker_dir/"stale.json").write_text(json.dumps(marker))
+  (marker_dir/"stale.1.json").write_text(json.dumps(marker))
+  link={"schema_version":2,"route_id":"r1","node_id":"stale","attempt_id":"att-stale-mixed",
+   "dispatch_depth":2,"transport":"headless","execution_surface":"registered-headless",
+   "registered_worker":True,"fallback_hop":"same-harness-headless",
+   "evidence_sha256":marker["evidence"]["sha256"],
+   "completion_marker":str(marker_dir/"stale.json"),
+   "completion_marker_history":str(marker_dir/"stale.1.json")}
+  (marker_dir/"stale.att-stale-mixed.attempt.json").write_text(json.dumps(link))
   wd=self.home/".dispatch/watchdog";wd.mkdir(parents=True)
   (wd/"att-stale-mixed.json").write_text(json.dumps({"quiet_windows":2,"observed_at":time.time()+10,"last_progress_at":0}))
  def tearDown(self):
@@ -147,6 +176,7 @@ class MixedRegistryTest(unittest.TestCase):
   subprocess.run(["git","-C",str(self.primary),"worktree","remove","--force",str(self.unsafe)],capture_output=True)
   self.tmp.cleanup()
  def invoke(self,*args):
+  currentize_registry(self.jobs)
   return subprocess.run([sys.executable,str(SCRIPT),*args,"--jobs",str(self.jobs),"--agent-home",str(self.home)],capture_output=True,text=True)
  def test_mixed_current_and_guarded_reconcile(self):
   current=json.loads(self.invoke("current","--session","s1").stdout)
@@ -161,9 +191,24 @@ class MixedRegistryTest(unittest.TestCase):
   self.assertIn("\topen\t"+str(self.primary)+"\t"+str(self.unsafe)+"\tunsafe\t",text)
   self.assertIn("\topen\t"+str(self.primary)+"\t/x\tunrelated\t",text)
   again=json.loads(self.invoke("reconcile","--route","r1","--apply").stdout);self.assertEqual(again["closed"],0)
+
+ def test_marker_repair_rejects_noncanonical_completion_pointer(self):
+  spec=importlib.util.spec_from_file_location("dispatch_registry_pointer",SCRIPT)
+  module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  row=next(
+   item for item in module.read_rows(self.jobs)
+   if item["meta"].get("attempt_id")=="att-stale-mixed"
+  )
+  self.assertTrue(module._marker_backed_repair(row,self.home))
+  link_path=self.home/".dispatch/completion/r1/stale.att-stale-mixed.attempt.json"
+  link=json.loads(link_path.read_text())
+  link["completion_marker"]=str(self.home/".dispatch/completion/r1/forged.json")
+  link_path.write_text(json.dumps(link))
+  self.assertFalse(module._marker_backed_repair(row,self.home))
  def test_concurrent_reconcile_adds_one_terminal_note(self):
   row="2020-01-01T00:00:00Z\topen\t/r\t/x\trace\tparent_sid=s3,route_id=rc,route_node=n,attempt_id=att-race-mixed,pid=99999990,pid_start=1\n"
   with self.jobs.open("a") as out:out.write(row)
+  currentize_registry(self.jobs)
   cmd=[sys.executable,str(SCRIPT),"reconcile","--attempt","att-race-mixed","--apply","--jobs",str(self.jobs),"--agent-home",str(self.home)]
   procs=[subprocess.Popen(cmd,stdout=subprocess.PIPE,text=True) for _ in range(4)]
   results=[json.loads(p.communicate(timeout=10)[0]) for p in procs]
@@ -189,6 +234,7 @@ class OrphanReconcileTest(unittest.TestCase):
   if extra: meta+=","+extra
   return f"2026-07-16T00:00:00Z\topen\t/r\t/w\t{slug}\t{meta}"
  def invoke(self,*args):
+  currentize_registry(self.jobs)
   return subprocess.run([sys.executable,str(SCRIPT),*args,"--jobs",str(self.jobs),"--agent-home",str(self.home)],capture_output=True,text=True)
  def test_dead_owner_with_open_child_is_orphaned(self):
   self.mark("plan")

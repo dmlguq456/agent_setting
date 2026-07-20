@@ -26,25 +26,34 @@ Pipeline intensity controls which orchestration shape an autopilot entry uses. V
 | Intensity | Stage graph | Plan and check policy | Dispatch | Assurance |
 |---|---|---|---|---|
 | `direct` | `intake → produce → sanity/report` | No plan, plan check, or durable plan; final sanity only | Inline | none/light |
-| `quick` | `intake → orient-lite → micro-plan → plan-check-lite → produce → verify-lite → report` | One depth-1 session; 3–4 focused plan questions and one concrete sanity check | One-shot owner; no depth 2 | quick |
-| `standard` | `intake → orient → owner-plan → plan-check → optional verifier/planner → synth → produce → verify → report` | Durable plan where the capability owns a work cycle; bounded review for separable work | Thin conductor dispatches each durable stage as depth 2 with file-only handoff | standard |
+| `quick` | `intake → orient-lite → micro-plan → plan-check-lite → produce → verify-lite → report` | One dispatch-depth-1 session; 3–4 focused plan questions and one concrete sanity check | One-shot owner; no dispatch depth 2 | quick |
+| `standard` | `intake → orient → owner-plan → plan-check → optional verifier/planner → synth → produce → verify → report` | Durable plan where the capability owns a work cycle; bounded review for separable work | Thin conductor dispatches each durable stage as dispatch depth 2 with file-only handoff | standard |
 | `strong` | Standard plus a risk-focused check and optional fix loop | One independent review at the riskiest point | Stage dispatch plus one bounded risk worker | standard/thorough |
-| `thorough` | Owner plan, multiple bounded perspectives, synthesis, production, and verification | Deeper plan review and bounded alternatives | Depth-1 owner opens bounded depth-2 perspectives | thorough |
+| `thorough` | Owner plan, multiple bounded perspectives, synthesis, production, and verification | Deeper plan review and bounded alternatives | Dispatch-depth-1 owner opens bounded dispatch-depth-2 perspectives | thorough |
 | `adversarial` | Thorough plus adversarial planning and failure-mode/security verification | Explicit contradiction or hostile pass | Bounded adversary/verifier workers | adversarial |
 
 Stage-local gates stay cheap and ask only whether output can feed the next stage. An independent QA pass uses another role, model, or harness and runs only where the selected intensity calls for it. Final verification remains capability-specific. Every non-direct graph includes at least a small plan check because a bad plan corrupts every downstream stage.
 
-Depth 0 is the user-facing main session. Depth 1 owns the whole capability pipeline and returns only synthesis. At standard+, it is a thin conductor; quick uses a one-shot owner. Depth 2 serves read-only review helpers and independently dispatched pipeline stages with disjoint writes. Direct stays inline, quick opens no depth 2, and depth 3 or greater is forbidden. Stage sessions use in-session teams for any internal parallelism.
+Dispatch depth is portable route topology, not process ancestry, runtime-native
+agent nesting, or proof of registry membership. Dispatch dispatch depth 0 is user-facing
+main ownership; dispatch depth 1 owns the capability pipeline; dispatch depth 2
+serves bounded review, perspective, and pipeline-stage nodes. Direct stays inline
+at dispatch depth 0. Quick is exactly one registered-headless owner at dispatch
+dispatch depth 1 and opens no child node. Standard+ fallback attempts retain their node's
+dispatch depth even when the execution surface changes from registered headless
+to a runtime-native subagent or inline. Dispatch dispatch depth 3 or greater is forbidden.
+Resource runners and Claude agent-team teammate sessions are separate lifecycle
+surfaces and carry no dispatch depth.
 
 ### §1.1. Verification Rigor Tiers
 
-Rigor is an assurance budget inside the graph selected by intensity. It does not create stages, choose topology, or grant depth 2. Reviewer counts are upper bounds for a selected pass rather than automatic fan-out after every stage.
+Rigor is an assurance budget inside the graph selected by intensity. It does not create stages, choose topology, or grant dispatch depth 2. Reviewer counts are upper bounds for a selected pass rather than automatic fan-out after every stage.
 
 | Rigor | Derived from | Plan check | Selected independent pass | Final verification | Retry budget |
 |---|---|---|---|---|---|
 | `quick` | `quick` | Self-check or 3–4 focused questions | None by default | One concrete sanity check | None automatically |
 | `light`/none | `direct` | Focused self-check if present | At most one fast reviewer at an already selected review point | Focused command, render, or source check | One pass |
-| `standard` | `standard`, `strong` | Lightweight independent review where planning exists | One bounded depth-2 point for separable work | Normal capability verification; source check when relevant | At most one correction |
+| `standard` | `standard`, `strong` | Lightweight independent review where planning exists | One bounded dispatch-depth-2 point for separable work | Normal capability verification; source check when relevant | At most one correction |
 | `thorough` | `thorough` | Deeper or multi-axis review | Additional bounded perspectives | Broader evidence and adequacy review | Up to two corrections |
 | `adversarial` | `adversarial` | Hostile owner-plan critique | Thorough plus explicit external adversary, security, contradiction, or failure-mode pass | Verification plus adversarial evidence | Two corrections plus one adversary pass |
 
@@ -80,7 +89,7 @@ Shared contracts use model roles rather than concrete model names. Vendor-specif
 | `fast fact-checker` | Narrow comparison of claims against source artifacts with limited creativity | citation, venue, year, metric, lineage, table values |
 | `fast writer` | Low-cost assembly of verified artifacts into a user-facing summary | Final report and short synthesis |
 | `deep maker` | Generation requiring aesthetic, strategic, architectural, or domain judgment | Planning, research synthesis, visual design, editorial rewrite |
-| `deep orchestrator` | High-judgment conductor for stage gates, failover, and evidence synthesis | Standard+ depth-1 capability owner |
+| `deep orchestrator` | High-judgment conductor for stage gates, failover, and evidence synthesis | Standard+ dispatch-depth-1 capability owner |
 | `external adversary` | Hostile review through an independent engine or runtime | Adversarial verification |
 | `orchestrator` | Balanced mechanical coordination of already decided calls, paths, and states | Wrappers, dispatch mechanics, report assembly |
 
@@ -113,7 +122,7 @@ For standard+ code stage dispatch, choose explicitly: code-plan uses deep maker;
 
 ## §3. Hard Cross-Document Invariants
 
-1. Intensity selects graph and depth; §1.1 derives assurance from intensity. There is no user-facing `--qa` axis, and rigor alone cannot open depth 2 or a full pipeline.
+1. Intensity selects graph and depth; §1.1 derives assurance from intensity. There is no user-facing `--qa` axis, and rigor alone cannot open dispatch depth 2 or a full pipeline.
 2. Quick means one-session micro-plan, plan-check-lite, and verify-lite. Requiring a durable plan, repeated QA, or parallel reviewer fan-out for every small task is drift.
 3. Adversarial means thorough plus a selected external adversary, failure-mode, security, or claim-verification pass. `standard + external/Codex` is not the definition.
 4. Code has no fact-checker.
@@ -494,6 +503,14 @@ Draft Step 0 and research Step 1.5 are the existing track-specific instances. Sp
 Unified memory moved to `MEMORY.md` on 2026-06-23 with §7 numbering preserved. That file is the single source.
 # Route, resource, and report invariants
 
-Depth applies only to registered dispatched agents: quick is depth 1, standard+ has a depth-1 owner and at most depth-2 workers, while resource runners are detached processes with no agent depth and in-session native team subagents are internal parallelism inside their session (§1, `OPERATIONS §5.10` delegation surfaces) that adds no depth. Review workers write isolated verdicts and map workers write isolated shards; one owner performs canonical merges. Completion is route-hash and node-bound, so a stale dispatch row is not completion.
+Dispatch depth applies to portable route ownership: quick is dispatch depth 1,
+standard+ has a dispatch-depth-1 owner and at most dispatch-depth-2 nodes, and a
+native or inline fallback keeps that logical value without becoming a registered
+worker. Resource runners are detached processes with no dispatch depth, while
+runtime-native subagents and Claude agent-team teammate sessions retain their own
+runtime semantics. Review workers write isolated verdicts and map workers write
+isolated shards; one owner performs canonical merges. Completion is route-hash,
+node, exact attempt, execution-surface, and evidence bound, so a stale dispatch
+row or a same-evidence retry with different attempt axes is not completion.
 
 Lab full-run entry requires a current hash-bound smoke attestation. Reports with media use `capabilities/report-manifest.schema.json` as the shared Markdown and HTML manifest: summary statistics occur in both outputs, each audio sample has 1:1 waveform/spectrogram/playback media, hashes and visual evidence are bound, and the house audio parameters are 48 kHz with the full 0–24 kHz band.

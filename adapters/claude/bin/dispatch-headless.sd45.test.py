@@ -9,7 +9,7 @@ WH_S=importlib.util.spec_from_file_location("claude_dispatch_headless",Path(__fi
 
 def probe_args(**overrides):
     base = dict(
-        depth=2, action="start", nested_eligibility="unknown", eligibility_source="",
+        dispatch_depth=2, action="start", nested_eligibility="unknown", eligibility_source="",
         eligibility_failure_class="", parent_harness="claude", parent_transport="headless",
         parent_sandbox="default", launch_authority="conductor", worktree="/tmp/fixture-worktree",
     )
@@ -35,7 +35,7 @@ class ClaudeSD45InternalProbe(unittest.TestCase):
         self.assertEqual(args.eligibility_source, "direct-command-check")
         self.assertEqual(args.eligibility_probe, "internal")
         WH.validate_nested_eligibility(
-            depth=args.depth, action=args.action, parent_harness=args.parent_harness,
+            dispatch_depth=args.dispatch_depth, action=args.action, parent_harness=args.parent_harness,
             parent_transport=args.parent_transport, parent_sandbox=args.parent_sandbox,
             child_harness="claude", launch_authority=args.launch_authority,
             status=args.nested_eligibility, source=args.eligibility_source,
@@ -52,7 +52,7 @@ class ClaudeSD45InternalProbe(unittest.TestCase):
         self.assertEqual(args.eligibility_probe, "internal")
         with self.assertRaises(WH.DispatchContractError) as ctx:
             WH.validate_nested_eligibility(
-                depth=args.depth, action=args.action, parent_harness=args.parent_harness,
+                dispatch_depth=args.dispatch_depth, action=args.action, parent_harness=args.parent_harness,
                 parent_transport=args.parent_transport, parent_sandbox=args.parent_sandbox,
                 child_harness="claude", launch_authority=args.launch_authority,
                 status=args.nested_eligibility, source=args.eligibility_source,
@@ -95,7 +95,7 @@ class ClaudeSD45InternalProbe(unittest.TestCase):
         self.assertEqual(args.eligibility_probe, "internal")
 
     def test_depth1_never_probes(self):
-        args = probe_args(depth=1)
+        args = probe_args(dispatch_depth=1)
         with mock.patch.object(WH.subprocess, "run") as run:
             WH.bind_internal_eligibility_probe(args)
         run.assert_not_called()
@@ -113,8 +113,8 @@ class ClaudeSD45(unittest.TestCase):
    base=Path(td); repo=base/"repo"; repo.mkdir(); subprocess.run(["git","init","-q",str(repo)],check=True); subprocess.run(["git","-C",str(repo),"config","user.email","fixture@example.com"],check=True); subprocess.run(["git","-C",str(repo),"config","user.name","Fixture"],check=True); (repo/"x").write_text("x"); subprocess.run(["git","-C",str(repo),"add","x"],check=True); subprocess.run(["git","-C",str(repo),"commit","-qm","init"],check=True)
    art=base/".agent_reports"; art.mkdir(); gate={"spec_read":{"satisfied":True,"source":"claude-fixture"},"drift_verdict":"within-spec","workflow_mode":"tracked","artifact_guard":{"satisfied":True,"source":"claude-fixture"}}
    dispatch={"tuples":[{"parent_harness":"claude","parent_transport":"headless","parent_sandbox":"fixture","child_harness":"claude","launch_authority":"conductor","status":"supported","probe_source":"claude-fixture","probe_time":"2026-07-16T00:00:00Z","failure_class":""}],"native_subagent":[]}; route=R.compile_route("autopilot-code","dev","strong",repo,art,signals=["shared-contract"],transport="headless",tracking="tracked",tracked_gate_evidence=gate,dispatch_evidence=dispatch); path=base/"route.json"; path.write_text(json.dumps(route)); node=next(x for x in route["nodes"] if x["id"]=="execute"); jobs=base/"jobs.log"; logs=base/"logs"
-   args=[sys.executable,str(ROOT/"adapters/claude/bin/dispatch-headless.py"),"--register","--worktree",str(repo),"--slug","claude-sd45","--capability","autopilot-code","--mode","dev/backend","--qa","standard","--intensity","strong","--depth","2","--parent","owner","--route-file",str(path),"--route-id",route["route_id"],"--route-hash",route["route_hash"],"--route-node","execute","--registry-digest",route["registry_digest"],"--write-scope",";".join(node["write_scope"]),"--completion-gate",node["completion_gate"],"--model","claude-test","--effort","low","--jobs",str(jobs),"--log-dir",str(logs)]
-   env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art)}; ok=subprocess.run(args,text=True,capture_output=True,env=env); self.assertEqual(ok.returncode,0,ok.stderr); prompt=(logs/"claude-sd45.claude.prompt.txt").read_text(); self.assertIn("consume the immutable record",prompt); self.assertNotIn("status -> prompt-signal -> mode -> route\n",prompt); self.assertIn("async_wait_policy=deny-proven",jobs.read_text())
+   args=[sys.executable,str(ROOT/"adapters/claude/bin/dispatch-headless.py"),"--register","--worktree",str(repo),"--slug","claude-sd45","--capability","autopilot-code","--mode","dev/backend","--qa","standard","--intensity","strong","--dispatch-depth","2","--parent","owner","--parent-harness","claude","--parent-transport","headless","--parent-sandbox","fixture","--nested-eligibility","supported","--eligibility-source","claude-fixture","--fallback-ordinal","1","--route-file",str(path),"--route-id",route["route_id"],"--route-hash",route["route_hash"],"--route-node","execute","--registry-digest",route["registry_digest"],"--write-scope",";".join(node["write_scope"]),"--completion-gate",node["completion_gate"],"--model","claude-test","--effort","low","--jobs",str(jobs),"--log-dir",str(logs)]
+   env={**{k:v for k,v in os.environ.items() if k!="AGENT_DISPATCH_JOBS"},"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art)}; ok=subprocess.run(args,text=True,capture_output=True,env=env); self.assertEqual(ok.returncode,0,ok.stderr); prompt=(logs/"claude-sd45.claude.prompt.txt").read_text(); self.assertIn("consume the immutable record",prompt); self.assertNotIn("status -> prompt-signal -> mode -> route\n",prompt); self.assertIn("async_wait_policy=deny-proven",jobs.read_text())
    broken=json.loads(path.read_text()); del broken["tracked_gate_evidence"]; broken["route_hash"]=R.route_hash(broken); broken["route_id"]="rt-"+broken["route_hash"].split(":",1)[1][:16]; path.write_text(json.dumps(broken)); bad=args.copy(); bad[bad.index(route["route_id"])]=broken["route_id"]; bad[bad.index(route["route_hash"])]=broken["route_hash"]; denied=subprocess.run(bad,text=True,capture_output=True,env=env); self.assertEqual(denied.returncode,65); self.assertIn("tracked gate evidence",denied.stderr)
    legacy=[sys.executable,str(ROOT/"adapters/claude/bin/dispatch-headless.py"),"--dry-run","--worktree",str(repo),"--slug","claude-legacy-scope","--capability","autopilot-code","--mode","dev/backend","--qa","standard","--write-scope","source/**","--model","claude-test","--effort","low"]
    compatible=subprocess.run(legacy,text=True,capture_output=True,env=env); self.assertEqual(compatible.returncode,0,compatible.stderr); self.assertIn("status=dry-run",compatible.stdout)
@@ -124,6 +124,7 @@ def _shell_command_args(**overrides):
     base = dict(
         worker_type="owner", intensity="strong", artifact_root="/tmp/fixture-artifacts",
         worktree="/tmp/fixture-worktree",
+        completion_gate=None, assigned_contract=None,
         resolved_model_settings={"source": "inherit", "role": "-", "model": None, "effort": None},
     )
     base.update(overrides)
@@ -175,7 +176,7 @@ class ClaudeSD71AsyncDeny(unittest.TestCase):
         args.capability = "autopilot-code"
         args.mode = "dev"
         args.qa = "thorough"
-        args.depth = 1
+        args.dispatch_depth = 1
         task_spec = importlib.util.spec_from_file_location(
             "claude_dispatch_headless_task", Path(WH.__file__).with_name("dispatch-headless.py"))
         with mock.patch.object(WH, "task_prompt", return_value=("do the thing", "cli")):
@@ -195,7 +196,7 @@ class ClaudeSD71AsyncDeny(unittest.TestCase):
         args.capability = "autopilot-code"
         args.mode = "dev"
         args.qa = "thorough"
-        args.depth = 2
+        args.dispatch_depth = 2
         with mock.patch.object(WH, "task_prompt", return_value=("do the thing", "cli")):
             prompt, _source = WH.dispatch_prompt(args)
         self.assertNotIn("No asynchronous Monitor/wakeup/scheduling waits", prompt)

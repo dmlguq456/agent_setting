@@ -79,15 +79,15 @@ depth, parent, worker type, owner, agent, and model/variant choice or
 inheritance. `worker_role` is legacy read-only metadata, not bootstrap or
 Skill identity. Monitor
 `preflight.sh liveness [jobs.log]`; harvest via `preflight.sh harvest`.
-Conductors use `dispatch-chain` to invoke checked same/cross-harness depth-2
+Conductors use `dispatch-chain` to invoke checked same/cross-harness dispatch-depth-2
 adapter wrappers directly. Dispatch contract v3 atomically claims one stable
 attempt row before spawn and starts no child for a duplicate claim. Broker v1/v2
 routes are read-only migration inputs; the retired broker exposes only legacy
 `status`/`stop`.
 
-`standard+` uses a depth-1 capability owner and separable depth-2
+`standard+` uses a dispatch-depth-1 capability owner and separable dispatch-depth-2
 `code-plan -> code-execute -> code-test -> code-report` workers. `direct` is
-inline; `quick` is one depth-1 one-shot worker; depth 3 is forbidden. Record
+inline; `quick` is one registered-headless dispatch-depth-1 one-shot owner; dispatch depth 3 is forbidden. Record
 inline exceptions in plan metrics. After merge, integrated verification, and
 push, use `preflight.sh worktree-cleanup --check` before `--apply`.
 

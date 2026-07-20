@@ -22,7 +22,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 
 1. Before approval, route from this compact metadata and `core/WORKFLOW.md §0.2`; do not read the full portable source merely to propose the route.
 2. Present the five-field confirmation card from `core/WORKFLOW.md §0.4` unless the same route and scope are already approved.
-3. After approval, direct/quick acting sessions read `capabilities/autopilot-design.md`; at `standard+`, the depth-1 owner reads it and stage workers read only their assigned contracts.
+3. After approval, direct/quick acting sessions read `capabilities/autopilot-design.md`; at `standard+`, the dispatch-depth-1 owner reads it and stage workers read only their assigned contracts.
 4. Run `adapters/opencode/bin/preflight.sh capability-info autopilot-design` and obey the reported status:
    - `instruction-only`: use this Skill as OpenCode guidance plus explicit preflight guards.
    - `tool-contract`: report the named `tool_contract`, run any `tool_contract_check`, and obey `runtime_surface` / `fallback` before claiming full support.

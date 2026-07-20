@@ -123,7 +123,7 @@ Portable docs use role names, not vendor model names:
 | `fast implementer` | Routine implementation and refactoring |
 | `deep reviewer` | Architecture, methodology, safety, domain correctness, high-risk review |
 | `deep maker` | High-judgment creation: planning, synthesis, visual/editorial craft |
-| `deep orchestrator` | High-judgment conductor: stage gates, failover, and evidence synthesis for `standard+` depth-1 work |
+| `deep orchestrator` | High-judgment conductor: stage gates, failover, and evidence synthesis for `standard+` dispatch-depth-1 work |
 | `external adversary` | Independent reviewer with different model/runtime/process assumptions |
 | `orchestrator` | Balanced mechanical coordination of already-decided tooling, paths, and report assembly; not a deep-conductor alias |
 

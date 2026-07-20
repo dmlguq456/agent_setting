@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -18,7 +19,34 @@ from typing import Callable
 
 ELIGIBILITY = {"supported", "unsupported", "unknown"}
 LAUNCH_AUTHORITIES = {"conductor", "ancestor-broker"}
-CANONICAL_PARENT_TRANSPORTS = {"headless", "interactive"}
+ATTEMPT_SCHEMA_VERSION = 2
+WRAPPER_TRANSPORTS = {"headless", "interactive"}
+CANONICAL_PARENT_TRANSPORTS = WRAPPER_TRANSPORTS
+EXECUTION_SURFACES = {
+    "registered-headless",
+    "codex-native-subagent",
+    "claude-subagent",
+    "claude-agent-team-teammate",
+    "inline",
+}
+FALLBACK_HOPS = {
+    "same-harness-headless",
+    "cross-harness-headless",
+    "native-subagent",
+    "inline",
+}
+ATTEMPT_MUTABLE_METADATA = {
+    "launch_claimed",
+    "pid",
+    "pid_start",
+    "pid_scope",
+    "updated_at",
+    "note",
+    "completion_marker",
+    "completion_marker_history",
+    "watchdog",
+    "heartbeat",
+}
 _MODULE_ROOT = Path(__file__).resolve().parents[1]
 _CAPACITY_TERMINAL_RE = re.compile(
     r"(?:error\s*[:\-]\s*)?(?:selected\s+)?model(?:\s+[A-Za-z0-9._:/-]+)?\s+"
@@ -113,6 +141,227 @@ class BrokerSelection:
     jobs: Path
 
 
+def parse_registry_metadata(pipe: str) -> dict[str, str]:
+    """Parse the stable six-column registry's comma-delimited metadata."""
+
+    return dict(part.split("=", 1) for part in pipe.split(",") if "=" in part)
+
+
+def _registered_worker(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if str(value).lower() in {"1", "true"}:
+        return True
+    if str(value).lower() in {"0", "false"}:
+        return False
+    raise DispatchContractError("invalid-registered-worker", str(value))
+
+
+def validate_attempt_metadata(
+    metadata: dict[str, object],
+    *,
+    registered_headless_wrapper: bool = False,
+) -> None:
+    """Validate independent v20 attempt axes before claim, spawn, or completion."""
+
+    try:
+        schema_version = int(metadata.get("attempt_schema_version", 0))
+        dispatch_depth = int(metadata.get("dispatch_depth", -1))
+    except (TypeError, ValueError) as exc:
+        raise DispatchContractError("invalid-attempt-metadata", str(exc)) from exc
+    if schema_version != ATTEMPT_SCHEMA_VERSION:
+        raise DispatchContractError(
+            "legacy-attempt-row-read-only",
+            f"attempt schema v{schema_version or 1} cannot be claimed or completed",
+        )
+    if any(key in metadata for key in ("depth", "owner_depth", "max_depth")):
+        raise DispatchContractError(
+            "bare-dispatch-depth-field",
+            "current attempt metadata accepts dispatch_depth only",
+        )
+    if dispatch_depth not in {0, 1, 2}:
+        raise DispatchContractError("invalid-dispatch-depth", str(dispatch_depth))
+
+    transport = str(metadata.get("transport", ""))
+    surface = str(metadata.get("execution_surface", ""))
+    fallback_hop = str(metadata.get("fallback_hop", ""))
+    registered = _registered_worker(metadata.get("registered_worker"))
+    if transport not in WRAPPER_TRANSPORTS:
+        raise DispatchContractError("invalid-transport", transport)
+    if surface not in EXECUTION_SURFACES:
+        raise DispatchContractError("invalid-execution-surface", surface)
+    if fallback_hop not in FALLBACK_HOPS and not (
+        dispatch_depth == 0 and fallback_hop == ""
+    ):
+        raise DispatchContractError("invalid-fallback-hop", fallback_hop)
+    if dispatch_depth == 0 and (
+        surface != "inline"
+        or registered
+        or transport != "interactive"
+        or fallback_hop
+    ):
+        raise DispatchContractError("direct-attempt-axes-mismatch", surface)
+    if surface == "claude-agent-team-teammate":
+        raise DispatchContractError(
+            "teammate-not-dispatch-attempt",
+            "Claude agent-team teammates carry peer-session lifecycle, not dispatch depth",
+        )
+    if registered != (surface == "registered-headless"):
+        raise DispatchContractError("attempt-registration-surface-mismatch", surface)
+    if registered and transport != "headless":
+        raise DispatchContractError("registered-worker-transport-mismatch", transport)
+    if surface == "registered-headless" and fallback_hop not in {
+        "same-harness-headless",
+        "cross-harness-headless",
+    }:
+        raise DispatchContractError("registered-worker-fallback-mismatch", fallback_hop)
+    native_surfaces = {"codex-native-subagent", "claude-subagent"}
+    if surface in native_surfaces and (
+        fallback_hop != "native-subagent" or transport != "headless"
+    ):
+        raise DispatchContractError(
+            "native-surface-axes-mismatch",
+            f"transport={transport},fallback_hop={fallback_hop}",
+        )
+    if surface == "inline" and dispatch_depth > 0 and fallback_hop != "inline":
+        raise DispatchContractError("inline-surface-fallback-mismatch", fallback_hop)
+    if registered_headless_wrapper and (surface != "registered-headless" or not registered):
+        raise DispatchContractError("headless-wrapper-surface-mismatch", surface)
+
+
+def headless_attempt_policy(
+    *,
+    route_file: str | None,
+    route_node: str | None,
+    intensity: str,
+    harness: str,
+    dispatch_depth: int,
+    parent_slug: str | None,
+    execution_surface: str,
+    registered_worker: bool,
+    fallback_hop: str | None,
+    fallback_ordinal: int,
+    parent_harness: str,
+    parent_transport: str,
+    parent_sandbox: str,
+    launch_authority: str,
+) -> dict[str, object]:
+    """Bind one registered wrapper invocation to its immutable route axes."""
+
+    effective_hop = fallback_hop or {
+        1: "same-harness-headless",
+        2: "cross-harness-headless",
+    }.get(fallback_ordinal, "same-harness-headless")
+    metadata: dict[str, object] = {
+        "attempt_schema_version": ATTEMPT_SCHEMA_VERSION,
+        "dispatch_depth": dispatch_depth,
+        "transport": "headless",
+        "execution_surface": execution_surface,
+        "registered_worker": registered_worker,
+        "fallback_hop": effective_hop,
+    }
+    validate_attempt_metadata(metadata, registered_headless_wrapper=True)
+    policy: dict[str, object] = {
+        "fallback_hop": effective_hop,
+        "fallback_ordinal": fallback_ordinal,
+        "quick": False,
+        "terminal_attempt_limit": None,
+    }
+
+    if not route_file:
+        if intensity == "direct":
+            raise DispatchContractError("direct-main-inline-only", "direct routes do not register workers")
+        if intensity == "quick":
+            raise DispatchContractError(
+                "quick-headless-unavailable",
+                "quick dispatch requires a current immutable route",
+            )
+        return policy
+    try:
+        route = json.loads(Path(route_file).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise DispatchContractError("route-record-unreadable", str(exc)) from exc
+    if route.get("schema_version") != 2:
+        raise DispatchContractError(
+            "legacy-route-read-only",
+            f"route schema v{route.get('schema_version', 1)} cannot register or start workers",
+        )
+    node = next((row for row in route.get("nodes", []) if row.get("id") == route_node), None)
+    if node is None:
+        raise DispatchContractError("route-node-unknown", str(route_node))
+    if route.get("effective_intensity") == "direct":
+        raise DispatchContractError("direct-main-inline-only", "direct routes do not register workers")
+    if int(node.get("dispatch_depth", -1)) != dispatch_depth:
+        raise DispatchContractError("route-dispatch-depth-mismatch", str(node.get("dispatch_depth")))
+
+    if route.get("effective_intensity") == "quick":
+        if dispatch_depth != 1 or parent_slug or route_node != "one-shot":
+            raise DispatchContractError("quick-route-shape-invalid", str(route_node))
+        if node.get("execution_surface") != "registered-headless" or node.get("registered_worker") is not True:
+            raise DispatchContractError("quick-route-surface-invalid", str(node.get("execution_surface")))
+        if effective_hop != "same-harness-headless":
+            raise DispatchContractError("quick-fallback-forbidden", effective_hop)
+        candidates = [
+            row
+            for row in route.get("registered_headless_candidates") or []
+            if row.get("status") == "supported"
+            and row.get("harness") == harness
+            and row.get("transport") == "headless"
+            and row.get("surface") == "registered-headless"
+        ]
+        if not candidates:
+            raise DispatchContractError("quick-headless-unavailable", harness)
+        policy.update(quick=True, terminal_attempt_limit=len(candidates))
+        return policy
+
+    chain = node.get("fallback_hops")
+    if not isinstance(chain, list):
+        raise DispatchContractError("route-fallback-hops-missing", str(route_node))
+    expected_candidate = {
+        "parent_harness": parent_harness,
+        "parent_transport": parent_transport,
+        "parent_sandbox": parent_sandbox,
+        "child_harness": harness,
+        "launch_authority": launch_authority,
+        "status": "supported",
+    }
+
+    def candidate_matches(candidate: object) -> bool:
+        return isinstance(candidate, dict) and all(
+            candidate.get(key) == value for key, value in expected_candidate.items()
+        )
+
+    selected = None
+    if fallback_ordinal == 0:
+        selected = next(
+            (
+                row
+                for row in chain
+                if any(candidate_matches(candidate) for candidate in row.get("candidates", []))
+            ),
+            None,
+        )
+        if selected is not None:
+            fallback_ordinal = int(selected["ordinal"])
+            effective_hop = str(selected["fallback_hop"])
+            policy.update(fallback_ordinal=fallback_ordinal, fallback_hop=effective_hop)
+    else:
+        selected = next(
+            (row for row in chain if int(row.get("ordinal", 0)) == fallback_ordinal),
+            None,
+        )
+    if selected is None or selected.get("fallback_hop") != effective_hop:
+        raise DispatchContractError("route-fallback-hop-mismatch", effective_hop)
+    if not any(candidate_matches(candidate) for candidate in selected.get("candidates", [])):
+        raise DispatchContractError(
+            "route-fallback-candidate-mismatch",
+            json.dumps(expected_candidate, sort_keys=True),
+        )
+    if effective_hop not in {"same-harness-headless", "cross-harness-headless"}:
+        raise DispatchContractError("headless-wrapper-fallback-mismatch", effective_hop)
+    return policy
+
+
 def _absolute(path: str | Path, field: str) -> Path:
     value = Path(path).expanduser()
     if not value.is_absolute():
@@ -123,13 +372,13 @@ def _absolute(path: str | Path, field: str) -> Path:
 def resolve_global_registry(
     agent_home: Path,
     explicit_jobs: str | None,
-    depth: int,
+    dispatch_depth: int,
     action: str,
     environ: dict[str, str] | os._Environ[str] | None = None,
 ) -> RegistrySelection:
     """Resolve the one authoritative registry and reject nested overrides.
 
-    Depth-0/root dispatch may select an explicit registry once. The wrapper then
+    Dispatch-depth-0/root dispatch may select an explicit registry once. The wrapper then
     exports it through AGENT_DISPATCH_JOBS. A real nested start must inherit that
     path; argv may repeat it, but cannot replace it.
     """
@@ -139,23 +388,23 @@ def resolve_global_registry(
     explicit = _absolute(explicit_jobs, "jobs") if explicit_jobs else None
     inherited = _absolute(inherited_raw, "agent-dispatch-jobs") if inherited_raw else None
 
-    if depth > 1 and inherited and explicit and inherited != explicit:
+    if dispatch_depth > 1 and inherited and explicit and inherited != explicit:
         raise DispatchContractError(
             "noncanonical-nested-jobs",
             f"explicit={explicit} inherited={inherited}",
         )
 
-    nested_start = depth > 1 and action == "start"
+    nested_start = dispatch_depth > 1 and action == "start"
     if nested_start and inherited is None:
         raise DispatchContractError(
             "global-registry-unset",
             "nested --start requires inherited AGENT_DISPATCH_JOBS",
         )
 
-    # A depth-1 invocation is the root dispatch boundary.  It may deliberately
+    # A dispatch-depth-1 invocation is the root dispatch boundary. It may deliberately
     # choose a new canonical registry even when the invoking shell carries an
     # unrelated ambient value.  Only nested invocations must inherit exactly.
-    if depth <= 1 and explicit:
+    if dispatch_depth <= 1 and explicit:
         return RegistrySelection(explicit, "root-explicit", False)
     if inherited:
         return RegistrySelection(inherited, "inherited-env", True)
@@ -184,7 +433,7 @@ def ensure_launch_broker(
     agent_home: Path,
     jobs: Path,
     *,
-    depth: int,
+    dispatch_depth: int,
     action: str,
     intensity: str,
     environ: dict[str, str] | os._Environ[str] | None = None,
@@ -196,7 +445,11 @@ def ensure_launch_broker(
     resident broker. Diagnostic ``status``/``stop`` remain in dispatch-broker.py.
     """
 
-    if action != "start" or depth != 1 or intensity not in {"standard", "strong", "thorough", "adversarial"}:
+    if (
+        action != "start"
+        or dispatch_depth != 1
+        or intensity not in {"standard", "strong", "thorough", "adversarial"}
+    ):
         return None
     raise DispatchContractError(
         "launch-broker-retired",
@@ -206,7 +459,7 @@ def ensure_launch_broker(
 
 def validate_nested_eligibility(
     *,
-    depth: int,
+    dispatch_depth: int,
     action: str,
     parent_harness: str,
     parent_transport: str,
@@ -216,7 +469,7 @@ def validate_nested_eligibility(
     status: str,
     source: str,
 ) -> None:
-    if depth < 2:
+    if dispatch_depth < 2:
         return
     if launch_authority not in LAUNCH_AUTHORITIES:
         raise DispatchContractError("invalid-launch-authority", launch_authority)
@@ -284,10 +537,98 @@ def completion_marker_gate(
         except (OSError, ValueError):
             missing.append(dep)
             continue
-        if marker.get("route_id") != route["route_id"] or marker.get("route_hash") != route["route_hash"]:
+        dep_node = next((row for row in route.get("nodes", []) if row.get("id") == dep), None)
+        if dep_node is None or not completion_marker_is_current(route, dep_node, marker_path, marker):
             missing.append(dep)
     if missing:
         raise DispatchContractError("completion-marker-missing", ",".join(missing))
+
+
+def completion_marker_is_current(
+    route: dict[str, object],
+    node: dict[str, object],
+    marker_path: Path,
+    marker: dict[str, object] | None = None,
+) -> bool:
+    """Prove one schema-v2 marker and its immutable history/attempt linkage."""
+
+    try:
+        marker = marker or json.loads(marker_path.read_text(encoding="utf-8"))
+        if not isinstance(marker, dict) or marker.get("schema_version") != 2:
+            return False
+        node_id = str(node["id"])
+        sequence = int(marker.get("sequence", 0))
+        if sequence < 1:
+            return False
+        expected = {
+            "route_id": route.get("route_id"),
+            "route_hash": route.get("route_hash"),
+            "registry_digest": route.get("registry_digest"),
+            "node_id": node_id,
+            "completion_gate": node.get("completion_gate"),
+        }
+        if any(marker.get(key) != value for key, value in expected.items()):
+            return False
+        evidence_record = marker.get("evidence")
+        if not isinstance(evidence_record, dict):
+            return False
+        evidence = Path(str(evidence_record.get("path", "")))
+        if not evidence.is_absolute() or not evidence.is_file():
+            return False
+        if hashlib.sha256(evidence.read_bytes()).hexdigest() != evidence_record.get("sha256"):
+            return False
+        history_path = marker_path.parent / f"{node_id}.{sequence}.json"
+        history = json.loads(history_path.read_text(encoding="utf-8"))
+        if history != marker:
+            return False
+
+        if node.get("kind") == "resource-runner":
+            return (
+                marker.get("attempt_id") is None
+                and marker.get("dispatch_depth") is None
+                and marker.get("transport") is None
+                and marker.get("execution_surface") is None
+                and marker.get("registered_worker") is False
+                and marker.get("fallback_hop") is None
+            )
+
+        attempt_id = marker.get("attempt_id")
+        if not isinstance(attempt_id, str) or not attempt_id:
+            return False
+        axes = {
+            "attempt_schema_version": ATTEMPT_SCHEMA_VERSION,
+            "dispatch_depth": marker.get("dispatch_depth"),
+            "transport": marker.get("transport"),
+            "execution_surface": marker.get("execution_surface"),
+            "registered_worker": marker.get("registered_worker"),
+            "fallback_hop": marker.get("fallback_hop") or "",
+        }
+        validate_attempt_metadata(axes)
+        if int(axes["dispatch_depth"]) != node.get("dispatch_depth"):
+            return False
+        safe_attempt = "".join(
+            character if character.isalnum() or character in "._-" else "_"
+            for character in attempt_id
+        )
+        link_path = marker_path.parent / f"{node_id}.{safe_attempt}.attempt.json"
+        link = json.loads(link_path.read_text(encoding="utf-8"))
+        link_expected = {
+            "schema_version": 2,
+            "route_id": route.get("route_id"),
+            "node_id": node_id,
+            "attempt_id": attempt_id,
+            "dispatch_depth": marker.get("dispatch_depth"),
+            "transport": marker.get("transport"),
+            "execution_surface": marker.get("execution_surface"),
+            "registered_worker": marker.get("registered_worker"),
+            "fallback_hop": marker.get("fallback_hop"),
+            "evidence_sha256": evidence_record.get("sha256"),
+            "completion_marker": str(marker_path),
+            "completion_marker_history": str(history_path),
+        }
+        return all(link.get(key) == value for key, value in link_expected.items())
+    except (DispatchContractError, KeyError, OSError, TypeError, ValueError):
+        return False
 
 
 def new_attempt_id(value: str | None = None) -> str:
@@ -299,8 +640,23 @@ def new_attempt_id(value: str | None = None) -> str:
 
 
 def row_has_attempt(pipe: str, attempt_id: str) -> bool:
-    metadata = dict(part.split("=", 1) for part in pipe.split(",") if "=" in part)
+    metadata = parse_registry_metadata(pipe)
     return metadata.get("attempt_id") == attempt_id
+
+
+def _immutable_attempt_identity(fields: list[str]) -> tuple[object, ...]:
+    if len(fields) != 6:
+        raise DispatchContractError("invalid-registry-row", "expected six tab-separated fields")
+    metadata = parse_registry_metadata(fields[5])
+    validate_attempt_metadata(metadata)
+    immutable_metadata = tuple(
+        sorted(
+            (key, value)
+            for key, value in metadata.items()
+            if key not in ATTEMPT_MUTABLE_METADATA
+        )
+    )
+    return fields[2], fields[3], fields[4], immutable_metadata
 
 
 def _atomic_registry_replace(jobs: Path, lines: list[str]) -> None:
@@ -331,6 +687,8 @@ def claim_attempt_row(
     *,
     launch: bool = False,
     exclusive_metadata: dict[str, str] | None = None,
+    exclusive_live_metadata: dict[str, str] | None = None,
+    terminal_attempt_limit: int | None = None,
 ) -> bool:
     """Atomically register ``attempt_id`` and claim its launch at most once.
 
@@ -341,6 +699,13 @@ def claim_attempt_row(
 
     if not attempt_id:
         raise DispatchContractError("attempt-id-required", "registered dispatches require an attempt id")
+    row_fields = row.rstrip("\n").split("\t")
+    if len(row_fields) != 6:
+        raise DispatchContractError("invalid-registry-row", "expected six tab-separated fields")
+    row_metadata = parse_registry_metadata(row_fields[5])
+    validate_attempt_metadata(row_metadata)
+    if row_metadata.get("attempt_id") != attempt_id:
+        raise DispatchContractError("attempt-row-identity-mismatch", attempt_id)
     ensure_global_registry_writable(jobs)
     lock_path = Path(f"{jobs}.lock")
     with lock_path.open("a", encoding="utf-8") as lock:
@@ -349,7 +714,13 @@ def claim_attempt_row(
         for index, existing in enumerate(lines):
             fields = existing.split("\t")
             if len(fields) == 6 and row_has_attempt(fields[5], attempt_id):
-                metadata = dict(part.split("=", 1) for part in fields[5].split(",") if "=" in part)
+                metadata = parse_registry_metadata(fields[5])
+                validate_attempt_metadata(metadata)
+                if _immutable_attempt_identity(fields) != _immutable_attempt_identity(row_fields):
+                    raise DispatchContractError(
+                        "attempt-identity-conflict",
+                        f"attempt_id={attempt_id}",
+                    )
                 if not launch or metadata.get("launch_claimed") == "1" or fields[1] != "open":
                     return False
                 pipe = ",".join(part for part in fields[5].split(",") if not part.startswith("launch_claimed="))
@@ -362,16 +733,34 @@ def claim_attempt_row(
                 fields = existing.split("\t")
                 if len(fields) != 6:
                     continue
-                metadata = dict(
-                    part.split("=", 1)
-                    for part in fields[5].split(",")
-                    if "=" in part
-                )
+                metadata = parse_registry_metadata(fields[5])
                 if all(metadata.get(key) == value for key, value in exclusive_metadata.items()):
                     return False
-        row_fields = row.rstrip("\n").split("\t")
-        if len(row_fields) != 6:
-            raise DispatchContractError("invalid-registry-row", "expected six tab-separated fields")
+        if exclusive_live_metadata:
+            matching_terminal_attempts = set()
+            for existing in lines:
+                fields = existing.split("\t")
+                if len(fields) != 6:
+                    continue
+                metadata = parse_registry_metadata(fields[5])
+                if not all(
+                    metadata.get(key) == value
+                    for key, value in exclusive_live_metadata.items()
+                ):
+                    continue
+                validate_attempt_metadata(metadata)
+                if fields[1] in {"open", "running"}:
+                    return False
+                if fields[1] == "done" and metadata.get("attempt_id"):
+                    matching_terminal_attempts.add(metadata["attempt_id"])
+            if (
+                terminal_attempt_limit is not None
+                and len(matching_terminal_attempts) >= terminal_attempt_limit
+            ):
+                raise DispatchContractError(
+                    "quick-registered-headless-exhausted",
+                    f"terminal_attempts={len(matching_terminal_attempts)} limit={terminal_attempt_limit}",
+                )
         row_fields[5] += f",launch_claimed={1 if launch else 0}"
         with jobs.open("a", encoding="utf-8") as registry:
             registry.write("\t".join(row_fields) + "\n")
@@ -413,9 +802,10 @@ def close_attempt_row(
             fields = line.split("\t")
             if len(fields) != 6 or fields[1] not in {"open", "running"}:
                 continue
-            metadata = dict(part.split("=", 1) for part in fields[5].split(",") if "=" in part)
+            metadata = parse_registry_metadata(fields[5])
             if metadata.get("attempt_id") != attempt_id:
                 continue
+            validate_attempt_metadata(metadata)
             fields[1] = "done"
             additions = [f"note={note}"]
             for key, value in sorted((evidence or {}).items()):
@@ -494,10 +884,11 @@ def close_attempt_row_if(
             fields = line.split("\t")
             if len(fields) != 6 or fields[1] not in {"open", "running"}:
                 continue
-            metadata = dict(
-                part.split("=", 1) for part in fields[5].split(",") if "=" in part
-            )
-            if metadata.get("attempt_id") != attempt_id or not predicate(fields.copy()):
+            metadata = parse_registry_metadata(fields[5])
+            if metadata.get("attempt_id") != attempt_id:
+                continue
+            validate_attempt_metadata(metadata)
+            if not predicate(fields.copy()):
                 continue
             fields[1] = "done"
             additions = [f"note={note}"]
@@ -521,9 +912,10 @@ def annotate_attempt_row(jobs: Path, attempt_id: str, values: dict[str, str]) ->
             fields = line.split("\t")
             if len(fields) != 6:
                 continue
-            metadata = dict(part.split("=", 1) for part in fields[5].split(",") if "=" in part)
+            metadata = parse_registry_metadata(fields[5])
             if metadata.get("attempt_id") != attempt_id:
                 continue
+            validate_attempt_metadata(metadata)
             additions = [f"{key}={str(value).replace(',', ';')}" for key, value in sorted(values.items())]
             fields[5] += "," + ",".join(additions)
             lines[index] = "\t".join(fields)
@@ -533,7 +925,7 @@ def annotate_attempt_row(jobs: Path, attempt_id: str, values: dict[str, str]) ->
 
 
 def reconcile_local_registry(global_jobs: Path, local_jobs: Path) -> tuple[int, int]:
-    """Copy legacy local-only rows into the global registry exactly once."""
+    """Copy only current-contract local rows into the global registry once."""
 
     ensure_global_registry_writable(global_jobs)
     if not local_jobs.is_file():
@@ -554,6 +946,12 @@ def reconcile_local_registry(global_jobs: Path, local_jobs: Path) -> tuple[int, 
             fields = line.split("\t")
             identity = _row_identity(fields)
             if identity is None:
+                malformed += 1
+                continue
+            metadata=parse_registry_metadata(fields[5])
+            try:
+                validate_attempt_metadata(metadata)
+            except DispatchContractError:
                 malformed += 1
                 continue
             if identity in identities:

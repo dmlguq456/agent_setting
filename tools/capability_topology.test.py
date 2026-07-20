@@ -13,9 +13,30 @@ class TestTopology(unittest.TestCase):
         r=copy.deepcopy(self.r); r["recipes"].pop(); self.assertRaises(T.TopologyError, T.validate_registry, r)
     def test_cycle(self):
         r=copy.deepcopy(self.r); n=r["recipes"][0]["standard_plus"]["nodes"]; n[0]["depends_on"]=[n[-1]["id"]]; self.assertRaisesRegex(T.TopologyError,"cycle",T.validate_registry,r)
-    def test_depth_and_resource_depth(self):
-        r=copy.deepcopy(self.r); r["recipes"][0]["standard_plus"]["nodes"][0]["depth"]=3; self.assertRaises(T.TopologyError,T.validate_registry,r)
-        r=copy.deepcopy(self.r); lab=next(x for x in r["recipes"] if x["capability"]=="autopilot-lab"); lab["standard_plus"]["nodes"][-1]["depth"]=2; self.assertRaises(T.TopologyError,T.validate_registry,r)
+    def test_dispatch_depth_and_resource_boundary(self):
+        r=copy.deepcopy(self.r); r["recipes"][0]["standard_plus"]["nodes"][0]["dispatch_depth"]=3; self.assertRaises(T.TopologyError,T.validate_registry,r)
+        r=copy.deepcopy(self.r); lab=next(x for x in r["recipes"] if x["capability"]=="autopilot-lab"); lab["standard_plus"]["nodes"][-1]["dispatch_depth"]=2; self.assertRaises(T.TopologyError,T.validate_registry,r)
+    def test_every_bare_depth_key_and_wrong_max_are_rejected(self):
+        for location in ("recipe","quick","standard_plus","node"):
+            for key in ("depth","owner_depth","max_depth"):
+                r=copy.deepcopy(self.r); recipe=r["recipes"][0]
+                target={
+                    "recipe":recipe,
+                    "quick":recipe["quick"],
+                    "standard_plus":recipe["standard_plus"],
+                    "node":recipe["standard_plus"]["nodes"][0],
+                }[location]
+                target[key]=2
+                with self.subTest(location=location,key=key):
+                    self.assertRaises(T.TopologyError,T.validate_registry,r)
+        r=copy.deepcopy(self.r)
+        r["recipes"][0]["standard_plus"]["max_dispatch_depth"]=1
+        self.assertRaisesRegex(T.TopologyError,"max_dispatch_depth",T.validate_registry,r)
+    def test_namespace_vocabularies_fail_closed(self):
+        r=copy.deepcopy(self.r); r["execution_surfaces"].append("mystery")
+        self.assertRaisesRegex(T.TopologyError,"execution-surface",T.validate_registry,r)
+        r=copy.deepcopy(self.r); r["recipes"][0]["standard_plus"]["nodes"][0]["fallback_hops"]=["mystery"]
+        self.assertRaisesRegex(T.TopologyError,"fallback hops",T.validate_registry,r)
     def test_reviewer_and_map_scopes(self):
         r=copy.deepcopy(self.r); r["recipes"][0]["standard_plus"]["nodes"][1]["write_scope"]=["source/**"]; self.assertRaises(T.TopologyError,T.validate_registry,r)
         r=copy.deepcopy(self.r); d=next(x for x in r["recipes"] if x["capability"]=="autopilot-design"); d["standard_plus"]["nodes"][0]["write_scope"]=["design/**"]; self.assertRaises(T.TopologyError,T.validate_registry,r)

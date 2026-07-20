@@ -211,7 +211,7 @@ class DispatchJob:
     proc_start: Optional[str] = None    # /proc/<pid>/stat field 22 — the other half of the pid's
                                         # identity. F-27 refuses to signal without it, so a job row
                                         # is only a kill target when this is filled alongside pid.
-    pid_scope: Optional[str] = None     # namespace-local for depth-2 launches whose recorded PID
+    pid_scope: Optional[str] = None     # namespace-local for dispatch-depth-2 launches whose recorded PID
                                         # is only meaningful inside the capability-owner namespace.
     model: Optional[str] = None         # dispatch runtime model (own statusline if resolvable; else parent's, filled at render)
     elapsed_min: Optional[int] = None
@@ -229,8 +229,16 @@ class DispatchJob:
     artifact_root: Optional[str] = None  # registry artifact_root meta — a source-only worktree
                                          # (OPERATIONS §5.10) writes plans/ THERE, not under cwd
     branch: Optional[str] = None        # git branch override — demo fixtures; None = compute from cwd
-    depth: int = 1                      # dispatch tree depth: 1 capability owner, 2 bounded sub-worker
-    parent_slug: Optional[str] = None   # parent dispatch slug for depth-2 rows
+    depth: int = 1                      # display compatibility alias; derived from dispatch_depth on current rows
+    dispatch_depth: Optional[int] = None  # portable route topology: 0 main, 1 owner, 2 bounded node
+    transport: Optional[str] = None
+    execution_surface: Optional[str] = None
+    registered_worker: Optional[bool] = None
+    fallback_hop: Optional[str] = None
+    attempt_schema_version: Optional[int] = None
+    legacy_read_only: bool = False
+    attempt_contract_status: Optional[str] = None
+    parent_slug: Optional[str] = None   # parent dispatch slug for dispatch-depth-2 rows
     intensity: Optional[str] = None     # direct|quick|standard|strong|thorough|adversarial
     worker_type: Optional[str] = None   # owner | stage | review | support bootstrap overlay
     assigned_contract: Optional[str] = None  # exact portable Skill/contract assigned to worker

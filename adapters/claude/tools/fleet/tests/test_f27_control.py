@@ -292,11 +292,19 @@ def _load_upstream():
 
 
 _UPSTREAM = _load_upstream()
+CURRENT = (
+    "attempt_schema_version=2,dispatch_depth=1,transport=headless,"
+    "execution_surface=registered-headless,registered_worker=1,"
+    "fallback_hop=same-harness-headless,"
+)
 
 ROWS = (
-    "2026-07-15T10:00:00\topen\t/repo\t/wt/a\tslug-a\tcapability=code,mode=dev\n"
-    "2026-07-15T10:01:00\trunning\t/repo\t/wt/b\tslug-b\tcapability=code\n"
-    "2026-07-15T10:02:00\topen\t/repo\t/wt/c\tslug-c\tcapability=spec\n"
+    "2026-07-15T10:00:00\topen\t/repo\t/wt/a\tslug-a\t"
+    + CURRENT + "capability=code,mode=dev\n"
+    "2026-07-15T10:01:00\trunning\t/repo\t/wt/b\tslug-b\t"
+    + CURRENT + "capability=code\n"
+    "2026-07-15T10:02:00\topen\t/repo\t/wt/c\tslug-c\t"
+    + CURRENT + "capability=spec\n"
 )
 
 
@@ -311,7 +319,8 @@ class RegistryCloseTest(ActionLogEnv):
     def test_closes_the_matching_open_row(self):
         self.assertTrue(control.close_registry_row(self.jobs, "slug-a", "/wt/a"))
         out = _read(self.jobs)
-        self.assertIn("done\t/repo\t/wt/a\tslug-a\tcapability=code,mode=dev,note=fleet-kill", out)
+        self.assertIn("done\t/repo\t/wt/a\tslug-a\t", out)
+        self.assertIn("capability=code,mode=dev,note=fleet-kill", out)
 
     def test_spec_note_token_is_fleet_kill(self):
         """prd.md:255 names this token; it is what distinguishes an external console kill
@@ -339,11 +348,24 @@ class RegistryCloseTest(ActionLogEnv):
         self.assertFalse(control.close_registry_row(os.path.join(self.dir, "nope.log"),
                                                     "s", "/w"))
 
+    def test_legacy_row_is_diagnostic_only(self):
+        legacy = (
+            "2026-07-15T10:00:00\topen\t/repo\t/wt/a\tslug-a\t"
+            "capability=code\n"
+        )
+        with open(self.jobs, "w") as f:
+            f.write(legacy)
+        self.assertFalse(control.close_registry_row(self.jobs, "slug-a", "/wt/a"))
+        self.assertEqual(_read(self.jobs), legacy)
+
     def test_only_the_first_duplicate_is_closed(self):
         """Duplicate open rows are a registry anomaly; closing them all would make fleet
         write MORE broadly than upstream does. The exception stays minimal."""
         with open(self.jobs, "w") as f:
-            f.write("2026-07-15T10:00:00\topen\t/repo\t/wt/a\tslug-a\tp=1\n" * 3)
+            f.write((
+                "2026-07-15T10:00:00\topen\t/repo\t/wt/a\tslug-a\t"
+                + CURRENT + "p=1\n"
+            ) * 3)
         self.assertTrue(control.close_registry_row(self.jobs, "slug-a", "/wt/a"))
         out = _read(self.jobs)
         self.assertEqual(out.count("\tdone\t"), 1)
@@ -403,7 +425,10 @@ class TestRegistryCloseParity(ActionLogEnv):
         self.assertEqual(mine, theirs)
 
     def test_duplicate_rows_break_semantics_are_identical(self):
-        dup = "2026-07-15T10:00:00\topen\t/repo\t/wt/a\tslug-a\tp=1\n" * 3
+        dup = (
+            "2026-07-15T10:00:00\topen\t/repo\t/wt/a\tslug-a\t"
+            + CURRENT + "p=1\n"
+        ) * 3
         (mr, mine), (tr, theirs) = self._both("slug-a", "/wt/a", rows=dup)
         self.assertEqual(mr, tr)
         self.assertEqual(mine, theirs)
@@ -412,7 +437,10 @@ class TestRegistryCloseParity(ActionLogEnv):
         """jobs.log is a 6-field hard contract; upstream drops the 7th+ field on rewrite.
         fleet must drop it the SAME way — preserving it only in fleet would be a worse,
         asymmetric drift than the loss itself."""
-        extra = "2026-07-15T10:00:00\topen\t/repo\t/wt/a\tslug-a\tp=1\tSEVENTH\n"
+        extra = (
+            "2026-07-15T10:00:00\topen\t/repo\t/wt/a\tslug-a\t"
+            + CURRENT + "p=1\tSEVENTH\n"
+        )
         (mr, mine), (tr, theirs) = self._both("slug-a", "/wt/a", rows=extra)
         self.assertEqual(mr, tr)
         self.assertEqual(mine, theirs)

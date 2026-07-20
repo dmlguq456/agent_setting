@@ -27,6 +27,49 @@ fi
 notes=$(grep -c 'note=dead-nested-sandbox-lifetime' "$JOBS")
 [ "${notes:-0}" -ge 2 ] || { echo "FAIL: registry typed note 2건 미만: $notes"; fail=1; }
 
+python3 - "$JOBS" <<'PY' || fail=1
+import sys
+
+expected = {
+    "g11-claude": ("att-g11-claude", "review", "code-test"),
+    "g11-codex": ("att-g11-codex", "stage", "code-plan"),
+}
+rows = {}
+with open(sys.argv[1], encoding="utf-8") as handle:
+    for line in handle:
+        fields = line.rstrip("\n").split("\t")
+        if len(fields) != 6 or fields[4] not in expected:
+            continue
+        rows[fields[4]] = (
+            fields[1],
+            dict(part.split("=", 1) for part in fields[5].split(",") if "=" in part),
+        )
+for slug, (attempt_id, worker_type, assigned_contract) in expected.items():
+    if slug not in rows:
+        raise SystemExit(f"missing registry row: {slug}")
+    status, meta = rows[slug]
+    axes = {
+        "attempt_schema_version": "2",
+        "attempt_id": attempt_id,
+        "dispatch_depth": "2",
+        "transport": "headless",
+        "execution_surface": "registered-headless",
+        "registered_worker": "1",
+        "fallback_hop": "same-harness-headless",
+        "worker_type": worker_type,
+        "assigned_contract": assigned_contract,
+    }
+    for key, wanted in axes.items():
+        if meta.get(key) != wanted:
+            raise SystemExit(
+                f"{slug} {key}={meta.get(key)!r}, want {wanted!r}"
+            )
+    if status != "done" or meta.get("note") != "dead-nested-sandbox-lifetime":
+        raise SystemExit(f"{slug} terminal contract mismatch")
+    if "worker_role" in meta:
+        raise SystemExit(f"{slug} carries legacy worker_role")
+PY
+
 open_rows=$(awk -F '\t' '$2 == "open" || $2 == "running"' "$JOBS" | wc -l | tr -d ' ')
 [ "${open_rows:-0}" -eq 0 ] || { echo "FAIL: 거부 후 open/running 행 잔존: $open_rows"; fail=1; }
 

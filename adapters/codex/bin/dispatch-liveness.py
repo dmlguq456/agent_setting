@@ -350,7 +350,7 @@ def main(argv: list[str]) -> int:
                 log_hit = None if orphan else log_shows_limit(agent_home, slug)
                 if orphan is not None:
                     print(f"ORPHANED {label} - pipeline orphaned; route={orphan['route_id']}; "
-                          f"resume boundary={orphan['resume_boundary']}; depth-0 decision [open: {ts}]")
+                          f"resume boundary={orphan['resume_boundary']}; dispatch-depth-0 decision [open: {ts}]")
                 elif log_hit is not None:
                     print(f"DEAD     {label} - log limit/auth pattern ({log_hit}) [open: {ts}]")
                 else:

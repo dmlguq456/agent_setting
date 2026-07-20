@@ -1,12 +1,32 @@
 ## Pipeline: Mode dev
 
-Select the stage graph from `--intensity` before QA. `direct` performs produce plus sanity/report without this durable pipeline. `quick` uses one depth-1 worker with an inline micro-plan, plan-check-lite, and focused verification. standard+ follows the durable pipeline below.
+Select the stage graph from `--intensity` before QA. `direct` performs produce plus sanity/report without this durable pipeline. `quick` uses one registered-headless dispatch-depth-1 one-shot owner with an inline micro-plan, plan-check-lite, and focused verification. standard+ follows the durable pipeline below.
 
 Use independent plan review only when selected by the graph: UI or visual risk → native `디자인팀`; research or domain risk → native `연구팀`; construction quality → native `품질관리팀`.
 
 ### Standard+ Stage Dispatch
 
-The depth-1 owner is a thin conductor. Dispatch each durable stage as a depth-2 headless session with `adapters/claude/bin/dispatch-headless.py --depth 2 --parent <conductor-slug> --worker-type stage --assigned-contract code-<stage> --owner autopilot-code --model-role <portable-stage-role>`. Codex and OpenCode use their adapter-native dispatch wrappers.
+The dispatch-depth-1 owner is a thin conductor. The approved pre-execution gate must already
+have compiled an immutable standard+ route file with checked headless evidence. If that route
+file or the canonical jobs path is unavailable, stop instead of launching an unbound row.
+Dispatch every durable node through `utilities/dispatch-node.py`; it binds the route identity,
+node, write scope, completion gate, exact fallback tuple, and current attempt axes to the
+selected adapter wrapper:
+
+```bash
+STAGE_OUTPUT=$(python3 "$AGENT_HOME/utilities/dispatch-node.py" \
+  --route "$ROUTE_FILE" --node "$NODE_ID" --adapter "$STAGE_ADAPTER" \
+  --action start --slug "$STAGE_SLUG" --qa "$QA" \
+  --parent "$CONDUCTOR_SLUG" --prompt-text "$STAGE_PROMPT" \
+  -- --jobs "$CANONICAL_JOBS")
+printf '%s\n' "$STAGE_OUTPUT"
+ATTEMPT_ID=$(printf '%s\n' "$STAGE_OUTPUT" | sed -n 's/^attempt_id=//p' | tail -1)
+test -n "$ATTEMPT_ID"
+```
+
+Keep `ROUTE_FILE`, `CANONICAL_JOBS`, `NODE_ID`, and the captured `ATTEMPT_ID` together until
+that node's completion transaction succeeds. Never dispatch standard+ with a raw wrapper
+command that omits the route record.
 
 The prompt carries only subskill name, absolute input paths, output contract, intensity, and slug. It never carries plan bodies or prior-stage conversation. Each stage reads files; the conductor reads only verdict and gate state. Register every stage in `.dispatch/jobs.log`, monitor liveness, and keep conductor plus active stages at or below five processes. One-line or no-artifact micro-stages stay inline.
 
@@ -21,14 +41,14 @@ sh <agent-home>/utilities/dispatch-wait.sh --parent <conductor-slug>
 # exit 3 = suspect or dead; diagnose and redispatch
 ```
 
-After harvest, change the stage row from `open` to `done` before dispatching the next stage. An open harvested row orphans the pipe and keeps Fleet and dispatch-wait active.
-
-After judging a stage's artifact contract complete, write its completion marker before
-dispatching the next stage:
+After judging a stage's artifact contract complete, publish its captured exact-attempt completion before
+dispatching the next stage. The completion transaction writes the immutable marker/link and
+closes only that attempt row; never mark a routed row `done` first:
 
 ```bash
 python3 <agent-home>/utilities/capability-route.py complete \
-  --route <route-file> --node <node-id> --evidence <stage terminal artifact>
+  --route <route-file> --node <node-id> --evidence <stage terminal artifact> \
+  --jobs <canonical-jobs.log> --attempt-id <exact-attempt-id>
 ```
 
 The marker lands at `<agent-home>/.dispatch/completion/<route_id>/<node_id>.json`. Evidence is
@@ -50,7 +70,7 @@ For case 3, record reasoning in `plans/<slug>/_internal/metrics.md`; an unrecord
 
 #### Usage-Aware Cross-Harness Routing
 
-Before dispatch, run `sh <agent-home>/utilities/usage-check.sh`. It reports per-harness `ok`, `limited(<reset>)`, or `unknown`; `ok` means no known block, not guaranteed capacity. Avoid limited runtimes, honor explicit `HARNESS_CAPACITY_BIAS`, otherwise balance limit avoidance, task fit, and spread. Prefer a different model family for test or review than for implementation when feasible. Preserve `depth`, `parent`, `worker_type`, `assigned_contract`, `model_role`, `harness`, `owner_harness`, and `parent_sid` metadata across runtimes.
+Before dispatch, run `sh <agent-home>/utilities/usage-check.sh`. It reports per-harness `ok`, `limited(<reset>)`, or `unknown`; `ok` means no known block, not guaranteed capacity. Avoid limited runtimes, honor explicit `HARNESS_CAPACITY_BIAS`, otherwise balance limit avoidance, task fit, and spread. Prefer a different model family for test or review than for implementation when feasible. Preserve `dispatch_depth`, `parent`, `worker_type`, `assigned_contract`, `model_role`, `harness`, `owner_harness`, and `parent_sid` metadata across runtimes.
 
 If a stage dies immediately from usage, session, or authentication limits, the wrapper closes its row as `done,note=dead-<reason>` and records reset time when known. The wrapper does not retry; the conductor decides redispatch or cross-harness failover.
 
@@ -64,13 +84,12 @@ Skip for direct. quick uses an inline micro-plan. For standard+, first verify th
 
 ```bash
 AGENT_HOME=$(utilities/agent-home.sh)
-REPORTS_DIR=.agent_reports; [ -d .claude_reports ] && [ ! -d .agent_reports ] && REPORTS_DIR=.claude_reports
-python3 "$AGENT_HOME/adapters/claude/bin/dispatch-headless.py" --start \
-  --worktree "$PWD" --slug <cycle-slug> \
-  --capability code-plan --mode dev --intensity <intensity> \
-  --depth 2 --parent <cycle-slug> --worker-type stage --assigned-contract code-plan --owner autopilot-code \
-  --model-role "deep maker" --profile code-plan \
-  --prompt-text "<sub-skill contract + absolute input paths + output contract + slug>"
+NODE_ID=plan
+STAGE_ADAPTER=claude # choose claude, codex, or opencode from checked route evidence
+STAGE_SLUG="${CONDUCTOR_SLUG}-plan"
+STAGE_PROMPT="<sub-skill contract + absolute input paths + output contract + slug>"
+# Run the route-bound dispatch transaction from "Standard+ Stage Dispatch",
+# capture ATTEMPT_ID, then use that same value for `capability-route.py complete`.
 ```
 
 Poll in the same turn:
@@ -85,19 +104,22 @@ Loop until exit 0. Then read only plan status and paths. On exit 3, inspect live
 
 Only durable standard+ graphs use this step. direct has none; quick already completed plan-check-lite.
 
-The self-check is inline because it writes no new durable artifact. An independently warranted review may be a bounded depth-2 review worker.
+The self-check is inline because it writes no new durable artifact. An independently warranted review may be a bounded dispatch-depth-2 review worker.
 
 1. Resolve `en_plan_path`, `ko_plan_path`, and `log_dir`.
 2. Select review only when the graph and risk require it:
    - standard: one lightweight review when warranted;
    - strong: one review at the riskiest point;
-   - thorough or adversarial: bounded depth-2 or axis-separated reviewers, each returning a short memo.
+   - thorough or adversarial: bounded dispatch-depth-2 or axis-separated reviewers, each returning a short memo.
 3. If blocking findings exist, pause when `--user-refine` is set; otherwise run one `code-refine` within the correction budget.
 4. Without findings or selected review, continue.
 
 ### Step 3: code-execute
 
-For standard+, dispatch a depth-2 session with `--capability code-execute --worker-type stage --assigned-contract code-execute --model-role "fast implementer" --profile code-execute`. Pass the absolute `plan/plan.md` path, poll, and harvest. Fallback to in-session only under the closed rules above.
+For standard+, run the route-bound dispatch transaction with `NODE_ID=execute`; its route node
+selects `assigned_contract=code-execute` and the portable implementer role. Pass the absolute
+`plan/plan.md` path, retain the emitted attempt ID, poll, and publish exact completion. Fallback
+to in-session only under the closed rules above.
 
 Read plan frontmatter after harvest:
 
@@ -107,7 +129,10 @@ Read plan frontmatter after harvest:
 
 ### Step 4: code-test
 
-For standard+, dispatch with `--capability code-test --worker-type stage --assigned-contract code-test --model-role "fast reviewer" --profile code-test`; strong+ may select a deeper reviewer. Pass plan verification and checklist paths. Poll and read `test_logs/test_report.md` from disk. code-test is read-only and never hotfixes.
+For standard+, run the route-bound dispatch transaction with `NODE_ID=test`; its route node
+selects `assigned_contract=code-test` and the reviewer role. strong+ may select a deeper reviewer.
+Pass plan verification and checklist paths, retain the emitted attempt ID, poll, and publish exact
+completion from `test_logs/test_report.md`. code-test is read-only and never hotfixes.
 
 quick reports verify-lite failure without retry. Other graphs may open at most one pipeline-level retry:
 
@@ -126,7 +151,10 @@ quick reports verify-lite failure without retry. Other graphs may open at most o
 
 ### Step 5: code-report
 
-For standard+, dispatch with `--capability code-report --worker-type stage --assigned-contract code-report --model-role "fast writer" --profile code-report`. Pass plan, checklist, dev logs, test logs, and review paths. Poll and read the report path and headline from disk. Use the closed fallback when needed.
+For standard+, run the route-bound dispatch transaction with `NODE_ID=report`; its route node
+selects `assigned_contract=code-report` and the writer role. Pass plan, checklist, dev logs,
+test logs, and review paths, retain the emitted attempt ID, poll, and publish exact completion
+from the final report. Use the closed fallback when needed.
 
 ### Step 6: Pipeline Summary
 

@@ -800,7 +800,10 @@ class CodexAttemptIdentityTest(unittest.TestCase):
                 for retry in range(2, 6):
                     f.write(
                         "2026-07-16T00:0%d:00+00:00\topen\trepo\t%s\ttest-r%d\t"
-                        "capability=autopilot-code,harness=codex,depth=2,"
+                        "capability=autopilot-code,harness=codex,"
+                        "attempt_schema_version=2,dispatch_depth=2,transport=headless,"
+                        "execution_surface=registered-headless,registered_worker=1,"
+                        "fallback_hop=same-harness-headless,"
                         "route_id=rt-a,route_node=test,attempt_id=att-%016x\n"
                         % (retry, tmp, retry, retry)
                     )
@@ -884,6 +887,9 @@ class CodexAttemptIdentityTest(unittest.TestCase):
             with open(current, "w", encoding="utf-8") as f:
                 f.write(
                     "2026-07-16T01:00:00+00:00\tdone\trepo\t-\ttest-current\t"
+                    "attempt_schema_version=2,dispatch_depth=2,transport=headless,"
+                    "execution_surface=registered-headless,registered_worker=1,"
+                    "fallback_hop=same-harness-headless,attempt_id=att-current,"
                     "route_id=rt-a,route_node=test,note=current\n"
                 )
             with open(legacy, "w", encoding="utf-8") as f:

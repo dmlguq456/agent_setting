@@ -4,7 +4,7 @@
 
 `deep maker`, `deep reviewer`, `deep editor`, and `deep orchestrator` map to
 `opus`/high. Retained `orchestrator` is the balanced mechanical role and maps to
-`sonnet`/medium; it is not an alias for the standard+ depth-1 conductor. Fast
+`sonnet`/medium; it is not an alias for the standard+ dispatch-depth-1 conductor. Fast
 portable roles map to `sonnet`/medium. The adapter mapper normalizes case,
 hyphens, and underscores but accepts no undocumented role aliases.
 
@@ -273,7 +273,7 @@ verify through the runtime path above.
 
 ## SD-62 direct headless delegation — realized
 
-Claude conductors launch checked same- or cross-harness depth-2 headless
+Claude conductors launch checked same- or cross-harness dispatch-depth-2 headless
 adapters directly. The immutable v3 route binds the checked tuple and stable
 attempt identity; register/start are atomically claimed in the canonical
 registry. The retired broker retains diagnostic `status`/`stop` only, and

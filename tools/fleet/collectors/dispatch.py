@@ -125,6 +125,110 @@ def _parse_depth(value):
 
 
 _KNOWN_HARNESSES = {"claude", "codex", "opencode"}
+_TRANSPORTS = {"headless", "interactive"}
+_EXECUTION_SURFACES = {
+    "registered-headless",
+    "codex-native-subagent",
+    "claude-subagent",
+    "claude-agent-team-teammate",
+    "inline",
+}
+_FALLBACK_HOPS = {
+    "same-harness-headless",
+    "cross-harness-headless",
+    "native-subagent",
+    "inline",
+}
+
+
+def _attempt_contract(meta):
+    """Project independent attempt axes without mutating historical rows."""
+    raw_version = meta.get("attempt_schema_version")
+    try:
+        version = int(raw_version) if raw_version not in (None, "") else 1
+    except (TypeError, ValueError):
+        version = None
+    if version != 2:
+        legacy = version == 1
+        return {
+            "attempt_schema_version": version,
+            "dispatch_depth": None,
+            "transport": None,
+            "execution_surface": None,
+            "registered_worker": None,
+            "fallback_hop": None,
+            "legacy_read_only": legacy,
+            "attempt_contract_status": (
+                "legacy-read-only" if legacy else "invalid:schema-version"
+            ),
+        }
+
+    try:
+        dispatch_depth = int(meta.get("dispatch_depth"))
+    except (TypeError, ValueError):
+        dispatch_depth = None
+    transport = meta.get("transport")
+    surface = meta.get("execution_surface")
+    fallback_hop = meta.get("fallback_hop", "")
+    registered_raw = str(meta.get("registered_worker", "")).lower()
+    registered = (
+        True if registered_raw in {"1", "true"}
+        else False if registered_raw in {"0", "false"}
+        else None
+    )
+    violations = []
+    if (
+        any(key in meta for key in ("depth", "owner_depth", "max_depth"))
+        or dispatch_depth not in {0, 1, 2}
+    ):
+        violations.append("dispatch_depth")
+    if transport not in _TRANSPORTS:
+        violations.append("transport")
+    if surface not in _EXECUTION_SURFACES:
+        violations.append("execution_surface")
+    if registered is None or registered != (surface == "registered-headless"):
+        violations.append("registered_worker")
+    if fallback_hop not in _FALLBACK_HOPS and not (
+        dispatch_depth == 0 and fallback_hop == ""
+    ):
+        violations.append("fallback_hop")
+    if dispatch_depth == 0 and (
+        transport != "interactive"
+        or surface != "inline"
+        or registered is not False
+        or fallback_hop
+    ):
+        violations.append("direct_axes")
+    if surface == "registered-headless" and (
+        transport != "headless"
+        or fallback_hop not in {
+            "same-harness-headless", "cross-harness-headless"
+        }
+    ):
+        violations.append("headless_axes")
+    if surface in {"codex-native-subagent", "claude-subagent"} and (
+        transport != "headless"
+        or registered is not False
+        or fallback_hop != "native-subagent"
+    ):
+        violations.append("native_axes")
+    if surface == "claude-agent-team-teammate":
+        violations.append("teammate_not_dispatch_attempt")
+    if surface == "inline" and dispatch_depth in {1, 2} and fallback_hop != "inline":
+        violations.append("inline_axes")
+    return {
+        "attempt_schema_version": version,
+        "dispatch_depth": dispatch_depth,
+        "transport": transport,
+        "execution_surface": surface,
+        "registered_worker": registered,
+        "fallback_hop": fallback_hop or None,
+        "legacy_read_only": False,
+        "attempt_contract_status": (
+            "invalid:" + ",".join(dict.fromkeys(violations))
+            if violations else "current"
+        ),
+    }
 
 
 def _infer_harness(meta, slug=None):
@@ -689,7 +793,7 @@ _STAGE_SUFFIX_RE = re.compile(r"-(?:code-)?(?:plan|exec|execute|test|report)$")
 
 
 def _slug_stem(slug):
-    """Strip a trailing depth-2 stage-role suffix (F-15c dedup key): 'fleet-ui-v2-execute'
+    """Strip a trailing dispatch-depth-2 stage-role suffix (F-15c dedup key): 'fleet-ui-v2-execute'
     -> 'fleet-ui-v2', 'x-code-plan' -> 'x', 'already' unchanged. Display/matching helper
     only — never mutates DispatchJob.slug itself."""
     if not slug:
@@ -827,7 +931,23 @@ def _scan_route_nodes(paths):
             if not route_id or not route_node:
                 continue
             pid_s = meta.get("pid")
-            path_result.setdefault(route_id, {})[route_node] = {
+            attempt_contract = _attempt_contract(meta)
+            node_evidence = path_result.setdefault(route_id, {}).setdefault(
+                route_node, {}
+            )
+            node_evidence.setdefault("attempt_history", []).append({
+                "attempt_id": meta.get("attempt_id"),
+                "status": status,
+                "dispatch_depth": attempt_contract["dispatch_depth"],
+                "transport": attempt_contract["transport"],
+                "execution_surface": attempt_contract["execution_surface"],
+                "registered_worker": attempt_contract["registered_worker"],
+                "fallback_hop": attempt_contract["fallback_hop"],
+                "contract_status": attempt_contract["attempt_contract_status"],
+            })
+            if attempt_contract["attempt_contract_status"] != "current":
+                continue
+            node_evidence.update({
                 "status": status, "slug": slug, "ts": _iso_to_epoch(ts),
                 "pid": int(pid_s) if (pid_s or "").isdigit() else None,
                 "harness": _infer_harness(meta, slug),
@@ -843,7 +963,7 @@ def _scan_route_nodes(paths):
                 "route_file": meta.get("route_file"),
                 "route_hash": meta.get("route_hash"),
                 # code-test verification_round_2.md §10 — same bug class, second location:
-                # render.py's degrade-pool `covered_slugs` excludes a route's own depth-1
+                # render.py's degrade-pool `covered_slugs` excludes a route's own dispatch-depth-1
                 # conductor from the degrade pool by matching a LIVE child's `parent_slug`. Once
                 # that child goes terminal it vanishes from live `jobs` (same mechanism as
                 # route_file above) and the conductor stops being excluded — its bare slug then
@@ -851,7 +971,7 @@ def _scan_route_nodes(paths):
                 # record card. `parent` (== `_scan_jobs_log`'s `parent_slug`, same pipe field,
                 # already parsed) is the terminal-surviving half of that same fact.
                 "parent": meta.get("parent") or meta.get("parent_slug"),
-            }
+            })
         # Candidate paths are precedence-ordered (canonical first). Preserve
         # last-occurrence-wins inside each file, but never let a later legacy
         # registry overwrite canonical terminal evidence.
@@ -905,6 +1025,16 @@ def _scan_processes():
             parent_sid = env.get("AGENT_DISPATCH_PARENT_SESSION_ID") or env.get("CLAUDE_CODE_SESSION_ID")
             parent_slug = env.get("AGENT_DISPATCH_PARENT_SLUG")
             depth = _parse_depth(env.get("AGENT_DISPATCH_DEPTH"))
+            attempt_contract = _attempt_contract({
+                "attempt_schema_version": env.get(
+                    "AGENT_DISPATCH_ATTEMPT_SCHEMA_VERSION"
+                ),
+                "dispatch_depth": env.get("AGENT_DISPATCH_DEPTH"),
+                "transport": env.get("AGENT_DISPATCH_TRANSPORT"),
+                "execution_surface": env.get("AGENT_DISPATCH_EXECUTION_SURFACE"),
+                "registered_worker": env.get("AGENT_DISPATCH_REGISTERED_WORKER"),
+                "fallback_hop": env.get("AGENT_DISPATCH_FALLBACK_HOP"),
+            })
             is_child = env.get("AGENT_SESSION_ROLE", "").lower() == "worker" or env.get("CLAUDE_CODE_CHILD_SESSION") == "1" or bool(parent_slug or parent_sid)
             q, qsrc = effective_qa(qa, None, jcwd, slug, key)
             jobs.append(DispatchJob(
@@ -916,6 +1046,7 @@ def _scan_processes():
                 pid=int(pid_s) if pid_s.isdigit() else None,
                 proc_start=procscan.read_proc_start(pid_s) if pid_s.isdigit() else None,
                 model=_claude_job_model(pid_s, jcwd), depth=depth,
+                **attempt_contract,
                 intensity=env.get("AGENT_DISPATCH_INTENSITY"),
                 worker_type=env.get("AGENT_DISPATCH_WORKER_TYPE"),
                 assigned_contract=env.get("AGENT_DISPATCH_ASSIGNED_CONTRACT"),
@@ -1016,11 +1147,12 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None, registry_priority=0):
         # F-15c: (normalized cwd, slug-stem) dedup — a stage-worker registry row
         # (fleet-ui-v2-execute) reconciles against its already-shown proc job
         # (fleet-ui-v2) ONLY when both cwd and stem match; a different worktree (conductor
-        # vs its own depth-2 child, OPERATIONS §5.10) never collapses, so both stay visible.
+        # vs its own dispatch-depth-2 child, OPERATIONS §5.10) never collapses, so both stay visible.
         if cwd and seen_keys and (_norm_cwd(cwd), _slug_stem(slug)) in seen_keys:
             continue
         seen_slugs.add(slug)
         meta = _parse_pipe_meta(pipe or "")
+        attempt_contract = _attempt_contract(meta)
         pname = meta.get("_name") or repo or "job"
         # _parse_pipe_meta already strips any `autopilot-` prefix on a successful parse; this
         # covers the fallback-name path (parse failure) where pname = repo or "job".
@@ -1043,7 +1175,9 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None, registry_priority=0):
             harness=harness, model=meta.get("model"),
             pid=registry_pid, proc_start=meta.get("pid_start") or meta.get("proc_start"),
             pid_scope=meta.get("pid_scope"),
-            profile=meta.get("profile"), depth=_parse_depth(meta.get("depth")),
+            profile=meta.get("profile"),
+            depth=_parse_depth(meta.get("dispatch_depth", meta.get("depth"))),
+            **attempt_contract,
             intensity=meta.get("intensity"),
             worker_type=meta.get("worker_type"),
             assigned_contract=meta.get("assigned_contract"),
@@ -1057,6 +1191,28 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None, registry_priority=0):
             registry_order=registry_order,
             registry_priority=registry_priority,
         ))
+    quick_groups = {}
+    for job in jobs:
+        if job.intensity != "quick" or not job.route_id or not job.route_node:
+            continue
+        key = (job.route_id, job.route_node)
+        quick_groups.setdefault(key, []).append(job)
+        violations = []
+        if job.dispatch_depth != 1 or job.parent_slug:
+            violations.append("quick-shape")
+        if (
+            job.execution_surface != "registered-headless"
+            or job.registered_worker is not True
+        ):
+            violations.append("quick-surface")
+        if job.fallback_hop != "same-harness-headless":
+            violations.append("quick-fallback")
+        if violations:
+            job.attempt_contract_status = "invalid:" + ",".join(violations)
+    for group in quick_groups.values():
+        if len(group) > 1:
+            for job in group:
+                job.attempt_contract_status = "invalid:quick-multiple-live"
     return jobs, malformed
 
 
@@ -1177,7 +1333,7 @@ def _orphan_registry_module():
 
 
 def _annotate_orphan_conductors(jobs, now, jobs_path=None):
-    """SD-64/71: stamp note/resume_boundary on a dead depth-1 owner row that is a
+    """SD-64/71: stamp note/resume_boundary on a dead dispatch-depth-1 owner row that is a
     detected orphan (route incomplete + a registered open child or a ready
     un-started successor). Read-only — never mutates the registry."""
     dead_owners = [j for j in jobs if j.liveness == "dead" and int(getattr(j, "depth", 1) or 1) == 1

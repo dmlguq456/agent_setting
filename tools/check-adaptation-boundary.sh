@@ -818,7 +818,8 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'prompt_path.write_text(prompt_text, encoding="utf-8")' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'fcntl.flock' adapters/codex/bin/dispatch-headless.py \
     || ! grep -Fq 'registry_lock={jobs}.lock' adapters/codex/bin/dispatch-headless.py \
-    || ! grep -Fq 'fcntl.flock' adapters/codex/bin/dispatch-harvest.py \
+    || ! grep -Fq 'close_attempt_row' adapters/codex/bin/dispatch-harvest.py \
+    || ! grep -Fq 'ROUTE.complete_node' adapters/codex/bin/dispatch-harvest.py \
     || ! grep -Fq 'registry_lock={jobs}.lock' adapters/codex/bin/dispatch-harvest.py; then
     fail_msg "adapters/codex/bin/dispatch-headless.py must validate dispatch inputs and wrap assignments with the portable typed worker bootstrap"
   fi
@@ -1090,18 +1091,18 @@ check_codex_bin_wrappers() {
     fail_msg "adapters/codex/bin/capability-map.sh must not expose root Skill compatibility paths as Codex capability-info output"
   fi
   if ! grep -Fq 'stage_graph_contract="core/CONVENTIONS.md#pipeline-intensity-stage-graph-and-assurance"' adapters/codex/bin/capability-map.sh \
-    || ! grep -Fq 'plan_policy="direct=no-plan;quick=depth1-one-shot-micro-plan+plan-check-lite;standard+=durable-plan"' adapters/codex/bin/capability-map.sh \
+    || ! grep -Fq 'plan_policy="direct=no-plan;quick=registered-headless-dispatch-depth-1-one-shot-micro-plan+plan-check-lite;standard+=durable-plan"' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'pipeline_contract="code-plan>code-execute>code-test>code-report"' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'optional_pipeline_step="code-refine"' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'artifact_contract="plans/<date>_<slug>:plan.md,checklist.md,pipeline_summary.md,dev_logs/,test_logs/"' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'role_contract="planning=plan-team,implementation=dev-team,verification=qa-team,report=editorial-team"' adapters/codex/bin/capability-map.sh \
-    || ! grep -Fq 'dispatch_contract="preflight.sh dispatch --capability autopilot-code --mode <family/mode> --qa <level> --intensity <level> --depth 1|2 [--parent <slug>]"' adapters/codex/bin/capability-map.sh; then
+    || ! grep -Fq 'dispatch_contract="preflight.sh dispatch --capability autopilot-code --mode <family/mode> --qa <level> --intensity <level> --dispatch-depth 1|2 [--parent <slug>]"' adapters/codex/bin/capability-map.sh; then
     fail_msg "Codex autopilot-code capability-info must expose the portable pipeline/artifact/role/dispatch contracts"
   fi
   if ! grep -Fq 'capability-info` and `route` print the portable pipeline contract (`code-plan>code-execute>code-test>code-report` for `standard+`)' adapters/codex/AGENTS.md \
     || ! grep -Fq 'autopilot-code pipeline' adapters/codex/README.md \
     || ! grep -Fq 'stage_graph_contract=core/CONVENTIONS.md#pipeline-intensity-stage-graph-and-assurance' adapters/codex/README.md \
-    || ! grep -Fq 'plan_policy=direct=no-plan;quick=depth1-one-shot-micro-plan+plan-check-lite;standard+=durable-plan' adapters/codex/README.md \
+    || ! grep -Fq 'plan_policy=direct=no-plan;quick=registered-headless-dispatch-depth-1-one-shot-micro-plan+plan-check-lite;standard+=durable-plan' adapters/codex/README.md \
     || ! grep -Fq 'pipeline_contract=code-plan>code-execute>code-test>code-report' adapters/codex/README.md; then
     fail_msg "Codex docs must describe the autopilot-code pipeline metadata exposed by capability-info/route"
   fi
@@ -1248,7 +1249,7 @@ check_codex_utility_projection() {
   # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
   # leak window where a newly added utility silently has no projection decision).
   UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh worktree-cleanup.py dispatch-route.sh dispatch-defaults.py token-budget.py token-budget-experiment.py worker_bootstrap.py"
-  UTILITY_DEFERRED="artifact-root.test.sh dispatch-artifact-root.test.py worktree-cleanup.test.py dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py capability-route.py capability_route.test.py dispatch-broker.py dispatch_broker.test.py dispatch-node.py dispatch_node.test.py dispatch-progress.py dispatch_progress.test.py dispatch-registry.py dispatch_registry.test.py dispatch-orphan-watch.py dispatch_orphan_watch.test.py dispatch_adapters_v11.test.py dispatch_contract.py dispatch_contract.test.py dispatch_completion_marker.test.py dispatch_lifecycle.py dispatch_lifecycle.test.py nested-dispatch-eligibility.py nested_dispatch_eligibility.test.py stage-dispatch-fallback.py stage_dispatch_fallback.test.py stage_dispatch_capacity.test.py spec-transaction.py spec_transaction.test.py worker-route-guard.py worker_route_guard.test.py model-worker-governor.py model_worker_governor.test.py resource-runner.py resource_runner.test.py worker_bootstrap.test.py worker_dispatch_prompt.test.py verify-files.sh verify-files.test.sh worktree-residue.py worktree_residue.test.py dispatch_codex_nocommit_fixture.test.py codex_dispatch_terminal.py codex_dispatch_terminal.test.py"
+  UTILITY_DEFERRED="artifact-root.test.sh dispatch-artifact-root.test.py worktree-cleanup.test.py dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py capability-route.py capability_route.test.py dispatch-broker.py dispatch_broker.test.py dispatch-node.py dispatch_node.test.py dispatch-progress.py dispatch_progress.test.py dispatch-registry.py dispatch_registry.test.py dispatch-orphan-watch.py dispatch_orphan_watch.test.py dispatch_adapters_v11.test.py dispatch_contract.py dispatch_contract.test.py dispatch_completion_marker.test.py dispatch_harvest.test.py dispatch_v20.test.py dispatch_lifecycle.py dispatch_lifecycle.test.py nested-dispatch-eligibility.py nested_dispatch_eligibility.test.py stage-dispatch-fallback.py stage_dispatch_fallback.test.py stage_dispatch_capacity.test.py spec-transaction.py spec_transaction.test.py worker-route-guard.py worker_route_guard.test.py model-worker-governor.py model_worker_governor.test.py resource-runner.py resource_runner.test.py worker_bootstrap.test.py worker_dispatch_prompt.test.py verify-files.sh verify-files.test.sh worktree-residue.py worktree_residue.test.py dispatch_codex_nocommit_fixture.test.py codex_dispatch_terminal.py codex_dispatch_terminal.test.py"
   utility_count=0
   for f in utilities/*; do
     [ -f "$f" ] || continue
@@ -1511,10 +1512,10 @@ check_codex_native_skill_projection() {
     if [ "$invocation_class" = "entry-router" ]; then
       if grep -Fq '## Projected Portable Details' "$skill" \
         || grep -Fq '## Portable Contract' "$skill"; then
-        fail_msg "$skill must keep entry-router procedure detail out of the depth-0 projection"
+        fail_msg "$skill must keep entry-router procedure detail out of the dispatch-depth-0 projection"
       fi
       if ! grep -Fq 'five-field confirmation card' "$skill" \
-        || ! grep -Fq 'depth-1 owner reads it' "$skill" \
+        || ! grep -Fq 'dispatch-depth-1 owner reads it' "$skill" \
         || ! grep -Fq 'stage workers read only their assigned contracts' "$skill"; then
         fail_msg "$skill must project the confirmation and owner/worker context boundary"
       fi
@@ -1529,7 +1530,7 @@ check_codex_native_skill_projection() {
     fi
   done
   if ! grep -Fq 'five-field confirmation card' adapters/codex/skills/autopilot-code/SKILL.md \
-    || ! grep -Fq 'depth-1 owner reads it' adapters/codex/skills/autopilot-code/SKILL.md \
+    || ! grep -Fq 'dispatch-depth-1 owner reads it' adapters/codex/skills/autopilot-code/SKILL.md \
     || grep -Fq '## Projected Portable Details' adapters/codex/skills/autopilot-code/SKILL.md; then
     fail_msg "Codex autopilot-code entry projection must stay compact and delegate contract reading"
   fi
@@ -1596,7 +1597,7 @@ check_codex_native_plugin_projection() {
     fail_msg "Codex native plugin entry Skill must preserve the compact confirmation boundary"
   fi
   if ! grep -Fq 'five-field confirmation card' "$plugin_root/skills/autopilot-code/SKILL.md" \
-    || ! grep -Fq 'depth-1 owner reads it' "$plugin_root/skills/autopilot-code/SKILL.md" \
+    || ! grep -Fq 'dispatch-depth-1 owner reads it' "$plugin_root/skills/autopilot-code/SKILL.md" \
     || grep -Fq '## Projected Portable Details' "$plugin_root/skills/autopilot-code/SKILL.md"; then
     fail_msg "Codex native plugin autopilot-code entry projection must stay compact"
   fi
@@ -2291,7 +2292,7 @@ check_opencode_utility_projection() {
   # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
   # leak window where a newly added utility silently has no projection decision).
   UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh worktree-cleanup.py dispatch-route.sh dispatch-defaults.py worker_bootstrap.py"
-  UTILITY_DEFERRED="artifact-root.test.sh dispatch-artifact-root.test.py worktree-cleanup.test.py dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py token-budget.py token-budget-experiment.py capability-route.py capability_route.test.py dispatch-broker.py dispatch_broker.test.py dispatch-node.py dispatch_node.test.py dispatch-progress.py dispatch_progress.test.py dispatch-registry.py dispatch_registry.test.py dispatch-orphan-watch.py dispatch_orphan_watch.test.py dispatch_adapters_v11.test.py dispatch_contract.py dispatch_contract.test.py dispatch_completion_marker.test.py dispatch_lifecycle.py dispatch_lifecycle.test.py nested-dispatch-eligibility.py nested_dispatch_eligibility.test.py stage-dispatch-fallback.py stage_dispatch_fallback.test.py stage_dispatch_capacity.test.py spec-transaction.py spec_transaction.test.py worker-route-guard.py worker_route_guard.test.py model-worker-governor.py model_worker_governor.test.py resource-runner.py resource_runner.test.py worker_bootstrap.test.py worker_dispatch_prompt.test.py verify-files.sh verify-files.test.sh worktree-residue.py worktree_residue.test.py dispatch_codex_nocommit_fixture.test.py codex_dispatch_terminal.py codex_dispatch_terminal.test.py"
+  UTILITY_DEFERRED="artifact-root.test.sh dispatch-artifact-root.test.py worktree-cleanup.test.py dispatch-liveness.sh dispatch-liveness.test.sh dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py token-budget.py token-budget-experiment.py capability-route.py capability_route.test.py dispatch-broker.py dispatch_broker.test.py dispatch-node.py dispatch_node.test.py dispatch-progress.py dispatch_progress.test.py dispatch-registry.py dispatch_registry.test.py dispatch-orphan-watch.py dispatch_orphan_watch.test.py dispatch_adapters_v11.test.py dispatch_contract.py dispatch_contract.test.py dispatch_completion_marker.test.py dispatch_harvest.test.py dispatch_v20.test.py dispatch_lifecycle.py dispatch_lifecycle.test.py nested-dispatch-eligibility.py nested_dispatch_eligibility.test.py stage-dispatch-fallback.py stage_dispatch_fallback.test.py stage_dispatch_capacity.test.py spec-transaction.py spec_transaction.test.py worker-route-guard.py worker_route_guard.test.py model-worker-governor.py model_worker_governor.test.py resource-runner.py resource_runner.test.py worker_bootstrap.test.py worker_dispatch_prompt.test.py verify-files.sh verify-files.test.sh worktree-residue.py worktree_residue.test.py dispatch_codex_nocommit_fixture.test.py codex_dispatch_terminal.py codex_dispatch_terminal.test.py"
   utility_count=0
   for f in utilities/*; do
     [ -f "$f" ] || continue
@@ -2484,10 +2485,10 @@ check_opencode_native_skill_projection() {
     fi
     if [ "$invocation_class" = "entry-router" ]; then
       if grep -Fq '## Portable Contract' "$skill"; then
-        fail_msg "$skill must keep entry-router procedure detail out of the depth-0 projection"
+        fail_msg "$skill must keep entry-router procedure detail out of the dispatch-depth-0 projection"
       fi
       if ! grep -Fq 'five-field confirmation card' "$skill" \
-        || ! grep -Fq 'depth-1 owner reads it' "$skill" \
+        || ! grep -Fq 'dispatch-depth-1 owner reads it' "$skill" \
         || ! grep -Fq 'stage workers read only their assigned contracts' "$skill"; then
         fail_msg "$skill must project the confirmation and owner/worker context boundary"
       fi
@@ -3835,7 +3836,7 @@ check_fleet_depth2_liveness_regression() {
     fleet.tests.test_dispatch.CodexAttemptIdentityTest.test_namespace_local_visible_pid_is_live_without_route_or_heartbeat \
     fleet.tests.test_f15_rows.FoldingTest.test_portable_persona_child_is_visible_and_drives_exec_without_show_all \
     >"$out" 2>&1; then
-    fail_msg "Fleet depth-2 classifier/default-view conformance regression"
+    fail_msg "Fleet dispatch-depth-2 classifier/default-view conformance regression"
     sed -n '1,160p' "$out"
   fi
   if ! PYTHONDONTWRITEBYTECODE=1 python3 utilities/dispatch_registry.test.py \

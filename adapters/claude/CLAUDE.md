@@ -40,10 +40,10 @@ satisfy the spec-read gate before mutation.
 `autopilot-code` follows the portable intensity graph:
 
 - `direct`: inline, no durable plan.
-- `quick`: one depth-1 one-shot worker with micro-plan, plan-check-lite, focused verification, and concise report.
+- `quick`: one registered-headless dispatch-depth-1 one-shot owner with micro-plan, plan-check-lite, focused verification, and concise report.
 - `standard+`: `code-plan -> code-execute -> code-test -> code-report`, optional `code-refine`, file-only handoff, and the dispatch/fallback rules in `core/OPERATIONS.md §5.10`.
 
-Every standard+ same/cross-harness depth-2 headless target uses
+Every standard+ same/cross-harness dispatch-depth-2 headless target uses
 `stage-dispatch-fallback.py`, which invokes the checked adapter wrapper directly.
 Dispatch contract v3 atomically claims one stable attempt row before spawn and
 starts no child for a duplicate claim. Broker v1/v2 routes are read-only migration
