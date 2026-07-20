@@ -429,7 +429,7 @@ their runtimes exit on limit.) Patterns are conservative per 2026-07 issue evide
 
 ### SD-48~50 nested dispatch recovery — realized
 
-OpenCode independently enforces checked depth-2 tuple evidence and the
+OpenCode independently enforces checked dispatch-depth-2 tuple evidence and the
 inherited canonical global attempt registry. Its preflight exposes
 `nested-headless` and the portable ordered `dispatch-chain`; unsupported or
 unknown tuples remain explicit rather than borrowing another adapter's PASS.

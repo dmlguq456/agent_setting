@@ -1,7 +1,7 @@
 #!/bin/sh
 # PreToolUse(Skill): SD-11 → SD-11b stage-dispatch gate.
-#   A depth-1 conductor at standard+ intensity must dispatch each durable stage
-#   (code-plan/execute/test/report) as its own depth-2 headless session
+#   A dispatch-depth-1 conductor at standard+ intensity must dispatch each durable stage
+#   (code-plan/execute/test/report) as its own dispatch-depth-2 headless session
 #   (dev-pipeline Step 1~7), not invoke code-<stage> in-session.
 #
 #   SD-11 shipped this as a *soft reminder* because the hook could not tell a
@@ -15,8 +15,8 @@
 #   Decision (else clean exit 0 / silent):
 #     conductor_code_stage = CLAUDE_CODE_CHILD_SESSION=1 AND AGENT_DISPATCH_DEPTH=1
 #                            AND skill ∈ {code-plan,code-execute,code-test,code-report}
-#     · not conductor_code_stage        → silent (main, depth-2 stage session, non-code)
-#     · intensity ∈ {direct,quick}      → silent (direct inline; quick is a depth-1 one-shot worker)
+#     · not conductor_code_stage        → silent (main, dispatch-depth-2 stage session, non-code)
+#     · intensity ∈ {direct,quick}      → silent (direct inline; quick is a dispatch-depth-1 one-shot worker)
 #     · intensity ∈ {standard,strong,thorough,adversarial}:
 #         · STAGE_DISPATCH_INLINE_OK=1   → soft reminder (orchestrator granted an explicit
 #                                          inline opt-out — e.g. a self-modification cycle
@@ -31,7 +31,7 @@
 #     CLI mode         → "⛔ ..." on stderr, exit 2
 #
 #   Portable CLI (conformance): stage-dispatch-reminder.sh --skill <name>
-#     [--cwd <dir>] [--session <id>] [--depth <n>] [--intensity <i>]
+#     [--cwd <dir>] [--session <id>] [--dispatch-depth <n>] [--intensity <i>]
 #   Without args, reads Claude PreToolUse hook JSON from stdin.
 
 # Recursion guard: never trigger in a distiller session.
@@ -45,7 +45,7 @@ is_code_stage() {
   return 1
 }
 
-# conductor_code_stage — whether a depth-1 conductor is invoking code-<stage> in-session.
+# conductor_code_stage — whether a dispatch-depth-1 conductor invokes code-<stage> in-session.
 conductor_code_stage() { # $1=skill $2=depth ; env: CLAUDE_CODE_CHILD_SESSION
   [ "${CLAUDE_CODE_CHILD_SESSION:-}" = "1" ] || return 1
   [ "$2" = "1" ] || return 1
@@ -67,13 +67,15 @@ print(json.dumps(out, ensure_ascii=False))' "$1"
 
 emit_reminder() { # $1=skill
   self="${AGENT_DISPATCH_SELF_SLUG:-\$AGENT_DISPATCH_SELF_SLUG}"
-  msg="📌 stage-dispatch: this session is a depth-1 conductor (intensity=${AGENT_DISPATCH_INTENSITY:-?}). Dispatch ${1} with dispatch-headless.py --depth 2 --parent ${self} --worker-type stage --assigned-contract ${1}, then harvest it with dispatch-wait (dev-pipeline steps 1-7). Invoke the Skill in-session only for direct inline work, a quick one-shot worker, or a runtime fallback where headless dispatch is unavailable."
+  node=${1#code-}
+  msg="📌 stage-dispatch: this session is a dispatch-depth-1 conductor (intensity=${AGENT_DISPATCH_INTENSITY:-?}). Dispatch ${1} route-bound with dispatch-node.py --route <route-file> --node ${node} --adapter <adapter> --action start --slug <stage-slug> --parent ${self} -- --jobs <canonical-jobs.log>; capture the emitted attempt_id, harvest with dispatch-wait, then complete that exact route/node/attempt (dev-pipeline steps 1-7). Invoke the Skill in-session only for direct inline work, a quick one-shot worker, or a runtime fallback where registered headless dispatch is unavailable."
   _json_wrap context "$msg"
 }
 
 emit_deny() { # $1=skill
   self="${AGENT_DISPATCH_SELF_SLUG:-\$AGENT_DISPATCH_SELF_SLUG}"
-  msg="⛔ stage-dispatch denied: a depth-1 conductor (intensity=${AGENT_DISPATCH_INTENSITY:-?}) invoked ${1} in-session. At standard+ intensity, dispatch the stage as depth-2 headless work with dispatch-headless.py --depth 2 --parent ${self} --worker-type stage --assigned-contract ${1}, then harvest it with dispatch-wait. A legitimate inline case such as a self-modification cycle requires the orchestrator to set STAGE_DISPATCH_INLINE_OK=1 when launching; the conductor cannot grant itself an exception (§8.6.3)."
+  node=${1#code-}
+  msg="⛔ stage-dispatch denied: a dispatch-depth-1 conductor (intensity=${AGENT_DISPATCH_INTENSITY:-?}) invoked ${1} in-session. At standard+ intensity, use dispatch-node.py --route <route-file> --node ${node} --adapter <adapter> --action start --slug <stage-slug> --parent ${self} -- --jobs <canonical-jobs.log>; capture attempt_id, harvest with dispatch-wait, and complete that exact route/node/attempt. A legitimate inline case such as a self-modification cycle requires the orchestrator to set STAGE_DISPATCH_INLINE_OK=1 when launching; the conductor cannot grant itself an exception (§8.6.3)."
   if [ "$HOOK_MODE" -eq 1 ]; then
     _json_wrap deny "$msg"
     exit 0
@@ -109,7 +111,7 @@ if [ "$#" -gt 0 ]; then
       --skill) skill=$2; shift 2 ;;
       --cwd) shift 2 ;;
       --session) shift 2 ;;
-      --depth) depth=$2; shift 2 ;;
+      --dispatch-depth) depth=$2; shift 2 ;;
       --intensity) intensity=$2; shift 2 ;;
       -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
       *) echo "stage-dispatch-reminder: unknown arg '$1'" >&2; exit 64 ;;

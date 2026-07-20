@@ -24,7 +24,7 @@ class AdapterV11Test(unittest.TestCase):
   art=root/".agent_reports"; art.mkdir(); return repo,art
  def command(self,harness,action,repo,jobs,logs,status="supported"):
   wrapper,model=ADAPTERS[harness]
-  return wrapper+[f"--{action}","--worktree",str(repo),"--slug",f"{harness}-v11","--capability","autopilot-code","--mode","dev/backend","--intensity","standard","--depth","2","--parent","owner","--worker-role","code-plan","--owner","autopilot-code","--jobs",str(jobs),"--log-dir",str(logs),"--attempt-id",f"att-{harness}-fixture-0001","--parent-harness",harness,"--parent-transport","headless","--parent-sandbox","fixture","--launch-authority","conductor","--nested-eligibility",status,"--eligibility-source",f"{harness}-fixture","--fallback-ordinal","1"]+model
+  return wrapper+[f"--{action}","--worktree",str(repo),"--slug",f"{harness}-v11","--capability","autopilot-code","--mode","dev/backend","--intensity","standard","--dispatch-depth","2","--parent","owner","--worker-role","code-plan","--owner","autopilot-code","--jobs",str(jobs),"--log-dir",str(logs),"--attempt-id",f"att-{harness}-fixture-0001","--parent-harness",harness,"--parent-transport","headless","--parent-sandbox","fixture","--launch-authority","conductor","--nested-eligibility",status,"--eligibility-source",f"{harness}-fixture","--fallback-ordinal","1"]+model
  def test_sibling_registry_rows_and_nested_refusal(self):
   for harness in ADAPTERS:
    with self.subTest(harness=harness), tempfile.TemporaryDirectory() as td:
@@ -55,7 +55,7 @@ class AdapterV11Test(unittest.TestCase):
    claude_config=root/"claude"; (claude_config/"session-env").mkdir(parents=True)
    command=[sys.executable,str(ROOT/"adapters/codex/bin/dispatch-headless.py"),"--dry-run",
             "--worktree",str(repo),"--slug","codex-owner","--capability","autopilot-code",
-            "--mode","dev/backend","--intensity","standard","--depth","1","--worker-type","owner",
+            "--mode","dev/backend","--intensity","standard","--dispatch-depth","1","--worker-type","owner",
             "--model","gpt-test","--reasoning","low","--log-dir",str(logs)]
    env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),
         "CLAUDE_CONFIG_DIR":str(claude_config)}
@@ -74,7 +74,7 @@ class AdapterV11Test(unittest.TestCase):
   wrapper=importlib.util.module_from_spec(spec);spec.loader.exec_module(wrapper)
   args=type("Args",(),{
    "worktree":"/work/repo","artifact_root":"/artifacts","nested_headless_network":False,
-   "agent_home":ROOT,"depth":2,"route_id":"rt-1","attempt_id":"att-stage-1",
+   "agent_home":ROOT,"dispatch_depth":2,"route_id":"rt-1","attempt_id":"att-stage-1",
    "sandbox":"workspace-write","resolved_model_settings":{"source":"inherit"},"approval":"inherit"})()
   command=wrapper.shell_command(args,Path("/prompt"),Path("/log"))
   self.assertIn(f"--add-dir {ROOT / '.dispatch'}",command)
@@ -83,7 +83,7 @@ class AdapterV11Test(unittest.TestCase):
   wrapper=self.load_wrapper("codex")
   args=type("Args",(),{
    "worktree":"/work/repo","artifact_root":"/artifacts","nested_headless_network":False,
-   "agent_home":ROOT,"depth":2,"route_id":"rt-1","attempt_id":"att-stage-1",
+   "agent_home":ROOT,"dispatch_depth":2,"route_id":"rt-1","attempt_id":"att-stage-1",
    "sandbox":"workspace-write","launch_lifecycle":"foreground-scoped",
    "parent_harness":"codex","parent_transport":"headless","parent_sandbox":"workspace-write",
    "resolved_model_settings":{"source":"inherit"},"approval":"inherit"})()
@@ -145,9 +145,12 @@ class AdapterV11Test(unittest.TestCase):
   for harness in ("codex","claude"):
    with self.subTest(harness=harness), tempfile.TemporaryDirectory() as td:
     jobs=Path(td)/"jobs.log"; worktree="/fixture/worktree"; slug="stage"
+    contract=("attempt_schema_version=2,dispatch_depth=2,transport=headless,"
+              "execution_surface=registered-headless,registered_worker=1,"
+              "fallback_hop=same-harness-headless")
     jobs.write_text(
-     f"2026-07-20T00:00:00Z\topen\t/repo\t{worktree}\t{slug}\tattempt_id=att-a\n"
-     f"2026-07-20T00:00:01Z\topen\t/repo\t{worktree}\t{slug}\tattempt_id=att-b\n",encoding="utf-8")
+     f"2026-07-20T00:00:00Z\topen\t/repo\t{worktree}\t{slug}\t{contract},attempt_id=att-a\n"
+     f"2026-07-20T00:00:01Z\topen\t/repo\t{worktree}\t{slug}\t{contract},attempt_id=att-b\n",encoding="utf-8")
     wrapper=self.load_wrapper(harness)
     self.assertTrue(wrapper.close_job_row(jobs,slug,worktree,"timeout","","att-a"))
     rows=jobs.read_text(encoding="utf-8").splitlines()

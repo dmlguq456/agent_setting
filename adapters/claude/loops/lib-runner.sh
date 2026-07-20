@@ -171,7 +171,7 @@ _loop_register_dispatch_job() {
   [ "${DRILL_FLEET_REGISTRY:-1}" = "0" ] && return 0
   local status=$1 adapter=$2 pf=$3 repo=$4 slug=$5
   local death_reason="${6:-}" reset="${7:-}"
-  local jobs ts case_id git_root parent_sid parent_cwd parent_slug mode worker_role pipe line
+  local jobs ts case_id git_root parent_sid parent_cwd parent_slug mode pipe line
   jobs=$(_loop_jobs_path)
   ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   case_id=$(_loop_case_id "$pf")
@@ -184,8 +184,7 @@ _loop_register_dispatch_job() {
   parent_cwd="${DRILL_FLEET_PARENT_CWD:-}"
   parent_slug="${DRILL_FLEET_PARENT_SLUG:-}"
   mode=$(_loop_registry_value "${DRILL_FLEET_MODE:-loop/drill}")
-  worker_role=$(_loop_registry_value "${DRILL_FLEET_WORKER_ROLE:-$case_id}")
-  pipe="capability=drill,mode=$mode,qa=quick,intensity=quick,depth=1,harness=$(_loop_registry_value "$adapter"),worker_role=$worker_role,owner=drill"
+  pipe="capability=drill,mode=$mode,qa=quick,intensity=quick,attempt_schema_version=2,attempt_id=att-$slug,dispatch_depth=1,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless,harness=$(_loop_registry_value "$adapter"),worker_type=owner,assigned_contract=drill,owner=drill"
   if [ -n "$parent_sid" ]; then
     pipe="$pipe,parent_sid=$(_loop_registry_value "$parent_sid")"
   fi

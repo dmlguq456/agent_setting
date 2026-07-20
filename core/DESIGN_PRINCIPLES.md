@@ -186,11 +186,11 @@ After five accumulated minor changes, surface an `/audit` alert. Audit compares 
 
 ## 5. Quality Gates
 
-Quality gates live inside the selected graph. Intensity chooses the graph; derived verification rigor scales plan checks, selected independent passes, and final verification. A high rigor tier does not secretly open stages, repeat loops, or depth-2 workers.
+Quality gates live inside the selected graph. Intensity chooses the graph; derived verification rigor scales plan checks, selected independent passes, and final verification. A high rigor tier does not secretly open stages, repeat loops, or dispatch-depth-2 workers.
 
 - QA assurance levels—quick, light, standard, thorough, adversarial—are check budgets defined in `CONVENTIONS §1`, not graph selectors.
 - Stage-local gates stay small and answer only whether the next stage may proceed.
-- Independent QA runs where intensity and risk call for it: the strongest risk point at strong, bounded depth 2 at thorough, and adversary/security/claim verification at adversarial.
+- Independent QA runs where intensity and risk call for it: the strongest risk point at strong, bounded dispatch depth 2 at thorough, and adversary/security/claim verification at adversarial.
 - Fact and source checking applies to selected document, research, refinement, and note claims. Code uses code, tests, and runtime behavior as ground truth. `--no-fact-check` remains limited to capabilities that expose it.
 - In paper mode, integrate reviewer feedback naturally. Do not paste an entire table or enumeration into prose. If one or two inline sentences cannot express it, drop it or move it to an appendix. The four-step Paragraph Cohesion Pre-Check evaluates substantive duplication, paragraph axis, cross-section redundancy, and the EDIT/REPLACE/INSERT/DROP action before a mechanical insert.
 
@@ -237,7 +237,7 @@ Efficiency is not corner cutting. Reduce duplicated orchestrator reasoning, not 
 
 - Preserve QA rounds selected by the graph, rich role prompts, and required verification.
 - Remove repeated orchestrator reading and summarization and the accumulation of large result bodies in context.
-- Protect depth-0 context first: before route confirmation, main uses compact
+- Protect dispatch-depth-0 context first: before route confirmation, main uses compact
   entry metadata and the routing map rather than loading full Skill bodies or
   references. The user receives a completed five-field proposal, which changes
   the task from route generation to error recognition.
@@ -245,8 +245,8 @@ Efficiency is not corner cutting. Reduce duplicated orchestrator reasoning, not 
   envelope: artifact path, `PASS|FAIL|BLOCKED`, and a one-line blocker. Changed
   files, commands, logs, findings, and reasoning stay in the artifact; worker
   output is a machine handoff, not a user-facing report.
-- At `standard+`, the depth-1 owner reads the selected entry contract and
-  extends file-only handoff to depth-2 stages. Each plan, execute, test, and
+- At `standard+`, the dispatch-depth-1 owner reads the selected entry contract and
+  extends file-only handoff to dispatch-depth-2 stages. Each plan, execute, test, and
   report worker reads only its stage contract and writes a complete artifact
   for the next stage. Main retains route, state, artifact paths, and verdicts;
   the owner remains a thin conductor. If a file cannot carry required context,
@@ -307,5 +307,5 @@ Cross-adapter completion and active-context budgets live only in `ADAPTATION §2
 | §5 | `bf8d565` rejected pasting a rebuttal table into paper prose after the ICML camera-ready incident; the four-step cohesion check followed |
 | §6 | `3f5a48c` created the translation role; `cfb0e12` renamed and expanded it into editorial ownership |
 | §7 | `60f141a` created the notes flow, now `/post-it`, separating explicit retention from agent learning |
-| §8 | A 2026-07-06 single-owner design was reversed on 2026-07-10 into stage dispatch with file-only depth-2 handoff |
+| §8 | A 2026-07-06 single-owner design was reversed on 2026-07-10 into stage dispatch with file-only dispatch-depth-2 handoff |
 | §10 | The 2026-07-13 Skill-design refactor placed Pocock's four levers plus predictability here and scan-ready quantitative rules in `CONVENTIONS §5.6a` |

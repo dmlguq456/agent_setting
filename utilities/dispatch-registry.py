@@ -16,8 +16,9 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "utilities")]
 from tools.fleet.model import ATTEMPT_CLASSIFIER_SOURCE, classify_attempt_evidence  # noqa: E402
-from dispatch_contract import (close_attempt_row_if, reconcile_local_registry,
-                               resolve_agent_home)  # noqa: E402
+from dispatch_contract import (DispatchContractError, close_attempt_row_if,
+                               reconcile_local_registry, resolve_agent_home,
+                               validate_attempt_metadata)  # noqa: E402
 from codex_dispatch_terminal import inspect_terminal_log  # noqa: E402
 _cleanup_spec = importlib.util.spec_from_file_location("worktree_cleanup", ROOT / "utilities/worktree-cleanup.py")
 cleanup = importlib.util.module_from_spec(_cleanup_spec)
@@ -37,9 +38,23 @@ def read_rows(jobs):
     for order, line in enumerate(jobs.read_text(encoding="utf-8", errors="replace").splitlines()):
         fields = line.split("\t")
         if len(fields) != 6: continue
+        meta = parse_meta(fields[5])
+        raw_schema = meta.get("attempt_schema_version")
+        legacy = raw_schema in (None, "", "1")
+        contract_status = (
+            "legacy-read-only" if legacy
+            else "current" if raw_schema == "2"
+            else "invalid:attempt-schema-version"
+        )
+        if contract_status == "current":
+            try:
+                validate_attempt_metadata(meta)
+            except DispatchContractError as exc:
+                contract_status = f"invalid:{exc.reason}"
         rows.append({"order": order, "timestamp": fields[0], "status": fields[1],
                      "repo": fields[2], "worktree": fields[3], "slug": fields[4],
-                     "pipe": fields[5], "meta": parse_meta(fields[5]), "raw": line})
+                     "pipe": fields[5], "meta": meta, "raw": line,
+                     "legacy_read_only": legacy, "attempt_contract_status": contract_status})
     return rows
 
 
@@ -134,6 +149,8 @@ def terminal_marker(row, home):
     marker_path = home / ".dispatch" / "completion" / route / f"{node}.json"
     try: marker = json.loads(marker_path.read_text(encoding="utf-8"))
     except (OSError, ValueError): return False, "terminal-marker-invalid"
+    if marker.get("schema_version") != 2 or not _marker_backed_repair(row, home):
+        return False, "terminal-marker-attempt-link-invalid"
     evidence_record = marker.get("evidence") if isinstance(marker.get("evidence"), dict) else {}
     evidence = Path(str(evidence_record.get("path", "")))
     if (marker.get("route_id") != route or marker.get("route_hash") != route_hash
@@ -186,33 +203,62 @@ def _marker_backed_repair(row, home):
     if not (route_id and node and attempt_id and home): return False
     safe_attempt = "".join(c if c.isalnum() or c in "._-" else "_" for c in attempt_id)
     directory = home / ".dispatch" / "completion" / route_id
-    linkage = None
-    # Per-attempt linkage is immutable, so a later retry cannot erase the
-    # repair evidence for an earlier attempt. The canonical sibling remains a
-    # compatibility fallback for markers written before this fix-forward.
-    for linkage_path in (
-        directory / f"{node}.{safe_attempt}.attempt.json",
-        directory / f"{node}.attempt.json",
+    linkage_path = directory / f"{node}.{safe_attempt}.attempt.json"
+    try:
+        linkage = json.loads(linkage_path.read_text(encoding="utf-8"))
+        history_path = Path(linkage["completion_marker_history"])
+        marker = json.loads(history_path.read_text(encoding="utf-8"))
+    except (KeyError, OSError, TypeError, ValueError):
+        return False
+    row_registered = str(meta.get("registered_worker", "")).lower() in {"1", "true"}
+    expected_axes = {
+        "dispatch_depth": int(meta["dispatch_depth"]),
+        "transport": meta.get("transport"),
+        "execution_surface": meta.get("execution_surface"),
+        "registered_worker": row_registered,
+        "fallback_hop": meta.get("fallback_hop") or None,
+    }
+    expected_link = {
+        "schema_version": 2,
+        "route_id": route_id,
+        "node_id": node,
+        "attempt_id": attempt_id,
+        **expected_axes,
+        "completion_marker": str(directory / f"{node}.json"),
+    }
+    if any(linkage.get(key) != value for key, value in expected_link.items()):
+        return False
+    expected_history = directory / f"{node}.{marker.get('sequence')}.json"
+    if history_path != expected_history or marker.get("schema_version") != 2:
+        return False
+    if (
+        marker.get("route_id") != route_id
+        or marker.get("route_hash") != meta.get("route_hash")
+        or marker.get("registry_digest") != meta.get("registry_digest")
+        or marker.get("node_id") != node
+        or marker.get("attempt_id") != attempt_id
+        or marker.get("completion_gate") != meta.get("completion_gate")
+        or any(marker.get(key) != value for key, value in expected_axes.items())
+        or marker.get("evidence", {}).get("sha256") != linkage.get("evidence_sha256")
     ):
-        try:
-            candidate = json.loads(linkage_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        if (candidate.get("attempt_id") == attempt_id
-                and candidate.get("route_id") == route_id
-                and candidate.get("node_id") == node):
-            linkage = candidate
-            break
-    if linkage is None: return False
-    marker_path = home / ".dispatch" / "completion" / route_id / f"{node}.json"
-    return marker_path.is_file()
+        return False
+    try:
+        evidence = Path(marker["evidence"]["path"])
+        return (
+            evidence.is_absolute()
+            and evidence.is_file()
+            and hashlib.sha256(evidence.read_bytes()).hexdigest()
+            == linkage.get("evidence_sha256")
+        )
+    except (KeyError, OSError, TypeError):
+        return False
 
 
 def resolve_owner_route(row, rows=None):
     """Resolve an owner's immutable route from itself or its registered children.
 
-    Real depth-1 owner rows predate route compilation and therefore normally
-    carry no route_id/route_file. Depth-2 child rows do carry both. Derivation
+    Real dispatch-depth-1 owner rows predate route compilation and therefore normally
+    carry no route_id/route_file. Dispatch-depth-2 child rows do carry both. Derivation
     is limited to exact children in the same repo/worktree and fails closed on
     any disagreement, including disagreement with direct owner metadata.
     Terminal child rows remain valid provenance for an unstarted successor.
@@ -315,6 +361,10 @@ def resume_boundary(route_file, incomplete_nodes):
 def classify(row, args, newest_orders, rows=None):
     if row["status"] not in OPEN: return "terminal", "already-terminal", None
     meta = row["meta"]
+    if row.get("legacy_read_only"):
+        return "legacy-read-only", "legacy-attempt-row", None
+    if row.get("attempt_contract_status") != "current":
+        return "contract-invalid", row.get("attempt_contract_status", "invalid"), None
     terminal = inspect_terminal_log(meta.get("log_file"))
     if (
         meta.get("attempt_id")

@@ -81,7 +81,7 @@ The Claude Code adapter maps portable roles from `core/CONVENTIONS.md §2` to co
 | `fast writer` | `sonnet` | Assemble verified artifacts into a final report |
 | `deep reviewer` | `opus` | methodology, domain expertise, completeness, safety/security, architecture risk |
 | `deep maker` | `opus` | Planning, research synthesis, and visual/editorial work requiring high judgment |
-| `deep orchestrator` | `opus` high | Stage gates, failover, and evidence judgment for standard+ depth-1 ownership |
+| `deep orchestrator` | `opus` high | Stage gates, failover, and evidence judgment for standard+ dispatch-depth-1 ownership |
 | `fast implementer` | `sonnet` | Routine implementation and refactoring; escalate complex API/library design |
 | `orchestrator` | `sonnet` medium | Balanced mechanical coordination of decided calls, paths, and states |
 | `external adversary` | Codex CLI via `codex-review-team` | Independent hostile review for adversarial intensity |

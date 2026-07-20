@@ -54,7 +54,10 @@ def _canonical(payload):
 
 
 def route_hash(record):
-    bare = {k: v for k, v in record.items() if k not in ("route_hash", "route_id")}
+    bare = {
+        k: v for k, v in record.items()
+        if k not in ("route_hash", "route_id") and not k.startswith("_fleet_")
+    }
     return "sha256:" + hashlib.sha256(_canonical(bare)).hexdigest()
 
 
@@ -62,6 +65,45 @@ def clear_cache():
     """Test hermeticity: drop the mtime+size caches (model.reset_state_tracker() precedent)."""
     _CACHE.clear()
     _MARKER_CACHE.clear()
+
+
+def _valid_attempt_axes(marker, node):
+    """Validate the schema-2 attempt tuple before it can publish a gate."""
+    depth = marker.get("dispatch_depth")
+    transport = marker.get("transport")
+    surface = marker.get("execution_surface")
+    registered = marker.get("registered_worker")
+    fallback = marker.get("fallback_hop")
+    if depth != node.get("dispatch_depth") or depth not in {0, 1, 2}:
+        return False
+    if transport not in {"headless", "interactive"}:
+        return False
+    if surface not in {
+        "registered-headless", "codex-native-subagent",
+        "claude-subagent", "inline",
+    }:
+        return False
+    if not isinstance(registered, bool):
+        return False
+    if registered != (surface == "registered-headless"):
+        return False
+    if depth == 0:
+        return (
+            transport == "interactive"
+            and surface == "inline"
+            and registered is False
+            and fallback is None
+        )
+    if surface == "registered-headless":
+        return (
+            transport == "headless"
+            and fallback in {
+                "same-harness-headless", "cross-harness-headless",
+            }
+        )
+    if surface in {"codex-native-subagent", "claude-subagent"}:
+        return transport == "headless" and fallback == "native-subagent"
+    return surface == "inline" and fallback == "inline"
 
 
 def _load_uncached(abspath):
@@ -72,8 +114,9 @@ def _load_uncached(abspath):
         return None
     if not isinstance(record, dict):
         return None
-    if record.get("schema_version") != 1:
-        return None   # future schema — do not guess-interpret (prd.md:481 sync obligation)
+    schema_version = record.get("schema_version", 1)
+    if schema_version not in {1, 2}:
+        return None
     digest = record.get("route_hash")
     if not isinstance(digest, str):
         return None
@@ -91,7 +134,50 @@ def _load_uncached(abspath):
     for n in nodes:
         if not isinstance(n, dict) or not isinstance(n.get("id"), str):
             return None
-    return record
+    if schema_version == 2:
+        if record.get("dispatch_contract_version") != 3:
+            return None
+        if record.get("owner_dispatch_depth") not in {0, 1}:
+            return None
+        if record.get("max_dispatch_depth") not in {0, 1, 2}:
+            return None
+        if any(key in record for key in ("depth", "owner_depth", "max_depth")):
+            return None
+        observed_dispatch_depths = [record["owner_dispatch_depth"]]
+        for node in nodes:
+            if node.get("kind") == "resource-runner":
+                if any(
+                    key in node
+                    for key in (
+                        "depth", "owner_depth", "max_depth", "dispatch_depth",
+                        "transport", "fallback_hops",
+                    )
+                ):
+                    return None
+                if node.get("resource_transport") != "detached-process":
+                    return None
+                continue
+            if (
+                any(key in node for key in ("depth", "owner_depth", "max_depth"))
+                or node.get("dispatch_depth") not in {0, 1, 2}
+            ):
+                return None
+            observed_dispatch_depths.append(node["dispatch_depth"])
+            if "dispatch_fallback" in node:
+                return None
+            for hop in node.get("fallback_hops", []):
+                if not isinstance(hop, dict) or hop.get("fallback_hop") not in {
+                    "same-harness-headless", "cross-harness-headless",
+                    "native-subagent", "inline",
+                }:
+                    return None
+        if record["max_dispatch_depth"] != max(observed_dispatch_depths):
+            return None
+    result = dict(record)
+    result["_fleet_schema_status"] = (
+        "current" if schema_version == 2 else "legacy-read-only"
+    )
+    return result
 
 
 def load(path, expect_hash=None, expect_id=None):
@@ -147,13 +233,15 @@ def _load_marker_uncached(abspath):
         return None
     if not isinstance(marker, dict):
         return None
-    if not isinstance(marker.get("route_id"), str) or not isinstance(marker.get("route_hash"), str):
+    if (
+        marker.get("schema_version") != 2
+        or not isinstance(marker.get("route_id"), str)
+        or not isinstance(marker.get("route_hash"), str)
+        or not isinstance(marker.get("sequence"), int)
+        or marker.get("sequence") < 1
+    ):
         return None
     return marker
-    # NOTE: `sequence`/`completed_at`/`schema_version` are deliberately NOT required. The
-    # repo's first real markers (.dispatch/completion/rt-5fd84b9bcf8a799c/, SD-56) carry only
-    # route_id/route_hash/registry_digest/node_id/completion_gate/evidence — demanding the
-    # writer's optional fields would reject the very evidence this feature exists to read.
 
 
 def _load_marker(abspath):
@@ -216,14 +304,83 @@ def gate_mark(record, node_id, home=None):
         return None
     if os.sep in node_id or (os.altsep and os.altsep in node_id):
         return None   # a node id is an identifier, never a path — refuse to traverse
-    directory = os.path.join(home or _completion_home(), ".dispatch", "completion", route_id)
-    path = _latest_marker_path(directory, node_id)
-    if not path:
+    if record.get("schema_version") != 2 or record.get("dispatch_contract_version") != 3:
         return None
+    node = next(
+        (candidate for candidate in record.get("nodes", []) if candidate.get("id") == node_id),
+        None,
+    )
+    if node is None:
+        return None
+    directory = os.path.join(home or _completion_home(), ".dispatch", "completion", route_id)
+    path = os.path.join(directory, node_id + ".json")
     marker = _load_marker(path)
     if marker is None:
         return None
-    if marker.get("route_id") != route_id or marker.get("route_hash") != route_hash_val:
+    if (
+        marker.get("route_id") != route_id
+        or marker.get("route_hash") != route_hash_val
+        or marker.get("registry_digest") != record.get("registry_digest")
+        or marker.get("node_id") != node_id
+        or marker.get("completion_gate") != node.get("completion_gate")
+    ):
+        return None
+    history_path = os.path.join(directory, "%s.%d.json" % (node_id, marker["sequence"]))
+    history = _load_marker(history_path)
+    if history != marker:
+        return None
+    evidence = marker.get("evidence")
+    if not isinstance(evidence, dict) or not os.path.isabs(str(evidence.get("path", ""))):
+        return None
+    try:
+        with open(evidence["path"], "rb") as handle:
+            if hashlib.sha256(handle.read()).hexdigest() != evidence.get("sha256"):
+                return None
+    except OSError:
+        return None
+    if node.get("kind") == "resource-runner":
+        if (
+            marker.get("attempt_id") is not None
+            or marker.get("dispatch_depth") is not None
+            or marker.get("transport") is not None
+            or marker.get("execution_surface") is not None
+            or marker.get("registered_worker") is not False
+            or marker.get("fallback_hop") is not None
+        ):
+            return None
+        return True
+    attempt_id = marker.get("attempt_id")
+    if not isinstance(attempt_id, str) or not attempt_id:
+        return None
+    if marker.get("dispatch_depth") != node.get("dispatch_depth"):
+        return None
+    if not _valid_attempt_axes(marker, node):
+        return None
+    safe_attempt = "".join(
+        character if character.isalnum() or character in "._-" else "_"
+        for character in attempt_id
+    )
+    link_path = os.path.join(directory, "%s.%s.attempt.json" % (node_id, safe_attempt))
+    try:
+        with open(link_path, encoding="utf-8") as handle:
+            link = json.load(handle)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    expected_link = {
+        "schema_version": 2,
+        "route_id": route_id,
+        "node_id": node_id,
+        "attempt_id": attempt_id,
+        "dispatch_depth": marker.get("dispatch_depth"),
+        "transport": marker.get("transport"),
+        "execution_surface": marker.get("execution_surface"),
+        "registered_worker": marker.get("registered_worker"),
+        "fallback_hop": marker.get("fallback_hop"),
+        "evidence_sha256": evidence.get("sha256"),
+        "completion_marker": path,
+        "completion_marker_history": history_path,
+    }
+    if any(link.get(key) != value for key, value in expected_link.items()):
         return None
     return True
 

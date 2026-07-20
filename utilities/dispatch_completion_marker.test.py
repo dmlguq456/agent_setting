@@ -67,11 +67,13 @@ class CompletionMarkerTest(unittest.TestCase):
             "workflow_mode": "tracked",
             "artifact_guard": {"satisfied": True, "source": "fixture"},
         }
-        return ROUTE.compile_route(
+        route = ROUTE.compile_route(
             "autopilot-code", "dev", "strong", self.repo, self.artifact,
             signals=["shared-contract"], transport="headless", tracking="tracked",
             tracked_gate_evidence=gate, dispatch_evidence=evidence,
         )
+        self.current_route = route
+        return route
 
     def as_v2(self, route):
         # Hand-forced historical v2 shape for the read-only compatibility
@@ -127,7 +129,7 @@ class CompletionMarkerTest(unittest.TestCase):
         return wrapper + [
             f"--{action}", "--worktree", str(self.repo), "--slug", f"{harness}-{node_id}",
             "--capability", "autopilot-code", "--mode", "dev/backend",
-            "--intensity", route["effective_intensity"], "--depth", "2", "--parent", "owner",
+            "--intensity", route["effective_intensity"], "--dispatch-depth", "2", "--parent", "owner",
             "--worker-role", "code-" + node_id, "--owner", "autopilot-code",
             "--jobs", str(self.jobs), "--log-dir", str(self.logs),
             "--parent-harness", harness, "--parent-transport", "headless", "--parent-sandbox", "fixture",
@@ -139,12 +141,38 @@ class CompletionMarkerTest(unittest.TestCase):
             "--write-scope", ";".join(node["write_scope"]),
         ] + model
 
-    def complete(self, route_path, node_id, evidence_path, jobs=None, attempt_id=None):
+    def complete(self, route_path, node_id, evidence_path, jobs=None, attempt_id=None, attempt_axes=None):
+        if jobs is None and attempt_id is None:
+            attempt_id = f"att-inline-{node_id}-fixture"
+            attempt_axes = {
+                "dispatch_depth": 2,
+                "transport": "interactive",
+                "execution_surface": "inline",
+                "registered_worker": "0",
+                "fallback_hop": "inline",
+            }
         command = [sys.executable, str(ROOT / "utilities/capability-route.py"), "complete",
                    "--route", str(route_path), "--node", node_id, "--evidence", str(evidence_path)]
         if jobs is not None: command += ["--jobs", str(jobs)]
         if attempt_id is not None: command += ["--attempt-id", attempt_id]
+        if attempt_axes is not None:
+            command += [
+                "--dispatch-depth", str(attempt_axes["dispatch_depth"]),
+                "--transport", attempt_axes["transport"],
+                "--execution-surface", attempt_axes["execution_surface"],
+                "--registered-worker", str(attempt_axes["registered_worker"]),
+                "--fallback-hop", attempt_axes["fallback_hop"],
+            ]
         return subprocess.run(command, text=True, capture_output=True, env=self.base_env())
+
+    def registered_axes(self):
+        return {
+            "dispatch_depth": 2,
+            "transport": "headless",
+            "execution_surface": "registered-headless",
+            "registered_worker": "1",
+            "fallback_hop": "same-harness-headless",
+        }
 
     # fixture 6 -----------------------------------------------------------
     def test_complete_writes_canonical_marker(self):
@@ -216,7 +244,7 @@ class CompletionMarkerTest(unittest.TestCase):
                 command = wrapper + [
                     "--start", "--worktree", str(self.repo), "--slug", f"{harness}-unbound",
                     "--capability", "autopilot-code", "--mode", "dev/backend",
-                    "--intensity", "standard", "--depth", "2", "--parent", "owner",
+                    "--intensity", "standard", "--dispatch-depth", "2", "--parent", "owner",
                     "--worker-role", "code-execute", "--owner", "autopilot-code",
                     "--jobs", str(self.jobs), "--log-dir", str(self.logs),
                     "--parent-harness", harness, "--parent-transport", "headless", "--parent-sandbox", "fixture",
@@ -248,6 +276,25 @@ class CompletionMarkerTest(unittest.TestCase):
                     offenders.append(str(path))
         self.assertEqual(offenders, [])
 
+    def test_dependency_gate_rejects_schema_less_or_unlinked_marker(self):
+        route = self.compile_route()
+        route_path = self.write_route(route)
+        evidence = self.base / "plan.md"
+        evidence.write_text("plan body\n", encoding="utf-8")
+        completed = self.complete(route_path, "plan", evidence)
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        directory = self.agent_home / ".dispatch" / "completion" / route["route_id"]
+        canonical = directory / "plan.json"
+        marker = json.loads(canonical.read_text(encoding="utf-8"))
+        marker.pop("schema_version")
+        canonical.write_text(json.dumps(marker), encoding="utf-8")
+        result = subprocess.run(
+            self.wrapper_command("codex", "start", route_path, route, "execute"),
+            text=True, capture_output=True, env=self.base_env(),
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("reason=completion-marker-missing", result.stdout)
+
     # fixture 9 ---------------------------------------------------------
     def test_reharvest_preserves_history_and_latest_is_authoritative(self):
         route = self.compile_route()
@@ -272,7 +319,17 @@ class CompletionMarkerTest(unittest.TestCase):
         # changed evidence -> new history entry, old one untouched, canonical
         # points at the latest.
         evidence.write_text("v2\n", encoding="utf-8")
-        third = self.complete(route_path, "plan", evidence)
+        third = self.complete(
+            route_path, "plan", evidence,
+            attempt_id="att-inline-plan-retry",
+            attempt_axes={
+                "dispatch_depth": 2,
+                "transport": "interactive",
+                "execution_surface": "inline",
+                "registered_worker": "0",
+                "fallback_hop": "inline",
+            },
+        )
         self.assertEqual(third.returncode, 0, third.stdout + third.stderr)
         self.assertTrue(history_2.is_file())
         self.assertEqual(json.loads(history_1.read_text(encoding="utf-8")), first_marker)
@@ -281,10 +338,138 @@ class CompletionMarkerTest(unittest.TestCase):
         import hashlib
         self.assertEqual(latest["evidence"]["sha256"], hashlib.sha256(evidence.read_bytes()).hexdigest())
 
+    def test_same_attempt_changed_evidence_fails_before_canonical_mutation(self):
+        route = self.compile_route()
+        route_path = self.write_route(route)
+        evidence = self.base / "plan.md"
+        evidence.write_text("first\n", encoding="utf-8")
+        first = self.complete(route_path, "plan", evidence)
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        directory = self.agent_home / ".dispatch" / "completion" / route["route_id"]
+        canonical = directory / "plan.json"
+        before = canonical.read_bytes()
+
+        evidence.write_text("forged retry\n", encoding="utf-8")
+        changed = self.complete(route_path, "plan", evidence)
+        self.assertNotEqual(changed.returncode, 0)
+        self.assertIn("immutable attempt completion differs", changed.stderr)
+        self.assertEqual(canonical.read_bytes(), before)
+        self.assertFalse((directory / "plan.2.json").exists())
+
+    def test_same_evidence_registered_then_inline_creates_new_history(self):
+        route = self.compile_route()
+        route_path = self.write_route(route)
+        evidence = self.base / "plan.md"
+        evidence.write_text("same evidence\n", encoding="utf-8")
+        self.write_row("open", "registered", "att-registered-first")
+        registered = self.complete(
+            route_path, "plan", evidence,
+            jobs=self.jobs, attempt_id="att-registered-first",
+        )
+        self.assertEqual(registered.returncode, 0, registered.stdout + registered.stderr)
+        inline = self.complete(
+            route_path, "plan", evidence,
+            attempt_id="att-inline-second",
+            attempt_axes={
+                "dispatch_depth": 2,
+                "transport": "interactive",
+                "execution_surface": "inline",
+                "registered_worker": "0",
+                "fallback_hop": "inline",
+            },
+        )
+        self.assertEqual(inline.returncode, 0, inline.stdout + inline.stderr)
+        directory = self.agent_home / ".dispatch" / "completion" / route["route_id"]
+        first = json.loads((directory / "plan.1.json").read_text())
+        second = json.loads((directory / "plan.2.json").read_text())
+        latest = json.loads((directory / "plan.json").read_text())
+        self.assertEqual(first["attempt_id"], "att-registered-first")
+        self.assertEqual(first["execution_surface"], "registered-headless")
+        self.assertEqual(second["attempt_id"], "att-inline-second")
+        self.assertEqual(second["execution_surface"], "inline")
+        self.assertEqual(latest, second)
+
+    def test_same_evidence_inline_then_registered_creates_new_history(self):
+        route = self.compile_route()
+        route_path = self.write_route(route)
+        evidence = self.base / "execute.md"
+        evidence.write_text("same evidence\n", encoding="utf-8")
+        inline = self.complete(
+            route_path, "execute", evidence,
+            attempt_id="att-inline-first",
+            attempt_axes={
+                "dispatch_depth": 2,
+                "transport": "interactive",
+                "execution_surface": "inline",
+                "registered_worker": "0",
+                "fallback_hop": "inline",
+            },
+        )
+        self.assertEqual(inline.returncode, 0, inline.stdout + inline.stderr)
+        self.write_row("open", "registered", "att-registered-second", node_id="execute")
+        registered = self.complete(
+            route_path, "execute", evidence,
+            jobs=self.jobs, attempt_id="att-registered-second",
+        )
+        self.assertEqual(registered.returncode, 0, registered.stdout + registered.stderr)
+        directory = self.agent_home / ".dispatch" / "completion" / route["route_id"]
+        first = json.loads((directory / "execute.1.json").read_text())
+        second = json.loads((directory / "execute.2.json").read_text())
+        self.assertEqual(first["execution_surface"], "inline")
+        self.assertEqual(second["execution_surface"], "registered-headless")
+        self.assertEqual(
+            json.loads((directory / "execute.json").read_text()), second
+        )
+
+    def test_same_evidence_different_native_surfaces_create_new_history(self):
+        route = self.compile_route()
+        route_path = self.write_route(route)
+        evidence = self.base / "test.md"
+        evidence.write_text("same evidence\n", encoding="utf-8")
+        axes = {
+            "dispatch_depth": 2,
+            "transport": "headless",
+            "registered_worker": "0",
+            "fallback_hop": "native-subagent",
+        }
+        codex = self.complete(
+            route_path, "test", evidence,
+            attempt_id="att-codex-native",
+            attempt_axes={
+                **axes, "execution_surface": "codex-native-subagent"
+            },
+        )
+        self.assertEqual(codex.returncode, 0, codex.stdout + codex.stderr)
+        claude = self.complete(
+            route_path, "test", evidence,
+            attempt_id="att-claude-native",
+            attempt_axes={
+                **axes, "execution_surface": "claude-subagent"
+            },
+        )
+        self.assertEqual(claude.returncode, 0, claude.stdout + claude.stderr)
+        directory = self.agent_home / ".dispatch" / "completion" / route["route_id"]
+        first = json.loads((directory / "test.1.json").read_text())
+        second = json.loads((directory / "test.2.json").read_text())
+        self.assertEqual(first["execution_surface"], "codex-native-subagent")
+        self.assertEqual(second["execution_surface"], "claude-subagent")
+        self.assertEqual(json.loads((directory / "test.json").read_text()), second)
+
 
     # SD-70 fixtures -------------------------------------------------------
-    def write_row(self, status, slug, attempt_id, extra=""):
-        line = f"2026-07-19T00:00:00Z\t{status}\t{self.repo}\t{self.repo}\t{slug}\tattempt_id={attempt_id}"
+    def write_row(self, status, slug, attempt_id, extra="", node_id="plan"):
+        contract = (
+            "attempt_schema_version=2,dispatch_depth=2,transport=headless,"
+            "execution_surface=registered-headless,registered_worker=1,"
+            "fallback_hop=same-harness-headless"
+        )
+        line = (
+            f"2026-07-19T00:00:00Z\t{status}\t{self.repo}\t{self.repo}\t{slug}\t"
+            f"attempt_id={attempt_id},{contract},route_id={self.current_route['route_id']},"
+            f"route_hash={self.current_route['route_hash']},"
+            f"registry_digest={self.current_route['registry_digest']},route_node={node_id},"
+            f"completion_gate={next(node['completion_gate'] for node in self.current_route['nodes'] if node['id'] == node_id)}"
+        )
         if extra: line += "," + extra
         with self.jobs.open("a", encoding="utf-8") as fh:
             fh.write(line + "\n")
@@ -329,13 +514,65 @@ class CompletionMarkerTest(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertIn("\tdone\t", rows[0])
 
+    def test_noncompletion_terminal_row_is_rejected_before_marker_write(self):
+        route = self.compile_route()
+        route_path = self.write_route(route)
+        evidence = self.base / "blocked.md"
+        evidence.write_text("must not publish\n", encoding="utf-8")
+        self.write_row("done", "blocked", "att-blocked-target", "note=dead-test")
+        result = self.complete(
+            route_path, "plan", evidence,
+            jobs=self.jobs, attempt_id="att-blocked-target",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("attempt-row-terminal-without-completion", result.stderr)
+        directory = self.agent_home / ".dispatch" / "completion" / route["route_id"]
+        self.assertFalse((directory / "plan.json").exists())
+        self.assertFalse((directory / "plan.1.json").exists())
+
+    def test_concurrent_completions_serialize_history_and_canonical_sequence(self):
+        route = self.compile_route()
+        route_path = self.write_route(route)
+        attempts = ("att-concurrent-a", "att-concurrent-b")
+        evidence_paths = []
+        for index, attempt in enumerate(attempts):
+            self.write_row("open", f"worker-{index}", attempt)
+            evidence = self.base / f"concurrent-{index}.md"
+            evidence.write_text(f"evidence {index}\n", encoding="utf-8")
+            evidence_paths.append(evidence)
+        processes = []
+        for attempt, evidence in zip(attempts, evidence_paths):
+            command = [
+                sys.executable, str(ROOT / "utilities/capability-route.py"), "complete",
+                "--route", str(route_path), "--node", "plan",
+                "--evidence", str(evidence), "--jobs", str(self.jobs),
+                "--attempt-id", attempt,
+            ]
+            processes.append(subprocess.Popen(
+                command, text=True, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, env=self.base_env(),
+            ))
+        results = [process.communicate(timeout=20) + (process.returncode,) for process in processes]
+        self.assertTrue(all(code == 0 for _, _, code in results), results)
+        directory = self.agent_home / ".dispatch" / "completion" / route["route_id"]
+        first = json.loads((directory / "plan.1.json").read_text())
+        second = json.loads((directory / "plan.2.json").read_text())
+        canonical = json.loads((directory / "plan.json").read_text())
+        self.assertEqual({first["attempt_id"], second["attempt_id"]}, set(attempts))
+        self.assertEqual(canonical["sequence"], 2)
+        self.assertEqual(canonical, second)
+        self.assertFalse((directory / "plan.3.json").exists())
+
     def test_complete_attempt_mismatch_fails_closed_marker_preserved(self):
         route = self.compile_route()
         route_path = self.write_route(route)
         evidence = self.base / "plan.md"
         evidence.write_text("plan body\n", encoding="utf-8")
         # no row for this attempt id at all
-        result = self.complete(route_path, "plan", evidence, jobs=self.jobs, attempt_id="att-missing")
+        result = self.complete(
+            route_path, "plan", evidence, jobs=self.jobs, attempt_id="att-missing",
+            attempt_axes=self.registered_axes(),
+        )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("attempt-row-absent", result.stdout + result.stderr)
         canonical = self.agent_home / ".dispatch" / "completion" / route["route_id"] / "plan.json"
@@ -350,7 +587,10 @@ class CompletionMarkerTest(unittest.TestCase):
         unwritable_dir.mkdir(mode=0o500)
         unwritable_jobs = unwritable_dir / "jobs.log"
         try:
-            result = self.complete(route_path, "plan", evidence, jobs=unwritable_jobs, attempt_id="att-unwritable")
+            result = self.complete(
+                route_path, "plan", evidence, jobs=unwritable_jobs,
+                attempt_id="att-unwritable", attempt_axes=self.registered_axes(),
+            )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("row-close-failed", result.stdout + result.stderr)
             canonical = self.agent_home / ".dispatch" / "completion" / route["route_id"] / "plan.json"
@@ -401,6 +641,7 @@ class CompletionMarkerTest(unittest.TestCase):
         first = self.complete(
             route_path, "plan", first_evidence,
             jobs=missing_jobs, attempt_id="att-prior-link",
+            attempt_axes=self.registered_axes(),
         )
         self.assertNotEqual(first.returncode, 0)
         self.assertIn("attempt-row-absent", first.stdout + first.stderr)
@@ -413,6 +654,14 @@ class CompletionMarkerTest(unittest.TestCase):
             jobs=self.jobs, attempt_id="att-later-link",
         )
         self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+
+        replay = self.complete(
+            route_path, "plan", first_evidence,
+            jobs=missing_jobs, attempt_id="att-prior-link",
+            attempt_axes=self.registered_axes(),
+        )
+        self.assertNotEqual(replay.returncode, 0)
+        self.assertIn("attempt-row-absent", replay.stdout + replay.stderr)
 
         directory = self.agent_home / ".dispatch" / "completion" / route["route_id"]
         prior_link = json.loads((directory / "plan.att-prior-link.attempt.json").read_text())

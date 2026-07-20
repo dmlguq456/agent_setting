@@ -2,14 +2,14 @@
 
 The full cycle is **setup** → user training → **eval**. With `--mode auto`, infer the branch from the request. Each mode is an independent invocation and persists state in `pipeline_state.yaml`.
 
-> **Stage-dispatch contract for standard+:** dispatch durable setup, eval, and report stages as separate depth-2 headless sessions under OPERATIONS §5.10. In-session teams run inside their stage session. Use file-only handoff: read inputs from artifacts and never rely on earlier conversational context. The depth-1 conductor passes paths and collects only verdicts and status. **Do not dispatch the actual experiment run:** it is long, asynchronous, and human-gated by the pending `_RUNLOG.md` row. Keep using the existing `lab-runner.yaml` profile for that segment. Direct, quick, and one-off run guidance remain inline. Stage sessions never redispatch; depth 3+ is forbidden.
+> **Stage-dispatch contract for standard+:** dispatch durable setup, eval, and report stages as separate dispatch-depth-2 headless sessions under OPERATIONS §5.10. In-session teams run inside their stage session. Use file-only handoff: read inputs from artifacts and never rely on earlier conversational context. The dispatch-depth-1 conductor passes paths and collects only verdicts and status. **Do not dispatch the actual experiment run:** it is long, asynchronous, and human-gated by the pending `_RUNLOG.md` row. Keep using the existing `lab-runner.yaml` profile for that segment. Direct, quick, and one-off run guidance remain inline. Stage sessions never redispatch; dispatch depth 3+ is forbidden.
 
 #### Setup stage-worker mapping
 
 | Stage | In-session team | Input artifacts | Output artifacts | Write class |
 |---|---|---|---|---|
-| S1 spec | 연구팀, plan-review | Recent `_RUNLOG.md` rows and research artifacts | `experiments/{date}_{slug}/experiment_spec.md` | Dispatched depth 2 |
-| S2 scaffold | 개발팀, new-lib | `experiment_spec.md` plus reference or parent config | `train.py`, `eval.py`, `config.yaml`, and `metrics.jsonl` logger | Dispatched depth 2 |
+| S1 spec | 연구팀, plan-review | Recent `_RUNLOG.md` rows and research artifacts | `experiments/{date}_{slug}/experiment_spec.md` | Dispatched dispatch depth 2 |
+| S2 scaffold | 개발팀, new-lib | `experiment_spec.md` plus reference or parent config | `train.py`, `eval.py`, `config.yaml`, and `metrics.jsonl` logger | Dispatched dispatch depth 2 |
 | S3 run | User or cluster submit | `config.yaml` | Pending `_RUNLOG.md` row and `run.json` with running status | **Not dispatched**; long, asynchronous, human-gated |
 
 See `eval-procedure.md` for E2, E3-2, and E3-3.

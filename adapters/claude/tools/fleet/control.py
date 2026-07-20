@@ -333,6 +333,13 @@ def close_registry_row(jobs, slug, worktree):
                                                         parts[3], parts[4], parts[5])
                 if status != "open" or row_slug != slug or wt != worktree:
                     continue
+                metadata = dict(
+                    item.split("=", 1) for item in pipe.split(",") if "=" in item
+                )
+                if metadata.get("attempt_schema_version") != "2":
+                    # Historical rows remain diagnostic-only; control actions
+                    # never promote them into the current attempt contract.
+                    continue
                 pipe += ",note=fleet-kill"
                 lines[i] = "%s\tdone\t%s\t%s\t%s\t%s\n" % (ts, repo, wt, row_slug, pipe)
                 changed = True

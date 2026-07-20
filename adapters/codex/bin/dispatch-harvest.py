@@ -4,18 +4,23 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
-from contextlib import contextmanager
-import fcntl
 import os
 import shutil
 import sys
-import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "utilities"))
-from dispatch_contract import DispatchContractError, reconcile_local_registry  # noqa: E402
+from dispatch_contract import (DispatchContractError, close_attempt_row,
+                               parse_registry_metadata, reconcile_local_registry,
+                               validate_attempt_metadata)  # noqa: E402
+_route_spec = importlib.util.spec_from_file_location(
+    "capability_route", ROOT / "utilities" / "capability-route.py"
+)
+ROUTE = importlib.util.module_from_spec(_route_spec)
+_route_spec.loader.exec_module(ROUTE)
 
 
 def parser() -> argparse.ArgumentParser:
@@ -70,16 +75,44 @@ def resolve_agent_home() -> Path:
     return ROOT
 
 
-@contextmanager
-def jobs_lock(jobs: Path):
-    jobs.parent.mkdir(parents=True, exist_ok=True)
-    lock_path = Path(f"{jobs}.lock")
-    with lock_path.open("a", encoding="utf-8") as lock:
-        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-        try:
-            yield lock_path
-        finally:
-            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+def _complete_exact_routed_attempt(jobs: Path, metadata: dict[str, str], completion: Path) -> None:
+    marker = json.loads(completion.read_text(encoding="utf-8"))
+    registered = str(metadata.get("registered_worker", "")).lower() in {"1", "true"}
+    expected = {
+        "schema_version": 2,
+        "route_id": metadata.get("route_id"),
+        "route_hash": metadata.get("route_hash"),
+        "node_id": metadata.get("route_node"),
+        "attempt_id": metadata.get("attempt_id"),
+        "dispatch_depth": int(metadata["dispatch_depth"]),
+        "transport": metadata.get("transport"),
+        "execution_surface": metadata.get("execution_surface"),
+        "registered_worker": registered,
+        "fallback_hop": metadata.get("fallback_hop") or None,
+    }
+    if any(marker.get(key) != value for key, value in expected.items()):
+        raise ValueError("stale-route-completion")
+    route_file = Path(metadata.get("route_file", ""))
+    if not route_file.is_file():
+        raise ValueError("route-record-unreadable")
+    route = ROUTE.verify_route(json.loads(route_file.read_text(encoding="utf-8")))
+    node = next(
+        (row for row in route["nodes"] if row.get("id") == metadata["route_node"]),
+        None,
+    )
+    if node is None:
+        raise ValueError("route-node-unknown")
+    evidence = Path(str(marker.get("evidence", {}).get("path", "")))
+    if not evidence.is_absolute() or not evidence.is_file():
+        raise ValueError("completion-evidence-missing")
+    ROUTE.complete_node(
+        route,
+        node,
+        metadata["route_node"],
+        evidence,
+        jobs=jobs,
+        attempt_id=metadata["attempt_id"],
+    )
 
 
 def main(argv: list[str]) -> int:
@@ -96,75 +129,74 @@ def main(argv: list[str]) -> int:
     args.reconciled = 0
     if args.reconcile_local:
         try:
-            args.reconciled, _ = reconcile_local_registry(jobs.resolve(), Path(args.reconcile_local).resolve())
+            args.reconciled, _ = reconcile_local_registry(
+                jobs.resolve(), Path(args.reconcile_local).resolve()
+            )
         except DispatchContractError as exc:
             print(f"check=failed\nreason={exc.reason}\ndetail={exc.detail}")
             return 73
-    with jobs_lock(jobs):
-        if not jobs.exists():
-            emit_header(args, jobs, 0, 0, 0)
-            return 0
+    if not jobs.exists():
+        emit_header(args, jobs, 0, 0, 0)
+        return 0
 
-        original = jobs.read_text(encoding="utf-8").splitlines(keepends=True)
-        rewritten: list[str] = []
-        matched_jobs: list[list[str]] = []
-        homes_to_clean: list[Path] = []
-        matched = 0
-        marked_done = 0
-        malformed = 0
+    rows = []
+    malformed = 0
+    for line in jobs.read_text(encoding="utf-8", errors="replace").splitlines():
+        fields = line.split("\t")
+        if len(fields) != 6:
+            malformed += 1
+        elif matches(args, fields):
+            rows.append(fields)
 
-        for line in original:
-            bare = line.rstrip("\n")
-            fields = bare.split("\t")
-            if len(fields) != 6:
-                malformed += 1
-                rewritten.append(line)
-                continue
-            if matches(args, fields):
-                matched += 1
-                matched_jobs.append(fields.copy())
-                if args.mark_done and fields[1] == "open":
-                    metadata = dict(part.split("=", 1) for part in fields[5].split(",") if "=" in part)
-                    if metadata.get("route_id"):
-                        if not args.completion or not Path(args.completion).is_file():
-                            print("check=failed\nreason=route-completion-required")
-                            return 65
-                        completion = json.loads(Path(args.completion).read_text(encoding="utf-8"))
-                        if (completion.get("route_id") != metadata.get("route_id") or completion.get("route_hash") != metadata.get("route_hash") or completion.get("node_id") != metadata.get("route_node")):
-                            print("check=failed\nreason=stale-route-completion")
-                            return 65
-                    if not args.keep_home:
-                        slug = fields[4]
-                        profile_name = None
-                        for part in fields[5].split(","):
-                            if part.startswith("profile="):
-                                profile_name = part[len("profile="):]
-                                break
-                        if profile_name:
-                            homes_to_clean.append(resolve_agent_home() / ".dispatch" / "homes" / f"{slug}.{profile_name}")
-                    fields[1] = "done"
-                    marked_done += 1
-                    line = "\t".join(fields) + "\n"
-            rewritten.append(line)
+    marked_done = 0
+    if args.mark_done:
+        live = [fields for fields in rows if fields[1] in {"open", "running"}]
+        if len(live) > 1:
+            print("check=failed\nreason=ambiguous-selector")
+            print(f"matched_live={len(live)}")
+            return 64
+        if live:
+            target = live[0]
+            metadata = parse_registry_metadata(target[5])
+            try:
+                validate_attempt_metadata(metadata)
+            except DispatchContractError as exc:
+                print(f"check=failed\nreason={exc.reason}\ndetail={exc.detail}")
+                return 65
+            attempt_id = metadata.get("attempt_id")
+            if not attempt_id:
+                print("check=failed\nreason=attempt-id-required")
+                return 65
+            try:
+                if metadata.get("route_id"):
+                    if not args.completion or not Path(args.completion).is_file():
+                        raise ValueError("route-completion-required")
+                    _complete_exact_routed_attempt(jobs, metadata, Path(args.completion))
+                elif not close_attempt_row(jobs, attempt_id, "harvest-complete"):
+                    raise ValueError("attempt-row-not-open")
+            except (KeyError, OSError, TypeError, ValueError) as exc:
+                print(f"check=failed\nreason={exc}")
+                return 65
+            marked_done = 1
 
-        if args.mark_done:
-            with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=str(jobs.parent), delete=False) as tmp:
-                tmp.writelines(rewritten)
-                tmp_name = tmp.name
-            Path(tmp_name).replace(jobs)
+        if live and not args.keep_home:
+            profile_name = metadata.get("profile")
+            if profile_name:
+                home = resolve_agent_home() / ".dispatch" / "homes" / (
+                    f"{target[4]}.{profile_name}"
+                )
+                if home.exists():
+                    shutil.rmtree(home, ignore_errors=True)
 
-        for home in homes_to_clean:
-            if home.exists():
-                shutil.rmtree(home, ignore_errors=True)
 
-        emit_header(args, jobs, matched, marked_done, malformed)
-        for fields in matched_jobs:
-            _, state, repo, worktree, slug, pipe = fields
-            print(f"job_status={state}")
-            print(f"job_repo={repo}")
-            print(f"job_worktree={worktree}")
-            print(f"job_slug={slug}")
-            print(f"job_pipe={pipe}")
+    emit_header(args, jobs, len(rows), marked_done, malformed)
+    for fields in rows:
+        _, state, repo, worktree, slug, pipe = fields
+        print(f"job_status={state}")
+        print(f"job_repo={repo}")
+        print(f"job_worktree={worktree}")
+        print(f"job_slug={slug}")
+        print(f"job_pipe={pipe}")
     return 0
 
 

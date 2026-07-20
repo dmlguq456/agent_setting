@@ -2,7 +2,7 @@
 # g11_nested_sandbox_lifetime: a wrapper --start inside a per-call PID-namespace
 # sandbox must REFUSE with the typed reason instead of spawning a doomed child.
 # Regression anchor: 2026-07-20 memory-oncall-promotion-plan r1~r3 — three codex
-# depth-2 workers silently SIGKILLed the moment the launcher tool call returned.
+# dispatch-depth-2 workers silently SIGKILLed the moment the launcher tool call returned.
 set -eu
 WORK=$1
 REPO="$WORK/repo"

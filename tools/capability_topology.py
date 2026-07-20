@@ -6,8 +6,12 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "utilities"))
+from dispatch_contract import EXECUTION_SURFACES, FALLBACK_HOPS, WRAPPER_TRANSPORTS  # noqa: E402
+
 REGISTRY = ROOT / "capabilities" / "topologies.json"
 MANIFEST = ROOT / "harness-manifest.json"
 
@@ -76,28 +80,66 @@ def _validate_recipe(recipe, registry):
     missing = required - recipe.keys()
     if missing:
         raise TopologyError(f"{recipe.get('capability')}: missing {sorted(missing)}")
+    bare_depth_keys = {"depth", "owner_depth", "max_depth"}
+    if any(key in recipe for key in bare_depth_keys):
+        raise TopologyError(f"{recipe['capability']}: bare recipe dispatch-depth fields are forbidden")
     quick = recipe["quick"]
-    if quick.get("owner_depth") != 1 or quick.get("max_depth") != 1:
-        raise TopologyError(f"{recipe['capability']}: quick topology must be depth 1")
+    if any(key in quick for key in bare_depth_keys):
+        raise TopologyError(f"{recipe['capability']}: bare quick dispatch-depth fields are forbidden")
+    if quick.get("owner_dispatch_depth") != 1 or quick.get("max_dispatch_depth") != 1:
+        raise TopologyError(f"{recipe['capability']}: quick topology must be dispatch depth 1")
     for scope in quick.get("write_scope", []): _scope_root(scope)
     _validate_guard_scope(recipe, quick.get("write_scope", []), quick.get("guard_preconditions", []), registry, "quick")
     graph = recipe["standard_plus"]
-    if graph.get("owner_depth") != 1:
-        raise TopologyError(f"{recipe['capability']}: owner depth must be 1")
+    if any(key in graph for key in bare_depth_keys):
+        raise TopologyError(f"{recipe['capability']}: bare standard+ dispatch-depth fields are forbidden")
+    if graph.get("owner_dispatch_depth") != 1:
+        raise TopologyError(f"{recipe['capability']}: owner dispatch depth must be 1")
     nodes = graph.get("nodes", [])
     ids = [n.get("id") for n in nodes]
     if len(ids) != len(set(ids)) or not all(ids):
         raise TopologyError(f"{recipe['capability']}: duplicate/empty node id")
     by_id = {n["id"]: n for n in nodes}
+    actual_max_dispatch_depth = max(
+        (
+            node.get("dispatch_depth", 0)
+            for node in nodes
+            if node.get("kind") != "resource-runner"
+        ),
+        default=0,
+    )
+    if graph.get("max_dispatch_depth") != actual_max_dispatch_depth:
+        raise TopologyError(
+            f"{recipe['capability']}: max_dispatch_depth must equal "
+            f"{actual_max_dispatch_depth}"
+        )
     gates = set(recipe["completion_gates"])
     for node in nodes:
         if node.get("kind") not in registry["worker_kinds"]:
             raise TopologyError(f"{recipe['capability']}:{node['id']}: invalid worker kind")
         if node["kind"] == "resource-runner":
-            if "depth" in node or node.get("transport") != ["detached-process"]:
-                raise TopologyError(f"{recipe['capability']}:{node['id']}: resource runner is detached, not an agent depth")
-        elif node.get("depth") not in (1, 2):
-            raise TopologyError(f"{recipe['capability']}:{node['id']}: depth must be 1 or 2")
+            if any(
+                key in node
+                for key in (
+                    "depth", "owner_depth", "max_depth", "dispatch_depth",
+                    "transport", "fallback_hops",
+                )
+            ):
+                raise TopologyError(
+                    f"{recipe['capability']}:{node['id']}: resource runner lifecycle is not an agent dispatch"
+                )
+            if node.get("resource_transport") != "detached-process":
+                raise TopologyError(
+                    f"{recipe['capability']}:{node['id']}: detached resource transport required"
+                )
+        else:
+            if any(key in node for key in bare_depth_keys) or node.get("dispatch_depth") not in (1, 2):
+                raise TopologyError(f"{recipe['capability']}:{node['id']}: dispatch_depth must be 1 or 2")
+            unknown_hops = set(node.get("fallback_hops", [])) - FALLBACK_HOPS
+            if unknown_hops:
+                raise TopologyError(
+                    f"{recipe['capability']}:{node['id']}: unknown fallback hops {sorted(unknown_hops)}"
+                )
         if not node.get("inputs") or not node.get("outputs") or not node.get("write_scope"):
             raise TopologyError(f"{recipe['capability']}:{node['id']}: inputs/outputs/write_scope required")
         if node.get("completion_gate") not in gates:
@@ -135,6 +177,14 @@ def _validate_recipe(recipe, registry):
 
 
 def validate_registry(registry, manifest=None):
+    if registry.get("schema_version") != 2:
+        raise TopologyError("legacy topology registry is read-only")
+    if set(registry.get("transports", [])) != WRAPPER_TRANSPORTS:
+        raise TopologyError("transport vocabulary differs from portable dispatch contract")
+    if set(registry.get("execution_surfaces", [])) != EXECUTION_SURFACES:
+        raise TopologyError("execution-surface vocabulary differs from portable dispatch contract")
+    if set(registry.get("fallback_hops", [])) != FALLBACK_HOPS:
+        raise TopologyError("fallback-hop vocabulary differs from portable dispatch contract")
     if registry.get("tracking_values") != ["tracked", "untracked"]:
         raise TopologyError("tracking_values must declare tracked and untracked independently")
     if set(registry.get("tracked_gate_evidence", [])) != {

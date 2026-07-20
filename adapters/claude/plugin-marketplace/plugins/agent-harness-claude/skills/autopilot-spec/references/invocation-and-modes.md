@@ -116,7 +116,7 @@ Update mode performs three operations as one transaction:
 - **CLEAR drift** with unambiguous intent and scope: proceed autonomously and report in one line.
 - **AMBIGUOUS drift** with multiple interpretations or unclear impact: ask before proceeding; do not guess.
 
-For a small spec tweak, `--intensity quick` uses a depth-1 one-shot worker with only an inline micro-plan, plan-check-lite, and verify-lite. Durable snapshots and logs are created only when the update actually changes `prd.md`; quick intensity alone does not force plan, log, or snapshot artifacts.
+For a small spec tweak, `--intensity quick` uses one registered-headless dispatch-depth-1 one-shot owner with only an inline micro-plan, plan-check-lite, and verify-lite. Durable snapshots and logs are created only when the update actually changes `prd.md`; quick intensity alone does not force plan, log, or snapshot artifacts.
 
 ### Refinement v{N+1} Versioning
 

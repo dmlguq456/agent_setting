@@ -19,6 +19,9 @@ import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "utilities"))
+from dispatch_contract import DispatchContractError, parse_registry_metadata, validate_attempt_metadata
+
 OPEN_STATES = {"open", "running"}
 MAX_AUDIT_BYTES = 1024 * 1024
 KEEP_AUDIT_BYTES = 512 * 1024
@@ -322,9 +325,17 @@ def reconcile_registry(jobs: Path, target: Path) -> int:
         rewritten: list[str] = []
         for line in lines:
             fields = line.rstrip("\n").split("\t")
+            current_attempt = False
+            if len(fields) == 6:
+                try:
+                    validate_attempt_metadata(parse_registry_metadata(fields[5]))
+                    current_attempt = True
+                except DispatchContractError:
+                    current_attempt = False
             if (
                 len(fields) == 6
                 and fields[1] in OPEN_STATES
+                and current_attempt
                 and normalize(fields[3]) == target
             ):
                 fields[1] = "done"
@@ -390,6 +401,13 @@ def registered_job_worktrees(jobs: Path, repo: Path) -> list[Path]:
     for line in jobs.read_text(encoding="utf-8", errors="replace").splitlines():
         fields = line.split("\t")
         if len(fields) != 6:
+            continue
+        try:
+            metadata = parse_registry_metadata(fields[5])
+            validate_attempt_metadata(metadata)
+        except DispatchContractError:
+            continue
+        if not metadata.get("attempt_id"):
             continue
         candidate = normalize(fields[3])
         if candidate in found or not candidate.is_dir():

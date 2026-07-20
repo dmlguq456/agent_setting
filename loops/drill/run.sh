@@ -197,7 +197,7 @@ for c in "${cases[@]}"; do
       echo
       echo "Read this material and concisely report: (1) the violation, (2) missing or ambiguous guidance, and (3) one proposed fix. Do not modify files."
     } > "$DIAG_PROMPT"
-    diag_metrics=$(DRILL_FLEET_MODE=loop/drill-diagnosis DRILL_FLEET_WORKER_ROLE="diagnosis-$c" \
+    diag_metrics=$(DRILL_FLEET_MODE=loop/drill-diagnosis \
       run_case_on_adapter "$ADAPTER" "$DIAG_PROMPT" "$WORK/repo" 600 25 \
         "$RESULTS/$c.diagnosis.json" "$RESULTS/$c.diagnosis.md") || true
     [ -s "$RESULTS/$c.diagnosis.md" ] && echo "  diagnosis: $RESULTS/$c.diagnosis.md ($ADAPTER, ${diag_metrics:-?})"

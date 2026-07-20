@@ -44,7 +44,7 @@ When asked to review a plan:
 
 When in Focus axis mode, prefix every memo with `[<axis_name>]` (e.g., `[STYLE]`, `[COVERAGE]`) so the orchestrator can deduplicate after merge.
 
-If `Focus axis` is _absent_ from the prompt, run the **default mode**: cover _all_ axes from the Step 3 task-type table in a single pass. Use this for standard plan-checks and for any graph that did not explicitly open multi-axis/depth2 review.
+If `Focus axis` is _absent_ from the prompt, run the **default mode**: cover _all_ axes from the Step 3 task-type table in a single pass. Use this for standard plan-checks and for any graph that did not explicitly open a multi-axis dispatch-depth-2 review.
 
 Multi-axis review exists so narrow parallel instances collectively cover what a careful user would catch without overloading one reviewer. It changes structure, not the expected content coverage.
 

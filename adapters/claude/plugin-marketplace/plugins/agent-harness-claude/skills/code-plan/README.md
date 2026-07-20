@@ -45,14 +45,14 @@ Date: {YYYY-MM-DD}
 
 ## Plan-Check Assurance
 
-`code-plan` is used for durable `standard+` code-work cycles. `direct` skips it; `quick` is a depth-1 one-shot worker with an inline micro-plan and plan-check-lite. The rigor tier, derived from `--intensity` per [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers), scales the plan-check budget but does not create the stage graph.
+`code-plan` is used for durable `standard+` code-work cycles. `direct` skips it; `quick` is one registered-headless dispatch-depth-1 one-shot owner with an inline micro-plan and plan-check-lite. The rigor tier, derived from `--intensity` per [`CONVENTIONS.md §1.1`](../../core/CONVENTIONS.md#11-verification-rigor-tiers), scales the plan-check budget but does not create the stage graph.
 
 | Rigor tier | Action |
 |---|---|
 | quick | Direct invocation only; one fast sanity check and no repeated fix loop |
 | light | One focused fast review or self-check |
 | standard | One lightweight independent plan review, with at most one correction |
-| thorough | Multi-axis/depth-2 review only when selected by intensity |
+| thorough | Multi-axis/dispatch-depth-2 review only when selected by intensity |
 | adversarial | Selected thorough budget plus adversarial, failure-mode, and security critique when available |
 
 Record findings that remain after the selected budget in the plan's risk/unresolved section and return them to the caller.

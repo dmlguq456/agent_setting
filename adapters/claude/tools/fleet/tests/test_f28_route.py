@@ -91,6 +91,27 @@ class RouteLoadTest(unittest.TestCase):
             self.assertIsNotNone(rec2)
             self.assertNotEqual(rec1["route_id"], rec2["route_id"])
 
+    def test_current_route_rejects_declared_max_below_realized_depth(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "route.json")
+            record = {
+                "schema_version": 2,
+                "dispatch_contract_version": 3,
+                "owner_dispatch_depth": 1,
+                "max_dispatch_depth": 1,
+                "nodes": [{
+                    "id": "execute",
+                    "dispatch_depth": 2,
+                }],
+            }
+            record["route_hash"] = route.route_hash(record)
+            record["route_id"] = (
+                "rt-" + record["route_hash"].split(":", 1)[1][:16]
+            )
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump(record, handle)
+            self.assertIsNone(route.load(path))
+
 
 class NodeOrderTest(unittest.TestCase):
     def test_t1_10_parallel_lab_levels(self):
@@ -154,10 +175,18 @@ class CollectRouteFieldsTest(unittest.TestCase):
             nodes = dispatch.collect.last_route_nodes
             self.assertIn("rt-27f7bc9ff152ba13", nodes)
             self.assertNotIn("plan", ())  # sanity no-op guard
-            # fleet-v9-report / v93 rows are DONE — both must be visible here even though
-            # _scan_jobs_log itself would have dropped them as terminal.
-            self.assertEqual(nodes["rt-9ff8199b5372cfdb"]["report"]["status"], "done")
-            self.assertEqual(nodes["rt-1120bb39a13c4191"]["test"]["status"], "done")
+            # Historical terminal rows remain diagnostic history, but cannot
+            # authoritatively set current route-node state.
+            report = nodes["rt-9ff8199b5372cfdb"]["report"]
+            test = nodes["rt-1120bb39a13c4191"]["test"]
+            self.assertNotIn("status", report)
+            self.assertNotIn("status", test)
+            self.assertEqual(
+                report["attempt_history"][-1]["contract_status"], "legacy-read-only"
+            )
+            self.assertEqual(
+                test["attempt_history"][-1]["contract_status"], "legacy-read-only"
+            )
 
     def test_t1_13b_terminal_only_route_still_resolves_to_a_record_not_heuristic(self):
         """code-test verification.md §10 — the exact defect: `v93-reading-face-d1-test-r6`
@@ -177,9 +206,8 @@ class CollectRouteFieldsTest(unittest.TestCase):
                              "fixture precondition: this route has no LIVE job at all")
             views = route.collect_views(jobs, dispatch.collect.last_route_nodes)
         view = next(v for v in views if v["route_id"] == "rt-1120bb39a13c4191")
-        self.assertEqual(view["source"], "record")
-        self.assertEqual(view["capability"], "autopilot-code")
-        self.assertEqual(len(view["nodes"]), 4)
+        self.assertEqual(view["source"], "heuristic")
+        self.assertEqual(view["nodes"], [])
 
 
 class BuildViewsTest(unittest.TestCase):
@@ -277,14 +305,20 @@ class OrphanConductorAnnotationTest(unittest.TestCase):
                 fh.write(
                     "2026-07-19T00:00:00Z\topen\t/r\t/w\towner\t"
                     "worker_type=owner,attempt_id=att-fleet-owner,"
-                    "pid=999999996,pid_start=1,depth=1\n"
+                    "pid=999999996,pid_start=1,attempt_schema_version=2,"
+                    "dispatch_depth=1,transport=headless,"
+                    "execution_surface=registered-headless,registered_worker=1,"
+                    "fallback_hop=same-harness-headless\n"
                 )
                 # No pid/pid_start is needed here: the registry contract counts any open
-                # exact child row and preserves it for depth-0 diagnosis.
+                # exact child row and preserves it for main-session diagnosis.
                 fh.write(
                     "2026-07-19T00:00:01Z\topen\t/r\t/w\tchild\t"
                     "route_id=rt-fleet-orphan,route_file=%s,route_node=execute,"
-                    "attempt_id=att-fleet-child,parent=owner\n" % route_file
+                    "attempt_id=att-fleet-child,parent=owner,"
+                    "attempt_schema_version=2,dispatch_depth=2,transport=headless,"
+                    "execution_surface=registered-headless,registered_worker=1,"
+                    "fallback_hop=same-harness-headless\n" % route_file
                 )
             with mock.patch.object(dispatch.procscan, "_ps_lines", return_value=[]), \
                  mock.patch.dict(os.environ, {"AGENT_HOME": home}):
@@ -308,7 +342,10 @@ class OrphanConductorAnnotationTest(unittest.TestCase):
                 fh.write(
                     "2026-07-19T00:00:00Z\topen\t/r\t/w\towner-clean\t"
                     "route_id=rt-fleet-clean,route_file=%s,worker_type=owner,"
-                    "attempt_id=att-fleet-owner-clean,pid=999999994,pid_start=1,depth=1\n" % route_file
+                    "attempt_id=att-fleet-owner-clean,pid=999999994,pid_start=1,"
+                    "attempt_schema_version=2,dispatch_depth=1,transport=headless,"
+                    "execution_surface=registered-headless,registered_worker=1,"
+                    "fallback_hop=same-harness-headless\n" % route_file
                 )
             with mock.patch.object(dispatch.procscan, "_ps_lines", return_value=[]), \
                  mock.patch.dict(os.environ, {"AGENT_HOME": home}):

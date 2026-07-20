@@ -26,7 +26,7 @@ Intensity selects the stage graph; see [CONVENTIONS §1](../../../core/CONVENTIO
 - `quick`: intake → orient-lite → micro-plan → plan-check-lite → produce → verify-lite → report; no independent QA after every stage.
 - `standard`: durable code-plan → plan-check → optional bounded verifier → synthesis → code-execute → code-test → code-report.
 - `strong`: standard plus one risk-focused independent review.
-- `thorough` and `adversarial`: a depth-1 owner expands bounded depth-2 planning, verification, and adversarial workers, then synthesizes short reports.
+- `thorough` and `adversarial`: a dispatch-depth-1 owner expands bounded dispatch-depth-2 planning, verification, and adversarial workers, then synthesizes short reports.
 
 Every non-direct graph has a plan-check, but expensive independent QA does not repeat after every substage.
 
@@ -40,7 +40,7 @@ Rigor is derived from intensity and is not a separate `--qa` axis; see [CONVENTI
 - `thorough` → thorough
 - `adversarial` → adversarial
 
-Rigor changes plan-check, selected review, and final code-test depth; it does not select a graph. Depth-2 dispatch belongs to the standard+ owner-worker graph, not rigor alone. direct and quick do not open depth 2 without explicit escalation.
+Rigor changes plan-check, selected review, and final code-test depth; it does not select a graph. Dispatch-depth-2 dispatch belongs to the standard+ owner-worker graph, not rigor alone. direct and quick do not open dispatch depth 2 without explicit escalation.
 
 The code track has no card/PDF fact-checker. Its ground truth is source, tests, runtime behavior, API and CLI surfaces, and security review. Security-sensitive auth, secrets, external input, API-contract, or deserialization work may add `roles/modes/qa/security-review.md`; claim that pass only when it ran.
 

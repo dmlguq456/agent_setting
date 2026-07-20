@@ -27,6 +27,7 @@ from dispatch_contract import (  # noqa: E402
     anchored_capacity_failure,
     close_attempt_row_if,
     resolve_agent_home,
+    validate_attempt_metadata,
 )
 from codex_dispatch_terminal import inspect_terminal_log  # noqa: E402
 
@@ -92,6 +93,7 @@ def require_row(args):
         raise DispatchContractError("progress-attempt-missing", args.attempt_id)
     if row[1].get("route_id") != args.route_id or row[1].get("route_node") != args.route_node:
         raise DispatchContractError("progress-route-mismatch", args.attempt_id)
+    validate_attempt_metadata(row[1])
     return row
 
 

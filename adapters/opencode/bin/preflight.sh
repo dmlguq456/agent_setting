@@ -74,7 +74,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh headless [--check] <worktree>
        preflight.sh nested-headless --parent-harness <h> --parent-transport <t> --parent-sandbox <s> --child-harness <h> --launch-authority <authority> --worktree <path> [--json]
        preflight.sh broker <status|stop> --jobs <jobs.log> [--root <broker-root>]  # legacy drain only
-       preflight.sh dispatch [--dry-run|--register|--start] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--intensity <level>] [--depth 1|2] [--parent <slug>] [--worker-type owner|stage|review|support] [--assigned-contract <capability>] [--owner <capability>] [--agent <agent>] (--model-role <role>|--model <model> --variant <variant>|--inherit-model-settings) [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>] [--log-dir <dir>]
+       preflight.sh dispatch [--dry-run|--register|--start] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--intensity <level>] [--dispatch-depth 1|2] [--parent <slug>] [--worker-type owner|stage|review|support] [--assigned-contract <capability>] [--owner <capability>] [--agent <agent>] (--model-role <role>|--model <model> --variant <variant>|--inherit-model-settings) [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>] [--log-dir <dir>]
        preflight.sh dispatch-chain --route <route.json> --node <id> --slug <slug> --parent <slug> --mode <mode> [--model-role <role>] [--dry-run|--register|--start]
        preflight.sh stage-heartbeat --attempt-id <id> --route-id <id> --route-node <id> --jobs <jobs.log> --phase <phase> --kind <kind> --evidence <ref>
        preflight.sh dispatch-current --jobs <jobs.log> (--session <id>|--route <id>|--node <id>|--attempt <id>|--job <slug>) [--all]
@@ -361,7 +361,7 @@ dispatch_prompt_contract=portable-typed-worker-bootstrap
 worker_bootstrap_source=roles/worker-bootstrap.md+roles/worker-types/<owner|stage|review|support>.md
 worker_handoff=artifact,verdict,blocker
 physical_project_instruction_masking=unverified-checked-prompt-isolation-fallback
-constraints=main-or-owner-dispatched,max-depth-2-for-standard-plus-owner,register-open-job,explicit-capability-mode-qa-intensity-depth-parent-parent_sid,transcript-liveness-required
+constraints=main-or-owner-dispatched,max-dispatch-depth-2-for-standard-plus-owner,register-open-job,explicit-capability-mode-qa-intensity-dispatch_depth-parent-parent_sid,transcript-liveness-required
 claude_headless=unsupported
 fallback=checked-dispatch-chain-or-structured-degradation
 EOF

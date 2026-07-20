@@ -1,6 +1,6 @@
 ### Step 4: Report generation and selected report-check gate
 
-At `standard+`, dispatch report generation and QA as separate depth-2 stages under the [pipeline stage contract](pipeline-search-analysis.md). QA reads report files, not the prior session's conversation or hidden reasoning.
+At `standard+`, dispatch report generation and QA as separate dispatch-depth-2 stages under the [pipeline stage contract](pipeline-search-analysis.md). QA reads report files, not the prior session's conversation or hidden reasoning.
 
 | Stage | In-session team | Inputs | Outputs | Write class |
 |---|---|---|---|---|

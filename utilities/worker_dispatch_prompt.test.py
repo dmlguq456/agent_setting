@@ -65,7 +65,7 @@ class WorkerDispatchPromptTest(unittest.TestCase):
                     "dev/backend",
                     "--intensity",
                     "standard",
-                    "--depth",
+                    "--dispatch-depth",
                     "2",
                     "--parent",
                     "owner",
@@ -87,6 +87,7 @@ class WorkerDispatchPromptTest(unittest.TestCase):
                     "AGENT_ARTIFACT_ROOT": str(artifact_root),
                     "OPENCODE_CONFIG_CONTENT": "{}",
                 }
+                env.pop("AGENT_DISPATCH_JOBS", None)
                 result = subprocess.run(command, text=True, capture_output=True, env=env)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 prompt = (logs / f"{slug}.{suffix}").read_text(encoding="utf-8")
@@ -109,7 +110,7 @@ class WorkerDispatchPromptTest(unittest.TestCase):
                 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
                 args=module.parser().parse_args([
                     "--worktree","/work/repo","--slug","stage","--capability","code-test",
-                    "--mode","dev/backend","--intensity","standard","--depth","2",
+                    "--mode","dev/backend","--intensity","standard","--dispatch-depth","2",
                     "--parent","owner","--worker-type","stage",
                     "--assigned-contract","code-test","--prompt-text","TASK",*model,
                 ])

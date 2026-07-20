@@ -531,7 +531,7 @@ _PIPE_STAGES = {
     "draft": ["draft", "refine", "apply"],
 }
 
-# depth-2 stage worker role → human stage label (SD-F1). Code workers use their sub-skill
+# dispatch-depth-2 stage worker role → human stage label (SD-F1). Code workers use their sub-skill
 # names; other pipelines use the portable `stage-<name>` role emitted by dispatch. The label
 # also drives the parent conductor's active breadcrumb via _conductor_stage_override().
 _STAGE_ROLE = {
@@ -546,7 +546,7 @@ _STAGE_ROLE = {
 
 
 def _stage_role_label(worker_role):
-    """(base_label, suffix) for a depth-2 stage worker_role, e.g. 'stage-search:phase-A' ->
+    """(base_label, suffix) for a dispatch-depth-2 stage worker_role, e.g. 'stage-search:phase-A' ->
     ('search', ':phase-A'). base_label is None when worker_role isn't a known stage sub-skill —
     callers fall back to the existing _ROLE_SHORT/_compact_dispatch_name path."""
     if not worker_role:
@@ -707,8 +707,8 @@ _STAGE_ZONE_MAX = 30          # D3 (v9) — one constant, one place, same idiom 
                                # 168-col zero-overflow was previously incidental (a measured
                                # 5-cell slack, not a bound): a longer conductor/qa label or a
                                # further-along stage re-broke it. Widest real row since the
-                               # depth-1 entry-skill prefix moved to the options dial
-                               # (2026-07-20) is a prefixed depth-2 stage worker
+                               # dispatch-depth-1 entry-skill prefix moved to the options dial
+                               # (2026-07-20) is a prefixed dispatch-depth-2 stage worker
                                # ("exec: plan✓ › exec › test" = 25) — 30 keeps headroom
                                # without regressing anything currently on screen.
 
@@ -836,9 +836,9 @@ def _dispatch_stage_segs(j, key, stage, slug_name, working=False, route_seq=None
     if depth == 1 and intensity == "quick":
         return [("quick/exec", "stg0_on" if working and _BLINK_ON else "stg0_off")]
     if depth >= 2:
-        # P0-1: a depth-2 stage worker never repeats its parent conductor's full
+        # P0-1: a dispatch-depth-2 stage worker never repeats its parent conductor's full
         # breadcrumb — its identity already rode the name zone (label above); this slot
-        # is its own micro-status only. route_seq is a depth-1 CONDUCTOR concern only —
+        # is its own micro-status only. route_seq is a dispatch-depth-1 CONDUCTOR concern only —
         # never consulted here, unconditionally (F-28b plan §4.2, unchanged from pre-v10).
         if j.liveness == "working":
             return [("running", "stg0_on" if _BLINK_ON else "stg0_off")]
@@ -851,7 +851,7 @@ def _dispatch_stage_segs(j, key, stage, slug_name, working=False, route_seq=None
         return _stage_segs(key, stage, working=working, max_width=_STAGE_ZONE_MAX,
                            route_seq=route_seq)
     if key and key != slug_name and not _entry_skill(j):
-        # SD-F1: a depth-2 stage worker's `key` IS its capability (code-plan/code-execute/
+        # SD-F1: a dispatch-depth-2 stage worker's `key` IS its capability (code-plan/code-execute/
         # code-test/code-report) — reuse _stage_role_label (same helper the F-13 legend
         # uses) to humanize it instead of leaking the raw capability token onto the board.
         # When `_entry_skill` already leads the options column with this very token (user
@@ -1017,9 +1017,9 @@ def _compact_dispatch_name(name, max_width=_DISPATCH_NAME_MAX):
 
 
 def _dispatch_prefix(j):
-    # Every depth fans out with the same ↳ spawn arrow, nested two cells deeper per level
-    # (user 2026-07-16: depth-2 rows lost their arrow when they were indent-only), and the
-    # whole ladder starts one level in — the depth-1 arrow sits UNDER its parent session's
+    # Every dispatch depth fans out with the same ↳ spawn arrow, nested two cells deeper per level
+    # (user 2026-07-16: dispatch-depth-2 rows lost their arrow when they were indent-only), and the
+    # whole ladder starts one level in — the dispatch-depth-1 arrow sits UNDER its parent session's
     # text, not on the session's own glyph column (user 2026-07-16 "분사 세션의 화살표를
     # 좀 더 들여쓰자"). Width = (depth+1)*2; the harness field absorbs it (_HMW - len).
     depth = max(1, min(3, int(getattr(j, "depth", 1) or 1)))
@@ -1085,7 +1085,7 @@ def _strip_autopilot(name):
 def _entry_skill(j):
     """Skill identity for the options dial.
 
-    A depth-1 row names its entry capability. A depth-2 row instead names the
+    A dispatch-depth-1 row names its entry capability. A dispatch-depth-2 row instead names the
     assigned stage: route node when present, otherwise the registered capability
     key. This prevents inherited owner mode (``dev/refactor``) from masquerading
     as the child's own work.
@@ -1162,9 +1162,9 @@ def _dispatch_profile(j):
     return _compact_dispatch_name(profile, _PROFILE_MAX) if profile else None
 
 def _dispatch_stage_label(j):
-    """(label_prefix, is_stage_worker) — the depth-2 stage-role label ('exec', 'plan'...) that
-    now identifies a depth-2 child in the NAME zone (F-15a P0-1: identity lives here, not in a
-    duplicated breadcrumb). depth-1 conductors/orphans have no such label — their identity is
+    """(label_prefix, is_stage_worker) — the dispatch-depth-2 stage-role label ('exec', 'plan'...) that
+    now identifies a dispatch-depth-2 child in the NAME zone (F-15a P0-1: identity lives here, not in a
+    duplicated breadcrumb). dispatch-depth-1 conductors/orphans have no such label — their identity is
     just their own slug."""
     if max(1, int(getattr(j, "depth", 1) or 1)) < 2:
         return None
@@ -1187,7 +1187,7 @@ def _opts_segs(j):
     code (mode inten) / boot 순"). Three axes, three visual levels instead of the flat
     '·' chain that mixed them: the entry skill heads the dial, its behaviour knobs
     (mode·intensity) ride in a dim paren group, and the environment tail
-    (profile home / role suffix) is set off by ' / '. A depth-2 worker names its
+    (profile home / role suffix) is set off by ' / '. A dispatch-depth-2 worker names its
     assigned stage skill and keeps only worker-local intensity/profile: inherited
     owner mode and internal personas (qa/development/maker) are not child identity.
     qa left this dial with the retired qa axis (user 2026-07-16 — rigor derives
@@ -1206,6 +1206,11 @@ def _opts_segs(j):
         knob_items.append(role)
     knobs = "·".join(knob_items)
     tail = _dispatch_profile(j)
+    contract_status = getattr(j, "attempt_contract_status", None)
+    if contract_status == "legacy-read-only":
+        tail = " / ".join(value for value in (tail, "legacy") if value)
+    elif contract_status and contract_status != "current":
+        tail = " / ".join(value for value in (tail, "contract!") if value)
     parts = []
     w = 0
 
@@ -1236,7 +1241,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
       harness (model · effort)  |  [stage label] name  |  branch  |  options  |  stage breadcrumb
     F-33 (v11): model/effort fold into the harness field (no more separate model column).
     F-15a: the name zone is identity-only (no more parenthetical mode/qa tag — that moved to
-    its own options column). A depth-2 stage worker's identity is its stage label + slug
+    its own options column). A dispatch-depth-2 stage worker's identity is its stage label + slug
     (P0-1); its breadcrumb slot shows its own micro-status instead of repeating the parent
     conductor's full breadcrumb.
     """
@@ -1291,7 +1296,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
         segs.append(("    ", None))
         if getattr(j, "note", None) == "dead-parent-orphaned":
             # SD-64/71: distinct from the generic dead-conductor cell — never blank, and
-            # always names the exact node a depth-0 decision would resume from.
+            # always names the exact node a dispatch-depth-0 decision would resume from.
             boundary = getattr(j, "resume_boundary", None) or "-"
             segs.append(("⚠ ORPHANED resume=%s" % boundary, "g_dead"))
         else:
@@ -1674,7 +1679,7 @@ def _group_key_job(j, session_groups=None, job_groups=None):
         return session_groups[j.parent_sid]
     if getattr(j, "parent_cwd", None):
         return project_of(j.parent_cwd)
-    # Drill is fixture-rooted: keep its runner + depth-1 owner + depth-2 workers
+    # Drill is fixture-rooted: keep its runner + dispatch-depth-1 owner + dispatch-depth-2 workers
     # together in one /tmp/drill-* card. Other scheduled loops stay in the shared
     # control-plane group.
     if j.key in _LOOPS_KEYS:
@@ -1760,7 +1765,7 @@ def _select_entry_job(j, line_idx):
             "cwd": j.cwd, "slug": j.slug,
             "label": j.slug or j.key, "harness": j.harness, "source": j.source,
             "is_worker": bool(getattr(j, "is_child", False))}
-_FOLD_CHILD_LIVENESS = {"done", "queued", "idle", "unknown"}   # F-15b P0-2: depth-2 stage-worker
+_FOLD_CHILD_LIVENESS = {"done", "queued", "idle", "unknown"}   # F-15b P0-2: dispatch-depth-2 stage-worker
                                                                 # rows folded into the conductor
                                                                 # breadcrumb unless working/stale/dead
 
@@ -1769,7 +1774,7 @@ _FOLD_CHILD_LIVENESS = {"done", "queued", "idle", "unknown"}   # F-15b P0-2: dep
 # Single point of ASCII-degrade if double-width alignment ever breaks in a real terminal.
 _ICON_SUBAGENT = "⚡"
 _SUBAGENT_IND = "      "  # strip indent: pure inset, no connector glyph, 6 cells for a
-                          # session-owned strip — well past the depth-2 arrow column so the
+                          # session-owned strip — well past the dispatch-depth-2 arrow column so the
                           # strip reads as INSIDE the row above, never as a sibling (사용자
                           # 2026-07-16 "들여쓰기 레벨을 충분히 안쪽으로"; the 2-cell then 4-cell
                           # insets both read too shallow). Dispatch-owned strips add 2 more
@@ -2078,12 +2083,12 @@ def _route_card(view, session_by_pid, term_width, now):
 
 
 def _degrade_candidates(jobs, covered_slugs=()):
-    """Depth-1 jobs on a recognizable `_PIPE_STAGES` pipeline with NO resolved route_id — the
+    """Dispatch-depth-1 jobs on a recognizable `_PIPE_STAGES` pipeline with NO resolved route_id — the
     degrade card's population (prd.md:310 — record absence is a summary card, never a blank).
-    Deliberately excludes: depth-2 stage workers (those nest under their conductor's card, same
+    Deliberately excludes: dispatch-depth-2 stage workers (those nest under their conductor's card, same
     as the group view); any job that already has a route_id itself (that route already has a
     real card, even if the record failed to load — route.py's `_heuristic_view` covers that
-    case inside `route_views_by_id`, not here); and `covered_slugs` — the depth-1 CONDUCTOR of a
+    case inside `route_views_by_id`, not here); and `covered_slugs` — the dispatch-depth-1 CONDUCTOR of a
     route whose route_id lives on one of ITS children (§3.2 — the route link is attached to the
     stage worker, not the top job) would otherwise show up a SECOND time as a bare degrade card
     right next to its own real route card."""
@@ -2167,7 +2172,7 @@ def _build_process_lines(sessions, jobs, route_views_by_id, malformed, memory, t
 
     real_views = sorted((v for v in route_views_by_id.values() if v.get("nodes")),
                         key=lambda v: v.get("route_id") or "")
-    # A depth-1 conductor whose CHILD carries the route_id (§3.2 — the env/pipe route link is
+    # A dispatch-depth-1 conductor whose CHILD carries the route_id (§3.2 — the env/pipe route link is
     # attached to the stage worker, not the top job) already has a real card via that child;
     # exclude its own bare slug from the degrade pool so it never shows up a second time.
     # ★ code-test verification_round_2.md §10 — `jobs` (live only) under-covers the SAME way
@@ -2545,11 +2550,11 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             shown_cwds.pop(key_cwd, None)
 
         # pre-assemble session -> child-jobs and job -> sub-job maps before emitting rows.
-        # Depth 1 jobs can nest under an on-screen parent session; depth 2 jobs nest under
+        # Dispatch-depth-1 jobs can nest under an on-screen parent session; dispatch-depth-2 jobs nest under
         # their capability-owner job via parent_slug. This keeps main-session context light
         # while fleet still shows cross-harness orchestration shape.
         children = {}      # session_id -> [jobs] (nested under an on-screen parent)
-        job_children = {}  # parent dispatch slug -> [depth-2 jobs]
+        job_children = {}  # parent dispatch slug -> [dispatch-depth-2 jobs]
         orphans = []       # project-level fallback (parent dead/off-screen/no-env)
         loops_jobs = []    # no-parent-is-normal (cron loops) — no orphan marker
         visible_parent_slugs = {
@@ -2561,7 +2566,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 if j.parent_slug in visible_parent_slugs:
                     job_children.setdefault(j.parent_slug, []).append(j)
                 else:
-                    # A malformed/stale parent edge must not make a live depth-2 row
+                    # A malformed/stale parent edge must not make a live dispatch-depth-2 row
                     # disappear from Fleet. Surface it as a project-level orphan.
                     orphans.append(j)
             elif j.is_child and j.parent_sid and j.parent_sid in shown_sids:
@@ -2647,12 +2652,12 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
 
         def _emit_dispatch_tree(job, parent_model=None, parent_harness=None, parent_effort=None,
                                 orphan=False, is_last=True):
-            # SD-F2 — a depth-1 conductor's OWN breadcrumb tracks its active depth-2 stage
+            # SD-F2 — a dispatch-depth-1 conductor's OWN breadcrumb tracks its active dispatch-depth-2 stage
             # worker, not its static argv/plan-derived `stage`. `job_children` is the
             # enclosing closure dict, so this is readable before the row renders.
             stage_override = _conductor_stage_override(job)
-            # F-28b (v10) — a resolved route (found via a depth-2 CHILD's route_id, since the
-            # env/pipe route link is attached to the stage worker, not the depth-1 conductor
+            # F-28b (v10) — a resolved route (found via a dispatch-depth-2 CHILD's route_id, since the
+            # env/pipe route link is attached to the stage worker, not the dispatch-depth-1 conductor
             # row itself — dispatch.py §3.2) replaces the hardcoded `_PIPE_STAGES` breadcrumb.
             route_seq = _conductor_route_seq(job)
             if job.liveness == "stale":
@@ -2693,7 +2698,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 lines.extend(_subagent_strip(
                     shown_job_subs, depth=max(1, int(getattr(job, "depth", 1) or 1))))
             for sub in _sort_group_jobs(job_children.get(job.slug, [])):
-                # F-15b P0-2: a depth-2 stage worker that is done/queued/idle is already
+                # F-15b P0-2: a dispatch-depth-2 stage worker that is done/queued/idle is already
                 # absorbed into the conductor's own breadcrumb (✓/dim future segment) — only
                 # working (active) or stale/dead (failed, needs to be seen) children get their
                 # own row. `_SHOW_ALL` (the existing `a`-key toggle) restores the folded ones.
@@ -2727,8 +2732,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             return job.stage
 
         def _conductor_route_seq(job):
-            """[(node_id, state), ...] | None — resolved via a depth-2 CHILD's route_id (the
-            depth-1 conductor row itself rarely carries route_id — dispatch.py attaches the
+            """[(node_id, state), ...] | None — resolved via a dispatch-depth-2 CHILD's route_id (the
+            dispatch-depth-1 conductor row itself rarely carries route_id — dispatch.py attaches the
             env/pipe route link to the stage WORKER, §3.2). `None` means "no resolved route",
             the pre-v10 breadcrumb path (record-less or a load failure — tolerant, prd.md:303)."""
             depth2 = [k for k in job_children.get(job.slug, []) if getattr(k, "depth", 1) == 2]

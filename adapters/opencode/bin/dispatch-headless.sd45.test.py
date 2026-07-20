@@ -9,7 +9,7 @@ WH_S=importlib.util.spec_from_file_location("opencode_dispatch_headless",Path(__
 
 def probe_args(**overrides):
     base = dict(
-        depth=2, action="start", nested_eligibility="unknown", eligibility_source="",
+        dispatch_depth=2, action="start", nested_eligibility="unknown", eligibility_source="",
         eligibility_failure_class="", parent_harness="claude", parent_transport="headless",
         parent_sandbox="default", launch_authority="conductor", worktree="/tmp/fixture-worktree",
     )
@@ -35,7 +35,7 @@ class OpenCodeSD45InternalProbe(unittest.TestCase):
         self.assertEqual(args.eligibility_source, "direct-auth+headless-check")
         self.assertEqual(args.eligibility_probe, "internal")
         WH.validate_nested_eligibility(
-            depth=args.depth, action=args.action, parent_harness=args.parent_harness,
+            dispatch_depth=args.dispatch_depth, action=args.action, parent_harness=args.parent_harness,
             parent_transport=args.parent_transport, parent_sandbox=args.parent_sandbox,
             child_harness="opencode", launch_authority=args.launch_authority,
             status=args.nested_eligibility, source=args.eligibility_source,
@@ -52,7 +52,7 @@ class OpenCodeSD45InternalProbe(unittest.TestCase):
         self.assertEqual(args.eligibility_probe, "internal")
         with self.assertRaises(WH.DispatchContractError) as ctx:
             WH.validate_nested_eligibility(
-                depth=args.depth, action=args.action, parent_harness=args.parent_harness,
+                dispatch_depth=args.dispatch_depth, action=args.action, parent_harness=args.parent_harness,
                 parent_transport=args.parent_transport, parent_sandbox=args.parent_sandbox,
                 child_harness="opencode", launch_authority=args.launch_authority,
                 status=args.nested_eligibility, source=args.eligibility_source,
@@ -95,7 +95,7 @@ class OpenCodeSD45InternalProbe(unittest.TestCase):
         self.assertEqual(args.eligibility_probe, "internal")
 
     def test_depth1_never_probes(self):
-        args = probe_args(depth=1)
+        args = probe_args(dispatch_depth=1)
         with mock.patch.object(WH.subprocess, "run") as run:
             WH.bind_internal_eligibility_probe(args)
         run.assert_not_called()
@@ -113,8 +113,8 @@ class OpenCodeSD45(unittest.TestCase):
    base=Path(td); repo=base/"repo"; repo.mkdir(); subprocess.run(["git","init","-q",str(repo)],check=True); subprocess.run(["git","-C",str(repo),"config","user.email","fixture@example.com"],check=True); subprocess.run(["git","-C",str(repo),"config","user.name","Fixture"],check=True); (repo/"x").write_text("x"); subprocess.run(["git","-C",str(repo),"add","x"],check=True); subprocess.run(["git","-C",str(repo),"commit","-qm","init"],check=True)
    art=base/".agent_reports"; art.mkdir(); gate={"spec_read":{"satisfied":True,"source":"opencode-fixture"},"drift_verdict":"within-spec","workflow_mode":"tracked","artifact_guard":{"satisfied":True,"source":"opencode-fixture"}}
    dispatch={"tuples":[{"parent_harness":"opencode","parent_transport":"headless","parent_sandbox":"fixture","child_harness":"opencode","launch_authority":"conductor","status":"supported","probe_source":"opencode-fixture","probe_time":"2026-07-16T00:00:00Z","failure_class":""}],"native_subagent":[]}; route=R.compile_route("autopilot-code","dev","strong",repo,art,signals=["shared-contract"],transport="headless",tracking="tracked",tracked_gate_evidence=gate,dispatch_evidence=dispatch); path=base/"route.json"; path.write_text(json.dumps(route)); node=next(x for x in route["nodes"] if x["id"]=="execute"); jobs=base/"jobs.log"; logs=base/"logs"
-   args=[sys.executable,str(ROOT/"adapters/opencode/bin/dispatch-headless.py"),"--register","--worktree",str(repo),"--slug","opencode-sd45","--capability","autopilot-code","--mode","dev/backend","--qa","standard","--intensity","strong","--depth","2","--parent","owner","--route-file",str(path),"--route-id",route["route_id"],"--route-hash",route["route_hash"],"--route-node","execute","--registry-digest",route["registry_digest"],"--write-scope",";".join(node["write_scope"]),"--completion-gate",node["completion_gate"],"--model","provider/test","--variant","low","--jobs",str(jobs),"--log-dir",str(logs)]
-   env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),"OPENCODE_CONFIG_CONTENT":"{}"}; ok=subprocess.run(args,text=True,capture_output=True,env=env); self.assertEqual(ok.returncode,0,ok.stderr); prompt=(logs/"opencode-sd45.opencode.prompt.txt").read_text(); self.assertIn("consume the immutable record",prompt); self.assertNotIn("status -> prompt-signal -> mode -> route\n",prompt)
+   args=[sys.executable,str(ROOT/"adapters/opencode/bin/dispatch-headless.py"),"--register","--worktree",str(repo),"--slug","opencode-sd45","--capability","autopilot-code","--mode","dev/backend","--qa","standard","--intensity","strong","--dispatch-depth","2","--parent","owner","--parent-harness","opencode","--parent-transport","headless","--parent-sandbox","fixture","--nested-eligibility","supported","--eligibility-source","opencode-fixture","--fallback-ordinal","1","--route-file",str(path),"--route-id",route["route_id"],"--route-hash",route["route_hash"],"--route-node","execute","--registry-digest",route["registry_digest"],"--write-scope",";".join(node["write_scope"]),"--completion-gate",node["completion_gate"],"--model","provider/test","--variant","low","--jobs",str(jobs),"--log-dir",str(logs)]
+   env={**{k:v for k,v in os.environ.items() if k!="AGENT_DISPATCH_JOBS"},"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),"OPENCODE_CONFIG_CONTENT":"{}"}; ok=subprocess.run(args,text=True,capture_output=True,env=env); self.assertEqual(ok.returncode,0,ok.stderr); prompt=(logs/"opencode-sd45.opencode.prompt.txt").read_text(); self.assertIn("consume the immutable record",prompt); self.assertNotIn("status -> prompt-signal -> mode -> route\n",prompt)
    bad=args.copy(); bad[bad.index("autopilot-code")]="audit"; denied=subprocess.run(bad,text=True,capture_output=True,env=env); self.assertEqual(denied.returncode,65); self.assertIn("capability-reselection",denied.stderr)
    legacy=[sys.executable,str(ROOT/"adapters/opencode/bin/dispatch-headless.py"),"--dry-run","--worktree",str(repo),"--slug","opencode-legacy-scope","--capability","autopilot-code","--mode","dev/backend","--qa","standard","--write-scope","source/**","--model","provider/test","--variant","low"]
    compatible=subprocess.run(legacy,text=True,capture_output=True,env=env); self.assertEqual(compatible.returncode,0,compatible.stderr); self.assertIn("status=dry-run",compatible.stdout)

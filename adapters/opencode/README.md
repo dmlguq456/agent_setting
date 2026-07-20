@@ -274,7 +274,7 @@ reasoning-effort config field.
 | `fast implementer` | Configured balanced model/variant; concrete default remains unknown until runtime inventory exists |
 | `deep reviewer` / `deep maker` | Higher variant or stronger model for methodology, domain, architecture, and safety judgment |
 | `external adversary` | Prefer a model, configuration, or process different from the primary OpenCode session; otherwise report unavailable and fall back to thorough |
-| `deep orchestrator` | Standard+ depth-1 conductor; concrete model remains unknown until runtime inventory or probe exists |
+| `deep orchestrator` | Standard+ dispatch-depth-1 conductor; concrete model remains unknown until runtime inventory or probe exists |
 | `orchestrator` | Balanced mechanical coordination; concrete model remains unknown until runtime inventory or probe exists |
 
 OpenCode wrappers expose the mapping through `AGENT_MODEL_FAST`, `AGENT_MODEL_BALANCED`, `AGENT_MODEL_DEEP`,

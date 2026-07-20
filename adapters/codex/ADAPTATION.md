@@ -572,11 +572,11 @@ Conformance: `adapters/codex/bin/dispatch-headless.sd15.test.sh`.
 
 ### SD-48~50 nested dispatch recovery — realized
 
-Depth-2 starts require checked tuple evidence and an inherited canonical
+Dispatch-depth-2 starts require checked tuple evidence and an inherited canonical
 `AGENT_DISPATCH_JOBS`; noncanonical nested `--jobs` and unwritable global
 registries fail before spawn. Rows carry attempt identity, launch authority,
 fallback ordinal, and tuple evidence. `nested-headless` keeps the observed
-Codex-in-Codex workspace-write tuple is supported only when the depth-1 owner
+Codex-in-Codex workspace-write tuple is supported only when the dispatch-depth-1 owner
 has the wrapper-projected network contract, while `dispatch-chain` enforces
 same-harness → cross-harness → native → inline ordering. Adapter launches attach
 exact attempt, `pid`, and `/proc` start-tick identity; shared-worktree transcript
@@ -600,11 +600,11 @@ Dispatch contract v3 removes the resident launch broker, request spool,
 heartbeat, lease, and fencing identity. `dispatch-chain` invokes the checked
 Codex, Claude, or OpenCode adapter wrapper directly from the conductor. A stable
 attempt identity is claimed under the canonical jobs lock before process spawn;
-a duplicate claim starts zero children. Standard+ depth-1 Codex owners run with
+a duplicate claim starts zero children. Standard+ dispatch-depth-1 Codex owners run with
 `sandbox_workspace_write.network_access=true` and
 `AGENT_NESTED_HEADLESS_NETWORK=1`. Their writable worktree-local `CODEX_HOME`
 links the existing auth/config without copying or mutating credentials and
-keeps nested session/app-server state inside the owner sandbox. Depth-2 workers
+keeps nested session/app-server state inside the owner sandbox. Dispatch-depth-2 workers
 do not inherit the network widening. The outer Codex sandbox also admits only
 the existing harness `.core-grounding` directory and Claude `session-env`
 directory as downstream runtime scratch roots. This keeps adapter write guards
@@ -613,7 +613,7 @@ making the rest of either runtime home writable.
 Broker v1/v2 records remain readable for migration, and `preflight.sh broker`
 retains only diagnostic `status` and idempotent `stop` during the drain release.
 
-Foreground-scoped depth-2 Codex workers reuse the already checked outer
+Foreground-scoped dispatch-depth-2 Codex workers reuse the already checked outer
 `workspace-write` boundary and run the inner CLI with its mount sandbox disabled;
 this avoids unsupported nested mount setup without widening the outer filesystem
 or network authority. The wrapper also exports its exact self slug so

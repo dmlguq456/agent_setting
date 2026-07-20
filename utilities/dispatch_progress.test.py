@@ -22,7 +22,13 @@ class ProgressTest(unittest.TestCase):
         start = (Path("/proc") / str(self.proc.pid) / "stat").read_text().split()[21]
         self.attempt = "att-0123456789abcdef"
         self.scope=self.base/"scope";self.scope.mkdir()
-        pipe = f"capability=code-test,route_id=rt-1,route_node=test,attempt_id={self.attempt},pid={self.proc.pid},pid_start={start},write_scope={self.scope}"
+        pipe = (
+            "attempt_schema_version=2,dispatch_depth=2,transport=headless,"
+            "execution_surface=registered-headless,registered_worker=1,"
+            "fallback_hop=same-harness-headless,"
+            f"capability=code-test,route_id=rt-1,route_node=test,attempt_id={self.attempt},"
+            f"pid={self.proc.pid},pid_start={start},write_scope={self.scope}"
+        )
         self.jobs.write_text(f"2026-07-16T00:00:00Z\topen\t/repo\t{self.base}\tstage\t{pipe}\n")
 
     def tearDown(self):

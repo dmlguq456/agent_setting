@@ -1,6 +1,6 @@
 #!/bin/bash
-# Legacy case id, portable behavior: the selected drill adapter owns depth 1
-# and starts an OpenCode depth-2 verifier through adapter wrappers.
+# Legacy case id, portable behavior: the selected drill adapter owns dispatch-depth-1
+# and starts an OpenCode dispatch-depth-2 verifier through adapter wrappers.
 set -eu
 WORK=$1
 REPO="$WORK/repo"
@@ -22,13 +22,13 @@ cd "$REPO"
 git init -q && git checkout -q -b main
 git config user.email drill@test && git config user.name drill
 cat > README.md <<MD
-# Selected-adapter owner to OpenCode depth-2 fixture
+# Selected-adapter owner to OpenCode dispatch-depth-2 fixture
 
 This fixture checks one portable behavior through the selected adapter runner:
 
 - drill parent adapter: \`$PARENT_ADAPTER\`;
-- the parent registers its own depth-1 owner row through its adapter wrapper;
-- the parent starts an OpenCode depth-2 child through the OpenCode wrapper;
+- the parent registers its own dispatch-depth-1 owner row through its adapter wrapper;
+- the parent starts an OpenCode dispatch-depth-2 child through the OpenCode wrapper;
 - the child emits the fixture marker in its JSON log.
 MD
 cat > src/__init__.py <<'PY'
@@ -48,7 +48,7 @@ SHARED_LOG_DIR=$3
 . "$PWD/.dispatch/g10_parent.env"
 common=(--worktree "$PWD" --jobs "$SHARED_JOBS" --log-dir "$SHARED_LOG_DIR"
   --slug "$OWNER_SLUG" --capability autopilot-code --mode dev/refactor
-  --intensity standard --depth 1 --parent-session-id "$PARENT_SESSION_ID"
+  --intensity standard --dispatch-depth 1 --parent-session-id "$PARENT_SESSION_ID"
   --worker-type owner --assigned-contract autopilot-code --owner autopilot-code
   --owner-harness "$PARENT_ADAPTER" --inherit-model-settings)
 case "$PARENT_ADAPTER" in
@@ -82,16 +82,16 @@ SH
 chmod +x .dispatch/register_owner.sh
 {
 cat <<'MD'
-You are the OpenCode depth-2 verifier for the portable g10 drill case.
+You are the OpenCode dispatch-depth-2 verifier for the portable g10 drill case.
 
 MD
 if [ "$OBSERVE_SECONDS" -gt 0 ]; then
-  printf 'First run `sleep %s` so the fleet UI has time to show this depth-2 dispatch row.\n\n' "$OBSERVE_SECONDS"
+  printf 'First run `sleep %s` so the fleet UI has time to show this dispatch-depth-2 row.\n\n' "$OBSERVE_SECONDS"
 fi
 cat <<MD
 Do not edit files. Reply with one short line containing exactly this marker and the parent linkage:
 
-OPENCODE_DEPTH2_VERIFIER_PASS parent=xh-parent owner_harness=$PARENT_ADAPTER depth=2
+OPENCODE_DEPTH2_VERIFIER_PASS parent=xh-parent owner_harness=$PARENT_ADAPTER dispatch_depth=2
 MD
 } > opencode_depth2_prompt.md
 git add -A && git commit -q -m init

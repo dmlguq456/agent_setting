@@ -9,7 +9,7 @@ WH_S=importlib.util.spec_from_file_location("codex_dispatch_headless",Path(__fil
 
 def probe_args(**overrides):
     base = dict(
-        depth=2, action="start", nested_eligibility="unknown", eligibility_source="",
+        dispatch_depth=2, action="start", nested_eligibility="unknown", eligibility_source="",
         eligibility_failure_class="", parent_harness="claude", parent_transport="headless",
         parent_sandbox="default", launch_authority="conductor", worktree="/tmp/fixture-worktree",
     )
@@ -35,7 +35,7 @@ class CodexSD45InternalProbe(unittest.TestCase):
         self.assertEqual(args.eligibility_source, "direct-auth+headless-check")
         self.assertEqual(args.eligibility_probe, "internal")
         WH.validate_nested_eligibility(
-            depth=args.depth, action=args.action, parent_harness=args.parent_harness,
+            dispatch_depth=args.dispatch_depth, action=args.action, parent_harness=args.parent_harness,
             parent_transport=args.parent_transport, parent_sandbox=args.parent_sandbox,
             child_harness="codex", launch_authority=args.launch_authority,
             status=args.nested_eligibility, source=args.eligibility_source,
@@ -52,7 +52,7 @@ class CodexSD45InternalProbe(unittest.TestCase):
         self.assertEqual(args.eligibility_probe, "internal")
         with self.assertRaises(WH.DispatchContractError) as ctx:
             WH.validate_nested_eligibility(
-                depth=args.depth, action=args.action, parent_harness=args.parent_harness,
+                dispatch_depth=args.dispatch_depth, action=args.action, parent_harness=args.parent_harness,
                 parent_transport=args.parent_transport, parent_sandbox=args.parent_sandbox,
                 child_harness="codex", launch_authority=args.launch_authority,
                 status=args.nested_eligibility, source=args.eligibility_source,
@@ -95,7 +95,7 @@ class CodexSD45InternalProbe(unittest.TestCase):
         self.assertEqual(args.eligibility_probe, "internal")
 
     def test_depth1_never_probes(self):
-        args = probe_args(depth=1)
+        args = probe_args(dispatch_depth=1)
         with mock.patch.object(WH.subprocess, "run") as run:
             WH.bind_internal_eligibility_probe(args)
         run.assert_not_called()
@@ -112,7 +112,7 @@ class CodexSandboxMountShape(unittest.TestCase):
         return argparse.Namespace(
             sandbox="workspace-write",
             launch_lifecycle="foreground-scoped",
-            depth=2,
+            dispatch_depth=2,
             parent_harness="codex",
             parent_transport=transport,
             parent_sandbox="workspace-write",
@@ -182,8 +182,8 @@ class CodexSD45(unittest.TestCase):
    base=Path(td); repo=base/"repo"; repo.mkdir(); subprocess.run(["git","init","-q",str(repo)],check=True); subprocess.run(["git","-C",str(repo),"config","user.email","fixture@example.com"],check=True); subprocess.run(["git","-C",str(repo),"config","user.name","Fixture"],check=True); (repo/"x").write_text("x"); subprocess.run(["git","-C",str(repo),"add","x"],check=True); subprocess.run(["git","-C",str(repo),"commit","-qm","init"],check=True)
    art=base/".agent_reports"; art.mkdir(); gate={"spec_read":{"satisfied":True,"source":"codex-fixture"},"drift_verdict":"within-spec","workflow_mode":"tracked","artifact_guard":{"satisfied":True,"source":"codex-fixture"}}
    dispatch={"tuples":[{"parent_harness":"codex","parent_transport":"headless","parent_sandbox":"fixture","child_harness":"codex","launch_authority":"conductor","status":"supported","probe_source":"codex-fixture","probe_time":"2026-07-16T00:00:00Z","failure_class":""}],"native_subagent":[]}; route=R.compile_route("autopilot-code","dev","strong",repo,art,signals=["shared-contract"],transport="headless",tracking="tracked",tracked_gate_evidence=gate,dispatch_evidence=dispatch); path=base/"route.json"; path.write_text(json.dumps(route)); node=next(x for x in route["nodes"] if x["id"]=="execute"); jobs=base/"jobs.log"; logs=base/"logs"
-   args=[sys.executable,str(ROOT/"adapters/codex/bin/dispatch-headless.py"),"--register","--worktree",str(repo),"--slug","codex-sd45","--capability","autopilot-code","--mode","dev/backend","--qa","standard","--intensity","strong","--depth","2","--parent","owner","--route-file",str(path),"--route-id",route["route_id"],"--route-hash",route["route_hash"],"--route-node","execute","--registry-digest",route["registry_digest"],"--write-scope",";".join(node["write_scope"]),"--completion-gate",node["completion_gate"],"--model","gpt-test","--reasoning","low","--jobs",str(jobs),"--log-dir",str(logs)]
-   env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art)}; ok=subprocess.run(args,text=True,capture_output=True,env=env); self.assertEqual(ok.returncode,0,ok.stderr); prompt=(logs/"codex-sd45.codex.prompt.txt").read_text(); self.assertIn("consume the assigned route only",prompt); self.assertNotIn("preflight.sh route autopilot-code",prompt)
+   args=[sys.executable,str(ROOT/"adapters/codex/bin/dispatch-headless.py"),"--register","--worktree",str(repo),"--slug","codex-sd45","--capability","autopilot-code","--mode","dev/backend","--qa","standard","--intensity","strong","--dispatch-depth","2","--parent","owner","--parent-harness","codex","--parent-transport","headless","--parent-sandbox","fixture","--nested-eligibility","supported","--eligibility-source","codex-fixture","--fallback-ordinal","1","--route-file",str(path),"--route-id",route["route_id"],"--route-hash",route["route_hash"],"--route-node","execute","--registry-digest",route["registry_digest"],"--write-scope",";".join(node["write_scope"]),"--completion-gate",node["completion_gate"],"--model","gpt-test","--reasoning","low","--jobs",str(jobs),"--log-dir",str(logs)]
+   env={**{k:v for k,v in os.environ.items() if k!="AGENT_DISPATCH_JOBS"},"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art)}; ok=subprocess.run(args,text=True,capture_output=True,env=env); self.assertEqual(ok.returncode,0,ok.stderr); prompt=(logs/"codex-sd45.codex.prompt.txt").read_text(); self.assertIn("consume the assigned route only",prompt); self.assertNotIn("preflight.sh route autopilot-code",prompt)
    bad=args.copy(); bad[bad.index(";".join(node["write_scope"]))]="spec/**"; denied=subprocess.run(bad,text=True,capture_output=True,env=env); self.assertEqual(denied.returncode,65); self.assertIn("route-node-scope-mismatch",denied.stderr)
    legacy=[sys.executable,str(ROOT/"adapters/codex/bin/dispatch-headless.py"),"--dry-run","--worktree",str(repo),"--slug","codex-legacy-scope","--capability","autopilot-code","--mode","dev/backend","--qa","standard","--write-scope","source/**","--model","gpt-test","--reasoning","low"]
    compatible=subprocess.run(legacy,text=True,capture_output=True,env=env); self.assertEqual(compatible.returncode,0,compatible.stderr); self.assertIn("status=dry-run",compatible.stdout)
@@ -194,8 +194,9 @@ def _prompt_args(**overrides):
         worker_type="owner", intensity="strong", worktree="/tmp/fixture-worktree",
         route_id=None, route_node=None, attempt_id=None, route_file=None,
         worker_role=None, profile=None, capability="autopilot-code", mode="dev",
-        qa="thorough", depth=1, parent_slug=None, parent_session_id=None,
+        qa="thorough", dispatch_depth=1, parent_slug=None, parent_session_id=None,
         capability_owner=None, owner_harness=None, write_scope=None,
+        completion_gate=None, assigned_contract=None, model_role=None,
         agent_home=Path("/tmp/fixture-agent-home"), artifact_root="/tmp/fixture-artifacts",
     )
     base.update(overrides)
@@ -218,7 +219,7 @@ class CodexSD71SyncWaitClause(unittest.TestCase):
         self.assertIn("auxiliary layer only", prompt)
 
     def test_stage_prompt_never_carries_the_clause(self):
-        args = _prompt_args(worker_type=None, intensity="strong", depth=2,
+        args = _prompt_args(worker_type=None, intensity="strong", dispatch_depth=2,
                             route_id="rt-fixture", route_node="execute", attempt_id="att-fixture",
                             worker_role="code-execute")
         with mock.patch.object(WH, "task_prompt", return_value=("do the thing", "cli")):

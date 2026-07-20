@@ -116,7 +116,12 @@ class WorktreeCleanupTests(unittest.TestCase):
         self.fx.merge_and_push("eligible")
         self.fx.jobs.write_text(
             f"2026-07-14T00:00:00Z\topen\t{path}\t{path}\teligible\t"
-            "capability=autopilot-code,harness=codex\n",
+            "attempt_schema_version=2,attempt_id=att-cleanup-current,"
+            "dispatch_depth=1,transport=headless,execution_surface=registered-headless,"
+            "registered_worker=1,fallback_hop=same-harness-headless,"
+            "capability=autopilot-code,harness=codex\n"
+            f"2026-07-14T00:00:01Z\topen\t{path}\t{path}\teligible-legacy\t"
+            "capability=autopilot-code,harness=codex,depth=1\n",
             encoding="utf-8",
         )
         checked = self.fx.cleanup(path)
@@ -132,8 +137,12 @@ class WorktreeCleanupTests(unittest.TestCase):
         )
         self.assertEqual(branch.returncode, 0)
         registry = self.fx.jobs.read_text(encoding="utf-8")
-        self.assertIn("\tdone\t", registry)
-        self.assertIn("note=cleanup-merged", registry)
+        current = next(line for line in registry.splitlines() if "att-cleanup-current" in line)
+        legacy = next(line for line in registry.splitlines() if "eligible-legacy" in line)
+        self.assertIn("\tdone\t", current)
+        self.assertIn("note=cleanup-merged", current)
+        self.assertIn("\topen\t", legacy)
+        self.assertNotIn("note=cleanup-merged", legacy)
         self.assertIn('"artifact_harvest_required": false', self.fx.audit.read_text())
 
     def test_dirty_is_blocked(self):
@@ -193,13 +202,43 @@ class WorktreeCleanupTests(unittest.TestCase):
         unrelated = self.fx.add_worktree("unrelated")
         self.fx.jobs.write_text(
             f"2026-07-14T00:00:00Z\tdone\t{self.fx.repo}\t{registered}\t"
-            "registered\tcapability=autopilot-code,harness=codex\n",
+            "registered\tattempt_schema_version=2,attempt_id=att-cleanup-all,"
+            "dispatch_depth=1,transport=headless,"
+            "execution_surface=registered-headless,registered_worker=1,"
+            "fallback_hop=same-harness-headless,"
+            "capability=autopilot-code,harness=codex\n",
             encoding="utf-8",
         )
         result = self.fx.cleanup_all(apply=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertFalse(registered.exists())
         self.assertTrue(unrelated.exists())
+
+    def test_all_eligible_legacy_row_cannot_authorize_removal(self):
+        registered = self.fx.add_worktree("legacy-only")
+        self.fx.jobs.write_text(
+            f"2026-07-14T00:00:00Z\tdone\t{self.fx.repo}\t{registered}\t"
+            "legacy-only\tcapability=autopilot-code,harness=codex,depth=1\n",
+            encoding="utf-8",
+        )
+        result = self.fx.cleanup_all(apply=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("status=no-candidates", result.stdout)
+        self.assertTrue(registered.exists())
+
+    def test_all_eligible_current_axes_without_attempt_cannot_authorize_removal(self):
+        registered = self.fx.add_worktree("attemptless")
+        self.fx.jobs.write_text(
+            f"2026-07-14T00:00:00Z\tdone\t{self.fx.repo}\t{registered}\t"
+            "attemptless\tattempt_schema_version=2,dispatch_depth=1,"
+            "transport=headless,execution_surface=registered-headless,"
+            "registered_worker=1,fallback_hop=same-harness-headless\n",
+            encoding="utf-8",
+        )
+        result = self.fx.cleanup_all(apply=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("status=no-candidates", result.stdout)
+        self.assertTrue(registered.exists())
 
 
 if __name__ == "__main__":

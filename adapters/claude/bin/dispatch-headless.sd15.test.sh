@@ -51,7 +51,7 @@ launch() { # $1=fake-claude-body $2=slug $3=watch
   ( cd "$wt" && git init -q && git -c user.email=a@b -c user.name=a commit -q --allow-empty -m x )
   AGENT_HOME="$AH" AGENT_DISPATCH_JOBS="$AH/.dispatch/jobs.log" PATH="$bin:$PATH" python3 "$WRAP" --start \
     --worktree "$wt" --slug "$2" --capability code-plan --mode dev --qa standard \
-    --intensity standard --depth 2 --parent cx --worker-role code-plan --owner autopilot-code \
+    --intensity standard --dispatch-depth 2 --parent cx --worker-role code-plan --owner autopilot-code \
     --parent-harness claude --parent-transport headless --parent-sandbox fixture \
     --launch-authority conductor --nested-eligibility supported --eligibility-source sd15-fixture \
     --model sonnet --effort medium --early-exit-watch "$3" 2>&1

@@ -51,7 +51,7 @@ def profile_worker_type(root: Path, profile: str | None) -> str | None:
 def resolve_worker_type(
     *,
     explicit: str | None,
-    depth: int,
+    dispatch_depth: int,
     worker_role: str | None = None,
     route_node: str | None = None,
     profile_type: str | None = None,
@@ -67,7 +67,7 @@ def resolve_worker_type(
             if candidate not in WORKER_TYPES:
                 raise ValueError(f"invalid worker type: {candidate}")
             return candidate
-    if depth == 1:
+    if dispatch_depth == 1:
         return "owner"
     signal = (route_node or "").lower()
     if any(marker in signal for marker in REVIEW_MARKERS):

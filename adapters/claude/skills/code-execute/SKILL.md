@@ -15,7 +15,7 @@ metadata:
 
 # code-execute
 
-> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated depth-2 stage worker dispatched by the `autopilot-code` conductor. Resolve the plan path from arguments, read `plan/plan.md` from disk, and never depend on prior-stage conversation. This is the only source-mutating stage. Its write class is source code, `plan/checklist.md`, `dev_logs/`, `_internal/dev_reviews/`, and plan-frontmatter `status`. Any `dev-team` delegation remains inside this stage session.
+> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated dispatch-depth-2 stage worker dispatched by the `autopilot-code` conductor. Resolve the plan path from arguments, read `plan/plan.md` from disk, and never depend on prior-stage conversation. This is the only source-mutating stage. Its write class is source code, `plan/checklist.md`, `dev_logs/`, `_internal/dev_reviews/`, and plan-frontmatter `status`. Any `dev-team` delegation remains inside this stage session.
 
 > **Plan resolution**: Treat [arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) as the single authority for resolving `$ARG` to a plan path.
 

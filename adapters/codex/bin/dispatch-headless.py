@@ -27,8 +27,10 @@ from dispatch_contract import (  # noqa: E402
     close_attempt_row,
     completion_marker_gate,
     ensure_global_registry_writable,
+    headless_attempt_policy,
     launch_orphan_watch,
     new_attempt_id,
+    parse_registry_metadata,
     resolve_global_registry,
     validate_nested_eligibility,
 )
@@ -131,7 +133,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--mode", required=True)
     p.add_argument("--qa", default=None)  # optional/derived from --intensity (CONVENTIONS §1.1)
     p.add_argument("--intensity", default="standard")
-    p.add_argument("--depth", type=int, default=1)
+    p.add_argument("--dispatch-depth", dest="dispatch_depth", type=int, default=1)
     p.add_argument("--parent", dest="parent_slug")
     p.add_argument(
         "--parent-session-id",
@@ -165,6 +167,9 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--attempt-id")
     p.add_argument("--broker-request-id")
     p.add_argument("--fallback-ordinal", type=int, default=0)
+    p.add_argument("--fallback-hop")
+    p.add_argument("--execution-surface", default="registered-headless")
+    p.add_argument("--registered-worker", type=int, choices=(0, 1), default=1)
     p.add_argument("--capacity-retry", type=int, choices=(0, 1), default=0)
     p.add_argument("--prior-attempt-id")
     p.add_argument("--cooled-model")
@@ -218,17 +223,17 @@ def parser() -> argparse.ArgumentParser:
 
 
 def _bind_runtime_parent(args: argparse.Namespace) -> None:
-    """Bind a depth-1 Codex dispatch to the actual calling runtime session.
+    """Bind a dispatch-depth-1 Codex job to the actual calling runtime session.
 
     Callers historically supplied a synthetic ``--parent-session-id``. That
     overrides the parser's CODEX_THREAD_ID default and Fleet cannot repair the
     relationship from cwd when multiple interactive sessions share one repo.
-    Depth-2 workers keep their explicit conductor/owner envelope; the legacy
+    Dispatch-depth-2 workers keep their explicit conductor/owner envelope; the legacy
     force switch remains available when a checked fallback intentionally rebinds it.
     """
     force_current = os.environ.get("CODEX_DISPATCH_PARENT_CURRENT_FORCE") == "1"
     current_thread = os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID")
-    if args.depth == 1:
+    if args.dispatch_depth == 1:
         if current_thread:
             args.parent_session_id = current_thread
         if current_thread or force_current:
@@ -256,7 +261,7 @@ def task_prompt(args: argparse.Namespace) -> tuple[str, str]:
     return (
         "Run the requested portable harness work.\n"
         f"capability={args.capability}\nmode={args.mode}\nqa={args.qa}\n"
-        f"intensity={args.intensity}\ndepth={args.depth}\nparent={args.parent_slug or '-'}\n"
+        f"intensity={args.intensity}\ndispatch_depth={args.dispatch_depth}\nparent={args.parent_slug or '-'}\n"
         f"worktree={args.worktree}\n",
         "generated",
     )
@@ -397,7 +402,7 @@ def is_no_commit_stage(args: argparse.Namespace) -> bool:
     git-common-dir protected even when other roots are writable, so widening
     the sandbox to expose Git metadata is never an accepted fix. Such a stage
     produces source diff, tests, and evidence but does not ``git commit``; a
-    trusted depth-0/Claude boundary commits after the stage's own PASS gate.
+    trusted dispatch-depth-0/Claude boundary commits after the stage's own PASS gate.
     """
     return (
         getattr(args, "worker_type", None) in ("owner", "stage")
@@ -410,7 +415,7 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
     task, source = task_prompt(args)
     args.worker_type = resolve_worker_type(
         explicit=args.worker_type,
-        depth=args.depth,
+        dispatch_depth=args.dispatch_depth,
         worker_role=args.worker_role,
         route_node=args.route_node,
         profile_type=profile_worker_type(ROOT, args.profile),
@@ -447,7 +452,7 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
     no_commit_clause = (
         "No-commit worker (SD-69):\n"
         "- You are a no-commit worker: produce source diff, tests, and evidence; do NOT `git commit`.\n"
-        "- A trusted depth-0/Claude boundary commits after this stage's own PASS gate and confirms diff attribution.\n\n"
+        "- A trusted dispatch-depth-0/Claude boundary commits after this stage's own PASS gate and confirms diff attribution.\n\n"
         if is_no_commit_stage(args) else ""
     )
     sync_wait_clause = (
@@ -466,7 +471,7 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         f"- mode: {args.mode}\n"
         f"- qa: {args.qa}\n"
         f"- intensity: {args.intensity}\n"
-        f"- depth: {args.depth}\n"
+        f"- dispatch_depth: {args.dispatch_depth}\n"
         f"- worker_type: {args.worker_type}\n"
         f"- assigned_contract: {args.assigned_contract}\n"
         f"- route_node: {args.route_node or '-'}\n"
@@ -499,7 +504,7 @@ def effective_runtime_sandbox(args: argparse.Namespace) -> str:
     if (
         getattr(args, "launch_lifecycle", DETACHED) == FOREGROUND_SCOPED
         and os.environ.get("AGENT_DISPATCH_CHILD") == "1"
-        and getattr(args, "depth", 1) >= 2
+        and getattr(args, "dispatch_depth", 1) >= 2
         and getattr(args, "parent_harness", None) == "codex"
         and getattr(args, "parent_transport", None) == "headless"
         and getattr(args, "parent_sandbox", None) == "workspace-write"
@@ -543,10 +548,10 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
         "--add-dir",
         args.artifact_root,
     ]
-    if args.nested_headless_network or (args.depth == 2 and args.route_id and args.attempt_id):
-        # A depth-1 conductor must update the canonical attempt registry and
+    if args.nested_headless_network or (args.dispatch_depth == 2 and args.route_id and args.attempt_id):
+        # A dispatch-depth-1 conductor must update the canonical attempt registry and
         # materialize child prompt/transcript files under <agent-home>/.dispatch.
-        # A route-bound depth-2 stage needs the same narrow writable root for
+        # A route-bound dispatch-depth-2 stage needs the same narrow writable root for
         # its own SD-58 heartbeat. Network remains owner-only below.
         cmd += ["--add-dir", str(args.agent_home / ".dispatch")]
     for writable_dir in nested_owner_writable_dirs(args):
@@ -604,7 +609,7 @@ def _effective_parent_cwd(args):
 
     Orchestrators routinely `cd` into the task worktree before dispatching, so a raw
     getcwd() records the child's own worktree — a path that can never anchor the
-    parent session row in Fleet (observed: codex depth-1 dispatches stayed orphan,
+    parent session row in Fleet (observed: Codex dispatch-depth-1 jobs stayed orphan,
     2026-07-16). When the launch cwd sits inside the task worktree and that worktree
     is linked, back-map to the primary checkout instead; explicit --parent-cwd or
     AGENT_DISPATCH_PARENT_CWD still wins via args.parent_cwd.
@@ -630,7 +635,14 @@ def _effective_parent_cwd(args):
 
 def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     repo = subprocess.check_output(["git", "-C", args.worktree, "rev-parse", "--show-toplevel"], text=True).strip()
-    pipe = f"capability={args.capability},mode={args.mode},qa={args.qa},intensity={args.intensity},depth={args.depth},harness=codex"
+    pipe = (
+        f"capability={args.capability},mode={args.mode},qa={args.qa},"
+        f"intensity={args.intensity},attempt_schema_version=2,"
+        f"dispatch_depth={args.dispatch_depth},transport=headless,"
+        f"execution_surface={args.execution_surface},"
+        f"registered_worker={int(bool(args.registered_worker))},"
+        f"fallback_hop={args.fallback_hop},harness=codex"
+    )
     if args.parent_slug:
         pipe += f",parent={args.parent_slug}"
     if args.parent_session_id:
@@ -647,7 +659,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         pipe += f",owner={args.capability_owner}"
     if args.owner_harness:
         pipe += f",owner_harness={args.owner_harness}"
-    if args.depth >= 2:
+    if args.dispatch_depth >= 2:
         pipe += (
             f",parent_harness={args.parent_harness},parent_transport={args.parent_transport}"
             f",parent_sandbox={args.parent_sandbox},child_harness=codex"
@@ -682,17 +694,21 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     row = f"{ts}\topen\t{repo}\t{args.worktree}\t{args.slug}\t{pipe}"
     exclusive = ({"route_id": args.route_id, "route_node": args.route_node,
                   "capacity_retry": "1"} if args.capacity_retry else None)
+    quick_exclusive = ({"route_id": args.route_id, "route_node": args.route_node}
+                       if getattr(args, "quick_attempt", False) else None)
     return claim_attempt_row(
         jobs, args.attempt_id, row, launch=args.action == "start",
         exclusive_metadata=exclusive,
+        exclusive_live_metadata=quick_exclusive,
+        terminal_attempt_limit=getattr(args, "quick_attempt_limit", None),
     )
 
 
 def nested_headless_network_enabled(args: argparse.Namespace) -> bool:
-    """Grant network only to a standard+ depth-1 Codex capability owner."""
+    """Grant network only to a standard+ dispatch-depth-1 Codex capability owner."""
 
     return (
-        args.depth == 1
+        args.dispatch_depth == 1
         and args.worker_type == "owner"
         and args.intensity in {"standard", "strong", "thorough", "adversarial"}
         and args.sandbox == "workspace-write"
@@ -782,6 +798,9 @@ def close_job_row(jobs: Path, slug: str, worktree: str, reason: str, reset: str,
             ts, status, repo, wt, row_slug, pipe = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
             if status != "open" or row_slug != slug or wt != worktree:
                 continue
+            metadata = parse_registry_metadata(pipe)
+            if metadata.get("attempt_schema_version") != "2":
+                continue
             if attempt_id and f"attempt_id={attempt_id}" not in pipe.split(","):
                 continue
             pipe += f",note=dead-{reason}"
@@ -809,6 +828,9 @@ def annotate_job_row(jobs: Path, slug: str, worktree: str, extra_kv: str, attemp
                 continue
             ts, status, repo, wt, row_slug, pipe = parts[:6]
             if status != "open" or row_slug != slug or wt != worktree:
+                continue
+            metadata = parse_registry_metadata(pipe)
+            if metadata.get("attempt_schema_version") != "2":
                 continue
             if attempt_id and f"attempt_id={attempt_id}" not in pipe.split(","):
                 continue
@@ -990,24 +1012,24 @@ def validate_dispatch_inputs(args: argparse.Namespace) -> int:
             intensity=args.intensity,
             allowed_intensity="direct,quick,standard,strong,thorough,adversarial",
         )
-    if args.depth not in (1, 2):
-        return fail("invalid-dispatch-depth", 64, depth=str(args.depth), allowed_depth="1,2")
-    if args.depth == 2 and not args.parent_slug:
-        return fail("missing-dispatch-parent", 64, depth=str(args.depth))
-    if args.depth == 2 and args.intensity in {"direct", "quick"}:
-        return fail("invalid-depth-two-intensity", 64, depth=str(args.depth), intensity=args.intensity)
+    if args.dispatch_depth not in (1, 2):
+        return fail("invalid-dispatch-depth", 64, dispatch_depth=str(args.dispatch_depth), allowed_dispatch_depth="1,2")
+    if args.dispatch_depth == 2 and not args.parent_slug:
+        return fail("missing-dispatch-parent", 64, dispatch_depth=str(args.dispatch_depth))
+    if args.dispatch_depth == 2 and args.intensity in {"direct", "quick"}:
+        return fail("invalid-depth-two-intensity", 64, dispatch_depth=str(args.dispatch_depth), intensity=args.intensity)
     return 0
 
 
 def bind_internal_eligibility_probe(args: argparse.Namespace) -> None:
     """SD-66 fix-forward: run the nested-eligibility probe in-wrapper when a
-    depth-2 ``--start`` carries no explicit evidence, instead of failing
+    dispatch-depth-2 ``--start`` carries no explicit evidence, instead of failing
     closed on missing flags a caller never had reason to supply by hand.
 
     Triggers only when both evidence options are still at their parser
     default (``unknown``/empty) and the parent identity needed to run the
     probe is fully known. Explicit supported/unsupported/unknown/partial
-    evidence, depth-1, and dry-run/register never reach this function's
+    evidence, dispatch-depth-1, and dry-run/register never reach this function's
     trigger path (callers gate on depth/action before calling it). The probe's
     own JSON status is trusted only when every identity field it echoes back
     matches the request; a malformed/mismatched/erroring probe leaves
@@ -1015,7 +1037,7 @@ def bind_internal_eligibility_probe(args: argparse.Namespace) -> None:
     still fails closed. Preserves Codex's owner-network contract and headless
     readiness gates, which live inside the probe itself, not here.
     """
-    if args.depth < 2 or args.action != "start":
+    if args.dispatch_depth < 2 or args.action != "start":
         return
     if getattr(args, "nested_eligibility_explicit", False):
         return
@@ -1073,6 +1095,12 @@ def validate_route_record(args: argparse.Namespace) -> int:
     missing = [name for name in required if not getattr(args, name)]
     if missing:
         return fail("route-metadata-missing", 65, fields=",".join(missing))
+    try:
+        route_record = json.loads(Path(args.route_file).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        route_record = {}
+    if route_record.get("schema_version") != 2 or "broker_contract_version" in route_record:
+        return fail("legacy-broker-route-read-only", 65, route_file=args.route_file, child_spawned="0")
     command = [sys.executable, str(ROOT / "utilities" / "worker-route-guard.py"), "validate",
         "--route", args.route_file, "--node", args.route_node, "--cwd", args.worktree,
         "--artifact-root", args.artifact_root, "--capability", args.capability,
@@ -1142,7 +1170,7 @@ def main(argv: list[str]) -> int:
     bind_internal_eligibility_probe(args)
     try:
         validate_nested_eligibility(
-            depth=args.depth, action=action, parent_harness=args.parent_harness,
+            dispatch_depth=args.dispatch_depth, action=action, parent_harness=args.parent_harness,
             parent_transport=args.parent_transport, parent_sandbox=args.parent_sandbox,
             child_harness="codex", launch_authority=args.launch_authority,
             status=args.nested_eligibility, source=args.eligibility_source,
@@ -1163,6 +1191,26 @@ def main(argv: list[str]) -> int:
     rc = validate_route_record(args)
     if rc != 0:
         return rc
+    try:
+        attempt_policy = headless_attempt_policy(
+            route_file=args.route_file, route_node=args.route_node,
+            intensity=args.intensity, harness="codex",
+            dispatch_depth=args.dispatch_depth, parent_slug=args.parent_slug,
+            execution_surface=args.execution_surface,
+            registered_worker=bool(args.registered_worker),
+            fallback_hop=args.fallback_hop,
+            fallback_ordinal=args.fallback_ordinal,
+            parent_harness=args.parent_harness,
+            parent_transport=args.parent_transport,
+            parent_sandbox=args.parent_sandbox,
+            launch_authority=args.launch_authority,
+        )
+    except DispatchContractError as e:
+        return fail(e.reason, 65, detail=e.detail, child_spawned="0")
+    args.fallback_hop = str(attempt_policy["fallback_hop"])
+    args.fallback_ordinal = int(attempt_policy["fallback_ordinal"])
+    args.quick_attempt = bool(attempt_policy["quick"])
+    args.quick_attempt_limit = attempt_policy["terminal_attempt_limit"]
     try:
         args.resolved_model_settings = resolve_model_settings(args)
     except ModelSelectionError as e:
@@ -1214,7 +1262,7 @@ def main(argv: list[str]) -> int:
 
     agent_home = args.agent_home
     try:
-        registry = resolve_global_registry(agent_home, args.jobs, args.depth, action)
+        registry = resolve_global_registry(agent_home, args.jobs, args.dispatch_depth, action)
         jobs = registry.path
         args.attempt_id = new_attempt_id(args.attempt_id) if action in ("register", "start") else args.attempt_id
         if action in ("register", "start"):
@@ -1254,7 +1302,10 @@ def main(argv: list[str]) -> int:
             gate = subprocess.run([sys.executable, str(governor), "--root", str(governor_root), "check", "--class", "dispatch"])
             if gate.returncode != 0:
                 return fail("model-worker-governor-denied", 75)
-        args.attempt_claimed = append_job(jobs, args)
+        try:
+            args.attempt_claimed = append_job(jobs, args)
+        except DispatchContractError as e:
+            return fail(e.reason, 73, detail=e.detail, child_spawned="0")
     else:
         args.attempt_claimed = False
     if action == "start" and args.attempt_claimed:
@@ -1262,7 +1313,12 @@ def main(argv: list[str]) -> int:
             **{key: value for key, value in os.environ.items() if not key.startswith("AGENT_DISPATCH_BROKER_")},
             "AGENT_SESSION_ROLE": "worker",
             "AGENT_DISPATCH_CHILD": "1",
-            "AGENT_DISPATCH_DEPTH": str(args.depth),
+            "AGENT_DISPATCH_DEPTH": str(args.dispatch_depth),
+            "AGENT_DISPATCH_ATTEMPT_SCHEMA_VERSION": "2",
+            "AGENT_DISPATCH_TRANSPORT": "headless",
+            "AGENT_DISPATCH_EXECUTION_SURFACE": args.execution_surface,
+            "AGENT_DISPATCH_REGISTERED_WORKER": str(int(bool(args.registered_worker))),
+            "AGENT_DISPATCH_FALLBACK_HOP": args.fallback_hop,
             "AGENT_DISPATCH_INTENSITY": args.intensity,
             "AGENT_DISPATCH_SELF_SLUG": args.slug,
             "AGENT_DISPATCH_PARENT_SLUG": args.parent_slug or "",
@@ -1328,10 +1384,10 @@ def main(argv: list[str]) -> int:
         launch_identity = (f"pid={proc.pid}" + (f",pid_start={start_ticks}" if start_ticks else "")
                            + f",launch_lifecycle={args.launch_lifecycle}"
                            + f",runtime_sandbox={effective_runtime_sandbox(args)}")
-        if args.depth >= 2 and os.environ.get("AGENT_DISPATCH_CHILD") == "1":
+        if args.dispatch_depth >= 2 and os.environ.get("AGENT_DISPATCH_CHILD") == "1":
             launch_identity += ",pid_scope=namespace-local"
         annotate_job_row(jobs, args.slug, args.worktree, launch_identity, args.attempt_id)
-        if (args.depth == 1 and args.worker_type == "owner"
+        if (args.dispatch_depth == 1 and args.worker_type == "owner"
                 and args.launch_lifecycle == DETACHED):
             try:
                 watcher_pid = launch_orphan_watch(
@@ -1399,7 +1455,7 @@ def main(argv: list[str]) -> int:
     print(f"mode={args.mode}")
     print(f"qa={args.qa}")
     print(f"intensity={args.intensity}")
-    print(f"depth={args.depth}")
+    print(f"dispatch_depth={args.dispatch_depth}")
     print(f"eligibility_probe={getattr(args, 'eligibility_probe', None) or '-'}")
     print(f"parent={args.parent_slug or '-'}")
     print(f"parent_session_id={args.parent_session_id or '-'}")
@@ -1424,6 +1480,9 @@ def main(argv: list[str]) -> int:
     print(f"attempt_id={args.attempt_id or '-'}")
     print(f"launch_authority={args.launch_authority}")
     print(f"fallback_ordinal={args.fallback_ordinal}")
+    print(f"fallback_hop={args.fallback_hop}")
+    print(f"execution_surface={args.execution_surface}")
+    print(f"registered_worker={int(bool(args.registered_worker))}")
     print(f"registry_lock={jobs}.lock")
     print(f"duplicate_attempt={0 if args.attempt_claimed or action == 'dry-run' else 1}")
     print(f"registered={1 if args.attempt_claimed else 0}")

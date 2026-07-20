@@ -89,7 +89,7 @@ Before `design-init`, apply the CONVENTIONS §6.6 intake gate when visual direct
 
 ## Pipeline and Stage Dispatch
 
-For `standard+`, dispatch each durable phase as its own depth-2 headless session under OPERATIONS §5.10 (`<agent-home>/core/OPERATIONS.md#510-work-isolation-and-parallel-dispatch`). The depth-1 conductor passes artifact paths and reads verdict/status only. Each phase reconstructs context from `design_state.yaml` and prior artifacts; conversation memory is not a handoff channel. Stage sessions never redispatch.
+For `standard+`, dispatch each durable phase as its own dispatch-depth-2 headless session under OPERATIONS §5.10 (`<agent-home>/core/OPERATIONS.md#510-work-isolation-and-parallel-dispatch`). The dispatch-depth-1 conductor passes artifact paths and reads verdict/status only. Each phase reconstructs context from `design_state.yaml` and prior artifacts; conversation memory is not a handoff channel. Stage sessions never redispatch.
 
 Keep `direct`, `quick`, and artifact-free micro-stages inline. Between dispatched phases, record the confirmation verdict in `design_state.yaml` before launching the next phase.
 

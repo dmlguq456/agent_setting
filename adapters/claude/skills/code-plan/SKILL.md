@@ -17,7 +17,7 @@ metadata:
 
 Use the deepest eligible planning profile selected by the active adapter when cross-file reasoning or call-site analysis would benefit from it.
 
-> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated depth-2 stage worker dispatched by the `autopilot-code` conductor. Inputs are the task description and `<artifact-root>/plans/`; never depend on prior-stage conversation. The write class is `plan/plan.md`, an existing or explicitly requested audience-language companion such as legacy `plan/plan_ko.md`, and `_internal/plan_reviews/`. Any `plan-team` delegation remains inside this stage session.
+> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated dispatch-depth-2 stage worker dispatched by the `autopilot-code` conductor. Inputs are the task description and `<artifact-root>/plans/`; never depend on prior-stage conversation. The write class is `plan/plan.md`, an existing or explicitly requested audience-language companion such as legacy `plan/plan_ko.md`, and `_internal/plan_reviews/`. Any `plan-team` delegation remains inside this stage session.
 
 > **Language rule**: Follow the audience and artifact language contract in [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md). Write the canonical plan in the selected artifact language; do not generate a language mirror merely because the skill source is English or the conversation uses a particular language.
 

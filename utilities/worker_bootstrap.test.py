@@ -11,41 +11,41 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class WorkerBootstrapTest(unittest.TestCase):
     def test_deterministic_fallback_types(self):
-        self.assertEqual(W.resolve_worker_type(explicit=None, depth=1), "owner")
+        self.assertEqual(W.resolve_worker_type(explicit=None, dispatch_depth=1), "owner")
         self.assertEqual(
-            W.resolve_worker_type(explicit=None, depth=2, route_node="test"),
+            W.resolve_worker_type(explicit=None, dispatch_depth=2, route_node="test"),
             "stage",
         )
         self.assertEqual(
-            W.resolve_worker_type(explicit=None, depth=2, route_node="plan-review"),
+            W.resolve_worker_type(explicit=None, dispatch_depth=2, route_node="plan-review"),
             "review",
         )
-        self.assertEqual(W.resolve_worker_type(explicit=None, depth=2), "support")
+        self.assertEqual(W.resolve_worker_type(explicit=None, dispatch_depth=2), "support")
 
     def test_worker_role_is_only_a_legacy_fallback(self):
         self.assertEqual(
             W.resolve_worker_type(
                 explicit="support",
-                depth=2,
+                dispatch_depth=2,
                 worker_role="external-adversary",
                 route_node="review",
             ),
             "support",
         )
         self.assertEqual(
-            W.resolve_worker_type(explicit=None, depth=2, worker_role="code-test"),
+            W.resolve_worker_type(explicit=None, dispatch_depth=2, worker_role="code-test"),
             "stage",
         )
 
     def test_explicit_and_profile_precedence(self):
         self.assertEqual(
             W.resolve_worker_type(
-                explicit="review", depth=1, profile_type="stage"
+                explicit="review", dispatch_depth=1, profile_type="stage"
             ),
             "review",
         )
         self.assertEqual(
-            W.resolve_worker_type(explicit=None, depth=1, profile_type="support"),
+            W.resolve_worker_type(explicit=None, dispatch_depth=1, profile_type="support"),
             "support",
         )
 

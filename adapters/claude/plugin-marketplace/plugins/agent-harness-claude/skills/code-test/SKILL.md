@@ -15,7 +15,7 @@ metadata:
 
 # code-test
 
-> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated depth-2 stage worker dispatched by the `autopilot-code` conductor. Read the verification section in `plan/plan.md` and marks in `plan/checklist.md` from disk; never depend on prior-stage conversation. Source is read-only in this stage. The write class is `test_logs/` and `_internal/test_reviews/`. Any `qa-team` delegation remains inside this stage session.
+> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated dispatch-depth-2 stage worker dispatched by the `autopilot-code` conductor. Read the verification section in `plan/plan.md` and marks in `plan/checklist.md` from disk; never depend on prior-stage conversation. Source is read-only in this stage. The write class is `test_logs/` and `_internal/test_reviews/`. Any `qa-team` delegation remains inside this stage session.
 
 > **Plan resolution**: Treat [arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) as the single authority for resolving `$ARG`. If no plan matches, interpret the argument as the file or directory test target instead of returning a plan-resolution error.
 
@@ -79,7 +79,7 @@ This is the concrete final verify stage. Derive rigor from plan frontmatter or c
 | `quick` | Run the narrowest applicable command or check and record skip reasons | None by default |
 | `light` | Run focused syntax, import, smoke, or caller-specified checks | One fast review only when risk selects it |
 | `standard` | Run applicable graduated levels and capture command evidence | One focused adequacy review for a nontrivial change surface |
-| `thorough` | Broaden target coverage and add behavioral runtime observation for changed user-facing surfaces | Parallel or depth-2 review only when selected by `intensity=thorough` |
+| `thorough` | Broaden target coverage and add behavioral runtime observation for changed user-facing surfaces | Parallel or dispatch-depth-2 review only when selected by `intensity=thorough` |
 | `adversarial` | Thorough verification plus applicable security, failure-mode, and external-adversary evidence | Prove every claimed adversary or security pass ran |
 
 After `qa-team` returns, read `test_logs/test_report.md`. Run a separate adequacy review only when the selected assurance budget requires it, and append its findings to the report. Otherwise return the concrete verification verdict directly.

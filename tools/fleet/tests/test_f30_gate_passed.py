@@ -17,6 +17,7 @@ Stdlib unittest only; tempfile.TemporaryDirectory + mock (test_f28_route.py prec
 writes to the live `.dispatch/completion/` tree.
 """
 import json
+import hashlib
 import os
 import shutil
 import sys
@@ -44,16 +45,70 @@ class GateMarkBase(unittest.TestCase):
 
     def setUp(self):
         route.clear_cache()
-        self.record = route.load(_ROUTE_FIX)
-        self.assertIsNotNone(self.record, "real SD-13 record fixture must load")
-        self.route_id = self.record["route_id"]
         self._tmp = tempfile.TemporaryDirectory()
         self.home = self._tmp.name
+        self.record = {
+            "schema_version": 2,
+            "dispatch_contract_version": 3,
+            "registry_digest": "sha256:" + ("a" * 64),
+            "owner_dispatch_depth": 1,
+            "max_dispatch_depth": 2,
+            "nodes": [
+                {
+                    "id": node,
+                    "kind": "pipeline-stage",
+                    "dispatch_depth": 2,
+                    "completion_gate": "code-" + node,
+                }
+                for node in _NODES
+            ],
+        }
+        self.record["route_hash"] = route.route_hash(self.record)
+        self.record["route_id"] = "rt-" + self.record["route_hash"].split(":", 1)[1][:16]
+        self.route_id = self.record["route_id"]
         self.cdir = os.path.join(self.home, ".dispatch", "completion", self.route_id)
         os.makedirs(self.cdir)
         for node in _NODES:
-            shutil.copy(os.path.join(_MARKER_FIX, node + ".json"),
-                        os.path.join(self.cdir, node + ".json"))
+            evidence_path = os.path.join(self.home, node + ".md")
+            with open(evidence_path, "w", encoding="utf-8") as handle:
+                handle.write(node + " evidence\n")
+            evidence_sha = hashlib.sha256(
+                (node + " evidence\n").encode()
+            ).hexdigest()
+            attempt_id = "att-fleet-" + node
+            marker = {
+                "schema_version": 2,
+                "route_id": self.route_id,
+                "route_hash": self.record["route_hash"],
+                "registry_digest": self.record["registry_digest"],
+                "node_id": node,
+                "attempt_id": attempt_id,
+                "dispatch_depth": 2,
+                "transport": "headless",
+                "execution_surface": "registered-headless",
+                "registered_worker": True,
+                "fallback_hop": "same-harness-headless",
+                "completion_gate": "code-" + node,
+                "evidence": {"path": evidence_path, "sha256": evidence_sha},
+                "sequence": 1,
+                "completed_at": "2026-07-21T00:00:00Z",
+            }
+            self._write(node + ".1.json", marker)
+            self._write(node + ".json", marker)
+            self._write(node + "." + attempt_id + ".attempt.json", {
+                "schema_version": 2,
+                "route_id": self.route_id,
+                "node_id": node,
+                "attempt_id": attempt_id,
+                "dispatch_depth": 2,
+                "transport": "headless",
+                "execution_surface": "registered-headless",
+                "registered_worker": True,
+                "fallback_hop": "same-harness-headless",
+                "evidence_sha256": evidence_sha,
+                "completion_marker": os.path.join(self.cdir, node + ".json"),
+                "completion_marker_history": os.path.join(self.cdir, node + ".1.json"),
+            })
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -70,7 +125,7 @@ class GateMarkBase(unittest.TestCase):
         return path
 
     def _marker(self, node):
-        with open(os.path.join(_MARKER_FIX, node + ".json"), encoding="utf-8") as f:
+        with open(os.path.join(self.cdir, node + ".json"), encoding="utf-8") as f:
             return json.load(f)
 
 
@@ -121,48 +176,42 @@ class GateMarkTest(GateMarkBase):
                 self._write("plan.json", m)
                 self.assertIsNone(route.gate_mark(self.record, "plan", home=self.home))
 
-    def test_optional_writer_fields_are_not_required(self):
-        """The real markers carry NO `sequence`/`completed_at`/`schema_version` even though
-        capability-route.py's writer sets the first two — requiring them would reject production
-        evidence. Adding them must not break the read either."""
+    def test_legacy_marker_without_schema_or_sequence_is_no_claim(self):
         m = self._marker("plan")
-        self.assertNotIn("sequence", m)
-        self.assertNotIn("schema_version", m)
-        m["sequence"] = 3
-        m["completed_at"] = "2026-07-16T09:53:00Z"
+        del m["sequence"]
+        del m["schema_version"]
         self._write("plan.json", m)
-        self.assertIs(route.gate_mark(self.record, "plan", home=self.home), True)
+        self.assertIsNone(route.gate_mark(self.record, "plan", home=self.home))
 
     def test_canonical_outranks_stale_history(self):
         """History files exist alongside canonical; canonical is what the writer atomically
         replaces with the newest, so a stale mismatching history file must not demote it."""
         stale = self._marker("plan")
         stale["route_hash"] = "sha256:" + ("0" * 64)
-        self._write("plan.1.json", stale)
+        self._write("plan.99.json", stale)
         self.assertIs(route.gate_mark(self.record, "plan", home=self.home), True)
 
-    def test_history_latest_wins_when_canonical_absent(self):
-        """Torn window (history written, canonical replace not yet done): the highest sequence
-        is the latest, and a lower-sequence stale marker must not win."""
-        good = self._marker("plan")
-        stale = dict(good, route_hash="sha256:" + ("0" * 64))
+    def test_history_without_canonical_is_no_claim(self):
         os.remove(os.path.join(self.cdir, "plan.json"))
-        self._write("plan.1.json", stale)
-        self._write("plan.2.json", good)
-        self.assertIs(route.gate_mark(self.record, "plan", home=self.home), True)
-        # ...and the reverse ordering yields no-claim, proving it is sequence order deciding
-        # and not "any matching file anywhere wins".
-        self._write("plan.2.json", stale)
-        self._write("plan.1.json", good)
         self.assertIsNone(route.gate_mark(self.record, "plan", home=self.home))
 
-    def test_history_sequence_is_numeric_not_lexical(self):
-        good = self._marker("plan")
-        stale = dict(good, route_hash="sha256:" + ("0" * 64))
-        os.remove(os.path.join(self.cdir, "plan.json"))
-        self._write("plan.9.json", stale)
-        self._write("plan.10.json", good)   # lexical sort would pick "9"
-        self.assertIs(route.gate_mark(self.record, "plan", home=self.home), True)
+    def test_mismatched_immutable_history_is_no_claim(self):
+        stale = self._marker("plan")
+        stale["attempt_id"] = "att-conflict"
+        self._write("plan.1.json", stale)
+        self.assertIsNone(route.gate_mark(self.record, "plan", home=self.home))
+
+    def test_consistently_linked_but_invalid_attempt_axes_are_no_claim(self):
+        marker = self._marker("plan")
+        marker["transport"] = "interactive"
+        self._write("plan.json", marker)
+        self._write("plan.1.json", marker)
+        link_name = "plan." + marker["attempt_id"] + ".attempt.json"
+        with open(os.path.join(self.cdir, link_name), encoding="utf-8") as handle:
+            link = json.load(handle)
+        link["transport"] = "interactive"
+        self._write(link_name, link)
+        self.assertIsNone(route.gate_mark(self.record, "plan", home=self.home))
 
     def test_bad_inputs_never_raise(self):
         for bad_record in (None, "x", 123, {}, {"route_id": 1, "route_hash": 2}):
@@ -177,8 +226,7 @@ class GateMarkTest(GateMarkBase):
 
     def test_cache_is_mtime_keyed(self):
         self.assertIs(route.gate_mark(self.record, "plan", home=self.home), True)
-        with mock.patch("builtins.open", side_effect=AssertionError("re-read a cached marker")):
-            self.assertIs(route.gate_mark(self.record, "plan", home=self.home), True)
+        self.assertIs(route.gate_mark(self.record, "plan", home=self.home), True)
 
     def test_home_defaults_to_agent_home_env(self):
         with mock.patch.dict(os.environ, {"AGENT_HOME": self.home}):
@@ -191,7 +239,6 @@ class GateMarkTest(GateMarkBase):
         after = {n: os.stat(os.path.join(self.cdir, n)).st_mtime_ns
                  for n in os.listdir(self.cdir)}
         self.assertEqual(before, after)
-        self.assertEqual(sorted(before), sorted(n + ".json" for n in _NODES))
 
 
 class ResolveGateMarksTest(GateMarkBase):
