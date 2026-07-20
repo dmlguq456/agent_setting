@@ -180,6 +180,16 @@ def parser() -> argparse.ArgumentParser:
         help="SD-15: seconds to watch a just-launched child for a limit/auth early death "
         "(0 disables). On detection the jobs.log row is closed done,note=dead-<reason>.",
     )
+    p.add_argument(
+        "--foreground",
+        action="store_true",
+        help="Hold the worker synchronously inside this launcher call and record its real "
+        "exit/signal on the registry row. THE nested-sandbox-safe mode: a per-tool-call "
+        "PID-namespace sandbox kills any backgrounded child the moment the call returns, "
+        "but a foreground child lives exactly as long as the launcher does. The sequential "
+        "stage pipeline (OPERATIONS §5.10) makes the blocking equivalent to the "
+        "spawn-then-poll flow; the caller owns a sufficiently long tool budget.",
+    )
     return p
 
 
@@ -976,16 +986,19 @@ def main(argv: list[str]) -> int:
         if args.profile:
             env["CLAUDE_CONFIG_DIR"] = str(instance_dir)
         if (os.environ.get("AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN") != "1"
+                and not args.foreground
                 and pid_namespace_scoped()):
             # Fail-fast instead of spawning a child that dies with this tool call.
-            # AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN=1 is the deliberate override for
-            # long-lived containers, where the namespace outlives the launcher.
+            # --foreground is the sanctioned path here (child lives as long as the
+            # launcher); AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN=1 is the deliberate
+            # override for long-lived containers, where the namespace outlives us.
             close_job_row(jobs, args.slug, args.worktree,
                           "nested-sandbox-lifetime", "", args.attempt_id)
             return fail(
                 "nested-sandbox-lifetime", 77,
                 detail=("launcher runs inside a per-call PID-namespace sandbox; a "
-                        "background child cannot outlive this tool call — use a checked "
+                        "background child cannot outlive this tool call — rerun with "
+                        "--foreground to hold the worker inside this call, use a checked "
                         "fallback (OPERATIONS §5.10 inline / dispatch from an unsandboxed "
                         "owner), or set AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN=1 in a "
                         "long-lived container"),
@@ -1011,7 +1024,7 @@ def main(argv: list[str]) -> int:
         if args.depth >= 2 and os.environ.get("AGENT_DISPATCH_CHILD") == "1":
             launch_identity += ",pid_scope=namespace-local"
         annotate_job_row(jobs, args.slug, args.worktree, launch_identity, args.attempt_id)
-        if args.depth == 1 and args.worker_type == "owner":
+        if args.depth == 1 and args.worker_type == "owner" and not args.foreground:
             try:
                 watcher_pid = launch_orphan_watch(
                     jobs, agent_home, args.attempt_id, proc.pid, start_ticks or "")
@@ -1032,16 +1045,38 @@ def main(argv: list[str]) -> int:
         args.child_pid = proc.pid
         args.child_pid_start = start_ticks
         args.launch_heartbeat = seed_launch_heartbeat(args, jobs, proc.pid, start_ticks)
-        # SD-15 (OPERATIONS §5.10 ⑨): watch briefly for a limit/auth early death so
-        # a limit-killed launch closes its own row now instead of lingering `open`
-        # until liveness SUSPECT catches it minutes later.
-        death = watch_early_death(proc, log_path, args.early_exit_watch)
-        if death:
-            reason, reset = death
-            close_job_row(jobs, args.slug, args.worktree, reason, reset, args.attempt_id)
-            if reason != "capacity":
-                write_reset_cache(agent_home, "claude", reason, reset)
-            args.early_death = (reason, reset)
+        if args.foreground:
+            # Foreground mode: the full worker lifetime IS the watch window. On exit,
+            # classify limit/auth via the same SD-15 log scan, else record the REAL
+            # exit/signal on the row. rc==0 leaves the row open for the normal
+            # harvest flow, identical to a background child that completed on its own.
+            rc = proc.wait()
+            args.foreground_exit = rc
+            try:
+                tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
+            except OSError:
+                tail = ""
+            death = scan_anchored_death(tail) if rc != 0 else None
+            if death:
+                reason, reset = death
+                close_job_row(jobs, args.slug, args.worktree, reason, reset, args.attempt_id)
+                if reason != "capacity":
+                    write_reset_cache(agent_home, "claude", reason, reset)
+                args.early_death = (reason, reset)
+            elif rc != 0:
+                reason = f"signal-{-rc}" if rc < 0 else f"exit-{rc}"
+                close_job_row(jobs, args.slug, args.worktree, reason, "", args.attempt_id)
+        else:
+            # SD-15 (OPERATIONS §5.10 ⑨): watch briefly for a limit/auth early death so
+            # a limit-killed launch closes its own row now instead of lingering `open`
+            # until liveness SUSPECT catches it minutes later.
+            death = watch_early_death(proc, log_path, args.early_exit_watch)
+            if death:
+                reason, reset = death
+                close_job_row(jobs, args.slug, args.worktree, reason, reset, args.attempt_id)
+                if reason != "capacity":
+                    write_reset_cache(agent_home, "claude", reason, reset)
+                args.early_death = (reason, reset)
 
     print("adapter=claude")
     print("runtime_surface=claude-print-headless")
@@ -1084,6 +1119,10 @@ def main(argv: list[str]) -> int:
     print(f"child_pid={getattr(args, 'child_pid', None) or '-'}")
     print(f"child_pid_start={getattr(args, 'child_pid_start', None) or '-'}")
     print(f"launch_heartbeat={getattr(args, 'launch_heartbeat', 'not-started')}")
+    print(f"foreground={1 if args.foreground else 0}")
+    fg_exit = getattr(args, "foreground_exit", None)
+    if fg_exit is not None:
+        print(f"worker_exit={fg_exit}")
     early_death = getattr(args, "early_death", None)
     if early_death:
         reason, reset = early_death

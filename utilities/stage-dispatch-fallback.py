@@ -206,6 +206,27 @@ def allowed_capacity_settings(harness: str, model: str, paired: str) -> bool:
     return False
 
 
+def pid_namespace_scoped() -> bool:
+    """Same probe as the adapter wrappers (adapters/*/bin/dispatch-headless.py): True when
+    THIS launcher runs inside a per-tool-call PID-namespace sandbox, where a backgrounded
+    child dies the moment the tool call returns (2026-07-20 memory-oncall-promotion r1~r3).
+    Duplicated per the sibling-adapter self-containment pattern; keep the three in sync."""
+    try:
+        with open("/proc/self/status", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith("NSpid:"):
+                    if len(line.split()) > 2:
+                        return True
+                    break
+    except OSError:
+        pass
+    try:
+        with open("/proc/1/comm", encoding="utf-8") as handle:
+            return handle.read().strip() not in ("systemd", "init")
+    except OSError:
+        return True
+
+
 def wrapper_command(
     args: argparse.Namespace,
     route: dict,
@@ -274,6 +295,15 @@ def wrapper_command(
     for value, flag in optional:
         if value:
             command += [flag, str(value)]
+    if (args.action == "start"
+            and harness in {"claude", "codex"}
+            and os.environ.get("AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN") != "1"
+            and pid_namespace_scoped()):
+        # Sandboxed conductor → the wrapper holds the worker in FOREGROUND (the child
+        # lives exactly as long as this tool call; codex-style yield polling carries the
+        # long call). Unsandboxed launchers keep today's background spawn. opencode's
+        # wrapper has no --foreground yet — its nested path stays guarded by eligibility.
+        command.append("--foreground")
     return command
 
 
