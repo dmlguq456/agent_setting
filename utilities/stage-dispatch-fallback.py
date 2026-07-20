@@ -13,6 +13,9 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "utilities"))
+from dispatch_lifecycle import DETACHED, FOREGROUND_SCOPED, select_launch_lifecycle  # noqa: E402
+
 ORDER = ["same-harness-headless", "cross-harness-headless", "native-subagent", "inline"]
 
 
@@ -220,6 +223,7 @@ def wrapper_command(
     wrapper = ROOT / f"adapters/{harness}/bin/dispatch-headless.py"
     if harness not in {"codex", "claude", "opencode"} or not wrapper.is_file():
         raise ValueError(f"unsupported child harness: {harness}")
+    lifecycle = getattr(args, "launch_lifecycle", DETACHED)
     command = [
         sys.executable,
         str(wrapper),
@@ -253,6 +257,10 @@ def wrapper_command(
         "--eligibility-failure-class", row.get("failure_class") or "-",
         "--fallback-ordinal", str(ordinal),
     ]
+    if harness in {"codex", "claude"}:
+        command += ["--launch-lifecycle", lifecycle]
+        if lifecycle == FOREGROUND_SCOPED:
+            command += ["--foreground-timeout", str(args.foreground_timeout)]
     if capacity_settings:
         model, paired = capacity_settings
         command += ["--model", model]
@@ -386,7 +394,11 @@ def capacity_retry(
     try:
         retry = subprocess.run(
             retry_command, cwd=ROOT, text=True, capture_output=True,
-            check=False, timeout=args.direct_timeout, env=direct_env(),
+            check=False,
+            timeout=(args.foreground_timeout + 10
+                     if getattr(args, "launch_lifecycle", DETACHED) == FOREGROUND_SCOPED
+                     else args.direct_timeout),
+            env=direct_env(),
         )
     except subprocess.TimeoutExpired:
         if registry_has_attempt(args.jobs, retry_id):
@@ -403,7 +415,8 @@ def capacity_retry(
             return "existing", refreshed[-1], retry_output
         return "fail-closed", retry_fields, "capacity-exclusive-claim-lost"
     if (retry.returncode == 0 and retry_fields.get("early_death", "-") == "-"
-            and retry_fields.get("check") != "failed"):
+            and retry_fields.get("check") != "failed"
+            and retry_fields.get("worker_failure", "-") == "-"):
         if args.action == "start":
             watch_state, watch_fields = watch_launched_attempt(
                 args, route, node, retry_id, retry_fields
@@ -426,7 +439,7 @@ def main() -> int:
     p.add_argument("--route", type=Path, required=True)
     p.add_argument("--node", required=True)
     p.add_argument("--slug", required=True)
-    p.add_argument("--parent", required=True)
+    p.add_argument("--parent")
     p.add_argument("--mode", required=True)
     p.add_argument("--qa", default="standard")
     p.add_argument("--worker-role")
@@ -436,6 +449,7 @@ def main() -> int:
     p.add_argument("--broker-root", type=Path, help=argparse.SUPPRESS)
     p.add_argument("--broker-timeout", type=float, help=argparse.SUPPRESS)
     p.add_argument("--direct-timeout", type=float, default=45.0)
+    p.add_argument("--foreground-timeout", type=float, default=3600.0)
     p.add_argument("--progress-window-seconds", type=float, default=300.0)
     p.add_argument("--watchdog-max-windows", type=int, default=12)
     p.add_argument("--native-attempt-id")
@@ -450,6 +464,16 @@ def main() -> int:
     action.add_argument("--register", dest="action", action="store_const", const="register")
     action.add_argument("--start", dest="action", action="store_const", const="start")
     args = p.parse_args()
+    args.launch_lifecycle = select_launch_lifecycle()
+    self_slug = os.environ.get("AGENT_DISPATCH_SELF_SLUG")
+    if args.parent and self_slug and args.parent != self_slug:
+        return fail(
+            "parent-identity-mismatch", 73, explicit=args.parent,
+            current=self_slug, child_spawned="0",
+        )
+    args.parent = args.parent or self_slug
+    if not args.parent:
+        return fail("parent-identity-missing", 73, child_spawned="0")
 
     try:
         args.route = args.route.resolve()
@@ -523,18 +547,26 @@ def main() -> int:
                         text=True,
                         capture_output=True,
                         check=False,
-                        timeout=args.direct_timeout,
+                        timeout=(args.foreground_timeout + 10
+                                 if args.launch_lifecycle == FOREGROUND_SCOPED
+                                 else args.direct_timeout),
                         env=direct_env(),
                     )
                     output = (result.stdout + result.stderr).strip()
                     fields = output_fields(output)
                     early = fields.get("early_death", "-")
+                    worker_failure = fields.get("worker_failure", "-")
                     attempts.append(f"{ordinal}:{key}:direct:exit-{result.returncode}:attempt-{attempt_id}")
-                    if result.returncode != 0 or fields.get("check") == "failed":
+                    if (result.returncode != 0 or fields.get("check") == "failed"
+                            or worker_failure != "-"):
+                        failure_reason = (
+                            fields.get("reason")
+                            or (worker_failure if worker_failure != "-" else "wrapper-exit")
+                        )
                         direct_failures.append({
                             "attempt_id": attempt_id,
                             "exit": str(result.returncode),
-                            "reason": fields.get("reason") or "wrapper-exit",
+                            "reason": failure_reason,
                             "detail": fields.get("detail") or compact_diagnostic(output),
                         })
                 except subprocess.TimeoutExpired as exc:
@@ -549,7 +581,8 @@ def main() -> int:
                 except (OSError, ValueError) as exc:
                     attempts.append(f"{ordinal}:{key}:direct-error-{type(exc).__name__}:attempt-{attempt_id}")
                     continue
-                if result.returncode == 0 and early == "-" and fields.get("check") != "failed":
+                if (result.returncode == 0 and early == "-"
+                        and fields.get("check") != "failed" and worker_failure == "-"):
                     if args.action == "start":
                         watch_state, watch_fields = watch_launched_attempt(
                             args, route, node, attempt_id, fields)

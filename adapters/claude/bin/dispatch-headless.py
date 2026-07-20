@@ -32,6 +32,13 @@ from dispatch_contract import (  # noqa: E402
     resolve_global_registry,
     validate_nested_eligibility,
 )
+from dispatch_lifecycle import (  # noqa: E402
+    DETACHED,
+    FOREGROUND_SCOPED,
+    LIFECYCLES,
+    pid_namespace_scoped,
+    wait_foreground,
+)
 from worker_bootstrap import (  # noqa: E402
     assigned_contract,
     profile_worker_type,
@@ -179,6 +186,13 @@ def parser() -> argparse.ArgumentParser:
         default=float(os.environ.get("CLAUDE_DISPATCH_EARLY_EXIT_WATCH", "8")),
         help="SD-15: seconds to watch a just-launched child for a limit/auth early death "
         "(0 disables). On detection the jobs.log row is closed done,note=dead-<reason>.",
+    )
+    p.add_argument("--launch-lifecycle", choices=LIFECYCLES, default=DETACHED)
+    p.add_argument(
+        "--foreground-timeout",
+        type=float,
+        default=float(os.environ.get("CLAUDE_DISPATCH_FOREGROUND_TIMEOUT", "3600")),
+        help="maximum child lifetime for foreground-scoped launch; 0 disables timeout",
     )
     return p
 
@@ -566,34 +580,6 @@ def process_start_ticks(pid: int) -> str:
         return ""
 
 
-def pid_namespace_scoped() -> bool:
-    """True when this launcher itself runs inside a nested PID namespace — the
-    per-tool-call sandbox case (bwrap --unshare-pid --die-with-parent). A child
-    spawned here CANNOT outlive the tool call, start_new_session or not: namespace
-    PID 1 dies with the call and everything inside is SIGKILLed (observed 2026-07-20
-    on the codex adapter — memory-oncall-promotion-plan r1~r3, three depth-2 workers
-    died 2-4 events in, exactly when the launcher returned; same physics applies
-    here). OPERATIONS §5.10 lists "headless dispatch is unsupported" as a checked
-    inline trigger; this probe turns that clause from a silent trap into a typed
-    refusal. Two probes because the sandbox may or may not remount /proc: against
-    the HOST proc our NSpid line grows extra columns; a REMOUNTED proc exposes a
-    non-init pid 1."""
-    try:
-        with open("/proc/self/status", encoding="utf-8") as handle:
-            for line in handle:
-                if line.startswith("NSpid:"):
-                    if len(line.split()) > 2:
-                        return True
-                    break
-    except OSError:
-        pass
-    try:
-        with open("/proc/1/comm", encoding="utf-8") as handle:
-            return handle.read().strip() not in ("systemd", "init")
-    except OSError:
-        return True
-
-
 def seed_launch_heartbeat(args: argparse.Namespace, jobs: Path, pid: int, start: str) -> str:
     if not (args.attempt_id and args.route_id and args.route_node):
         return "not-route-bound"
@@ -975,7 +961,8 @@ def main(argv: list[str]) -> int:
         })
         if args.profile:
             env["CLAUDE_CONFIG_DIR"] = str(instance_dir)
-        if (os.environ.get("AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN") != "1"
+        if (args.launch_lifecycle == DETACHED
+                and os.environ.get("AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN") != "1"
                 and pid_namespace_scoped()):
             # Fail-fast instead of spawning a child that dies with this tool call.
             # AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN=1 is the deliberate override for
@@ -985,7 +972,8 @@ def main(argv: list[str]) -> int:
             return fail(
                 "nested-sandbox-lifetime", 77,
                 detail=("launcher runs inside a per-call PID-namespace sandbox; a "
-                        "background child cannot outlive this tool call — use a checked "
+                        "background child cannot outlive this tool call — select "
+                        "foreground-scoped through dispatch-chain or use a checked "
                         "fallback (OPERATIONS §5.10 inline / dispatch from an unsandboxed "
                         "owner), or set AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN=1 in a "
                         "long-lived container"),
@@ -1007,11 +995,13 @@ def main(argv: list[str]) -> int:
         # the child pid so liveness can use a process signal. Conductor activity
         # in the same worktree can contaminate transcript mtime.
         start_ticks = process_start_ticks(proc.pid)
-        launch_identity = f"pid={proc.pid}" + (f",pid_start={start_ticks}" if start_ticks else "")
+        launch_identity = (f"pid={proc.pid}" + (f",pid_start={start_ticks}" if start_ticks else "")
+                           + f",launch_lifecycle={args.launch_lifecycle}")
         if args.depth >= 2 and os.environ.get("AGENT_DISPATCH_CHILD") == "1":
             launch_identity += ",pid_scope=namespace-local"
         annotate_job_row(jobs, args.slug, args.worktree, launch_identity, args.attempt_id)
-        if args.depth == 1 and args.worker_type == "owner":
+        if (args.depth == 1 and args.worker_type == "owner"
+                and args.launch_lifecycle == DETACHED):
             try:
                 watcher_pid = launch_orphan_watch(
                     jobs, agent_home, args.attempt_id, proc.pid, start_ticks or "")
@@ -1032,16 +1022,23 @@ def main(argv: list[str]) -> int:
         args.child_pid = proc.pid
         args.child_pid_start = start_ticks
         args.launch_heartbeat = seed_launch_heartbeat(args, jobs, proc.pid, start_ticks)
-        # SD-15 (OPERATIONS §5.10 ⑨): watch briefly for a limit/auth early death so
-        # a limit-killed launch closes its own row now instead of lingering `open`
-        # until liveness SUSPECT catches it minutes later.
-        death = watch_early_death(proc, log_path, args.early_exit_watch)
-        if death:
-            reason, reset = death
-            close_job_row(jobs, args.slug, args.worktree, reason, reset, args.attempt_id)
-            if reason != "capacity":
-                write_reset_cache(agent_home, "claude", reason, reset)
-            args.early_death = (reason, reset)
+        if args.launch_lifecycle == FOREGROUND_SCOPED:
+            outcome = wait_foreground(proc, args.foreground_timeout)
+            args.worker_exit = outcome.exit_code
+            args.worker_failure = outcome.failure
+            if outcome.failure:
+                close_job_row(
+                    jobs, args.slug, args.worktree, outcome.failure, "", args.attempt_id
+                )
+        else:
+            # SD-15: detached launches retain the short early-death watch.
+            death = watch_early_death(proc, log_path, args.early_exit_watch)
+            if death:
+                reason, reset = death
+                close_job_row(jobs, args.slug, args.worktree, reason, reset, args.attempt_id)
+                if reason != "capacity":
+                    write_reset_cache(agent_home, "claude", reason, reset)
+                args.early_death = (reason, reset)
 
     print("adapter=claude")
     print("runtime_surface=claude-print-headless")
@@ -1084,6 +1081,9 @@ def main(argv: list[str]) -> int:
     print(f"child_pid={getattr(args, 'child_pid', None) or '-'}")
     print(f"child_pid_start={getattr(args, 'child_pid_start', None) or '-'}")
     print(f"launch_heartbeat={getattr(args, 'launch_heartbeat', 'not-started')}")
+    print(f"launch_lifecycle={args.launch_lifecycle}")
+    print(f"worker_exit={getattr(args, 'worker_exit', '-')}")
+    print(f"worker_failure={getattr(args, 'worker_failure', None) or '-'}")
     early_death = getattr(args, "early_death", None)
     if early_death:
         reason, reset = early_death

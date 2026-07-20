@@ -33,5 +33,18 @@ class SpecTransactionTest(unittest.TestCase):
    route=R.compile_route("autopilot-code","dev","direct",root,artifact,predicates=["atomic-outcome","known-scope","no-shared-contract","no-resource-run","no-artifact-handoff","no-independent-verifier","focused-verification"],transport="inline-fallback",inline_reason="atomic-direct",tracking="tracked",tracked_gate_evidence=gate)
    path=root/"route.json"; path.write_text(json.dumps(route)); p=subprocess.run([sys.executable,str(ROOT/"utilities/spec-transaction.py"),"run","--artifact-root",str(artifact),"--worktree",str(root),"--route",str(path),"--node","inline","--",sys.executable,"-c","pass"],text=True,capture_output=True)
    self.assertEqual(p.returncode,65); self.assertIn("spec-touch-not-declared",p.stdout)
+ def test_component_spec_root_owns_its_version_sequence(self):
+  with tempfile.TemporaryDirectory() as td:
+   root=Path(td); artifact=root/".agent_reports"; component=artifact/"spec/component"; component.mkdir(parents=True)
+   subprocess.run(["git","init","-q",str(root)],check=True); subprocess.run(["git","-C",str(root),"config","user.email","fixture@example.com"],check=True); subprocess.run(["git","-C",str(root),"config","user.name","Fixture"],check=True); (root/"README").write_text("x\n"); subprocess.run(["git","-C",str(root),"add","README"],check=True); subprocess.run(["git","-C",str(root),"commit","-qm","init"],check=True)
+   gate={"spec_read":{"satisfied":True,"source":"fixture"},"drift_verdict":"within-spec","workflow_mode":"tracked","artifact_guard":{"satisfied":True,"source":"fixture"}}
+   route=R.compile_route("autopilot-spec","update","strong",root,artifact,signals=["shared-contract"],transport="headless",tracking="tracked",tracked_gate_evidence=gate,dispatch_evidence=DISPATCH)
+   route_path=root/"route.json"; route_path.write_text(json.dumps(route))
+   code="import os; from pathlib import Path; p=Path(os.environ['AGENT_SPEC_ROOT'])/'_internal/versions'/('v'+os.environ['AGENT_SPEC_NEXT_VERSION']); p.mkdir(parents=True); (p/'prd.md').write_text('snapshot')"
+   command=[sys.executable,str(ROOT/"utilities/spec-transaction.py"),"run","--artifact-root",str(artifact),"--worktree",str(root),"--route",str(route_path),"--node","prd-transaction","--spec-root",str(component),"--require-snapshot","--",sys.executable,"-c",code]
+   result=subprocess.run(command,text=True,capture_output=True)
+   self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+   self.assertTrue((component/"_internal/versions/v1/prd.md").is_file())
+   self.assertFalse((artifact/"spec/_internal/versions/v1").exists())
 
 if __name__=="__main__": unittest.main()

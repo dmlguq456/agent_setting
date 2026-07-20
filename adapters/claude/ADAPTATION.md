@@ -123,6 +123,11 @@ main/orchestrator chooses per job and the wrapper only reflects that choice:
   instead of as an orphan.
 - `utilities/dispatch-liveness.sh` inspects Claude session transcript mtimes
   under the Claude runtime project log layout to catch hung headless jobs.
+- When shared `dispatch-chain` runs inside a transient PID namespace, it selects
+  `foreground-scoped` and the Claude wrapper remains alive with `claude -p`,
+  forwarding termination signals and recording the lifecycle on wrapper output
+  and the exact jobs row. Outside that scope it keeps the existing `detached`
+  launch. The explicit long-lived-namespace override also remains detached.
 
 Codex and future adapters should preserve the dispatch invariant, but must map
 it onto their own thread/subagent/session/status surfaces instead of copying the

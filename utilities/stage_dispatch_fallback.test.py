@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 import importlib.util, json, os, subprocess, sys, tempfile, unittest
+from types import SimpleNamespace
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 S=importlib.util.spec_from_file_location("route",ROOT/"utilities/capability-route.py"); R=importlib.util.module_from_spec(S); S.loader.exec_module(R)
+F_SPEC=importlib.util.spec_from_file_location("fallback",ROOT/"utilities/stage-dispatch-fallback.py"); F=importlib.util.module_from_spec(F_SPEC); F_SPEC.loader.exec_module(F)
 
 class FallbackTest(unittest.TestCase):
  def setUp(self):
@@ -21,16 +23,38 @@ class FallbackTest(unittest.TestCase):
   path=Path(self.tmp.name)/"route.json"; path.write_text(json.dumps(route),encoding="utf-8"); return path
  def run_chain(self,path,*extra):
   cmd=[sys.executable,str(ROOT/"utilities/stage-dispatch-fallback.py"),"--route",str(path),"--node","plan","--slug","fallback-plan","--parent","owner","--mode","dev/backend","--model-role","deep maker","--jobs",str(self.jobs),"--dry-run",*extra]
-  env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(self.art),"AGENT_DISPATCH_JOBS":str(self.jobs)}
+  env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(self.art),"AGENT_DISPATCH_JOBS":str(self.jobs),"AGENT_DISPATCH_SELF_SLUG":"owner"}
   return subprocess.run(cmd,text=True,capture_output=True,env=env)
  def run_register(self,path):
   cmd=[sys.executable,str(ROOT/"utilities/stage-dispatch-fallback.py"),"--route",str(path),"--node","plan","--slug","fallback-plan","--parent","owner","--mode","dev/backend","--model-role","deep maker","--jobs",str(self.jobs),"--register"]
-  env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(self.art),"AGENT_DISPATCH_JOBS":str(self.jobs)}
+  env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(self.art),"AGENT_DISPATCH_JOBS":str(self.jobs),"AGENT_DISPATCH_SELF_SLUG":"owner"}
   return subprocess.run(cmd,text=True,capture_output=True,env=env)
  def test_cross_harness_direct_precedes_inline(self):
   result=self.run_chain(self.route()); self.assertEqual(result.returncode,0,result.stdout+result.stderr)
   self.assertIn("selected_hop=cross-harness-headless",result.stdout); self.assertIn("child_harness=claude",result.stdout)
   self.assertIn("launch_authority=conductor",result.stdout); self.assertIn("broker_lifecycle=retired",result.stdout)
+ def test_wrapper_command_projects_selected_lifecycle_to_codex_and_claude(self):
+  path=self.route(same_status="supported"); route=json.loads(path.read_text()); node=route["nodes"][0]
+  args=SimpleNamespace(action="dry-run",slug="stage",parent="owner",mode="dev/refactor",qa="standard",worker_role="code-plan",model_role="deep maker",prompt_file=None,jobs=self.jobs,route=path,launch_lifecycle="foreground-scoped",foreground_timeout=123.0)
+  for ordinal,harness in ((1,"codex"),(2,"claude")):
+   row=self.tuple(harness,"supported")
+   command=F.wrapper_command(args,route,node,row,ordinal,"att-test")
+   self.assertIn("--launch-lifecycle",command)
+   self.assertEqual(command[command.index("--launch-lifecycle")+1],"foreground-scoped")
+   self.assertEqual(command[command.index("--foreground-timeout")+1],"123.0")
+  args.launch_lifecycle="detached"
+  command=F.wrapper_command(args,route,node,self.tuple("codex","supported"),1,"att-test")
+  self.assertNotIn("--foreground-timeout",command)
+  command=F.wrapper_command(args,route,node,self.tuple("opencode","supported"),1,"att-test")
+  self.assertNotIn("--launch-lifecycle",command)
+ def test_explicit_parent_mismatch_fails_before_registration(self):
+  path=self.route(same_status="supported")
+  cmd=[sys.executable,str(ROOT/"utilities/stage-dispatch-fallback.py"),"--route",str(path),"--node","plan","--slug","fallback-plan","--parent","wrong-owner","--mode","dev/backend","--jobs",str(self.jobs),"--register"]
+  env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(self.art),"AGENT_DISPATCH_JOBS":str(self.jobs),"AGENT_DISPATCH_SELF_SLUG":"real-owner"}
+  result=subprocess.run(cmd,text=True,capture_output=True,env=env)
+  self.assertEqual(result.returncode,73,result.stdout+result.stderr)
+  self.assertIn("reason=parent-identity-mismatch",result.stdout)
+  self.assertFalse(self.jobs.exists())
  def test_failed_same_and_cross_degrade_in_order(self):
   path=self.route(native="supported"); same="codex/headless/workspace-write/codex/conductor"; cross="codex/headless/workspace-write/claude/conductor"
   result=self.run_chain(path,"--failed-tuple",same,"--failed-tuple",cross); self.assertEqual(result.returncode,79,result.stdout+result.stderr); self.assertIn("skipped-child-proof-missing",result.stdout); self.assertIn("selected_hop=inline",result.stdout)

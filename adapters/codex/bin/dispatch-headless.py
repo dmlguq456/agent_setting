@@ -32,6 +32,13 @@ from dispatch_contract import (  # noqa: E402
     resolve_global_registry,
     validate_nested_eligibility,
 )
+from dispatch_lifecycle import (  # noqa: E402
+    DETACHED,
+    FOREGROUND_SCOPED,
+    LIFECYCLES,
+    pid_namespace_scoped,
+    wait_foreground,
+)
 from worker_bootstrap import (  # noqa: E402
     assigned_contract,
     profile_worker_type,
@@ -197,6 +204,13 @@ def parser() -> argparse.ArgumentParser:
         default=float(os.environ.get("CODEX_DISPATCH_EARLY_EXIT_WATCH", "8")),
         help="SD-15: seconds to watch a just-launched child for a limit/auth early death "
         "(0 disables). On detection the jobs.log row is closed done,note=dead-<reason>.",
+    )
+    p.add_argument("--launch-lifecycle", choices=LIFECYCLES, default=DETACHED)
+    p.add_argument(
+        "--foreground-timeout",
+        type=float,
+        default=float(os.environ.get("CODEX_DISPATCH_FOREGROUND_TIMEOUT", "3600")),
+        help="maximum child lifetime for foreground-scoped launch; 0 disables timeout",
     )
     return p
 
@@ -474,6 +488,36 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
     )
 
 
+def effective_runtime_sandbox(args: argparse.Namespace) -> str:
+    """Avoid nesting Codex's mount sandbox inside an already checked Codex sandbox."""
+
+    if (
+        getattr(args, "launch_lifecycle", DETACHED) == FOREGROUND_SCOPED
+        and os.environ.get("AGENT_DISPATCH_CHILD") == "1"
+        and getattr(args, "depth", 1) >= 2
+        and getattr(args, "parent_harness", None) == "codex"
+        and getattr(args, "parent_transport", None) == "headless"
+        and getattr(args, "parent_sandbox", None) == "workspace-write"
+    ):
+        return "danger-full-access"
+    return args.sandbox
+
+
+def nested_owner_writable_dirs(args: argparse.Namespace) -> tuple[Path, ...]:
+    """Expose only the runtime scratch roots a Codex owner may need downstream."""
+
+    if not getattr(args, "nested_headless_network", False):
+        return ()
+    claude_config = Path(
+        os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude"
+    ).expanduser()
+    candidates = (
+        Path(args.agent_home) / ".core-grounding",
+        claude_config / "session-env",
+    )
+    return tuple(path.resolve() for path in candidates if path.is_dir())
+
+
 def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -> str:
     cmd = [
         "codex",
@@ -489,6 +533,10 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
         # A route-bound depth-2 stage needs the same narrow writable root for
         # its own SD-58 heartbeat. Network remains owner-only below.
         cmd += ["--add-dir", str(args.agent_home / ".dispatch")]
+    for writable_dir in nested_owner_writable_dirs(args):
+        # Core read markers and Claude's Bash pre-exec snapshot are the only
+        # home-scoped writes needed by a recursive standard+ Codex owner.
+        cmd += ["--add-dir", str(writable_dir)]
     if args.route_id:
         # SD-69: a route-bound worker needs the exact primary spec-grounding
         # marker directory writable. Codex's workspace-write sandbox keeps
@@ -499,7 +547,7 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
         spec_grounding = args.agent_home / ".spec-grounding"
         spec_grounding.mkdir(mode=0o700, parents=True, exist_ok=True)
         cmd += ["--add-dir", str(spec_grounding)]
-    cmd += ["--sandbox", args.sandbox]
+    cmd += ["--sandbox", effective_runtime_sandbox(args)]
     if args.nested_headless_network:
         cmd += ["-c", "sandbox_workspace_write.network_access=true"]
     if args.resolved_model_settings["source"] != "inherit":
@@ -590,6 +638,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
             f",eligibility_failure_class={args.eligibility_failure_class or '-'}"
             f",eligibility_probe={getattr(args, 'eligibility_probe', None) or '-'}"
         )
+    pipe += f",runtime_sandbox={effective_runtime_sandbox(args)}"
     for key in ("route_file", "route_id", "route_hash", "route_node", "registry_digest", "write_scope", "completion_gate", "harness_affinity"):
         value = getattr(args, key)
         if value:
@@ -757,33 +806,6 @@ def process_start_ticks(pid: int) -> str:
         return (Path("/proc") / str(pid) / "stat").read_text(encoding="utf-8").split()[21]
     except (OSError, IndexError):
         return ""
-
-
-def pid_namespace_scoped() -> bool:
-    """True when this launcher itself runs inside a nested PID namespace — the
-    per-tool-call sandbox case (bwrap --unshare-pid --die-with-parent). A child
-    spawned here CANNOT outlive the tool call, start_new_session or not: namespace
-    PID 1 dies with the call and everything inside is SIGKILLed (2026-07-20
-    memory-oncall-promotion-plan r1~r3 — three depth-2 codex workers died 2-4
-    events in, silently, exactly when the launcher returned). OPERATIONS §5.10
-    lists "headless dispatch is unsupported" as a checked inline trigger; this
-    probe turns that clause from a silent trap into a typed refusal. Two probes
-    because the sandbox may or may not remount /proc: against the HOST proc our
-    NSpid line grows extra columns; a REMOUNTED proc exposes a non-init pid 1."""
-    try:
-        with open("/proc/self/status", encoding="utf-8") as handle:
-            for line in handle:
-                if line.startswith("NSpid:"):
-                    if len(line.split()) > 2:
-                        return True
-                    break
-    except OSError:
-        pass
-    try:
-        with open("/proc/1/comm", encoding="utf-8") as handle:
-            return handle.read().strip() not in ("systemd", "init")
-    except OSError:
-        return True
 
 
 def seed_launch_heartbeat(args: argparse.Namespace, jobs: Path, pid: int, start: str) -> str:
@@ -1216,6 +1238,7 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_CHILD": "1",
             "AGENT_DISPATCH_DEPTH": str(args.depth),
             "AGENT_DISPATCH_INTENSITY": args.intensity,
+            "AGENT_DISPATCH_SELF_SLUG": args.slug,
             "AGENT_DISPATCH_PARENT_SLUG": args.parent_slug or "",
             "AGENT_DISPATCH_PARENT_SESSION_ID": args.parent_session_id or "",
             "AGENT_DISPATCH_PARENT_CWD": (_effective_parent_cwd(args) if (args.parent_slug or args.parent_session_id) else ""),
@@ -1231,7 +1254,7 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_JOBS": str(jobs),
             "AGENT_DISPATCH_CURRENT_HARNESS": "codex",
             "AGENT_DISPATCH_CURRENT_TRANSPORT": "headless",
-            "AGENT_DISPATCH_CURRENT_SANDBOX": args.sandbox,
+            "AGENT_DISPATCH_CURRENT_SANDBOX": effective_runtime_sandbox(args),
         }
         if args.nested_headless_network:
             dispatch_env["AGENT_NESTED_HEADLESS_NETWORK"] = "1"
@@ -1241,7 +1264,8 @@ def main(argv: list[str]) -> int:
             dispatch_env["CODEX_HOME"] = str(args.nested_codex_home)
         elif profile_home is not None:
             dispatch_env["CODEX_HOME"] = str(profile_home)
-        if (os.environ.get("AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN") != "1"
+        if (args.launch_lifecycle == DETACHED
+                and os.environ.get("AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN") != "1"
                 and pid_namespace_scoped()):
             # Fail-fast instead of spawning a child that dies with this tool call.
             # AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN=1 is the deliberate override for
@@ -1251,7 +1275,8 @@ def main(argv: list[str]) -> int:
             return fail(
                 "nested-sandbox-lifetime", 77,
                 detail=("launcher runs inside a per-call PID-namespace sandbox; a "
-                        "background child cannot outlive this tool call — use a checked "
+                        "background child cannot outlive this tool call — select "
+                        "foreground-scoped through dispatch-chain or use a checked "
                         "fallback (OPERATIONS §5.10 inline / dispatch from an unsandboxed "
                         "owner), or set AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN=1 in a "
                         "long-lived container"),
@@ -1270,11 +1295,14 @@ def main(argv: list[str]) -> int:
             close_job_row(jobs, args.slug, args.worktree, "launch-error", "", args.attempt_id)
             return fail("child-launch-failed", 70, detail=str(exc), attempt_id=args.attempt_id)
         start_ticks = process_start_ticks(proc.pid)
-        launch_identity = f"pid={proc.pid}" + (f",pid_start={start_ticks}" if start_ticks else "")
+        launch_identity = (f"pid={proc.pid}" + (f",pid_start={start_ticks}" if start_ticks else "")
+                           + f",launch_lifecycle={args.launch_lifecycle}"
+                           + f",runtime_sandbox={effective_runtime_sandbox(args)}")
         if args.depth >= 2 and os.environ.get("AGENT_DISPATCH_CHILD") == "1":
             launch_identity += ",pid_scope=namespace-local"
         annotate_job_row(jobs, args.slug, args.worktree, launch_identity, args.attempt_id)
-        if args.depth == 1 and args.worker_type == "owner":
+        if (args.depth == 1 and args.worker_type == "owner"
+                and args.launch_lifecycle == DETACHED):
             try:
                 watcher_pid = launch_orphan_watch(
                     jobs, agent_home, args.attempt_id, proc.pid, start_ticks or "")
@@ -1295,16 +1323,23 @@ def main(argv: list[str]) -> int:
         args.child_pid = proc.pid
         args.child_pid_start = start_ticks
         args.launch_heartbeat = seed_launch_heartbeat(args, jobs, proc.pid, start_ticks)
-        # SD-15 (OPERATIONS §5.10 ⑨): watch briefly for a limit/auth early death so a
-        # limit-killed launch closes its own row now instead of lingering `open` until
-        # liveness SUSPECT catches it minutes later.
-        death = watch_early_death(proc, log_path, args.early_exit_watch)
-        if death:
-            reason, reset = death
-            close_job_row(jobs, args.slug, args.worktree, reason, reset, args.attempt_id)
-            if reason != "capacity":
-                write_reset_cache(agent_home, "codex", reason, reset)
-            args.early_death = (reason, reset)
+        if args.launch_lifecycle == FOREGROUND_SCOPED:
+            outcome = wait_foreground(proc, args.foreground_timeout)
+            args.worker_exit = outcome.exit_code
+            args.worker_failure = outcome.failure
+            if outcome.failure:
+                close_job_row(
+                    jobs, args.slug, args.worktree, outcome.failure, "", args.attempt_id
+                )
+        else:
+            # SD-15: detached launches retain the short early-death watch.
+            death = watch_early_death(proc, log_path, args.early_exit_watch)
+            if death:
+                reason, reset = death
+                close_job_row(jobs, args.slug, args.worktree, reason, reset, args.attempt_id)
+                if reason != "capacity":
+                    write_reset_cache(agent_home, "codex", reason, reset)
+                args.early_death = (reason, reset)
 
     print("adapter=codex")
     print("runtime_surface=codex-exec-headless")
@@ -1348,9 +1383,17 @@ def main(argv: list[str]) -> int:
     print(f"child_pid={getattr(args, 'child_pid', None) or '-'}")
     print(f"child_pid_start={getattr(args, 'child_pid_start', None) or '-'}")
     print(f"launch_heartbeat={getattr(args, 'launch_heartbeat', 'not-started')}")
+    print(f"launch_lifecycle={args.launch_lifecycle}")
+    print(f"runtime_sandbox={effective_runtime_sandbox(args)}")
+    print(f"worker_exit={getattr(args, 'worker_exit', '-')}")
+    print(f"worker_failure={getattr(args, 'worker_failure', None) or '-'}")
     print(f"require_hook_trust={1 if args.require_hook_trust else 0}")
     print(f"nested_headless_network={1 if args.nested_headless_network else 0}")
     print(f"nested_codex_home={args.nested_codex_home_path or '-'}")
+    print(
+        "nested_owner_writable_dirs="
+        + (";".join(map(str, nested_owner_writable_dirs(args))) or "-")
+    )
     early_death = getattr(args, "early_death", None)
     if early_death:
         reason, reset = early_death

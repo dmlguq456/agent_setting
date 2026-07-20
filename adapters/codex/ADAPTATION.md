@@ -582,6 +582,18 @@ same-harness → cross-harness → native → inline ordering. Adapter launches 
 exact attempt, `pid`, and `/proc` start-tick identity; shared-worktree transcript
 activity cannot revive an exited retry.
 
+`dispatch-chain` also selects the launch lifecycle from its current PID scope.
+Transient namespaces use `foreground-scoped`, so the Codex or Claude wrapper
+supervises the child until exit and forwards termination signals; durable scopes
+retain `detached`. The wrapper output and exact jobs row both expose
+`launch_lifecycle`. `AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN=1` remains the checked
+long-lived-namespace override and preserves detached behavior.
+For a foreground Codex child whose actual parent tuple is
+`codex/headless/workspace-write`, the child uses `danger-full-access` only as
+its inner runtime setting because nested mount setup is unsupported there; the
+already-checked outer workspace-write sandbox remains the effective boundary.
+Wrapper output and the exact attempt row record the effective runtime sandbox.
+
 ### SD-51~53 direct headless launch — realized
 
 Dispatch contract v3 removes the resident launch broker, request spool,
@@ -593,9 +605,19 @@ a duplicate claim starts zero children. Standard+ depth-1 Codex owners run with
 `AGENT_NESTED_HEADLESS_NETWORK=1`. Their writable worktree-local `CODEX_HOME`
 links the existing auth/config without copying or mutating credentials and
 keeps nested session/app-server state inside the owner sandbox. Depth-2 workers
-do not inherit the network widening.
+do not inherit the network widening. The outer Codex sandbox also admits only
+the existing harness `.core-grounding` directory and Claude `session-env`
+directory as downstream runtime scratch roots. This keeps adapter write guards
+functional and lets a checked Codex→Claude worker initialize Bash without
+making the rest of either runtime home writable.
 Broker v1/v2 records remain readable for migration, and `preflight.sh broker`
 retains only diagnostic `status` and idempotent `stop` during the drain release.
+
+Foreground-scoped depth-2 Codex workers reuse the already checked outer
+`workspace-write` boundary and run the inner CLI with its mount sandbox disabled;
+this avoids unsupported nested mount setup without widening the outer filesystem
+or network authority. The wrapper also exports its exact self slug so
+`dispatch-chain` can reject parent-identity drift before Fleet registration.
 
 ## Distillation Boundary
 

@@ -247,6 +247,16 @@ class FoldingTest(unittest.TestCase):
         text = self._emit(conductor, [plan_c], show_all=True)
         self.assertIn("plan fleet-ui-v2-plan", text)
 
+    def test_unmatched_depth_two_parent_stays_visible_as_orphan(self):
+        child = DispatchJob(key="code-plan", slug="live-depth-two", depth=2,
+                            parent_slug="missing-owner", worker_role="code-plan",
+                            liveness="working", cwd="/tmp/project")
+        render.set_show_all(False)
+        lines = render._build_lines([], [child], section="dispatch", narrow=False,
+                                    malformed=0, layout="wide")
+        text = "\n".join("".join(t for t, _k in line) for line in lines if line)
+        self.assertIn("plan live-depth-two", text)
+
 
 class StageDoneMarkerTest(unittest.TestCase):
 
