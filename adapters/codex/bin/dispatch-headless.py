@@ -759,6 +759,33 @@ def process_start_ticks(pid: int) -> str:
         return ""
 
 
+def pid_namespace_scoped() -> bool:
+    """True when this launcher itself runs inside a nested PID namespace — the
+    per-tool-call sandbox case (bwrap --unshare-pid --die-with-parent). A child
+    spawned here CANNOT outlive the tool call, start_new_session or not: namespace
+    PID 1 dies with the call and everything inside is SIGKILLed (2026-07-20
+    memory-oncall-promotion-plan r1~r3 — three depth-2 codex workers died 2-4
+    events in, silently, exactly when the launcher returned). OPERATIONS §5.10
+    lists "headless dispatch is unsupported" as a checked inline trigger; this
+    probe turns that clause from a silent trap into a typed refusal. Two probes
+    because the sandbox may or may not remount /proc: against the HOST proc our
+    NSpid line grows extra columns; a REMOUNTED proc exposes a non-init pid 1."""
+    try:
+        with open("/proc/self/status", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith("NSpid:"):
+                    if len(line.split()) > 2:
+                        return True
+                    break
+    except OSError:
+        pass
+    try:
+        with open("/proc/1/comm", encoding="utf-8") as handle:
+            return handle.read().strip() not in ("systemd", "init")
+    except OSError:
+        return True
+
+
 def seed_launch_heartbeat(args: argparse.Namespace, jobs: Path, pid: int, start: str) -> str:
     if not (args.attempt_id and args.route_id and args.route_node):
         return "not-route-bound"
@@ -1214,6 +1241,21 @@ def main(argv: list[str]) -> int:
             dispatch_env["CODEX_HOME"] = str(args.nested_codex_home)
         elif profile_home is not None:
             dispatch_env["CODEX_HOME"] = str(profile_home)
+        if (os.environ.get("AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN") != "1"
+                and pid_namespace_scoped()):
+            # Fail-fast instead of spawning a child that dies with this tool call.
+            # AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN=1 is the deliberate override for
+            # long-lived containers, where the namespace outlives the launcher.
+            close_job_row(jobs, args.slug, args.worktree,
+                          "nested-sandbox-lifetime", "", args.attempt_id)
+            return fail(
+                "nested-sandbox-lifetime", 77,
+                detail=("launcher runs inside a per-call PID-namespace sandbox; a "
+                        "background child cannot outlive this tool call — use a checked "
+                        "fallback (OPERATIONS §5.10 inline / dispatch from an unsandboxed "
+                        "owner), or set AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN=1 in a "
+                        "long-lived container"),
+                attempt_id=args.attempt_id, child_spawned="0")
         try:
             proc = subprocess.Popen(
                 [sys.executable, str(governor), "--root", str(governor_root),
