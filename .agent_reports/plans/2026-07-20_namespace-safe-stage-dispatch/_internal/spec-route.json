@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "capability": "autopilot-spec",
+  "capability_mode": "update",
+  "requested_intensity": "strong",
+  "effective_intensity": "strong",
+  "execution_topology": "transactional-owner",
+  "owner_depth": 1,
+  "tracking": "tracked",
+  "tracked_gate_evidence": {
+    "spec_read": {
+      "satisfied": true,
+      "source": "root:stage-dispatch-prd-v18"
+    },
+    "drift_verdict": "within-spec",
+    "workflow_mode": "tracked",
+    "artifact_guard": {
+      "satisfied": true,
+      "source": "passed:canonical-component-spec"
+    }
+  },
+  "spec_touch": true,
+  "cwd": "/home/Uihyeop/agent_setting-wt/namespace-safe-stage-dispatch",
+  "artifact_root": "/home/Uihyeop/agent_setting/.agent_reports",
+  "source_commit": "1399e97acb787f8084cd108ca7935d1925faeb27",
+  "registry_digest": "sha256:161b5539ad48dfd354aae3605daf27a9203ec3a676b450ba27b4856bfcea03c1",
+  "dispatch_defaults_digest": "sha256:b3e8dd08b3b52872a1ffbc873dec370b5c8ea900a27f6190f8cfcd30032e072b",
+  "selection": {
+    "direct_predicates": [],
+    "promotion_signals": [
+      {
+        "signal": "shared-contract",
+        "source": "caller"
+      }
+    ],
+    "selection_basis": [
+      {
+        "axis": "promotion",
+        "signal": "shared-contract",
+        "source": "caller"
+      }
+    ],
+    "escalation_basis": [
+      {
+        "signal": "shared-contract",
+        "source": "caller"
+      }
+    ],
+    "transport": "inline-fallback",
+    "transport_evidence": "caller-selected",
+    "inline_reason": "nonseparable-transaction"
+  },
+  "nodes": [
+    {
+      "id": "research",
+      "kind": "map-worker",
+      "depth": 2,
+      "depends_on": [],
+      "role": "deep maker",
+      "inputs": [
+        "intent",
+        "prior-evidence"
+      ],
+      "outputs": [
+        "shards/spec-research/**"
+      ],
+      "write_scope": [
+        "shards/spec-research/**"
+      ],
+      "resource_class": "normal",
+      "transport": [
+        "headless",
+        "native-subagent",
+        "inline-fallback"
+      ],
+      "completion_gate": "spec-research",
+      "harness_affinity": "unspecified"
+    },
+    {
+      "id": "review",
+      "kind": "review-worker",
+      "depth": 2,
+      "depends_on": [
+        "research"
+      ],
+      "role": "deep reviewer",
+      "inputs": [
+        "intent",
+        "shards/spec-research/**"
+      ],
+      "outputs": [
+        "reviews/spec-verdict.json"
+      ],
+      "write_scope": [
+        "reviews/spec/**"
+      ],
+      "resource_class": "normal",
+      "transport": [
+        "headless",
+        "native-subagent",
+        "inline-fallback"
+      ],
+      "completion_gate": "spec-review",
+      "harness_affinity": "unspecified"
+    },
+    {
+      "id": "prd-transaction",
+      "kind": "capability-owner",
+      "depth": 1,
+      "depends_on": [
+        "review"
+      ],
+      "role": "deep maker",
+      "inputs": [
+        "intent",
+        "shards/spec-research/**",
+        "reviews/spec-verdict.json"
+      ],
+      "outputs": [
+        "spec/prd.md",
+        "spec/pipeline_state.yaml",
+        "spec/pipeline_summary.md",
+        "version-snapshot"
+      ],
+      "write_scope": [
+        "spec/prd.md",
+        "spec/pipeline_state.yaml",
+        "spec/pipeline_summary.md",
+        "spec/_internal/versions/**"
+      ],
+      "resource_class": "normal",
+      "transport": [
+        "headless",
+        "inline-fallback"
+      ],
+      "completion_gate": "spec-atomic-transaction"
+    }
+  ],
+  "completion_gates": [
+    "spec-research",
+    "spec-review",
+    "spec-atomic-transaction"
+  ],
+  "human_gates": [
+    "intent-confirmation"
+  ],
+  "resume_retry_boundaries": [
+    "research",
+    "review",
+    "prd-transaction"
+  ],
+  "dispatch_evidence": null,
+  "dispatch_contract_version": null,
+  "route_hash": "sha256:94ed270212e809674a79d6721f26eb742b558c748566c3d2fcae315201dfd95d",
+  "route_id": "rt-94ed270212e80967"
+}

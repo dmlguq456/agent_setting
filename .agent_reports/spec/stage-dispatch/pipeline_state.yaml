@@ -1,7 +1,7 @@
 project_name: stage-dispatch
 component: stage-dispatch          # autopilot 파이프 디스패치 토폴로지 개정 (repo spec/prd.md = Unified Memory System, spec/harness-layer-sync·dispatch-profiles·agent-fleet-dashboard 무관)
 created: 2026-07-10
-version: 18
+version: 19
 mode: [library, cli]              # library(스테이지 분사 계약·오케스트레이션) + cli(dispatch wrapper·jobs.log·fleet 관제) — infra
 scope_note: "depth-0 main은 substantive tracked work의 orchestration/integration만 소유. direct=atomic inline, quick=단일 depth-1 one-shot(depth-2 금지), standard+=capability-specific recipe. v15부터 신규 depth-2 route는 conductor direct headless를 사용하고 broker는 historical v1/v2 compatibility로만 남는다. Codex owner는 명시적 network-enabled workspace-write profile로 nested codex exec를 실행한다."
 inputs:
@@ -33,13 +33,15 @@ inputs:
   - '코드 원인 실측 2026-07-16 (v14): broker_status()의 /proc 단일 하드 게이트가 PID-네임스페이스 격리 sandbox에서 socket ping 도달 전 fail — 산 broker의 broker-unavailable 오판 + ensure의 flock-상실 spawn 루프(broker-start-timeout). fleet-depth2 준비 실측(pid 1057841/12701276)과 일치'
   - '사용자 결정 2026-07-16 (v15): native subagent와 recursive codex exec를 구분. nested headless는 parent sandbox가 network/auth를 허용하면 가능; broker가 야기한 중복·stale·fencing 상태면 때문에 기본 경로에서 폐기'
   - '운영 실측 2026-07-16 (v15 minor #1): plans/2026-07-16_spec-gate-multi-spec — r1 conductor 배경 대기 턴 종료 사망(지침-단독 불충분 실증), dispatch-node eligibility 증거 미전달 fail-closed, r2 BLOCKED(source_commit 정확 일치 × execute 커밋 계약 모순)'
+  - '운영 실측 2026-07-20 (v19): plans/2026-07-20_namespace-safe-stage-dispatch — transient PID namespace에서 detached depth-2 3회 조기 사망; foreground-scoped Codex·Claude live PASS, Fleet unmatched-parent 누락과 Claude session-env EROFS 확인'
 phases:
-  spec: done              # PRD v18 — conductor 생존, Codex no-commit mutation, exact marker↔attempt 결합. v17 snapshot = _internal/versions/v17/
+  spec: done              # PRD v19 — namespace-safe foreground stage lifecycle, parent/Fleet visibility, Codex→Claude runtime scratch projection. v18 snapshot = _internal/versions/v18/
   scaffolding: deferred   # lean — 코드 skeleton 은 autopilot-code 로 이월 (§11 module 구조만 확정, wrapper 재작성 불요)
   design: n/a             # 시각 UI 없음 (인프라 계약)
-  dev: in_progress        # v18 구현 사이클: Claude one-shot hardening/Stop probe, SD-64 orphan reconcile, Codex no-commit+spec-grounding, exact marker↔attempt close
-last_updated: 2026-07-19
+  dev: in_progress        # v19 구현 사이클: foreground-scoped Codex/Claude depth-2, exact parent/Fleet visibility, scoped nested runtime writes
+last_updated: 2026-07-20
 decisions_locked:
+  - 'SD-72(v19): transient PID namespace에서는 dispatch-chain이 Codex/Claude wrapper를 foreground-scoped로 유지하고 signal/timeout/exact-row closure를 감독한다. Codex inner mount sandbox는 checked outer workspace-write 안에서만 비활성화하며, owner는 .core-grounding·Claude session-env만 추가 writable projection한다. exact self-parent를 강제하고 Fleet는 unmatched depth-2를 orphan으로 표시한다'
   - 'SD-69(v18): Codex linked-worktree mutation stage는 source/evidence를 쓰되 no-commit. protected gitdir을 --add-dir로 우회하지 않고, 권한 있는 depth-0/Claude 경계가 PASS 수확 뒤 commit. primary의 정확한 .spec-grounding만 좁은 writable root로 추가'
   - 'SD-70(v18): capability-route complete는 canonical jobs+exact current attempt를 받아 marker 직후 해당 row 하나만 idempotent done(note=completed-marker) 처리. breadth-close 금지, marker-first partial failure는 structured nonzero+reconcile 수리'
   - 'SD-71(v18): verified async wait/scheduling tool만 Claude --disallowedTools로 차단, 2.1.215 -p Stop hook 재검증, SD-64 dead-parent-orphaned post-exit reconcile+liveness/preflight/Fleet 노출. 자동 재개 금지, dispatch-wait prompt는 보조층'
