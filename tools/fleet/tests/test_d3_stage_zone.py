@@ -110,5 +110,48 @@ class StageZoneCapTest(unittest.TestCase):
         self.assertEqual(joined, "plan✓ › exec › test")
 
 
+class PrePlanBootTokenTest(unittest.TestCase):
+    """user 2026-07-20: "plan 전에 이게 죽었나 살았나" — the unlit pre-plan track leads with a
+    `pre` token carrying boot-phase liveness (blinks while working, dim while queued)."""
+
+    def test_pre_leads_the_unlit_track_dim_when_not_working(self):
+        segs = render._stage_segs("code", "open", working=False)
+        self.assertEqual("".join(t for t, _k in segs), "pre › plan › exec › test")
+        self.assertEqual(segs[0], ("pre", "stg0_off"))
+
+    def test_pre_blinks_with_the_working_dot(self):
+        prev = render._BLINK_ON
+        try:
+            render._BLINK_ON = True
+            self.assertEqual(render._stage_segs("code", "", working=True)[0],
+                             ("pre", "stg0_on"))
+            render._BLINK_ON = False
+            self.assertEqual(render._stage_segs("code", "", working=True)[0],
+                             ("pre", "stg0_off"))
+        finally:
+            render._BLINK_ON = prev
+
+    def test_pre_leaves_the_track_once_plan_lights(self):
+        segs = render._stage_segs("code", "plan", working=True)
+        self.assertNotIn("pre", "".join(t for t, _k in segs))
+
+
+class StageZoneLeadInTest(unittest.TestCase):
+    """user 2026-07-20: "stages 앞에 콜론 등으로 구분감" — dim ' : ' lead-in (leading space
+    so an overflowing dial never glues to the colon), skipped when the breadcrumb brings
+    its own colon."""
+
+    def test_colon_leads_a_plain_breadcrumb(self):
+        out = render._stage_zone_segs([("plan", "stg0_off")])
+        self.assertEqual(out[0], (" : ", "dim"))
+
+    def test_own_label_prefix_skips_the_colon(self):
+        out = render._stage_zone_segs([("drill: ", "name_dim"), ("—", "dim")])
+        self.assertEqual(out[0], ("  ", None))
+
+    def test_empty_breadcrumb_gets_no_dangling_colon(self):
+        self.assertEqual(render._stage_zone_segs([]), [])
+
+
 if __name__ == "__main__":
     unittest.main()

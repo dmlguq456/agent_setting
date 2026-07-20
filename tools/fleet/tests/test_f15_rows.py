@@ -309,7 +309,7 @@ class OptsDialHierarchyTest(unittest.TestCase):
     def test_full_hierarchy(self):
         j = DispatchJob(key="code", slug="s", depth=1, mode="dev",
                         intensity="standard", profile="boot")
-        self.assertEqual(self._dial(j), "code (dev·std) / boot")
+        self.assertEqual(self._dial(j), "code(dev·std) / boot")
 
     def test_depth2_worker_has_bare_knobs_no_entry(self):
         # identity lives in the name zone for a depth-2 worker — no entry head, no parens.
@@ -323,7 +323,14 @@ class OptsDialHierarchyTest(unittest.TestCase):
     def test_intensity_left_the_profile_tail(self):
         # pre-hierarchy the tail rendered 'boot/std' — the knob now rides in the parens only.
         j = DispatchJob(key="code", slug="s", depth=1, intensity="standard", profile="boot")
-        self.assertEqual(self._dial(j), "code (std) / boot")
+        self.assertEqual(self._dial(j), "code(std) / boot")
+
+    def test_role_is_a_knob_not_an_environment_tail(self):
+        # user 2026-07-20: "owner의 위치가 애매" — the worker role acts like mode/intensity
+        # (behaviour), so it rides the paren group's last slot, not 'boot/planner'.
+        j = DispatchJob(key="code", slug="s", depth=1, mode="dev", intensity="standard",
+                        worker_role="planner", profile="boot")
+        self.assertEqual(self._dial(j), "code(dev·std·planner) / boot")
 
 
 if __name__ == "__main__":

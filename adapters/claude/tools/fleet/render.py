@@ -804,8 +804,13 @@ def _stage_segs(key, stage, working=False, max_width=None, route_seq=None):
         # pre-plan boot (live_stage fell back to the argv key) / registry-only rows: show the
         # WHOLE track unlit — the breadcrumb is visible from the first tick and lights up
         # left→right (plan › exec › test) as plans/ artifacts appear. (user 2026-07-02:
-        # Preserve the concrete plan → exec → test sequence.
-        out = []
+        # Preserve the concrete plan → exec › test sequence.)
+        # A leading `pre` token carries the BOOT-PHASE liveness (user 2026-07-20: "plan 전에
+        # 이게 죽었나 살았나") — it blinks like any current stage while the classifier says
+        # working, sits dim while queued/stale, and leaves the track the moment `plan`
+        # lights. The evidence is F-25's existing verdict; this is display only.
+        pre_key = ("stg0_on" if _BLINK_ON else "stg0_off") if working else "stg0_off"
+        out = [("pre", pre_key), (" › ", "dim")]
         for i, st in enumerate(seq):
             if i:
                 out.append((" › ", "dim"))
@@ -863,6 +868,20 @@ def _dispatch_stage_segs(j, key, stage, slug_name, working=False, route_seq=None
             return body
         return segs
     return _stage_segs(key, stage, working=working, max_width=_STAGE_ZONE_MAX)
+
+
+def _stage_zone_segs(bc):
+    """Stage-zone lead-in (user 2026-07-20: "stages 앞에 콜론 등으로 구분감") — a dim ' : '
+    separates the breadcrumb from the options dial. The leading space is load-bearing: a
+    dial that overflows _OPTW leaves no pad, and a flush colon would read as the dial's own
+    label ('layer2: pre'). Skipped when the breadcrumb already opens with its own
+    'label: ' prefix (SD-F1 rows) — a second colon would stutter — and on an empty
+    breadcrumb, where a dangling colon would mark nothing."""
+    if not bc:
+        return bc
+    lead_text, lead_key = bc[0]
+    own_prefix = lead_key == "name_dim" and lead_text.endswith(": ")
+    return ([("  ", None)] if own_prefix else [(" : ", "dim")]) + bc
 
 
 def _session_name(s):
@@ -1114,11 +1133,9 @@ def _dispatch_role_suffix(j, max_width=None):
 
 
 def _dispatch_profile(j):
+    # environment tail ONLY now — the worker role left for the dial's paren knob group
+    # (user 2026-07-20: "owner의 위치가 애매" — 'boot/owner' read as one env path).
     profile = getattr(j, "profile", None)
-    budget = _PROFILE_MAX - (len(profile) + 1 if profile else 0)
-    role_suffix = _dispatch_role_suffix(j, max_width=max(0, budget))
-    if role_suffix:
-        profile = (profile + "/" + role_suffix) if profile else role_suffix
     return _compact_dispatch_name(profile, _PROFILE_MAX) if profile else None
 
 def _dispatch_stage_label(j):
@@ -1144,7 +1161,14 @@ def _opts_segs(j):
     with the retired qa axis (user 2026-07-16 — rigor derives from intensity,
     CONVENTIONS §1.1)."""
     entry = _entry_skill(j)
-    knobs = "·".join(t for t in (j.mode, _short_level(getattr(j, "intensity", None))) if t)
+    knob_items = [t for t in (j.mode, _short_level(getattr(j, "intensity", None))) if t]
+    # the worker ROLE is a behaviour knob too (who the worker acts as), not environment —
+    # it rides the paren group's last slot (user 2026-07-20: "owner의 위치가 애매").
+    role = _dispatch_role_suffix(
+        j, max_width=max(0, _PROFILE_MAX - sum(len(t) + 1 for t in knob_items)))
+    if role:
+        knob_items.append(role)
+    knobs = "·".join(knob_items)
     tail = _dispatch_profile(j)
     parts = []
     w = 0
@@ -1158,7 +1182,9 @@ def _opts_segs(j):
         _add(entry, "name_dim")
     if knobs:
         if entry:
-            _add(" (", "dim"); _add(knobs, "dim"); _add(")", "dim")
+            # flush paren (user 2026-07-20: "code 뒤에 괄호 여백 지우고") — same idiom as
+            # the F-33 flush '·'.
+            _add("(", "dim"); _add(knobs, "dim"); _add(")", "dim")
         else:
             _add(knobs, "dim")
     if tail:
@@ -1251,9 +1277,9 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
         if optw < _OPTW:
             segs.append((" " * (_OPTW - optw), None))
 
-        segs.append(("  ", None))
-        segs += _dispatch_stage_segs(j, key, stage, slug_name, working=(j.liveness == "working"),
-                                     route_seq=route_seq)
+        segs += _stage_zone_segs(
+            _dispatch_stage_segs(j, key, stage, slug_name, working=(j.liveness == "working"),
+                                 route_seq=route_seq))
 
     segs.append((_RFLUSH, None))
     segs += [(_CLOCK, "dim"), ("%6s" % fmt_min(j.elapsed_min), "dim")]
@@ -1408,9 +1434,9 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     l2 += opt_segs
     if optw < _OPTW:
         l2.append((" " * (_OPTW - optw), None))
-    l2.append(("  ", None))
-    l2 += _dispatch_stage_segs(j, key, stage, slug_name, working=(j.liveness == "working"),
-                               route_seq=route_seq)
+    l2 += _stage_zone_segs(
+        _dispatch_stage_segs(j, key, stage, slug_name, working=(j.liveness == "working"),
+                             route_seq=route_seq))
     if _split:
         return l1, l2, br_seg
     return l1, l2
