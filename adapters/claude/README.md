@@ -89,7 +89,7 @@ The Claude Code adapter maps portable roles from `core/CONVENTIONS.md §2` to co
 
 This mapping reproduces the intensity-derived rigor tiers from `CONVENTIONS §1.1`; there is no separate `--qa` axis. Wrappers never choose automatically: main or the orchestrator selects `--model-role`, concrete `--model --effort`, or explicit `--inherit-model-settings` for every job.
 
-Two `CONVENTIONS §1.1` properties are intensity-independent and this adapter honors them: every review the `품질관리팀` runs carries the refute-by-default adversarial stance (single source in `agent-modes/qa/_review_rules.md`), and an independent pass replicates across a different harness family — the Codex `codex-review-team` path — as a 2-way replica/merge by default at `strong` and above, not only at `adversarial`. When Codex is unavailable, fail loudly if the cross-harness pass was explicitly requested; otherwise fall back to a same-family independent reviewer and report the reduced independence.
+Two `CONVENTIONS §1.1` properties are intensity-independent and this adapter honors them: every review the `품질관리팀` runs carries the refute-by-default adversarial stance (anchored in `CONVENTIONS §1.1` / `roles/MODES.md`; `agent-modes/qa/_review_rules.md` is the single source for the code-review, plan-review, and test modes that load it), and an independent pass replicates across a different harness family — the Codex `codex-review-team` path — as a 2-way replica/merge by default at `strong` and above, not only at `adversarial`. When Codex is unavailable, fail loudly if the cross-harness pass was explicitly requested; otherwise fall back to a same-family independent reviewer and report the reduced independence.
 
 ## Compatibility
 
