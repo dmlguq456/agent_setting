@@ -711,6 +711,12 @@ _STAGE_ZONE_MAX = 30          # D3 (v9) — one constant, one place, same idiom 
                                # (2026-07-20) is a prefixed dispatch-depth-2 stage worker
                                # ("exec: plan✓ › exec › test" = 25) — 30 keeps headroom
                                # without regressing anything currently on screen.
+_ROUTE_STAGE_ZONE_MAX = 42     # user 2026-07-21 ("전부 표시해줘"): a dispatch-depth-1 CONDUCTOR's
+                               # route breadcrumb shows the WHOLE pipeline (plan › execute › test
+                               # › report), not just "where now". A 4-stage code route is 32 cells,
+                               # over _STAGE_ZONE_MAX, so plan was silently folded by
+                               # _drop_past_stages; this wider bound is CONDUCTOR-only (route_seq
+                               # path, ~:851) so depth-2 / narrow-card zones keep the tuned 30.
 
 
 def _drop_past_stages(items, cur_i, max_width):
@@ -848,7 +854,9 @@ def _dispatch_stage_segs(j, key, stage, slug_name, working=False, route_seq=None
     if route_seq:
         # F-28b (v10): a resolved route replaces the whole breadcrumb — record nodes are the
         # real pipeline shape, not a role-label prefix over the hardcoded 3-stage table.
-        return _stage_segs(key, stage, working=working, max_width=_STAGE_ZONE_MAX,
+        # user 2026-07-21: CONDUCTOR breadcrumb shows the whole pipeline (wider bound than the
+        # shared stage zone) so no stage — plan especially — is silently dropped.
+        return _stage_segs(key, stage, working=working, max_width=_ROUTE_STAGE_ZONE_MAX,
                            route_seq=route_seq)
     if key and key != slug_name and not _entry_skill(j):
         # SD-F1: a dispatch-depth-2 stage worker's `key` IS its capability (code-plan/code-execute/
