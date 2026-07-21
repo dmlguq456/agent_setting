@@ -66,6 +66,14 @@ case "$mode" in
   *) echo "codex distill worker: unknown mode: $mode (expected increment|curate)" >&2; exit 64 ;;
 esac
 
+# Propagate the caller-supplied session cwd so downstream `apply-distill-actions.py`
+# → `mem.py add` records it via `MEM_CWD or os.getcwd()` (mem.py:977). Without this,
+# the distill launcher's shell cwd gets baked into the write-event journal, so
+# fleet's per-repo memory rows map curator events to the wrong project card. mem.py
+# already prefers MEM_CWD; we only need to set it here. (Claude's dispatch hook
+# achieves the same effect via `cd "$CWD"` in mem-distill-dispatch.sh.)
+[ -n "$cwd" ] && export MEM_CWD="$cwd"
+
 # Recursion guard: a distillation worker must never spawn another distillation.
 # If we are already inside a distiller context, no-op. The codex exec call below
 # exports MEM_DISTILL=1, so any lifecycle hook it triggers re-enters here (and
