@@ -38,6 +38,10 @@ Review construction quality: logic, completeness, test coverage, side effects, a
 
 Use this as the construction-side partner for a durable `code-plan` plan check or a selected independent review. Quick work uses inline `plan-check-lite` instead.
 
+## Stance (all intensities)
+
+Review the plan adversarially by default, regardless of intensity. Assume a step is unsafe to execute until it proves otherwise: hunt for the missed caller, the schema or migration the plan forgot, the ordering that corrupts a later stage, and the risky step with no concrete verification or rollback. Name at least one concrete way the plan could fail in execution before calling it sound, and when you cannot confirm a step is safe, mark it unproven rather than waving it through. Even `plan-check-lite` keeps this posture inside its smaller budget.
+
 ## Review Questions
 
 - Does the current code match the plan's current-state analysis?

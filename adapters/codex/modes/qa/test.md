@@ -40,6 +40,8 @@ surfaces rewritten to Codex-native preflight/tool-contract wording.
 
 Run graduated dynamic verification with stop-on-failure semantics.
 
+Hold an adversarial stance at every intensity: the absence of a failing signal is not proof of correctness. Prefer the input, path, or state most likely to break the changed behavior, and when the available evidence cannot confirm the surface works, return BLOCKED or FAIL rather than PASS. A PASS asserts observed-correct, not merely not-observed-wrong.
+
 ## Levels
 
 1. **Syntax:** parse, compile, or type-check the changed surface.
