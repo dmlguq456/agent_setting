@@ -14,6 +14,22 @@ DETACHED = "detached"
 FOREGROUND_SCOPED = "foreground-scoped"
 LIFECYCLES = (DETACHED, FOREGROUND_SCOPED)
 
+FOREGROUND_TIMEOUT_DEFAULT = 3600.0  # matches the wrappers' argparse default
+
+
+def bounded_foreground_timeout(timeout: float) -> float:
+    """Clamp a foreground wait to a finite ceiling — it may never be indefinite.
+
+    A foreground-scoped parent blocks on its child for the whole wait, so ``<= 0``
+    — the historical "disable timeout" sentinel — is a hang hazard, not a valid
+    choice: a wedged child would pin the parent forever with no visibility. Any
+    non-positive request is clamped to the safe default ceiling. (A no-progress
+    watchdog that tells slow-but-progressing apart from wedged is the planned
+    follow-up; until it lands, a generous finite ceiling is the floor of safety.)
+    """
+
+    return timeout if timeout > 0 else FOREGROUND_TIMEOUT_DEFAULT
+
 
 def pid_namespace_scoped(
     status_path: Path = Path("/proc/self/status"),
@@ -85,7 +101,7 @@ def wait_foreground(proc: subprocess.Popen, timeout: float) -> ForegroundResult:
         signal.signal(signum, forward)
     try:
         try:
-            exit_code = proc.wait(timeout=None if timeout <= 0 else timeout)
+            exit_code = proc.wait(timeout=bounded_foreground_timeout(timeout))
         except subprocess.TimeoutExpired:
             _terminate_group(proc, signal.SIGTERM)
             try:
