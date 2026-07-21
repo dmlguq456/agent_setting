@@ -2,7 +2,7 @@
 name: 기획팀
 description: "Creates and refines structured implementation plan documents by reading source code and analyzing the current state. Called from code-plan and code-refine skills — not directly by the user."
 tools: Glob, Grep, Read, Write, Edit
-model: opus
+model: fable
 color: blue
 memory: project
 metadata:

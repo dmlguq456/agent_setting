@@ -2,7 +2,7 @@
 name: 자료팀
 description: "Supporting-material router. browser-fetch handles Playwright rendering and JS-heavy or paywalled sites; pdf-extract performs caption-aware figure extraction; web-image-search gathers paper and reference images; figure-gen creates reproducible matplotlib PDF and PNG assets; data-script aggregates CSV files, parses logs, computes statistics, and produces Markdown or LaTeX tables. Owns both collection and transformation of supporting material. Reads <agent-home>/agent-modes/material/<mode>.md as the canonical mode persona."
 tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch
-model: opus
+model: sonnet
 color: yellow
 memory: project
 metadata:

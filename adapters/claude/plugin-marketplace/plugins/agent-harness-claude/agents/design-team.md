@@ -2,7 +2,7 @@
 name: 디자인팀
 description: "Visual-artifact router. maker creates UI mockups, design tokens, components, diagrams, slide visuals, icons, and layouts; critic performs read-only six-axis critique of rendered artifacts or pre-render UI plans and checks the token contract; verifier independently checks console, layout, token, and intent breakage. Covers visual assets beyond product UI, including presentation slides, supporting paper figures, and thumbnails. Reads <agent-home>/agent-modes/design/<mode>.md as the canonical mode persona."
 tools: Glob, Grep, Read, Edit, Write, Bash, WebFetch
-model: opus
+model: fable
 color: pink
 memory: project
 metadata:

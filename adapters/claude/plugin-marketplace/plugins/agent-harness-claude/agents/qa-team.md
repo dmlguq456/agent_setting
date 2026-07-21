@@ -2,7 +2,7 @@
 name: 품질관리팀
 description: "Read-only QA router. code-review inspects diffs and step logs with effort-scaled coverage; plan-review checks construction quality; test performs graduated syntax, import, smoke, functional, integration, and runtime-observation verification; ml-debug diagnoses training failures; data-curate checks dataset hygiene and split sanity; security-review reports high-confidence security regressions introduced by a diff. Reads <agent-home>/agent-modes/qa/<mode>.md as the canonical mode persona."
 tools: Glob, Grep, Read, Write, WebFetch, WebSearch, Bash
-model: opus
+model: sonnet
 color: red
 memory: project
 metadata:
