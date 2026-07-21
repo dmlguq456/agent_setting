@@ -52,8 +52,8 @@ Sources merged per unit: `roles/modes/material/<mode>.md` (EN),
 
 ## Deliberately dropped (confirm)
 
-9. **Model literals** (`material-team.md:5` `model: sonnet`; `:67-69` "Claude adapter
-   default: sonnet/opus"): role NAMES carried into `role:` frontmatter (fast tool
+9. **Model literals** (`material-team.md:5` adapter-configured model; `:67-69`
+   adapter-configured tier defaults): role NAMES carried into `role:` frontmatter (fast tool
    worker / deep maker); concrete models resolve via per-adapter models.conf. The
    team file's "deep maker **or reviewer**" for data-script was resolved to `deep
    maker` (the unit's stance is maker; sanity checks are not adversarial review).

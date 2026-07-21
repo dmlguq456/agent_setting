@@ -23,12 +23,12 @@ merge divergences. Sources: `roles/modes/qa/*.md` (EN), `adapters/claude/agent-m
    into the entry recipes (workstream B), or the qa entry coverage silently degrades.
 
 4. **Native runtime config of the team agent.** `adapters/claude/agents/qa-team.md:1-11`
-   (`tools:` list, `model: sonnet`, `color: red`, `memory: project`, name `품질관리팀`).
+   (`tools:` list, adapter-configured model, `color: red`, `memory: project`, name `품질관리팀`).
    Dropped by design: model literals are guard violations, concrete tool/write config is
    node-owned, and the team identity becomes the `family: qa` label.
 
 5. **Model-role recommendations.** `adapters/claude/agents/qa-team.md:33-38` maps modes
-   to fast/deep reviewer with "Claude adapter default: sonnet/opus". The portable part is
+   to fast/deep reviewer with adapter-configured tier defaults. The portable part is
    captured in each unit's `role:` (fast reviewer: code-review, plan-review, test,
    data-curate; deep reviewer: ml-debug, security-review). The adapter defaults resolve
    via per-adapter models.conf and were intentionally not restated.

@@ -7,10 +7,10 @@ the agent body WAS the persona). The only mined source is
 divergences to reconcile. Residue items:
 
 1. **Native frontmatter dropped** (`adapters/claude/agents/plan-team.md:1-11`):
-   - `model: fable` — model literal; forbidden in units. The unit carries only the
+   - Adapter-configured deep-tier model — model literal omitted because it is forbidden in units. The unit carries only the
      portable role name `deep maker`; concrete model resolves via per-adapter
      models.conf. Reviewers should confirm `deep maker` maps to the tier previously
-     pinned by `fable` for this stage.
+     configured for this stage.
    - `tools: Glob, Grep, Read, Write, Edit` — a concrete tool grant is node/surface
      owned, not unit-owned. Recorded here so workstream B can carry the grant onto
      the topology node for this unit.

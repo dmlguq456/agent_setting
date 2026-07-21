@@ -6,8 +6,8 @@ Sources merged: `roles/modes/editorial/{translate,polish,review}.md` (EN),
 the units/_voice or were resolved with a judgment call.
 
 1. **Model literals dropped (rule-mandated).**
-   `adapters/claude/agents/editorial-team.md:5` (`model: fable`) and `:117-121`
-   ("Claude adapter default: opus / opus / sonnet"). Units carry role NAMES only
+   `adapters/claude/agents/editorial-team.md:5` (adapter-configured model) and
+   `:117-121` (adapter-configured tier defaults). Units carry role NAMES only
    (`deep editor`, `fast reviewer`). Verify the per-adapter models.conf maps these
    roles equivalently before team-file deletion (WS C).
 

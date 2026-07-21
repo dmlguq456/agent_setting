@@ -43,7 +43,7 @@ silently.
    `nas_Uihyeop/claude-meta-spec/reverse_engineering/deep-research.md`.
    External path, not restated in the portable unit.
 7. **Team frontmatter runtime metadata** (`research-team.md:1-11`): tools
-   list, `model: fable`, color, `memory: project`. Harness runtime config
+   list, adapter-configured model, color, `memory: project`. Harness runtime config
    dies with the team agent; the model literal is intentionally NOT carried
    (guard violation) — role names only.
 8. **Verbatim strings abbreviated**: Google Scholar full User-Agent literal

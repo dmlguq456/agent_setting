@@ -40,8 +40,8 @@ overrides or drop.
 
 ## 3. Router frontmatter that dies with the team file
 
-`design-team.md:1-11`: native tool list (Glob…WebFetch), `model: fable` (vendor
-literal), `color: pink`, `memory: project`, `metadata.modes`. Not portable; concrete
+`design-team.md:1-11`: native tool list (Glob…WebFetch), adapter-configured model,
+`color: pink`, `memory: project`, `metadata.modes`. Not portable; concrete
 tool grants and memory scope are node/surface-owned. Nothing re-homed by design.
 
 ## 4. Language rule second clause
