@@ -1024,14 +1024,36 @@ def _compact_dispatch_name(name, max_width=_DISPATCH_NAME_MAX):
     return name[: max_width - 1] + "…"
 
 
-def _dispatch_prefix(j):
+def _dispatch_prefix(j, orphan=False):
     # Every dispatch depth fans out with the same ↳ spawn arrow, nested two cells deeper per level
     # (user 2026-07-16: dispatch-depth-2 rows lost their arrow when they were indent-only), and the
     # whole ladder starts one level in — the dispatch-depth-1 arrow sits UNDER its parent session's
     # text, not on the session's own glyph column (user 2026-07-16 "분사 세션의 화살표를
     # 좀 더 들여쓰자"). Width = (depth+1)*2; the harness field absorbs it (_HMW - len).
+    #
+    # Project-level orphans (parent dead/off-screen, surfaced as a project fallback) intentionally
+    # drop the ↳ tree arrow — a parent-child arrow with no on-screen parent misleads readers into
+    # attaching the orphan to whatever live session row happens to sit above it. Replace with a
+    # same-width flat `··` "no-hierarchy" mark so the column stays aligned without implying nesting.
     depth = max(1, min(3, int(getattr(j, "depth", 1) or 1)))
+    if orphan:
+        return "  " * depth + "··"
     return "  " * depth + "↳ "
+
+
+_ORPHAN_DIVIDER_LABEL = "  ⌄ orphaned dispatch rows"
+
+
+def _orphan_divider(term_width=None):
+    """One dim in-band rule above a group card's project-level orphan rows.
+
+    Silent by default — only emitted when the group actually has orphaned
+    dispatch rows, so live-only groups render unchanged. Mirrors `_mem_divider`'s
+    in-band rule convention so the body-tint loop can tint it like any other row.
+    """
+    width = term_width or 78
+    rule = "─" * max(8, width - len(_ORPHAN_DIVIDER_LABEL) - 1)
+    return [(_ORPHAN_DIVIDER_LABEL, "dim"), (" ", None), (rule, "dim")]
 
 
 _LEVEL_SHORT = {
@@ -1273,7 +1295,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     # the NAME still lands at the shared _NAME_COL — name onward aligns with sessions. DIM =
     # spawned. F-33 (v11): the widened field also carries the job's own model/effort as a
     # parenthetical (SD-F3).
-    prefix = _dispatch_prefix(j)
+    prefix = _dispatch_prefix(j, orphan=orphan)
     segs = [("  ", None), (prefix, "dim"), (gch, gkey), (" ", None)]
     segs += _harness_model_cell(j.harness, None if dead_stale_j else (j.model or parent_model),
                                 eff, max(1, _HMW - len(prefix)),
@@ -1455,7 +1477,7 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     gch, gkey = _glyph(j.liveness, dim=True)
     hn = _BADGE_TEXT.get(j.harness, "—") if j.harness else "—"
 
-    prefix = _dispatch_prefix(j)
+    prefix = _dispatch_prefix(j, orphan=orphan)
     label = _dispatch_stage_label(j)
     if label:
         slug_room = max(1, _DISPATCH_NAME_MAX - len(label) - 1)
@@ -2941,6 +2963,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             lines.append([("     +%d stale/companion hidden" % hidden, "dim")])
 
         # orphans / loops: project-level fallback (standalone tree rows)
+        if orphans:
+            lines.append(_orphan_divider(term_width))
         for oj in _sort_group_jobs(orphans):
             _emit_dispatch_tree(oj, orphan=show_sessions)
         for lj in _sort_group_jobs(loops_jobs):
