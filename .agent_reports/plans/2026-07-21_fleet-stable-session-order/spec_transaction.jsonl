@@ -1,0 +1,4 @@
+{"action": "latest-reread", "next_version": 11, "route_id": "rt-6632bf58fbc5ce94", "status": "acquired", "waited": false}
+{"result": 1, "route_id": "rt-6632bf58fbc5ce94", "status": "released", "version": 11}
+{"action": "latest-reread", "next_version": 11, "route_id": "rt-6632bf58fbc5ce94", "status": "acquired", "waited": false}
+{"result": 0, "route_id": "rt-6632bf58fbc5ce94", "status": "released", "version": 11}

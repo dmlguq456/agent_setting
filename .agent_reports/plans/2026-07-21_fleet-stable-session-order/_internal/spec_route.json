@@ -1,0 +1,117 @@
+{
+  "schema_version": 2,
+  "capability": "autopilot-spec",
+  "capability_mode": "update",
+  "requested_intensity": "quick",
+  "effective_intensity": "quick",
+  "execution_topology": "one-shot-owner",
+  "owner_dispatch_depth": 1,
+  "max_dispatch_depth": 1,
+  "tracking": "tracked",
+  "tracked_gate_evidence": {
+    "spec_read": {
+      "satisfied": true,
+      "source": "/home/Uihyeop/agent_setting/.agent_reports/spec/agent-fleet-dashboard/prd.md"
+    },
+    "drift_verdict": "SPEC-SIGNIFICANT: live refresh ordering contradicts requested position stability",
+    "workflow_mode": "tracked",
+    "artifact_guard": {
+      "satisfied": true,
+      "source": "codex-preflight-write:passed"
+    }
+  },
+  "spec_touch": true,
+  "cwd": "/home/Uihyeop/agent_setting-wt/fleet-stable-session-order",
+  "artifact_root": "/home/Uihyeop/agent_setting/.agent_reports",
+  "source_commit": "781581bce0bac0ca51c70f676843457f68781ec7",
+  "registry_digest": "sha256:432cce7b1db46c1e743c3c6188b8969063a97d6c654e3742a7b876968d259e05",
+  "dispatch_defaults_digest": "sha256:b3e8dd08b3b52872a1ffbc873dec370b5c8ea900a27f6190f8cfcd30032e072b",
+  "selection": {
+    "direct_predicates": [],
+    "promotion_signals": [],
+    "selection_basis": [
+      {
+        "axis": "direct-predicate-gap",
+        "signal": "atomic-outcome",
+        "source": "compiler"
+      },
+      {
+        "axis": "direct-predicate-gap",
+        "signal": "focused-verification",
+        "source": "compiler"
+      },
+      {
+        "axis": "direct-predicate-gap",
+        "signal": "known-scope",
+        "source": "compiler"
+      },
+      {
+        "axis": "direct-predicate-gap",
+        "signal": "no-artifact-handoff",
+        "source": "compiler"
+      },
+      {
+        "axis": "direct-predicate-gap",
+        "signal": "no-independent-verifier",
+        "source": "compiler"
+      },
+      {
+        "axis": "direct-predicate-gap",
+        "signal": "no-resource-run",
+        "source": "compiler"
+      },
+      {
+        "axis": "direct-predicate-gap",
+        "signal": "no-shared-contract",
+        "source": "compiler"
+      }
+    ],
+    "escalation_basis": [],
+    "transport": "headless",
+    "transport_evidence": "caller-selected",
+    "inline_reason": null
+  },
+  "nodes": [
+    {
+      "id": "one-shot",
+      "kind": "capability-owner",
+      "dispatch_depth": 1,
+      "role": "orchestrator",
+      "write_scope": [
+        "spec/prd.md",
+        "spec/pipeline_state.yaml",
+        "spec/pipeline_summary.md"
+      ],
+      "resource_class": "normal",
+      "execution_surface": "registered-headless",
+      "registered_worker": true,
+      "completion_gate": "quick-complete"
+    }
+  ],
+  "completion_gates": [
+    "quick-complete"
+  ],
+  "human_gates": [
+    "intent-confirmation"
+  ],
+  "resume_retry_boundaries": [
+    "research",
+    "review",
+    "prd-transaction"
+  ],
+  "dispatch_evidence": null,
+  "dispatch_contract_version": 3,
+  "registered_headless_candidates": [
+    {
+      "harness": "codex",
+      "probe_source": "codex preflight headless --check --require-hook-trust",
+      "probe_time": "2026-07-21T00:30:50Z",
+      "status": "supported",
+      "surface": "registered-headless",
+      "transport": "headless"
+    }
+  ],
+  "registered_headless_policy": "serial-attempt",
+  "route_hash": "sha256:6632bf58fbc5ce941a3a8adeac3ce940eaf60cb61527262b515fc1085b39e712",
+  "route_id": "rt-6632bf58fbc5ce94"
+}

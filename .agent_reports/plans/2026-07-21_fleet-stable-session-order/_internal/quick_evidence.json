@@ -1,0 +1,12 @@
+{
+  "candidates": [
+    {
+      "harness": "codex",
+      "transport": "headless",
+      "surface": "registered-headless",
+      "status": "supported",
+      "probe_source": "codex preflight headless --check --require-hook-trust",
+      "probe_time": "2026-07-21T00:30:50Z"
+    }
+  ]
+}

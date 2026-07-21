@@ -1,8 +1,8 @@
 # agent-fleet-dashboard — Spec Pipeline Summary
 
-- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8/v9/v10) · 2026-07-17 (v11)
+- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8/v9/v10) · 2026-07-17 (v11) · 2026-07-21 (v13)
 - **Mode**: cli (터미널 TUI 도구)
-- **Status**: spec **v11 done + minor #2** (F-17 제목+부제 통합이 F-31을 대체 · 게이트 배지 퇴역) — 구현·라이브 검증 완료(테스트 664), 등재-미구현 잔여 없음(F-31 재개 조건만 보존)
+- **Status**: spec **v13 done** — live TUI의 survivor 위치 보존 계약 추가; 구현은 후속 autopilot-code 단계에서 수행
 - **Placement**: 별도 컴포넌트 `spec/agent-fleet-dashboard/` — 기존 `spec/prd.md`(Unified Memory System) 무수정.
 
 ## Process Log
@@ -11,6 +11,12 @@
 | research | 기술 tap 매핑 조사 (Explore) | `research/agent-fleet-dashboard/01_tap_mechanics.md` | 하네스별 discovery·tap·liveness, file-cited + jobs.log open/running 버그 발견 |
 | research | prior-art 스캔 (경량 web) | `research/agent-fleet-dashboard/00_prior_art.md` | herdr 정체(실OSS 멀티플렉서, 채택X) + 규모 작음 → 얇게 직접 빌드 + curses 확정 |
 | spec | PRD 작성 (lean) | `prd.md` v1 | intake skip(입력 충분), 단일 mode cli, scaffold 이월 |
+
+## v13 update (2026-07-21) — live stable session/group order
+
+- `v12/prd.md`에 기존 PRD를 snapshot한 뒤, live TUI에서 계속 보이는 그룹과 세션 행의 상대 위치를 run-local anchor로 보존하도록 계약을 추가했다.
+- 새 live run 및 stateless `--once`/`--json`은 기존 snapshot sort를 유지한다. 신규 가시 행은 survivor 뒤에 append하고, 사라진 행은 anchor에서 prune한다.
+- 상태 분류, 그룹 membership, filtering/folding, selection identity, scroll, process view, dispatch ordering, visual layout은 범위 밖이며 불변이다. 후속 구현은 bounded stable-order state와 이 경계를 회귀 테스트한다.
 
 ## 주요 결정 (locked)
 - F-1 외부 관찰자(zero-injection), 유일 write=우리 소유 statusline per-session tap.

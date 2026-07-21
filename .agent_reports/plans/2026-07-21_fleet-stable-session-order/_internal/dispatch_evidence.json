@@ -1,0 +1,16 @@
+{
+  "tuples": [
+    {
+      "child_harness": "codex",
+      "failure_class": "",
+      "launch_authority": "conductor",
+      "parent_harness": "codex",
+      "parent_sandbox": "workspace-write",
+      "parent_transport": "headless",
+      "probe_source": "codex-owner-network-contract+direct-auth+headless-check",
+      "probe_time": "2026-07-21T00:29:35.154570Z",
+      "status": "supported"
+    }
+  ],
+  "native_subagent": []
+}
