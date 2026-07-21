@@ -182,10 +182,13 @@ opencode_runtime_projection_check() {
     printf 'check=failed\nreason=opencode-agent-harness-missing\nopencode_home=%s\nexpected=%s\n' "$opencode_home" "$harness"
     return 69
   fi
-  native_agent="$opencode_home/agents/qa-team.md"
-  [ -f "$native_agent" ] || native_agent="$opencode_home/agent/qa-team.md"
+  # Kernel helper is the projection liveness probe: runtime team agents retired
+  # 2026-07-22 (재홈, CONVENTIONS §2.3) — memory-scout is the only projected native agent.
+  native_agent="$opencode_home/agents/memory-scout/memory-scout.md"
+  [ -f "$native_agent" ] || native_agent="$opencode_home/agents/memory-scout.md"
+  [ -f "$native_agent" ] || native_agent="$opencode_home/agent/memory-scout.md"
   if [ ! -f "$native_agent" ]; then
-    printf 'check=failed\nreason=opencode-native-agents-missing\nopencode_home=%s\nexpected=%s|%s\n' "$opencode_home" "$opencode_home/agents/qa-team.md" "$opencode_home/agent/qa-team.md"
+    printf 'check=failed\nreason=opencode-native-agents-missing\nopencode_home=%s\nexpected=%s|%s\n' "$opencode_home" "$opencode_home/agents/memory-scout/memory-scout.md" "$opencode_home/agents/memory-scout.md"
     return 69
   fi
   native_command="$opencode_home/commands/autopilot-code.md"

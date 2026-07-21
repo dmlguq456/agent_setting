@@ -1780,8 +1780,10 @@ from pathlib import Path
 
 root = Path(sys.argv[1])
 agents = sorted(root.glob("*.toml"))
-if len(agents) != 9:
-    raise SystemExit(f"expected 9 Codex agents, got {len(agents)}")
+# 재홈 2026-07-22: runtime team agents retired — the kernel helper memory-scout is the
+# only projected Codex custom agent TOML.
+if [a.name for a in agents] != ["memory-scout.toml"]:
+    raise SystemExit(f"expected exactly memory-scout.toml, got {[a.name for a in agents]}")
 for agent in agents:
     body = agent.read_text(encoding="utf-8")
     for key in ("name", "description"):
@@ -1801,21 +1803,32 @@ then
 else
   bad "codex native agent projection should have valid custom agent TOML without Claude paths"
 fi
-if grep -q 'Read-only role: do not edit, write, or mutate source files or artifacts' "$TMP/codex_agent_home/agents/qa-team.toml" \
-  && grep -q 'Stay depth-one: do not spawn nested agents' "$TMP/codex_agent_home/agents/qa-team.toml" \
-  && grep -q 'preflight.sh qa-policy <level> <track>' "$TMP/codex_agent_home/agents/qa-team.toml" \
-  && grep -q 'preflight.sh mode-info qa/test' "$TMP/codex_agent_home/agents/qa-team.toml" \
-  && grep -q 'report unavailable instead of simulating independence inline' "$TMP/codex_agent_home/agents/external-adversary.toml" \
-  && grep -q 'targeted hook coverage for obvious guarded reads and writes' "$TMP/codex_agent_home/agents/dev-team.toml"; then
+# 재홈 2026-07-22: per-team TOML boundaries retired — role-specific runtime boundaries now
+# live in unit-catalog frontmatter enforced by tools/check-unit-config.py; the kernel
+# memory-scout TOML stays read-only and team TOMLs must not reappear in the projection.
+if python3 "$ROOT/tools/check-unit-config.py" >/tmp/codex_unit_config.out 2>/tmp/codex_unit_config.err \
+  && grep -q '^read_only: true$' "$ROOT/roles/units/qa/test.md" \
+  && grep -q '^worker_type: review$' "$ROOT/roles/units/qa/test.md" \
+  && grep -q '^read_only: true$' "$ROOT/roles/units/qa/security-review.md" \
+  && grep -q '^read_only: false$' "$ROOT/roles/units/dev/backend.md" \
+  && grep -q '^worker_type: stage$' "$ROOT/roles/units/dev/backend.md" \
+  && grep -q 'sandbox_mode = "read-only"' "$TMP/codex_agent_home/agents/memory-scout.toml" \
+  && [ -z "$(find "$TMP/codex_agent_home/agents" -name '*-team.toml' -print -quit)" ]; then
   ok "codex native agent projection enforces role-specific runtime boundaries"
 else
   bad "codex native agent projection should encode role-specific runtime boundaries"
 fi
-if grep -q 'Codex role-map inputs: `fast reviewer, deep reviewer, external adversary`' "$TMP/codex_agent_home/agents/qa-team.toml" \
-  && grep -q 'Codex role-map inputs: `fast fact checker, deep reviewer, external adversary`' "$TMP/codex_agent_home/agents/research-team.toml" \
-  && grep -q 'Codex role-map inputs: `deep maker, fast tool worker`' "$TMP/codex_agent_home/agents/material-team.toml" \
-  && grep -q 'Codex role-map inputs: `deep maker, fast reviewer`' "$TMP/codex_agent_home/agents/editorial-team.toml" \
-  && grep -q 'select the concrete role by mode/QA policy' "$TMP/codex_agent_home/agents/qa-team.toml"; then
+# 재홈 2026-07-22: Codex role-map input lists retired — mixed role sets now live in unit
+# frontmatter role fields (portable role names resolved via per-adapter models.conf).
+if grep -q '^role: fast reviewer$' "$ROOT/roles/units/qa/test.md" \
+  && grep -q '^role: deep reviewer$' "$ROOT/roles/units/qa/security-review.md" \
+  && grep -q '^role: fast fact-checker$' "$ROOT/roles/units/research/fact-check.md" \
+  && grep -q '^role: deep reviewer$' "$ROOT/roles/units/research/plan-review.md" \
+  && grep -q '^role: deep maker$' "$ROOT/roles/units/material/data-script.md" \
+  && grep -q '^role: fast tool worker$' "$ROOT/roles/units/material/pdf-extract.md" \
+  && grep -q '^role: deep editor$' "$ROOT/roles/units/editorial/polish.md" \
+  && grep -q '^role: fast reviewer$' "$ROOT/roles/units/editorial/review.md" \
+  && grep -q 'PORTABLE role name only' "$ROOT/roles/units/_schema.md"; then
   ok "codex native agent projection preserves mixed role sets"
 else
   bad "codex native agent projection should preserve mixed role sets"
@@ -1836,17 +1849,31 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
-sources = sorted((root / "roles" / "modes").glob("*/*.md"))
+sys.path.insert(0, str(root / "tools"))
+import harness_manifest
+
+# 재홈 2026-07-22: portable personas live in roles/units; codex modes are generated from
+# the unit-bearing manifest modes (internal fragments like design/_design_rules have no
+# projection), and shared-tool paths (tools/design-mcp) are no longer Claude-only leaks.
+manifest = harness_manifest.load()
+sources = sorted(
+    spec["unit"]
+    for spec in manifest["modes"].values()
+    if isinstance(spec, dict) and spec.get("unit")
+)
+if not sources:
+    raise SystemExit("manifest lists no unit-bearing modes")
 modes = sorted((root / "codex_setting" / "codex-modes").glob("*/*.md"))
 if len(modes) != len(sources):
     raise SystemExit(f"expected {len(sources)} Codex modes, got {len(modes)}")
-for source in sources:
-    rel = source.relative_to(root / "roles" / "modes")
-    mode = rel.with_suffix("").as_posix()
-    native = root / "codex_setting" / "codex-modes" / rel
+for mode in sources:
+    unit_source = root / "roles" / "units" / f"{mode}.md"
+    if not unit_source.is_file():
+        raise SystemExit(f"{mode}: missing unit catalog source {unit_source}")
+    native = root / "codex_setting" / "codex-modes" / f"{mode}.md"
     body = native.read_text(encoding="utf-8")
     required = [
-        f"roles/modes/{mode}.md",
+        f"roles/units/{mode}.md",
         f"adapters/codex/bin/preflight.sh mode-info {mode}",
         f"adapters/codex/modes/{mode}.md",
         "not a legacy runtime mode copy",
@@ -1854,10 +1881,10 @@ for source in sources:
     ]
     for item in required:
         if item not in body:
-            raise SystemExit(f"{rel}: missing {item}")
-    forbidden = ("adapters/claude", "claude_setting", "settings.json", "statusline.sh", "CLAUDE.md", "agent-modes", "allowedTools", "Design MCP", "mcp__design__", "tools/design-mcp", "getConsoleLogs", "eval_js")
+            raise SystemExit(f"{mode}: missing {item}")
+    forbidden = ("adapters/claude", "claude_setting", "settings.json", "statusline.sh", "CLAUDE.md", "agent-modes", "allowedTools", "Design MCP", "mcp__design__", "getConsoleLogs", "eval_js")
     if any(item in body for item in forbidden):
-        raise SystemExit(f"{rel}: leaked non-Codex runtime surface")
+        raise SystemExit(f"{mode}: leaked non-Codex runtime surface")
 PY
 then
   ok "codex native mode projection covers portable modes without Claude paths"
@@ -1875,13 +1902,15 @@ if [ -L "$ROOT/codex_setting/scaffolds" ] \
 else
   bad "codex scaffold projection should expose shared design assets without Claude runtime paths"
 fi
+# 재홈 2026-07-22: bodies regenerate from roles/units — 5b is now a "### Level 5b" heading
+# and the meta-skill row says "units" instead of the retired "modes" persona surface.
 if grep -q '## Levels' "$ROOT/codex_setting/codex-modes/qa/test.md" \
-  && grep -q '5b. \*\*Behavioral runtime observation:\*\*' "$ROOT/codex_setting/codex-modes/qa/test.md" \
+  && grep -q '### Level 5b: Behavioral runtime observation' "$ROOT/codex_setting/codex-modes/qa/test.md" \
   && grep -q 'verification-runner' "$ROOT/codex_setting/codex-modes/qa/test.md" \
   && grep -q 'Tool Contract: `visual-harness`' "$ROOT/codex_setting/codex-modes/design/maker.md" \
   && grep -q 'preflight.sh visual-harness <file.html>' "$ROOT/codex_setting/codex-modes/design/maker.md" \
   && grep -q 'preflight.sh visual-harness <file.html>' "$ROOT/codex_setting/codex-modes/design/verifier.md" \
-  && grep -q 'Portable capabilities, roles, modes, and adapter projections' "$ROOT/codex_setting/codex-modes/research/plan-review.md"; then
+  && grep -q 'Portable capabilities, roles, units, and adapter projections' "$ROOT/codex_setting/codex-modes/research/plan-review.md"; then
   ok "codex native mode projection embeds sanitized portable mode contracts"
 else
   bad "codex native mode projection should embed sanitized portable mode contracts"
@@ -2324,9 +2353,11 @@ else
   bad "codex mode wrapper should treat security-review as portable read-only guidance"
 fi
 codex_design_modes_ok=1
-for mode_file in "$ROOT"/roles/modes/design/*.md; do
+# 재홈 2026-07-22: design personas re-homed to roles/units/design; _-prefixed internal
+# fragments (_design-rules, _NOTES) have no mode projection.
+for mode_file in "$ROOT"/roles/units/design/*.md; do
   mode_name=$(basename "$mode_file" .md)
-  [ "$mode_name" = "_design_rules" ] && continue
+  case "$mode_name" in _*) continue ;; esac
   mode="design/$mode_name"
   if ! "$CODEX" mode-info "$mode" >/tmp/mode.out 2>/tmp/mode.err \
     || ! grep -q '^status=tool-contract$' /tmp/mode.out \
@@ -2571,12 +2602,22 @@ if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/check-runti
 else
   grep -q '^status=failed' "$TMP/codex_rp0.out" && ok "codex check-runtime-projection reports an unwired home as failed" || bad "codex check-runtime-projection unwired output wrong"
 fi
+# 재홈 2026-07-22: the agent-modes surface retired for surface=unit-catalog (per-family
+# unit-family= lines). Until the §6.1-owned baseline refresh renames
+# native-bootstrap:agent-modes-total -> unit-catalog:total, accept exactly that
+# two-warning transition state and nothing else; any other warning still fails.
 if python3 "$ROOT/tools/context-footprint.py" --root "$ROOT" --skip-runtime --skip-hooks >"$TMP/context_footprint.out" 2>"$TMP/context_footprint.err" \
   && grep -q '^context_footprint_report=1' "$TMP/context_footprint.out" \
   && grep -q '^surface=codex-plugin ' "$TMP/context_footprint.out" \
   && grep -q '^surface=claude ' "$TMP/context_footprint.out" \
   && grep -q '^surface=native-bootstrap-agents ' "$TMP/context_footprint.out" \
-  && grep -q '^status=ok' "$TMP/context_footprint.out"; then
+  && grep -q '^surface=unit-catalog ' "$TMP/context_footprint.out" \
+  && grep -q '^unit-family=qa ' "$TMP/context_footprint.out" \
+  && ! grep -q '^surface=native-bootstrap-agent-modes' "$TMP/context_footprint.out" \
+  && { grep -q '^status=ok' "$TMP/context_footprint.out" \
+    || { grep -q '^status=warn warnings=2$' "$TMP/context_footprint.out" \
+      && grep -q 'missing from context footprint baseline: unit-catalog:total' "$TMP/context_footprint.out" \
+      && grep -q 'was not measured: native-bootstrap:agent-modes-total' "$TMP/context_footprint.out"; }; }; then
   ok "context-footprint reports bootstrap and skill metadata without runtime hooks"
 else
   bad "context-footprint should report deterministic metadata footprint"
@@ -2598,7 +2639,7 @@ if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/install-run
   && grep -q '^check=skill-link:autopilot-code:ok' "$TMP/codex_rp2.out" \
   && grep -q '^check=skill-discovery:native' "$TMP/codex_rp2.out" \
   && grep -q '^check=skills-linked:ok' "$TMP/codex_rp2.out" \
-  && grep -q '^check=agent-link:plan-team.toml:ok' "$TMP/codex_rp2.out" \
+  && grep -q '^check=agent-link:memory-scout.toml:ok' "$TMP/codex_rp2.out" \
   && grep -q '^check=agents-linked:ok' "$TMP/codex_rp2.out" \
   && grep -q '^status=ok' "$TMP/codex_rp2.out"; then
   ok "codex install-runtime-projection wires the home and the checker passes"
@@ -2625,10 +2666,10 @@ RPBAD="$TMP/codex-runtime-home-bad"
 rm -rf "$RPBAD"; mkdir -p "$RPBAD"
 if AGENT_HOME="$ROOT" CODEX_HOME="$RPBAD" "$ROOT/adapters/codex/bin/install-runtime-projection.sh" >"$TMP/codex_rp_bad_install.out" 2>"$TMP/codex_rp_bad_install.err" \
   && ln -sfn "$TMP" "$RPBAD/skills/autopilot-code" \
-  && ln -sfn "$TMP" "$RPBAD/agents/plan-team.toml" \
+  && ln -sfn "$TMP" "$RPBAD/agents/memory-scout.toml" \
   && ! AGENT_HOME="$ROOT" CODEX_HOME="$RPBAD" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >"$TMP/codex_rp_bad.out" 2>"$TMP/codex_rp_bad.err" \
   && grep -q '^check=skill-link:autopilot-code:failed' "$TMP/codex_rp_bad.out" \
-  && grep -q '^check=agent-link:plan-team.toml:failed' "$TMP/codex_rp_bad.out" \
+  && grep -q '^check=agent-link:memory-scout.toml:failed' "$TMP/codex_rp_bad.out" \
   && grep -q '^status=failed' "$TMP/codex_rp_bad.out"; then
   ok "codex check-runtime-projection rejects miswired skill and agent links"
 else
@@ -2929,13 +2970,15 @@ mkdir -p "$TMP/opencode_headless_home/.config/opencode/agents" \
   "$TMP/opencode_headless_home/.config/opencode/plugins"
 ln -s "$ROOT" "$TMP/opencode_headless_home/.config/opencode/agent-harness"
 ln -s "$ROOT/opencode_setting/opencode-skills/autopilot-code" "$TMP/opencode_headless_home/.config/opencode/skills/autopilot-code"
-ln -s "$ROOT/opencode_setting/opencode-agents/qa-team/qa-team.md" "$TMP/opencode_headless_home/.config/opencode/agents/qa-team.md"
+# 재홈 2026-07-22: runtime team agents retired — the projected native agent is the
+# kernel helper memory-scout (agents/memory-scout/memory-scout.md).
+ln -s "$ROOT/opencode_setting/opencode-agents/memory-scout" "$TMP/opencode_headless_home/.config/opencode/agents/memory-scout"
 ln -s "$ROOT/opencode_setting/opencode-commands/autopilot-code.md" "$TMP/opencode_headless_home/.config/opencode/commands/autopilot-code.md"
 ln -s "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js" "$TMP/opencode_headless_home/.config/opencode/plugins/agent-harness-guards.js"
 if HOME="$TMP/opencode_headless_home" XDG_CONFIG_HOME="$TMP/opencode_headless_home/.config" \
   "$OPENCODE" headless --check "$TMP/repo" >/tmp/opencode_headless_check.out 2>/tmp/opencode_headless_check.err \
   && grep -q '^runtime_projection=ok$' /tmp/opencode_headless_check.out \
-  && grep -q '/agents/qa-team.md$' /tmp/opencode_headless_check.out \
+  && grep -q '/agents/memory-scout/memory-scout.md$' /tmp/opencode_headless_check.out \
   && grep -q '/commands/autopilot-code.md$' /tmp/opencode_headless_check.out \
   && grep -q '^check=ok$' /tmp/opencode_headless_check.out; then
   ok "opencode headless check validates plural native runtime projection"
@@ -2946,7 +2989,8 @@ mkdir -p "$TMP/opencode_headless_config_home/.config/opencode/agent" \
   "$TMP/opencode_headless_config_home/.config/opencode/command" \
   "$TMP/opencode_headless_config_home/.config/opencode/plugins"
 ln -s "$ROOT" "$TMP/opencode_headless_config_home/.config/opencode/agent-harness"
-ln -s "$ROOT/opencode_setting/opencode-agents/qa-team/qa-team.md" "$TMP/opencode_headless_config_home/.config/opencode/agent/qa-team.md"
+# 재홈 2026-07-22: singular-layout variant keeps a flat agent/memory-scout.md link.
+ln -s "$ROOT/opencode_setting/opencode-agents/memory-scout/memory-scout.md" "$TMP/opencode_headless_config_home/.config/opencode/agent/memory-scout.md"
 ln -s "$ROOT/opencode_setting/opencode-commands/autopilot-code.md" "$TMP/opencode_headless_config_home/.config/opencode/command/autopilot-code.md"
 ln -s "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js" "$TMP/opencode_headless_config_home/.config/opencode/plugins/agent-harness-guards.js"
 if OPENCODE_CONFIG_CONTENT='{"skills":{"paths":["/tmp/opencode-\u0073kills"]}}' \
@@ -3292,17 +3336,21 @@ if command -v opencode >/dev/null 2>&1; then
     [ -f "$f" ] || continue
     ln -s "$f" "$TMP/opencode_home/.config/opencode/agent/$(basename "$f")"
   done
+  # 재홈 2026-07-22: team profiles retired — the discoverable native agent is the kernel
+  # helper memory-scout, which declares its portable source (core/MEMORY.md §7.4).
   if HOME="$TMP/opencode_home" XDG_CONFIG_HOME="$TMP/opencode_home/.config" XDG_DATA_HOME="$TMP/opencode_home/.local/share" \
-    opencode debug agent plan-team --pure >/tmp/opencode_agent.out 2>/tmp/opencode_agent.err \
-    && grep -q '"description": "OpenCode-native agent for portable role profile plan-team' /tmp/opencode_agent.out \
-    && grep -q 'roles/README.md' /tmp/opencode_agent.out \
+    opencode debug agent memory-scout --pure >/tmp/opencode_agent.out 2>/tmp/opencode_agent.err \
+    && grep -q '"description": "Read-only memory scout for agent-initiated deep memory reconnaissance."' /tmp/opencode_agent.out \
+    && grep -q 'core/MEMORY.md' /tmp/opencode_agent.out \
     && ! grep -q '/.claude/' /tmp/opencode_agent.out; then
     ok "opencode native agent projection is discoverable without Claude paths"
   else
     bad "opencode native agent projection should be discoverable without Claude paths"
   fi
+  # 재홈 2026-07-22: qa-team projection retired — read-only/depth-one runtime enforcement
+  # is preserved on the kernel memory-scout projection (edit/write/task off + deny rules).
   if HOME="$TMP/opencode_home" XDG_CONFIG_HOME="$TMP/opencode_home/.config" XDG_DATA_HOME="$TMP/opencode_home/.local/share" \
-    opencode debug agent qa-team --pure >/tmp/opencode_agent_qa.out 2>/tmp/opencode_agent_qa.err \
+    opencode debug agent memory-scout --pure >/tmp/opencode_agent_qa.out 2>/tmp/opencode_agent_qa.err \
     && python3 - /tmp/opencode_agent_qa.out <<'PY'
 import json
 import sys
@@ -3735,9 +3783,11 @@ else
   bad "opencode mode wrapper should treat security-review as portable read-only guidance"
 fi
 opencode_design_modes_ok=1
-for mode_file in "$ROOT"/roles/modes/design/*.md; do
+# 재홈 2026-07-22: design personas re-homed to roles/units/design; _-prefixed internal
+# fragments (_design-rules, _NOTES) have no mode projection.
+for mode_file in "$ROOT"/roles/units/design/*.md; do
   mode_name=$(basename "$mode_file" .md)
-  [ "$mode_name" = "_design_rules" ] && continue
+  case "$mode_name" in _*) continue ;; esac
   mode="design/$mode_name"
   if ! "$OPENCODE" mode-info "$mode" >/tmp/opencode_mode.out 2>/tmp/opencode_mode.err \
     || ! grep -q '^status=unsupported$' /tmp/opencode_mode.out \
