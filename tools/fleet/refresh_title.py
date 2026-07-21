@@ -46,9 +46,9 @@ DEBOUNCE_SEC = 600
 CHILD_DEBOUNCE_SEC = 150   # dispatched children move faster than main sessions (user 2026-07-19)
 DEFAULT_CONCURRENCY = 2
 MAX_CONCURRENCY = 4
-DEFAULT_START_LIMIT = 16   # per START_WINDOW_SEC; 4 → 10 → 16 (user 2026-07-20: TUI 재시작 burst 배압 해소)
-MAX_START_LIMIT = 16
-START_WINDOW_SEC = 600
+DEFAULT_START_LIMIT = 3    # per START_WINDOW_SEC; 4 → 10 → 16 → 3 (user 2026-07-21: 10분당 16개 → 1분당 3개)
+MAX_START_LIMIT = 3
+START_WINDOW_SEC = 60      # 1-minute rolling window (was 600s; paired with the 16→3 limit above)
 DISABLE_MARKER = ".refresh-disabled"
 MODEL = os.environ.get("FLEET_TITLE_MODEL", "haiku")
 
