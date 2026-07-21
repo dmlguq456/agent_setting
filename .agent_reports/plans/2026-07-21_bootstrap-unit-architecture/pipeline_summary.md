@@ -30,8 +30,15 @@ the capability layer is restructured last. Origin: user direction (harness-wide,
 | Commits C2(2e1ce56e)·C3(2c38c933)·C4(a3493fbc) | ✅ (경로 분할, stage-dispatch 무접촉) |
 | portable-guards (clean worktree) | ✅ C5(839454e4): 제품 회귀 1건 수정 + 드릴 15건 현대화, PASS=351/베이스라인 대비 회귀 0 |
 | **최종 2-way cross-harness verify** | ✅ 양 leg verdict 회수 — Codex 9건 + Claude 6건 CONFIRMED(수렴: boundary guard·codex role-map·profiles), end-to-end 체인은 실증 clean(compile→seal→bootstrap→dry-run, unit 변조 거부) |
-| 지적 반영 | ⏳ main이 F1(서브스킬 미러 27개 확장)·F4(composed gate 검증)·F5(guard unit 바인딩)·F6(reserved role pin+unit-role authority)·F9(memory-scout 정확 예외)·F7 부분·F8(스캔 확대) 완료; 잔여(codex role-map/capability-map·boundary 전면 sweep·profiles 5+fragments·dev-pipeline prose·_NOTES 이중예외·scaffolds 링크) 전담 에이전트 진행 중 |
-| C6 커밋 → 최종 재검증 → push | pending |
+| 지적 반영 (Codex 9 + Claude 6 전건) | ✅ C6(63f521c8): 서브스킬 미러 27 확장(치명), unit 바인딩 강제(guard mismatch+wrapper 3+model-role=unit 권위), composed gate 검증, codex/opencode 매핑 재홈(role-map·capability-map·plan family), boundary 전면 sweep(74→1, 잔여=선재 __pycache__), manifest modes+2(report·plan-author→codex 투영 27), profiles/fragments v3화, guards 정합 |
+| 최종 게이트 | ✅ 배터리 17/17 · generate --check · 양 guard green · **clean-worktree portable-guards PASS=354 FAIL=2**(베이스라인 대비 실회귀 0, 선재 red 4→2로 개선 — codex doctor 쌍 치유) |
+| **push** | ✅ `306e0bd8..63f521c8` origin/main — 마이그레이션 완결 (C1–C6) |
+
+## Residual (비차단, 범위 외)
+- boundary 잔여 1: `__pycache__` 노출 (pre-migration 선재)
+- guards 잔여 2: `adapter loop runtime logs ignore`(선재, drill env), `opencode role wrapper opencode-default`(별도 adapter-model-config 변경 유래)
+- 용어 sweep: `adapters/codex/{preflight.sh,README.md,AGENTS.md}`의 role-profile 문서 어휘 잔존 (doc-level)
+- spec 소유 외 참조: harness-layer-sync PRD 등 타 스펙의 구조 서술은 각 스펙 세션 소관 |
 
 ## Key findings that shaped the design
 - Migration is **consolidation, not rewrite**: codex/opencode agents already generated; dispatch already kernel+overlay; nodes already carry role+kind.
