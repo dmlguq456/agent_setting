@@ -2112,7 +2112,7 @@ def _degrade_candidates(jobs, covered_slugs=()):
     return out
 
 
-def _degrade_card(job, term_width):
+def _degrade_card(job, session_by_pid, term_width):
     """§5.3's degrade card — `source: heuristic`, existing `_PIPE_STAGES` breadcrumb, no DAG
     (there is no record to derive one from). No job-row entry (the card key IS the job)."""
     cap = job.key or "?"
@@ -2135,6 +2135,13 @@ def _degrade_card(job, term_width):
     breadcrumb = _stage_segs(job.key, job.stage or "", working=(job.liveness == "working"),
                              max_width=_STAGE_ZONE_MAX)
     out.append([("    ", None)] + breadcrumb)
+    # F-29 — the degraded job's session's own active sub-agents, the same strip the route card
+    # draws (2060-2064); silent when the pid resolves to no session or no active sub-agent.
+    sess = session_by_pid.get(job.pid) if job.pid else None
+    subs = ([sa for sa in (getattr(sess, "subagents", None) or []) if sa.active or _SHOW_ALL]
+            if sess is not None else [])
+    if subs:
+        out.extend(_subagent_strip(subs))
     return out, {"card_key": card_key, "fold_line": 0, "job_rows": [], "folded": folded}
 
 
@@ -2195,12 +2202,26 @@ def _build_process_lines(sessions, jobs, route_views_by_id, malformed, memory, t
                 covered_slugs.add(parent)
     degrade_jobs = _degrade_candidates(jobs, covered_slugs)
 
-    if not real_views and not degrade_jobs:
+    # F-29 — plain top-level sessions running a native sub-agent. Process view is route-centric
+    # and emits no plain-session row, so without this a session's ⚡ agents are invisible here
+    # even though group view shows them in its session loop. Collected up front so they alone
+    # can populate the screen when no route/degrade card exists.
+    sub_sessions = []
+    for s in sessions:
+        if (getattr(s, "app_server", False) or getattr(s, "is_child", False)
+                or getattr(s, "mem_worker", False)):
+            continue
+        s_subs = [sa for sa in (getattr(s, "subagents", None) or []) if sa.active or _SHOW_ALL]
+        if s_subs:
+            sub_sessions.append((s, s_subs))
+
+    if not real_views and not degrade_jobs and not sub_sessions:
         # prd.md:310 — an honest "nothing is running" statement, never a blank screen.
         lines.append([("  no active route", "dim")])
         return lines
 
     seen_keys = set()
+    covered_pids = set()
     first = True
     for view in real_views:
         if not first:
@@ -2214,6 +2235,13 @@ def _build_process_lines(sessions, jobs, route_views_by_id, malformed, memory, t
         for rel_idx, job in meta["job_rows"]:
             if job.pid:
                 _SELECTABLE.append(_select_entry_job(job, base + rel_idx))
+        # F1 — cover every route node's session pid regardless of fold state: a folded card
+        # yields no job_rows, but its sessions are still "on a route", not routeless, and must
+        # not re-appear as a routeless anchor below.
+        for n in (view.get("nodes", []) or []):
+            nj = n.get("job") if isinstance(n, dict) else None
+            if nj is not None and getattr(nj, "pid", None):
+                covered_pids.add(nj.pid)
         seen_keys.add(meta["card_key"])
 
     for job in degrade_jobs:
@@ -2221,11 +2249,28 @@ def _build_process_lines(sessions, jobs, route_views_by_id, malformed, memory, t
             lines.append(None)
         first = False
         base = len(lines)
-        card_lines, meta = _degrade_card(job, term_width)
+        card_lines, meta = _degrade_card(job, session_by_pid, term_width)
         lines.extend(card_lines)
         _FOLDABLE.append({"line": base + meta["fold_line"], "card_key": meta["card_key"],
                           "folded": meta["folded"]})
+        if job.pid:
+            covered_pids.add(job.pid)
         seen_keys.add(meta["card_key"])
+
+    # Routeless sessions with active sub-agents — one minimal owner anchor + the same strip,
+    # skipping any pid already shown under a route/degrade card above (no double draw).
+    for s, s_subs in sub_sessions:
+        if s.pid and s.pid in covered_pids:
+            continue
+        if not first:
+            lines.append(None)
+        first = False
+        name_w = 40 if term_width is None else max(8, min(40, term_width - 6))
+        anchor = [("  ● ", "dim"), (_clip_w(_session_name(s), name_w), "name_dim")]
+        if getattr(s, "model", None):
+            anchor.append(("  " + str(s.model), "dim"))
+        lines.append(anchor)
+        lines.extend(_subagent_strip(s_subs))
 
     # StateTracker.sweep() precedent — a card key not seen this tick must not leak its fold
     # flag into a future, unrelated card that happens to reuse the same route_id/slug.
