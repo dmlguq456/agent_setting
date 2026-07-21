@@ -217,7 +217,7 @@ def parser() -> argparse.ArgumentParser:
         "--foreground-timeout",
         type=float,
         default=float(os.environ.get("CODEX_DISPATCH_FOREGROUND_TIMEOUT", "3600")),
-        help="maximum child lifetime for foreground-scoped launch; 0 disables timeout",
+        help="maximum child lifetime for foreground-scoped launch; non-positive clamps to the safe default (never waits indefinitely)",
     )
     return p
 

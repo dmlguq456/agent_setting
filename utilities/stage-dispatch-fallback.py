@@ -14,11 +14,44 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "utilities"))
-from dispatch_lifecycle import DETACHED, FOREGROUND_SCOPED, select_launch_lifecycle  # noqa: E402
+from dispatch_lifecycle import (  # noqa: E402
+    DETACHED,
+    FOREGROUND_SCOPED,
+    FOREGROUND_TIMEOUT_DEFAULT,
+    bounded_foreground_timeout,
+    select_launch_lifecycle,
+)
 from dispatch_contract import DispatchContractError, validate_attempt_metadata  # noqa: E402
 from worker_bootstrap import assigned_contract, worker_type_for_kind  # noqa: E402
 
 ORDER = ["same-harness-headless", "cross-harness-headless", "native-subagent", "inline"]
+
+
+def outer_subprocess_timeout(
+    foreground_timeout: float, lifecycle: str, direct_timeout: float
+) -> float | None:
+    """Wall-clock deadline for the OUTER subprocess.run hosting a wrapper launch.
+
+    Detached launches return immediately, so the outer call only needs the short
+    spawn-confirm window (``direct_timeout``). A foreground-scoped wrapper instead
+    stays attached and self-bounds its child via
+    ``dispatch_lifecycle.wait_foreground``; the outer deadline is a small grace
+    margin ABOVE that internal deadline so the wrapper can run its own
+    SIGTERM->SIGKILL cleanup and record a clean terminal row.
+
+    Boundary hazard this centralizes: ``foreground_timeout <= 0`` was the wrapper's
+    "disable timeout / wait indefinitely" sentinel, and a flat ``+ 10`` collapsed
+    the outer wall to 10s — the SHORTEST deadline, the inverse of "indefinite" —
+    abandoning a child that had only just started. Because a foreground-scoped
+    parent blocks on its child, indefinite is never safe here, so the non-positive
+    sentinel is clamped to a finite ceiling via ``bounded_foreground_timeout``
+    (mirrored inside ``wait_foreground`` so the wrapper self-bounds too). A
+    no-progress watchdog that tells slow-but-progressing from wedged is the planned
+    follow-up. Boundary coverage: utilities/dispatch_liveness_matrix.test.py.
+    """
+    if lifecycle != FOREGROUND_SCOPED:
+        return direct_timeout
+    return bounded_foreground_timeout(foreground_timeout) + 10.0
 
 
 def fail(reason: str, code: int, **fields: str) -> int:
@@ -535,9 +568,11 @@ def capacity_retry(
         retry = subprocess.run(
             retry_command, cwd=ROOT, text=True, capture_output=True,
             check=False,
-            timeout=(args.foreground_timeout + 10
-                     if getattr(args, "launch_lifecycle", DETACHED) == FOREGROUND_SCOPED
-                     else args.direct_timeout),
+            timeout=outer_subprocess_timeout(
+                getattr(args, "foreground_timeout", FOREGROUND_TIMEOUT_DEFAULT),
+                getattr(args, "launch_lifecycle", DETACHED),
+                args.direct_timeout,
+            ),
             env=direct_env(),
         )
     except subprocess.TimeoutExpired:
@@ -694,9 +729,11 @@ def main() -> int:
                         text=True,
                         capture_output=True,
                         check=False,
-                        timeout=(args.foreground_timeout + 10
-                                 if args.launch_lifecycle == FOREGROUND_SCOPED
-                                 else args.direct_timeout),
+                        timeout=outer_subprocess_timeout(
+                            args.foreground_timeout,
+                            args.launch_lifecycle,
+                            args.direct_timeout,
+                        ),
                         env=direct_env(),
                     )
                     output = (result.stdout + result.stderr).strip()
