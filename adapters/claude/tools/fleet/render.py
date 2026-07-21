@@ -1722,6 +1722,62 @@ def _sort_group_sessions(ss):
     return sorted(ss, key=k)
 
 
+def _live_session_identity(s):
+    """Stable, display-independent identity for a live-order anchor."""
+    if s.session_id:
+        if getattr(s, "app_server", False):
+            kind = "app-server"
+        elif getattr(s, "mem_worker", False):
+            kind = "memory-worker"
+        else:
+            kind = "session"
+        return ("sid", s.harness, s.session_id, kind)
+    if s.pid:
+        return ("proc", s.harness, s.pid, getattr(s, "proc_start", None))
+    return ("fallback", s.harness, s.cwd, s.slug)
+
+
+def _reconcile_live_order(anchors, current, identity):
+    """Keep visible survivors in anchor order, then append current newcomers.
+
+    A list per identity deliberately retains every current object if imperfect
+    collection data produces a collision; snapshot order is the tie-breaker.
+    """
+    buckets = {}
+    for item in current:
+        buckets.setdefault(identity(item), []).append(item)
+    ordered = []
+    for key in anchors:
+        bucket = buckets.get(key)
+        if bucket:
+            ordered.append(bucket.pop(0))
+    for item in current:
+        key = identity(item)
+        bucket = buckets.get(key)
+        if bucket and bucket[0] is item:
+            ordered.append(bucket.pop(0))
+    return ordered, [identity(item) for item in ordered]
+
+
+class _LiveOrderState:
+    """Run-local group and session anchors for the live curses renderer."""
+    def __init__(self):
+        self.groups = []
+        self.sessions = {}
+
+    def reconcile_groups(self, names):
+        ordered, self.groups = _reconcile_live_order(self.groups, names, lambda name: name)
+        current = set(names)
+        self.sessions = {name: anchors for name, anchors in self.sessions.items()
+                         if name in current}
+        return ordered
+
+    def reconcile_sessions(self, group, rows):
+        ordered, self.sessions[group] = _reconcile_live_order(
+            self.sessions.get(group, []), rows, _live_session_identity)
+        return ordered
+
+
 def _sort_group_jobs(js):
     return sorted(js, key=lambda j: (_JOB_LIVE_RANK.get(j.liveness, 9), -(j.elapsed_min or 0)))
 
@@ -2315,7 +2371,7 @@ def _current_attempt_jobs(jobs):
 
 
 def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memory=None,
-                 term_width=None):
+                 term_width=None, live_order=None):
     """Return a flat list of segment-lines for the whole screen (None = blank line).
 
     Side effect: refreshes the module-level `_SELECTABLE` stash (F-27) — see its definition.
@@ -2404,6 +2460,31 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     show_jobs = section in ("dispatch", "both")
 
     order = sorted(groups.keys(), key=lambda name: _group_sort_key(name, groups[name]))
+
+    # Anchor only project cards that will actually be visible.  This mirrors the
+    # existing section/dead-job/fold decisions below, so hidden cards are pruned.
+    if live_order is not None:
+        visible_order = []
+        for name in order:
+            g = groups[name]
+            group_sessions = g["sessions"] if show_sessions else []
+            group_jobs = g["jobs"] if show_jobs else []
+            if not _SHOW_ALL:
+                group_jobs = [j for j in group_jobs if j.liveness != "dead"]
+            if not group_sessions and not group_jobs:
+                continue
+            live_sessions = [s for s in group_sessions
+                             if s.liveness not in ("stale", "dead") and not s.app_server]
+            if (not _SHOW_ALL) and not live_sessions and not group_jobs:
+                continue
+            visible_order.append(name)
+        # Reconcile only card anchors, but retain folded/empty groups in the
+        # render input so the unchanged loop below can still aggregate the
+        # inactive folded summary.  Non-card groups stay in snapshot order and
+        # never become live anchors.
+        visible_names = set(visible_order)
+        non_card_order = [name for name in order if name not in visible_names]
+        order = live_order.reconcile_groups(visible_order) + non_card_order
 
     lines = []
     # F-12(c) legend glyph-appearance tracking — LOCAL to this call (never module/global state,
@@ -2799,8 +2880,11 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 return None
             return [(n["id"], n["state"]) for n in view["nodes"]]
 
+        shown = _sort_group_sessions(shown)
+        if live_order is not None:
+            shown = live_order.reconcile_sessions(name, shown)
         rendered_parent_sids = set()  # ambiguous enrichment must not duplicate a dispatch tree
-        for s in _sort_group_sessions(shown):
+        for s in shown:
             if getattr(s, "mem_worker", False):
                 # Memory rows use a dedicated dim summary and appear only after the ``a`` toggle.
                 lines.extend(_mem_row(s, layout))
@@ -3691,7 +3775,7 @@ def reset_scroll():
     _OFFSET = 0
 
 
-def _draw(stdscr, sessions, jobs, section, malformed, memory=None):
+def _draw(stdscr, sessions, jobs, section, malformed, memory=None, live_order=None):
     global _OFFSET, _TOGGLE_ROWS, _CLICK_ROWS, _FOLD_ROWS, _PROMPT_HITS, _CURSOR_ID
     # reset before any early-return so a stale map never survives a click (§4.1 pattern) —
     # _PROMPT_HITS in particular must never carry the PRIOR stage's coordinates into this
@@ -3705,7 +3789,7 @@ def _draw(stdscr, sessions, jobs, section, malformed, memory=None):
     stdscr.erase()
     narrow = w < _NARROW_CUTOFF
     lines = _build_lines(sessions, jobs, section, narrow, malformed, layout=_layout_mode(w),
-                         memory=memory, term_width=w)
+                         memory=memory, term_width=w, live_order=live_order)
     body_h = max(1, h - 1)   # reserve 1 footer row
 
     # F-27: the cursor tracks a ROW, so the viewport follows it (not the reverse). Done before
@@ -3786,6 +3870,7 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
     global _OFFSET, _BLINK_ON
     curses.curs_set(0)
     _init_colors()
+    live_order = _LiveOrderState()
     # herdr (HERDR_ENV=1) grabs mouse events itself — enabling curses mouse reporting inside it
     # deadlocks/freezes the pane (user-observed freeze 2026-07-01). Keyboard is the primary path,
     # so skip mouse under herdr; mouse click-toggle stays available in a plain terminal.
@@ -3799,7 +3884,7 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
     malformed = _malformed()
     mem_snapshot = _collect_memory()
     last = time.time()
-    _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot)
+    _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot, live_order=live_order)
     while True:
         # wake exactly at the next 0.5s blink boundary (regular period) but stay key-responsive (≤200ms)
         _nb = (int(time.time() * 10) + 1) / 10.0   # 10fps wake — the spinner cadence
@@ -3823,18 +3908,18 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
                     _handle_mouse(mx, my)
             else:
                 _handle_prompt_key(ch)
-            _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot)
+            _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot, live_order=live_order)
             continue
         if _SELECT_MODE:
             if _handle_select_key(ch):
-                _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot)
+                _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot, live_order=live_order)
                 continue
         elif ch in (ord("s"), ord("S"), ord("x"), ord("X")):
             # Enter selection mode. `x` doubles as the enter shortcut so the "press x to kill"
             # intent works from a cold start; it selects, it never kills on the first press.
             if not _enter_select(_live_targets()):
                 _set_action("no selectable rows")
-            _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot)
+            _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot, live_order=live_order)
             continue
 
         # --- base mode: scroll keys UNCHANGED (F-27 regression budget = 0) ---
@@ -3857,7 +3942,7 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
         _poll_pending_kill()     # F-27 grace window — non-blocking; may raise a re-prompt
         _BLINK_ON = (int(now * 2) % 2 == 0)     # ~2 Hz working-dot blink (manual — A_BLINK unreliable)
         # redraw every wake (covers KEY_RESIZE, blink and tick) — _draw clamps _OFFSET internally.
-        _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot)
+        _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot, live_order=live_order)
 
 
 def run_live(collect_all, hfilter, section, interval):
