@@ -840,7 +840,7 @@ def validate_route_record(args: argparse.Namespace) -> int:
         "--artifact-root",args.artifact_root,"--capability",args.capability,
         "--intensity",args.intensity,"--write-scope",args.write_scope,
         "--route-id",args.route_id,"--route-hash",args.route_hash,
-        "--registry-digest",args.registry_digest]
+        "--registry-digest",args.registry_digest,"--unit",args.unit]
     if args.attempt_id:
         command += ["--current-attempt", args.attempt_id]
     result=subprocess.run(command,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)

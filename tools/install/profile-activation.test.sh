@@ -69,16 +69,16 @@ PY
   test -L "$HOME/.config/opencode/plugins/agent-harness-guards.js" || fail "$profile lost OpenCode kernel guard plugin"
 }
 
-check_profile starter 6 5 8
+check_profile starter 6 5 10
 test ! -e "$HOME/.codex/skills/autopilot-design" || fail "starter exposed a design-only capability"
 test ! -e "$HOME/.codex/agent-modes/design/maker.md" || fail "starter exposed a design mode"
 
-check_profile builder 14 7 17
+check_profile builder 14 7 19
 test -L "$HOME/.codex/skills/autopilot-spec" || fail "builder omitted autopilot-spec"
 test ! -e "$HOME/.codex/skills/autopilot-draft" || fail "builder exposed a full-only document capability"
 
-# full codex mode links = 25: internal design/_design_rules has no native projection.
-check_profile full 27 8 25
+# full codex mode links = 27: internal design/_design_rules has no native projection.
+check_profile full 27 8 27
 # codex-review-team wrapper retired 2026-07-22 (재홈): cross-harness review is a
 # dispatched unit; only the memory-scout kernel helper is projected.
 test ! -e "$HOME/.claude/agents/codex-review-team.md" || fail "full re-projected the retired codex-review-team wrapper"

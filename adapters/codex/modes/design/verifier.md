@@ -47,7 +47,7 @@ io:
   return: "machine-parsed YAML schema below; on PASS a near-silent one-liner"
 tools:
   - roles/units/design/_design-rules.md
-  - "tools/design-mcp/console-check.mjs (visual-harness console gate; same code as the design-verifier drill floor)"
+  - "adapters/codex/bin/preflight.sh visual-harness (visual-harness console gate; same code as the design-verifier drill floor)"
 branches: [full-sweep, targeted]
 aliases: {}
 ---

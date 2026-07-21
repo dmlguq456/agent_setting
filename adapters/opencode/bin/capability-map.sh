@@ -56,7 +56,7 @@ case "$cap" in
     pipeline_contract="code-plan>code-execute>code-test>code-report"
     optional_pipeline_step="code-refine"
     artifact_contract="plans/<date>_<slug>:plan.md,checklist.md,pipeline_summary.md,dev_logs/,test_logs/"
-    role_contract="planning=plan-team,implementation=dev-team,verification=qa-team,report=editorial-team"
+    role_contract="planning=plan/plan-author,plan-check=qa/plan-review,implementation=dev/*,impl-review=qa/code-review,verification=qa/test,report=editorial/report"
     dispatch_contract="preflight.sh dispatch --capability autopilot-code --mode <family/mode> --qa <level> --intensity <level> --dispatch-depth 1|2 [--parent <slug>]"
     stage_graph_contract="core/CONVENTIONS.md#pipeline-intensity-stage-graph-and-assurance"
     plan_policy="direct=no-plan;quick=registered-headless-dispatch-depth1-one-shot-micro-plan+plan-check-lite;standard+=durable-plan"

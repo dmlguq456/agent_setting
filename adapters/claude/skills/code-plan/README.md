@@ -4,7 +4,7 @@
 
 ## Overview
 
-Creates a detailed implementation plan grounded in the real codebase. It delegates planning to `기획팀`, writes the canonical `plan.md` in the selected artifact language, runs the QA loop, and synchronizes a language companion only when one is explicitly required or already belongs to the artifact set.
+Creates a detailed implementation plan grounded in the real codebase. It runs planning as the `plan/plan-author` unit, writes the canonical `plan.md` in the selected artifact language, runs the QA loop, and synchronizes a language companion only when one is explicitly required or already belongs to the artifact set.
 
 ## Invocation
 
@@ -29,7 +29,7 @@ Search `<artifact-root>/plans/` for a similar plan and branch on its frontmatter
 | `done`/`failed` | Record it as a reference and create a new plan without pausing. |
 | `partial` | Read `failed_steps` and create a new plan covering only the failed or dependent steps without pausing. |
 
-## Delegation — `기획팀`
+## Planning — `plan/plan-author` unit
 
 ```
 Plan mode. Create a new implementation plan.
@@ -41,7 +41,7 @@ Date: {YYYY-MM-DD}
 {If partial: "Failed steps from previous execution: [list]"}
 ```
 
-`기획팀` writes the plan file directly. The orchestrator receives only its path and summary.
+The `plan/plan-author` unit writes the plan file directly. The orchestrator receives only its path and summary.
 
 ## Plan-Check Assurance
 

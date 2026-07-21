@@ -283,6 +283,9 @@ def compile_composed_route(composed_recipe, capability_mode, requested_intensity
     registry=TOPO.load_registry(); TOPO.validate_registry(registry)
     if not isinstance(composed_recipe, dict): raise ValueError("composed recipe must be an object")
     TOPO._validate_recipe(composed_recipe, registry)
+    # SAME validator means gates too: without this, a composed recipe could carry a
+    # forged completion gate that no registry contract backs (2026-07-22 verify finding).
+    TOPO._validate_gate_contracts(composed_recipe, registry)
     if capability_mode not in composed_recipe.get("modes", []):
         raise ValueError("composed recipe does not declare the requested capability mode")
     return _compile_from_recipe(

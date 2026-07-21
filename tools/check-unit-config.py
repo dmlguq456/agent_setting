@@ -27,8 +27,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 UNITS = ROOT / "roles" / "units"
 
-# Surfaces that must not reference the retired persona paths.
-RETIRED_REF_DIRS = ["skills", "capabilities"]
+# Surfaces that must not reference the retired persona paths. Consumer-facing .md
+# trees only (2026-07-22 verify finding: adapter Skill projections, plugin mirrors,
+# profiles, loops, and scaffolds escaped the original skills/+capabilities/ scan).
+RETIRED_REF_DIRS = [
+    "skills",
+    "capabilities",
+    "adapters/claude/skills",
+    "adapters/codex/skills",
+    "adapters/opencode/skills",
+    "adapters/codex/modes",
+    "adapters/claude/plugin-marketplace/plugins/agent-harness-claude/skills",
+    "adapters/codex/plugins/agent-harness-codex/skills",
+    "profiles",
+    "loops",
+    "scaffolds",
+]
 RETIRED_PATH_PATTERNS = [
     re.compile(r"roles/modes/"),
     re.compile(r"agent-modes/"),  # covers adapters/claude/agent-modes/ and bare refs
@@ -208,11 +222,11 @@ def main(argv: list[str]) -> int:
             continue
         if verbose:
             print(f"scan (catalog): {rel(path)}")
-        # _NOTES.md files are authoring residue that quotes legacy sources
-        # (including their model literals) verbatim per _schema.md — they are
-        # documentation of what was dropped, not dispatchable unit content.
-        if path.name != "_NOTES.md":
-            scan_model_literals(path, violations)
+        # The model-literal scan covers every catalog file, including _NOTES.md
+        # authoring residue (2026-07-22 verify finding): describe legacy models in
+        # words there instead of quoting concrete IDs. _NOTES.md stays exempt from
+        # the frontmatter/schema contract below — it is not a unit.
+        scan_model_literals(path, violations)
         # Frontmatter contract applies to unit definition files only:
         # <family>/<unit>.md where neither segment is an underscore-prefixed
         # helper (_schema.md, _shared/*, _NOTES.md, _voice.md, ...).
@@ -227,6 +241,9 @@ def main(argv: list[str]) -> int:
             continue
         for path in sorted(base.rglob("*.md")):
             if not path.is_file():
+                continue
+            sp = str(path)
+            if "/node_modules/" in sp or ".test." in path.name:
                 continue
             if d == "capabilities" and path.parent != base:
                 continue  # contract scans capabilities/*.md only

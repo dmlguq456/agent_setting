@@ -792,6 +792,10 @@
       "unit": "editorial/polish",
       "status": "portable-persona"
     },
+    "editorial/report": {
+      "unit": "editorial/report",
+      "status": "portable-persona"
+    },
     "editorial/review": {
       "unit": "editorial/review",
       "status": "portable-persona"
@@ -819,6 +823,10 @@
     "material/web-image-search": {
       "unit": "material/web-image-search",
       "status": "portable-with-tool-contract"
+    },
+    "plan/plan-author": {
+      "unit": "plan/plan-author",
+      "status": "portable-persona"
     },
     "qa/code-review": {
       "unit": "qa/code-review",

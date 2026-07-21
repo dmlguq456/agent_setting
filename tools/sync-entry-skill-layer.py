@@ -120,7 +120,10 @@ def main() -> int:
     files = expected(manifest)
     stale = [path for path, text in files.items() if not path.exists() or path.read_text(encoding="utf-8") != text]
     entries = [name for name, spec in manifest["capabilities"].items() if spec["invocation"]["class"] == "entry-router"]
-    for identifier in entries:
+    # Mirror EVERY capability tree, not only entry routers: sub-skill projections went
+    # stale during the 2026-07-22 재홈 because only the 13 entry trees were owned here.
+    mirrors = [name for name in manifest["capabilities"] if (ROOT / "skills" / name).is_dir()]
+    for identifier in mirrors:
         source = ROOT / "skills" / identifier
         dest = ROOT / "adapters" / "claude" / "skills" / identifier
         source_files = {path.relative_to(source) for path in source.rglob("*") if path.is_file()}
@@ -140,9 +143,9 @@ def main() -> int:
     for path, text in files.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
-    for identifier in entries:
+    for identifier in mirrors:
         copy_tree(ROOT / "skills" / identifier, ROOT / "adapters" / "claude" / "skills" / identifier)
-    print(f"generated compact routers and owner references for {len(entries)} entry Skills")
+    print(f"generated compact routers and owner references for {len(entries)} entry Skills; mirrored {len(mirrors)} Skill trees")
     return 0
 
 

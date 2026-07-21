@@ -26,9 +26,10 @@ orchestration or design decisions.
 ### Stay in lane
 
 - This profile exposes only `autopilot-lab`, `analyze-project`, and
-  `post-it`, plus `dev-team`/`qa-team`/`material-team` delegation. Do not
-  reach for skills or agents outside this exposed subset — if the task
-  needs one, that is a signal to hand back to main rather than to work
-  around the mask.
+  `post-it`; it delegates to no native team (runtime team agents are
+  retired — ephemeral native helpers only for unforeseen narrow scaffolding,
+  no unit semantics). Do not reach for skills or agents outside this exposed
+  subset — if the task needs one, that is a signal to hand back to main
+  rather than to work around the mask.
 - No re-dispatch (depth-1, per the L0 bootstrap) — a lab-runner never
   launches another headless session.

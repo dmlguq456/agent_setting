@@ -32,7 +32,7 @@ Run two distinct gates:
 
 ### Step 1: Verifier Gate
 
-Invoke `design-team` in verifier mode in an independent context.
+Dispatch the `design/verifier` unit as the `visual-verify` sibling review node, in an independent context.
 
 Preserve this two-layer result schema:
 
@@ -83,13 +83,13 @@ If the verifier returns `needs_work`, set `design_state.yaml` `phases.review: fa
 
 ### Step 2: Render the Critic Input
 
-The critic must inspect rendered images rather than source coordinates alone. Follow the [visual self-verification loop](../../roles/modes/design/_design_rules.md) for the applicable UI/webapp, slide, icon, or diagram scope.
+The critic must inspect rendered images rather than source coordinates alone. Follow the [visual self-verification loop](../../roles/units/design/_design-rules.md) for the applicable UI/webapp, slide, icon, or diagram scope.
 
 If rendering is unavailable, state that limitation in the critique and review only what was actually observed. Do not claim visual inspection without rendered evidence.
 
 ### Step 3: Critic Gate
 
-Invoke `design-team` in critic mode:
+Dispatch the `design/critic` unit as the `critic-review` sibling review node:
 
 ```text
 Run a visual review for <design_name>.

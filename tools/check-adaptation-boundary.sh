@@ -260,7 +260,7 @@ check_claude_projection_targets() {
   check_link_target claude_setting/commands ../adapters/claude/commands
   check_link_target claude_setting/skills ../adapters/claude/skills
   check_link_target claude_setting/agents ../adapters/claude/agents
-  check_link_target claude_setting/agent-modes ../adapters/claude/agent-modes
+  # claude_setting/agent-modes retired 2026-07-22 (재홈): units project via roles/.
   check_link_target claude_setting/hooks ../adapters/claude/hooks
   check_link_target claude_setting/utilities ../adapters/claude/utilities
   check_link_target claude_setting/tools ../adapters/claude/tools
@@ -844,22 +844,31 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'source=roles/README.md' adapters/codex/bin/role-map.sh; then
     fail_msg "adapters/codex/bin/role-map.sh must report roles/README.md as the portable source"
   fi
-  if ! adapters/codex/bin/role-map.sh planning >/tmp/codex-role-profile.out 2>/tmp/codex-role-profile.err \
-    || ! grep -Fq 'family=role-profile' /tmp/codex-role-profile.out \
-    || ! grep -Fq 'role_profile=plan-team' /tmp/codex-role-profile.out \
-    || ! grep -Fq 'pipeline_stage=planning' /tmp/codex-role-profile.out \
-    || ! grep -Fq 'native_agent_path=adapters/codex/agents/plan-team.toml' /tmp/codex-role-profile.out \
-    || ! grep -Fq 'concrete_role_check=preflight.sh role deep maker' /tmp/codex-role-profile.out \
+  # 재홈 2026-07-22 (CONVENTIONS §2.3): pipeline-stage aliases resolve to portable ROLES
+  # with unit-catalog guidance; retired team profiles/paths must never be re-emitted.
+  if ! adapters/codex/bin/role-map.sh planning >/tmp/codex-role-planning.out 2>/tmp/codex-role-planning.err \
+    || ! grep -Fq 'pipeline_stage=planning' /tmp/codex-role-planning.out \
+    || ! grep -Fq 'portable_model_role=deep maker' /tmp/codex-role-planning.out \
+    || ! grep -Fq 'unit_catalog=roles/units/' /tmp/codex-role-planning.out \
+    || grep -Fq 'native_agent_path=' /tmp/codex-role-planning.out \
+    || grep -Fq 'role_profile=' /tmp/codex-role-planning.out \
     || ! adapters/codex/bin/role-map.sh implementation >/tmp/codex-role-implementation.out 2>/tmp/codex-role-implementation.err \
-    || ! grep -Fq 'role_profile=dev-team' /tmp/codex-role-implementation.out \
+    || ! grep -Fq 'pipeline_stage=implementation' /tmp/codex-role-implementation.out \
+    || ! grep -Fq 'portable_model_role=fast implementer' /tmp/codex-role-implementation.out \
     || ! adapters/codex/bin/role-map.sh verification >/tmp/codex-role-verification.out 2>/tmp/codex-role-verification.err \
-    || ! grep -Fq 'role_profile=qa-team' /tmp/codex-role-verification.out \
+    || ! grep -Fq 'pipeline_stage=verification' /tmp/codex-role-verification.out \
+    || ! grep -Fq 'portable_model_role=variable reviewer' /tmp/codex-role-verification.out \
+    || ! grep -Fq 'role_set=fast reviewer,deep reviewer,external adversary' /tmp/codex-role-verification.out \
     || ! adapters/codex/bin/role-map.sh report >/tmp/codex-role-report.out 2>/tmp/codex-role-report.err \
-    || ! grep -Fq 'role_profile=editorial-team' /tmp/codex-role-report.out \
+    || ! grep -Fq 'pipeline_stage=report' /tmp/codex-role-report.out \
+    || ! grep -Fq 'portable_model_role=fast writer' /tmp/codex-role-report.out \
     || ! grep -Fq 'role <portable-role|role-profile|pipeline-stage>' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'role <portable-role|role-profile|pipeline-stage>' adapters/codex/README.md \
     || ! grep -Fq 'role <portable-role|role-profile|pipeline-stage>' adapters/codex/AGENTS.md; then
-    fail_msg "adapters/codex/bin/role-map.sh must map pipeline role aliases to Codex-native role profiles"
+    fail_msg "adapters/codex/bin/role-map.sh must map pipeline-stage aliases to portable roles with unit-catalog guidance (no retired team profiles)"
+  fi
+  if adapters/codex/bin/role-map.sh 'plan team' >/tmp/codex-role-retired.out 2>/tmp/codex-role-retired.err; then
+    fail_msg "adapters/codex/bin/role-map.sh must not resolve the retired 'plan team' profile alias"
   fi
   if ! adapters/codex/bin/role-map.sh variable reviewer >/tmp/codex-role-set.out 2>/tmp/codex-role-set.err \
     || ! grep -Fq 'family=role-set' /tmp/codex-role-set.out \
@@ -1074,7 +1083,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'runtime_surface=adapter-owned-verification-runner' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'tool_contract_check=adapters/codex/bin/preflight.sh verification-runner --check -- <command>' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'artifact_contract="plans/<date>_<slug>:test_logs/,_internal/test_reviews/;handoff=code-report"' adapters/codex/bin/capability-map.sh \
-    || ! grep -Fq 'role_contract="verification=qa-team,review=qa-team"' adapters/codex/bin/capability-map.sh; then
+    || ! grep -Fq 'role_contract="verification=qa/test,review=qa/code-review"' adapters/codex/bin/capability-map.sh; then
     fail_msg "Codex code-test capability-info must expose the verification-runner tool contract"
   fi
   if ! grep -Fq 'graduated verification' capabilities/code-test.md \
@@ -1095,7 +1104,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'pipeline_contract="code-plan>code-execute>code-test>code-report"' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'optional_pipeline_step="code-refine"' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'artifact_contract="plans/<date>_<slug>:plan.md,checklist.md,pipeline_summary.md,dev_logs/,test_logs/"' adapters/codex/bin/capability-map.sh \
-    || ! grep -Fq 'role_contract="planning=plan-team,implementation=dev-team,verification=qa-team,report=editorial-team"' adapters/codex/bin/capability-map.sh \
+    || ! grep -Fq 'role_contract="planning=plan/plan-author,plan-check=qa/plan-review,implementation=dev/*,impl-review=qa/code-review,verification=qa/test,report=editorial/report"' adapters/codex/bin/capability-map.sh \
     || ! grep -Fq 'dispatch_contract="preflight.sh dispatch --capability autopilot-code --mode <family/mode> --qa <level> --intensity <level> --dispatch-depth 1|2 [--parent <slug>]"' adapters/codex/bin/capability-map.sh; then
     fail_msg "Codex autopilot-code capability-info must expose the portable pipeline/artifact/role/dispatch contracts"
   fi
@@ -1395,7 +1404,7 @@ check_codex_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material figure-semantic-manifest.schema.json figure-semantic-verify.py"
-  TOOL_DEFERRED="__pycache__ build-manifest.py render-hub.py generate.py harness_manifest.py sync-skill-invocation-policy.py sync-entry-skill-layer.py entry-skill-layer.test.py generated-projections.test.sh sync-missing-projections.sh figure-semantic-verify.test.py check-adaptation-boundary.sh check-model-config.py context-footprint.py context-footprint-baseline.json adaptation-exemptions.tsv adaptation-guard.test.sh routing-contract.test.sh design-mcp skill-conformance web-bundle fleet profile install improvement release capability_topology.py capability_topology.test.py report-manifest-verify.py report_manifest_verify.test.py smoke-attestation.py smoke_attestation.test.py browser-acceptance"
+  TOOL_DEFERRED="__pycache__ build-manifest.py render-hub.py generate.py harness_manifest.py sync-skill-invocation-policy.py sync-entry-skill-layer.py entry-skill-layer.test.py generated-projections.test.sh sync-missing-projections.sh figure-semantic-verify.test.py check-adaptation-boundary.sh check-model-config.py check-unit-config.py context-footprint.py context-footprint-baseline.json adaptation-exemptions.tsv adaptation-guard.test.sh routing-contract.test.sh design-mcp skill-conformance web-bundle fleet profile install improvement release capability_topology.py capability_topology.test.py report-manifest-verify.py report_manifest_verify.test.py smoke-attestation.py smoke_attestation.test.py browser-acceptance"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -1645,7 +1654,14 @@ check_codex_native_agent_projection() {
     cat /tmp/codex-sync-agents.err
   fi
 
-  for profile in plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary memory-scout; do
+  # Runtime team agents retired 2026-07-22 (재홈, CONVENTIONS §2.3): kernel helper only,
+  # and the retired projections must NOT reappear.
+  for retired in plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary; do
+    if [ -e "adapters/codex/agents/$retired.toml" ]; then
+      fail_msg "adapters/codex/agents/$retired.toml is a retired team projection and must not exist"
+    fi
+  done
+  for profile in memory-scout; do
     agent="adapters/codex/agents/$profile.toml"
     if [ ! -f "$agent" ]; then
       fail_msg "$agent is missing"
@@ -1696,7 +1712,7 @@ PY
   for agent in adapters/codex/agents/*.toml; do
     [ -f "$agent" ] || continue
     profile=$(basename "$agent" .toml)
-    case " plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary memory-scout " in
+    case " memory-scout " in
       *" $profile "*) ;;
       *) fail_msg "$agent is not an approved Codex native agent projection" ;;
     esac
@@ -1714,29 +1730,11 @@ PY
     fail_msg "Codex native agent surfaces must not expose non-Codex adapter paths:"
     printf '%s\n' "$bad"
   fi
-  qa_agent="adapters/codex/agents/qa-team.toml"
-  if ! grep -Fq "Read-only role: do not edit, write, or mutate source files or artifacts" "$qa_agent" \
-    || ! grep -Fq "Stay depth-one: do not spawn nested agents" "$qa_agent" \
-    || ! grep -Fq "preflight.sh qa-policy <level> <track>" "$qa_agent" \
-    || ! grep -Fq "preflight.sh mode-info qa/test" "$qa_agent"; then
-    fail_msg "$qa_agent must encode Codex QA read-only, depth-one, and QA policy boundaries"
-  fi
-  external_agent="adapters/codex/agents/external-adversary.toml"
-  if ! grep -Fq "Independence is required: run \`adapters/codex/bin/preflight.sh role external adversary\`" "$external_agent" \
-    || ! grep -Fq "report unavailable instead of simulating independence inline" "$external_agent"; then
-    fail_msg "$external_agent must encode Codex external adversary independence boundaries"
-  fi
-  dev_agent="adapters/codex/agents/dev-team.toml"
-  if ! grep -Fq "Before every source or artifact edit, run \`adapters/codex/bin/preflight.sh write <file> [session-id]\`" "$dev_agent" \
-    || ! grep -Fq "targeted hook coverage for obvious guarded reads and writes" "$dev_agent"; then
-    fail_msg "$dev_agent must encode Codex write preflight and shell hook boundary"
-  fi
-  if ! grep -Fq 'Codex role-map inputs: `fast reviewer, deep reviewer, external adversary`' "$qa_agent" \
-    || ! grep -Fq 'Codex role-map inputs: `fast fact checker, deep reviewer, external adversary`' adapters/codex/agents/research-team.toml \
-    || ! grep -Fq 'Codex role-map inputs: `deep maker, fast tool worker`' adapters/codex/agents/material-team.toml \
-    || ! grep -Fq 'Codex role-map inputs: `deep maker, fast reviewer`' adapters/codex/agents/editorial-team.toml; then
-    fail_msg "Codex native agent projections must preserve mixed/variable role-map input sets"
-  fi
+  # Runtime team agents retired 2026-07-22 (재홈, CONVENTIONS §2.3): the per-team boundary
+  # prose (QA read-only/depth-one, external-adversary independence, dev write preflight,
+  # mixed role-map input sets) re-homed into roles/units/** unit contracts, which
+  # tools/check-unit-config.py guards. The only per-toml assertion left here is the
+  # memory-scout kernel helper above plus the must-not-exist negatives.
   if ! grep -Fq 'model_reasoning_effort' adapters/codex/README.md \
     || ! grep -Fq 'parity caveat' adapters/codex/README.md \
     || ! grep -Fq 'structural plus install-path validation' adapters/codex/README.md \
@@ -1750,49 +1748,21 @@ PY
   fi
 }
 
-# codex-adapter-parity audit P-26 (2026-07-04): cross-verify each Codex role-profile agent's static
-# PROFILE_CONFIG model/reasoning pin against the concrete resolution role-map.sh produces for its
-# declared "Codex role-map input:". memory-scout is excluded (no role-map input — intentional
-# low-cost read-only pin, already asserted elsewhere). Two profiles carry a documented, intentional
-# divergence and are exempted from the equality assertion:
-#   - material-team: cost-saving — static pin gpt-5.4-mini/low vs role-map resolution
-#     (fast tool worker -> deep-maker family) gpt-5.4-mini/medium.
-#   - external-adversary: env-gated independence fallback — role-map.sh resolves "external adversary"
-#     via AGENT_MODEL_EXTERNAL/AGENT_EXTERNAL_CMD, which is unset in a clean env (`unconfigured`), so
-#     its resolved model must never be asserted here.
+# codex-adapter-parity audit P-26 (2026-07-04), retired-team rework 2026-07-22 (재홈,
+# CONVENTIONS §2.3): the original check cross-verified each Codex role-profile agent's
+# static model pin against role-map.sh resolution. Runtime team agents are retired, so
+# the check is now memory-scout-only (its static read-only pin is asserted in
+# check_codex_native_agent_projection) plus must-not-exist negatives: no retired team
+# toml may reappear, and role-map.sh must not resolve team names or emit team paths.
 check_codex_model_pin_role_map_consistency() {
-  MODEL_PIN_DIVERGENCE="material-team external-adversary"
-
-  role_tmp="/tmp/codex-model-pin-role.$$"
-  role_err="/tmp/codex-model-pin-role.$$.err"
-
-  for profile in plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary; do
-    agent="adapters/codex/agents/$profile.toml"
-    if [ ! -f "$agent" ]; then
-      fail_msg "$agent is missing (cannot verify model pin vs role-map consistency)"
-      continue
-    fi
-
-    static_model=$(sed -n 's/^model = "\(.*\)"$/\1/p' "$agent" | head -n 1)
-    static_reasoning=$(sed -n 's/^model_reasoning_effort = "\(.*\)"$/\1/p' "$agent" | head -n 1)
-
-    case " $MODEL_PIN_DIVERGENCE " in
-      *" $profile "*) continue ;;
-    esac
-
-    mapped_role=$(sed -n 's/^Codex role-map input: `\(.*\)`$/\1/p' "$agent" | head -n 1)
-    if [ -z "$mapped_role" ] || ! env -u AGENT_MODEL_FAST -u AGENT_MODEL_DEEP -u AGENT_MODEL_EXTERNAL -u AGENT_MODEL_ORCHESTRATOR -u AGENT_REASONING_FAST -u AGENT_REASONING_DEEP -u AGENT_REASONING_EXTERNAL -u AGENT_REASONING_ORCHESTRATOR -u AGENT_EXTERNAL_CMD adapters/codex/bin/role-map.sh "$mapped_role" >"$role_tmp" 2>"$role_err"; then
-      fail_msg "$agent's Codex role-map input must resolve through adapters/codex/bin/role-map.sh to verify its model pin"
-      continue
-    fi
-
-    resolved_model=$(sed -n 's/^model=\(.*\)$/\1/p' "$role_tmp" | head -n 1)
-    resolved_reasoning=$(sed -n 's/^reasoning=\(.*\)$/\1/p' "$role_tmp" | head -n 1)
-
-    if [ "$static_model" != "$resolved_model" ] || [ "$static_reasoning" != "$resolved_reasoning" ]; then
-      fail_msg "$agent static pin (model=$static_model, reasoning=$static_reasoning) must match role-map.sh resolution for '$mapped_role' (model=$resolved_model, reasoning=$resolved_reasoning), or be added to the documented MODEL_PIN_DIVERGENCE list"
+  for retired in plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary; do
+    if [ -e "adapters/codex/agents/$retired.toml" ]; then
+      fail_msg "adapters/codex/agents/$retired.toml is a retired team projection and must not exist"
     fi
   done
+  if grep -Eq 'agents/(plan|dev|qa|research|material|design|editorial)-team|agents/external-adversary' adapters/codex/bin/role-map.sh; then
+    fail_msg "adapters/codex/bin/role-map.sh must not reference retired team agent paths"
+  fi
 }
 
 check_codex_native_mode_projection() {
@@ -1806,9 +1776,13 @@ check_codex_native_mode_projection() {
     cat /tmp/codex-sync-modes.err
   fi
 
-  for f in roles/modes/*/*.md; do
+  # Portable persona source = unit catalog (재홈 2026-07-22): iterate unit-bearing
+  # catalog files; underscore-prefixed shared/law/notes fragments have no projection.
+  for f in roles/units/*/*.md; do
     [ -f "$f" ] || continue
-    rel=${f#roles/modes/}
+    case "$(basename "$f")" in _*) continue ;; esac
+    case "$f" in roles/units/_shared/*) continue ;; esac
+    rel=${f#roles/units/}
     mode=${rel%.md}
     native="adapters/codex/modes/$mode.md"
     if [ ! -f "$native" ]; then
@@ -1818,8 +1792,8 @@ check_codex_native_mode_projection() {
     if [ -L "$native" ]; then
       fail_msg "$native must be a concrete adapter-owned Codex mode projection"
     fi
-    if ! grep -Fq "roles/modes/$mode.md" "$native"; then
-      fail_msg "$native must reference roles/modes/$mode.md as portable source"
+    if ! grep -Fq "roles/units/$mode.md" "$native"; then
+      fail_msg "$native must reference roles/units/$mode.md as portable source"
     fi
     if ! grep -Fq "adapters/codex/bin/preflight.sh mode-info $mode" "$native"; then
       fail_msg "$native must reference the Codex mode-info wrapper"
@@ -1842,7 +1816,7 @@ check_codex_native_mode_projection() {
   done
 
   if ! grep -Fq "## Levels" adapters/codex/modes/qa/test.md \
-    || ! grep -Fq "5b. **Behavioral runtime observation:**" adapters/codex/modes/qa/test.md \
+    || ! grep -Fq "Behavioral runtime observation" adapters/codex/modes/qa/test.md \
     || ! grep -Fq "verification-runner" adapters/codex/modes/qa/test.md; then
     fail_msg "adapters/codex/modes/qa/test.md must project the QA graduated test contract"
   fi
@@ -1851,7 +1825,7 @@ check_codex_native_mode_projection() {
     || ! grep -Fq "preflight.sh visual-harness <file.html>" adapters/codex/modes/design/verifier.md; then
     fail_msg "adapters/codex/modes/design/maker.md must project the design visual harness contract"
   fi
-  if ! grep -Fq "Portable capabilities, roles, modes, and adapter projections" adapters/codex/modes/research/plan-review.md; then
+  if ! grep -Fq "roles, units, and adapter projections" adapters/codex/modes/research/plan-review.md; then
     fail_msg "adapters/codex/modes/research/plan-review.md must sanitize runtime adapter projection references"
   fi
 
@@ -1859,8 +1833,8 @@ check_codex_native_mode_projection() {
     [ -f "$native" ] || continue
     rel=${native#adapters/codex/modes/}
     mode=${rel%.md}
-    if [ ! -f "roles/modes/$mode.md" ]; then
-      fail_msg "$native has no matching portable mode source"
+    if [ ! -f "roles/units/$mode.md" ]; then
+      fail_msg "$native has no matching portable unit source"
     fi
   done
 }
@@ -2430,7 +2404,7 @@ check_opencode_tool_projection() {
   # deferred-but-realized-as-visual-harness (a concrete launcher under a different name) — this
   # completeness check and the denylist above are separate assertions and must not be conflated.
   TOOL_PROJECTED="memory material figure-semantic-manifest.schema.json figure-semantic-verify.py"
-  TOOL_DEFERRED="__pycache__ build-manifest.py render-hub.py generate.py harness_manifest.py sync-skill-invocation-policy.py sync-entry-skill-layer.py entry-skill-layer.test.py generated-projections.test.sh sync-missing-projections.sh figure-semantic-verify.test.py check-adaptation-boundary.sh check-model-config.py context-footprint.py context-footprint-baseline.json adaptation-exemptions.tsv adaptation-guard.test.sh routing-contract.test.sh design-mcp skill-conformance web-bundle fleet profile install improvement release capability_topology.py capability_topology.test.py report-manifest-verify.py report_manifest_verify.test.py smoke-attestation.py smoke_attestation.test.py browser-acceptance"
+  TOOL_DEFERRED="__pycache__ build-manifest.py render-hub.py generate.py harness_manifest.py sync-skill-invocation-policy.py sync-entry-skill-layer.py entry-skill-layer.test.py generated-projections.test.sh sync-missing-projections.sh figure-semantic-verify.test.py check-adaptation-boundary.sh check-model-config.py check-unit-config.py context-footprint.py context-footprint-baseline.json adaptation-exemptions.tsv adaptation-guard.test.sh routing-contract.test.sh design-mcp skill-conformance web-bundle fleet profile install improvement release capability_topology.py capability_topology.test.py report-manifest-verify.py report_manifest_verify.test.py smoke-attestation.py smoke_attestation.test.py browser-acceptance"
   tool_count=0
   for f in tools/*; do
     [ -e "$f" ] || continue
@@ -2528,29 +2502,23 @@ check_opencode_native_agent_projection() {
     cat /tmp/opencode-sync-agents.err
   fi
 
-  # codex-adapter-parity audit P-18 (2026-07-04): memory-scout added to the profile domain (EXTRA
-  # agent, no roles/README.md catalog row) — Codex precedent conditional shape (see
-  # check_codex_native_agent_projection) ported verbatim for the skip/keep/add split below.
-  for profile in plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary memory-scout; do
+  # codex-adapter-parity audit P-18 (2026-07-04), retired-team rework 2026-07-22 (재홈,
+  # CONVENTIONS §2.3): runtime team agents are retired on all harnesses — the OpenCode
+  # native agent domain is the kernel helper memory-scout only, plus must-not-exist
+  # negatives so retired team projections cannot reappear.
+  for retired in plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary; do
+    if [ -e "adapters/opencode/agents/$retired" ]; then
+      fail_msg "adapters/opencode/agents/$retired is a retired team projection and must not exist"
+    fi
+  done
+  for profile in memory-scout; do
     agent="adapters/opencode/agents/$profile/$profile.md"
     if [ ! -f "$agent" ]; then
       fail_msg "$agent is missing"
       continue
     fi
-    if [ "$profile" = "memory-scout" ]; then
-      if ! grep -Fq "core/MEMORY.md" "$agent" || ! grep -Fq "§7.4" "$agent"; then
-        fail_msg "$agent must reference core/MEMORY.md §7.4 as portable source"
-      fi
-    elif ! grep -Fq "roles/README.md" "$agent"; then
-      fail_msg "$agent must reference roles/README.md as portable source"
-    fi
-    if [ "$profile" != "memory-scout" ] && ! grep -Fq "adapters/opencode/bin/preflight.sh role" "$agent"; then
-      fail_msg "$agent must reference the OpenCode role mapper"
-    fi
-    mapped_role=$(sed -n 's/^- OpenCode role-map input: `\(.*\)`$/\1/p' "$agent" | head -n 1)
-    if [ "$profile" != "memory-scout" ] && { [ -z "$mapped_role" ] || ! adapters/opencode/bin/role-map.sh "$mapped_role" >/tmp/opencode-agent-role.out 2>/tmp/opencode-agent-role.err; }; then
-      fail_msg "$agent must include an OpenCode role-map input that resolves through adapters/opencode/bin/role-map.sh"
-      cat /tmp/opencode-agent-role.err
+    if ! grep -Fq "core/MEMORY.md" "$agent" || ! grep -Fq "§7.4" "$agent"; then
+      fail_msg "$agent must reference core/MEMORY.md §7.4 as portable source"
     fi
     if grep -Fq '<portable-role>' "$agent"; then
       fail_msg "$agent must not leave placeholder OpenCode role-map input"
@@ -2565,7 +2533,7 @@ check_opencode_native_agent_projection() {
   for dir in adapters/opencode/agents/*; do
     [ -d "$dir" ] || continue
     profile=$(basename "$dir")
-    case " plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary memory-scout " in
+    case " memory-scout " in
       *" $profile "*) ;;
       *) fail_msg "$dir is not an approved OpenCode native agent projection" ;;
     esac
@@ -2758,35 +2726,18 @@ check_claude_skill_projection() {
 }
 
 check_claude_mode_projection() {
-  if [ ! -L claude_setting/agent-modes ]; then
-    fail_msg "claude_setting/agent-modes must project adapters/claude/agent-modes"
-    return
+  # agent-modes retired 2026-07-22 (재홈, CONVENTIONS §2.3): the persona SoT is
+  # roles/units/, projected wholesale through the roles surface. Neither the adapter
+  # copy nor its claude_setting symlink may reappear.
+  if [ -e adapters/claude/agent-modes ] || [ -L adapters/claude/agent-modes ]; then
+    fail_msg "adapters/claude/agent-modes is retired (unit catalog roles/units/ is the persona SoT) and must not exist"
   fi
-
-  target=$(readlink claude_setting/agent-modes)
-  if [ "$target" != "../adapters/claude/agent-modes" ]; then
-    fail_msg "claude_setting/agent-modes points to $target; expected ../adapters/claude/agent-modes"
+  if [ -e claude_setting/agent-modes ] || [ -L claude_setting/agent-modes ]; then
+    fail_msg "claude_setting/agent-modes is a retired projection and must not exist"
   fi
-
-  for d in roles/modes/*; do
-    [ -d "$d" ] || continue
-    family=${d#roles/modes/}
-    if [ ! -d "adapters/claude/agent-modes/$family" ]; then
-      fail_msg "adapters/claude/agent-modes/$family must be an adapter-owned mode directory"
-      continue
-    fi
-    if [ -L "adapters/claude/agent-modes/$family" ]; then
-      fail_msg "adapters/claude/agent-modes/$family must be a concrete adapter-owned mode projection"
-      continue
-    fi
-    for f in "$d"/*.md; do
-      [ -f "$f" ] || continue
-      name=${f#"$d"/}
-      if [ ! -f "adapters/claude/agent-modes/$family/$name" ]; then
-        fail_msg "adapters/claude/agent-modes/$family/$name is missing"
-      fi
-    done
-  done
+  if [ ! -d roles/units ]; then
+    fail_msg "roles/units unit catalog is missing"
+  fi
 }
 
 check_claude_hook_projection() {
@@ -3037,15 +2988,28 @@ check_role_catalog() {
     return
   fi
 
-  for profile in plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary; do
-    if ! grep -Fq "| \`$profile\` |" roles/README.md; then
-      fail_msg "roles/README.md is missing role profile: $profile"
+  # 재홈 2026-07-22 (CONVENTIONS §2.3): roles/README.md renders the generated UNIT
+  # catalog table; every catalog unit has a row and retired team rows must not reappear.
+  if ! grep -Fq '| Family | Unit | Portable model role | Worker type | Floor |' roles/README.md; then
+    fail_msg "roles/README.md must render the unit catalog table header (Family/Unit/Portable model role/Worker type/Floor)"
+  fi
+  for unit_file in roles/units/*/*.md; do
+    [ -f "$unit_file" ] || continue
+    unit_family=$(basename "$(dirname "$unit_file")")
+    unit_name=$(basename "$unit_file" .md)
+    case "$unit_family" in _*) continue ;; esac
+    case "$unit_name" in _*) continue ;; esac
+    if ! grep -Fq "| \`$unit_family/$unit_name\` |" roles/README.md; then
+      fail_msg "roles/README.md unit catalog table is missing unit row: $unit_family/$unit_name"
     fi
-    if ! grep -Fq "adapters/codex/agents/$profile.toml" roles/README.md; then
-      fail_msg "roles/README.md must document Codex native agent projection for $profile"
+  done
+  for retired in plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary; do
+    if grep -Fq "| \`$retired\` |" roles/README.md; then
+      fail_msg "roles/README.md must not carry retired team profile row: $retired"
     fi
-    if ! grep -Fq "adapters/opencode/agents/$profile/$profile.md" roles/README.md; then
-      fail_msg "roles/README.md must document OpenCode native agent projection for $profile"
+    if grep -Fq "adapters/codex/agents/$retired.toml" roles/README.md \
+      || grep -Fq "adapters/opencode/agents/$retired/$retired.md" roles/README.md; then
+      fail_msg "roles/README.md must not reference retired native team agent projections: $retired"
     fi
   done
 }
@@ -3081,11 +3045,9 @@ check_claude_native_agent_projection() {
 
     # explicit name-map: identity by default; declared renames only (never silent).
     # memory-scout is an EXTRA agent (present in both adapters, exempt from the roles/README.md
-    # role-catalog row check_role_catalog owns) but still requires this completeness projection.
-    case "$name" in
-      codex-review-team) target=external-adversary ;;
-      *) target=$name ;;
-    esac
+    # unit-catalog table check_role_catalog owns) but still requires this completeness projection.
+    # (재홈 2026-07-22: the codex-review-team → external-adversary rename died with the teams.)
+    target=$name
 
     if [ ! -f "adapters/codex/agents/$target.toml" ]; then
       fail_msg "adapters/claude/agents/$name.md has no Codex native agent projection (expected adapters/codex/agents/$target.toml)"
@@ -3322,9 +3284,11 @@ check_codex_mode_map() {
     return
   fi
 
-  for f in roles/modes/*/*.md; do
+  for f in roles/units/*/*.md; do
     [ -f "$f" ] || continue
-    rel=${f#roles/modes/}
+    case "$(basename "$f")" in _*) continue ;; esac
+    case "$f" in roles/units/_shared/*) continue ;; esac
+    rel=${f#roles/units/}
     rel=${rel%.md}
     out=${TMPDIR:-/tmp}/codex-mode-map.$$.out
     err=${TMPDIR:-/tmp}/codex-mode-map.$$.err
@@ -3433,7 +3397,7 @@ check_codex_mode_map() {
     if ! grep -Fq "native_mode_path=$native_path" "$out"; then
       fail_msg "Codex mode map must report native_mode_path=$native_path"
     fi
-    if ! grep -Fq "source=roles/modes/$rel.md" "$out"; then
+    if ! grep -Fq "source=roles/units/$rel.md" "$out"; then
       fail_msg "Codex mode map must report the portable source for $rel"
     fi
   done
@@ -3761,9 +3725,11 @@ check_language_neutrality_contract() {
     || ! grep -Fq "default to the language the user is currently using to communicate" roles/response-policy.md; then
     fail_msg "roles/response-policy.md must define the audience-language-first artifact contract"
   fi
-  if ! grep -Fq '## Highest-priority principle — audience language' adapters/claude/agents/editorial-team.md \
-    || ! grep -Fq 'Do not enforce a fixed locale or sentence ending.' adapters/claude/agents/editorial-team.md; then
-    fail_msg "the editorial router must apply the audience-language contract before language-specific style rules"
+  # 재홈 2026-07-22: the retired editorial-team router's audience-language contract now
+  # lives in the unit catalog's shared editorial voice fragment.
+  if ! grep -Fq '## Audience language (highest-priority principle)' roles/units/editorial/_voice.md \
+    || ! grep -Fq 'Do not enforce a fixed locale' roles/units/editorial/_voice.md; then
+    fail_msg "the editorial voice fragment (roles/units/editorial/_voice.md) must apply the audience-language contract before language-specific style rules"
   fi
 
   for bootstrap in adapters/claude/CLAUDE.md adapters/codex/AGENTS.md adapters/opencode/AGENTS.md; do

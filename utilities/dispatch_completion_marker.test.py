@@ -139,6 +139,7 @@ class CompletionMarkerTest(unittest.TestCase):
             "--route-hash", route["route_hash"], "--route-node", node_id,
             "--registry-digest", route["registry_digest"],
             "--write-scope", ";".join(node["write_scope"]),
+            "--unit", node.get("unit", ""),
         ] + model
 
     def complete(self, route_path, node_id, evidence_path, jobs=None, attempt_id=None, attempt_axes=None):

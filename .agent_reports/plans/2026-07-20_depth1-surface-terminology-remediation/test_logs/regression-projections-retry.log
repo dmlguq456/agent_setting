@@ -1,0 +1,79 @@
+adapter=codex
+runtime_surface=adapter-owned-verification-runner
+tool_contract=verification-runner
+command=bash
+timeout=600
+ok   - scan_death patterns + reset extraction
+ok   - limit-death → row done,note=dead-session-limit,reset=3pm
+ok   - reset cache written
+ok   - capacity death → exact row dead-capacity without usage-reset pollution
+ok   - clean fast exit → row stays open (normal harvest owns it)
+— dispatch-headless SD-15 conformance: PASS
+ok   - scan_death patterns (codex 429/usage_limit_reached) + reset
+ok   - dispatch-depth-1 binds actual Codex thread; dispatch-depth-2 keeps broker parent
+ok   - limit-death → row done,note=dead-session-limit,reset=3pm
+ok   - reset cache written
+ok   - capacity death closes the exact attempt as dead-capacity
+ok   - Codex wrapper records pid and process start ticks on the open row (O1)
+ok   - clean fast exit → row stays open (normal harvest owns it)
+ok   - liveness limit scan + nested CODEX_HOME resolution
+— codex dispatch-headless SD-15 conformance: PASS
+ok   - scan_death patterns (opencode provider-rate-limit/429) + reset
+ok   - clean-exit limit-death → row done,note=dead-session-limit,reset=3pm
+ok   - reset cache written
+ok   - capacity death closes the exact attempt as dead-capacity
+ok   - clean fast exit → row stays open
+ok   - hang-on-limit (#8203) escapes launch watch → row open (liveness owns it)
+ok   - liveness log_shows_limit: hung limit log DEAD, clean log alive
+— opencode dispatch-headless SD-15 conformance: PASS
+............................................................................................................................................................................................................................................................................................................................................................................................................................................./home/Uihyeop/agent_setting-wt/depth1-surface-terminology-remediated/tools/fleet/tests/test_f27_control.py:504: ResourceWarning: unclosed file <_io.TextIOWrapper name='/home/Uihyeop/agent_setting-wt/depth1-surface-terminology-remediated/tools/fleet/collectors/__init__.py' mode='r' encoding='UTF-8'>
+  src = open(collectors.__file__).read()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+...........................................................................................................................................................................................................................................................................................................
+----------------------------------------------------------------------
+Ran 728 tests in 19.571s
+
+OK
+ok   - WORKFLOW §0.2 semantic primary routing 존재
+ok   - WORKFLOW §0.3 pre-execution gate 존재
+ok   - WORKFLOW §0.2 상호 대체 금지 절
+ok   - OPERATIONS §5.10 main-session role contract 존재
+ok   - OPERATIONS §5.10 inline exceptions 존재
+ok   - OPERATIONS §5.10 delegation surfaces 존재
+ok   - CONVENTIONS §3 invariant 11 semantic routing 참조
+ok   - autopilot-lab eval topology 존재
+ok   - autopilot-lab Routing Boundary 존재
+ok   - autopilot-refine Routing Boundary 존재
+ok   - autopilot-refine → lab primary 위임 절
+ok   - autopilot-spec spec-sync 비대체 절
+ok   - autopilot-note Routing Boundary 존재
+ok   - Codex lab projection 에 owner pointer 존재
+ok   - Codex refine projection 에 owner pointer 존재
+ok   - Claude bootstrap semantic routing 실현
+ok   - Claude bootstrap delegation-surface 실현
+ok   - Codex bootstrap semantic routing 실현
+ok   - Codex bootstrap delegation-surface 실현
+ok   - OpenCode bootstrap semantic routing 실현
+ok   - lab SKILL semantic routing 참조
+ok   - lab eval-procedure gate 참조
+ok   - drill fixture r_route_lab_eval_primary 완비
+ok   - drill r_route_lab_eval_primary assert sh-clean
+ok   - drill r_route_lab_eval_primary fixture sh-clean
+ok   - drill fixture r_route_refine_doc_only 완비
+ok   - drill r_route_refine_doc_only assert sh-clean
+ok   - drill r_route_refine_doc_only fixture sh-clean
+ok   - drill fixture r_route_spec_policy_lab_exec 완비
+ok   - drill r_route_spec_policy_lab_exec assert sh-clean
+ok   - drill r_route_spec_policy_lab_exec fixture sh-clean
+ok   - drill fixture g_subagent_scope_headless 완비
+ok   - drill g_subagent_scope_headless assert sh-clean
+ok   - drill g_subagent_scope_headless fixture sh-clean
+ok   - drill fixture g_eval_stage_dispatch_or_reason 완비
+ok   - drill g_eval_stage_dispatch_or_reason assert sh-clean
+ok   - drill g_eval_stage_dispatch_or_reason fixture sh-clean
+routing-contract: all checks passed
+manifest up-to-date; delta baselines bound
+hub.html up-to-date
+checked 13 core projection groups
+status=ok
+exit_code=0

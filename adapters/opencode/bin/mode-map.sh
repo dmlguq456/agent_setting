@@ -44,7 +44,7 @@ fallback=""
 note=""
 
 case "$family" in
-  dev|editorial)
+  dev|editorial|plan)
     status=portable
     realization=portable-persona
     requirement="opencode edit/read tools plus normal preflight guards"

@@ -1,5 +1,5 @@
-## Delegate to 연구팀
-Invoke the **research-team** (연구팀) agent as a subagent with the following prompt:
+## Dispatch the research/research-survey Unit
+Dispatch the `research/research-survey` unit with the following prompt:
 
 ````
 Document strategy mode. Create an initial {mode} strategy document.

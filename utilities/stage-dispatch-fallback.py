@@ -14,6 +14,24 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "utilities"))
+
+
+def _unit_role(unit):
+    """Model-role authority follows the CHOSEN unit's frontmatter (2026-07-22 verify
+    finding: with unit_choices, the node role is only the default — e.g. a
+    fast-fact-checker claim-verify choice under a fast-reviewer node must resolve
+    its own role). Stdlib-only; returns None for absent/reserved/malformed units."""
+    if not unit or unit.startswith("_kernel/"):
+        return None
+    path = ROOT / "roles" / "units" / f"{unit}.md"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    import re as _re
+    m = _re.search(r"^role:\s*(.+?)\s*$", text.split("---", 2)[1], _re.MULTILINE) if text.startswith("---") else None
+    return m.group(1) if m else None
+
 from dispatch_lifecycle import (  # noqa: E402
     DETACHED,
     FOREGROUND_SCOPED,
@@ -423,7 +441,7 @@ def wrapper_command(
                 "--selection-source", "orchestrator-explicit",
             ]
     else:
-        command += ["--model-role", args.model_role or node.get("role", "fast implementer")]
+        command += ["--model-role", args.model_role or _unit_role(node.get("unit")) or node.get("role", "fast implementer")]
     optional = (
         (args.prompt_file, "--prompt-file"),
         (os.environ.get("AGENT_DISPATCH_PARENT_SESSION_ID"), "--parent-session-id"),

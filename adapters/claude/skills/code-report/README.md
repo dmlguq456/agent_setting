@@ -20,7 +20,7 @@ The single authority for resolving `$ARG` to a plan is [autopilot-code plan reso
 
 Use one fast writer. The report synthesizes artifacts already checked by plan, code, and test review stages. Do not add another report-review loop or external adversary. `qa_level` is prompt context only and does not change the writer role.
 
-## Delegation to 품질관리팀
+## Report Assembly — `editorial/report` unit
 
 Inputs: the canonical plan, `plan/checklist.md`, `dev_logs/`, `test_logs/`, `_internal/{plan_reviews,dev_reviews,test_reviews}/`, and any existing required language companion.
 
@@ -64,7 +64,7 @@ Localize headings to the report language while preserving this information archi
 
 ## Post-report reconciliation
 
-After 품질관리팀 returns:
+After the `editorial/report` unit returns:
 
 1. Read `final_report.md` once.
 2. Compare it with concrete orchestration evidence from the current run:

@@ -8,5 +8,5 @@ fragments:
   - profiles/fragments/lab-runner.md
 expose:
   skills: [autopilot-lab, analyze-project, post-it]
-  agents: [dev-team, qa-team, material-team]
+  agents: []
   triggers: []

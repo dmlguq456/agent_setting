@@ -45,7 +45,7 @@ fallback=""
 note=""
 
 case "$family" in
-  dev|editorial)
+  dev|editorial|plan)
     status=portable
     realization=portable-persona
     native_mode_path="adapters/codex/modes/$family/$name.md"

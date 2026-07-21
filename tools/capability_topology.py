@@ -123,6 +123,15 @@ def _validate_unit_ref(recipe, node, registry):
             raise TopologyError(
                 f"{capability}:{node_id}: kind {kind} requires reserved unit {sorted(compat)}"
             )
+        # Reserved refs carry no catalog frontmatter, so their role must be pinned here
+        # (2026-07-22 verify finding: _kernel/owner previously accepted any role).
+        reserved_roles = {"_kernel/owner": {"deep orchestrator", "deep maker"},
+                          "_kernel/resource": {"orchestrator"}}
+        allowed = reserved_roles.get(unit)
+        if allowed is not None and node.get("role") not in allowed:
+            raise TopologyError(
+                f"{capability}:{node_id}: reserved unit {unit} allows roles {sorted(allowed)}, got {node.get('role')}"
+            )
         if "unit_choices" in node:
             raise TopologyError(f"{capability}:{node_id}: reserved-unit node cannot carry unit_choices")
         return

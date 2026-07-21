@@ -1,0 +1,50 @@
+adapter=codex
+runtime_surface=adapter-owned-verification-runner
+tool_contract=verification-runner
+command=bash
+timeout=600
+.........
+----------------------------------------------------------------------
+Ran 9 tests in 0.034s
+
+OK
+.....................
+----------------------------------------------------------------------
+Ran 21 tests in 0.588s
+
+OK
+..............
+----------------------------------------------------------------------
+Ran 14 tests in 0.727s
+
+OK
+.......................
+----------------------------------------------------------------------
+Ran 23 tests in 0.014s
+
+OK
+completion_marker=/home/Uihyeop/agent_setting-wt/depth1-surface-terminology-remediated/.dispatch/completion/rt-fixture/execute.json
+completion_marker=/home/Uihyeop/agent_setting-wt/depth1-surface-terminology-remediated/.dispatch/completion/rt-fixture/execute.json
+completion_marker=/home/Uihyeop/agent_setting-wt/depth1-surface-terminology-remediated/.dispatch/completion/rt-fixture/execute.json
+check=failed
+reason=dispatch-evidence-no-eligible-fallback
+adapter=codex
+completion_marker=/home/Uihyeop/agent_setting-wt/depth1-surface-terminology-remediated/.dispatch/completion/rt-fixture/execute.json
+completion_marker=/home/Uihyeop/agent_setting-wt/depth1-surface-terminology-remediated/.dispatch/completion/rt-fixture/execute.json
+completion_marker=/home/Uihyeop/agent_setting-wt/depth1-surface-terminology-remediated/.dispatch/completion/rt-fixture/execute.json
+warning: You appear to have cloned an empty repository.
+Branch 'main' set up to track remote branch 'main' from 'origin'.
+.warning: You appear to have cloned an empty repository.
+Branch 'main' set up to track remote branch 'main' from 'origin'.
+.................
+----------------------------------------------------------------------
+Ran 18 tests in 5.260s
+
+OK
+...........
+----------------------------------------------------------------------
+Ran 11 tests in 8.374s
+
+OK
+status=ok
+exit_code=0

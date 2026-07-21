@@ -1,0 +1,23 @@
+adapter=codex
+runtime_surface=adapter-owned-verification-runner
+tool_contract=verification-runner
+command=bash
+timeout=600
+..............
+----------------------------------------------------------------------
+Ran 14 tests in 0.636s
+
+OK
+................
+----------------------------------------------------------------------
+Ran 16 tests in 1.254s
+
+OK
+.........
+----------------------------------------------------------------------
+Ran 9 tests in 1.182s
+
+OK
+adapters/claude/bin/dispatch-headless.sd15.test.sh: 6: set: Illegal option -o pipefail
+status=failed
+exit_code=2

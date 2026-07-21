@@ -4,10 +4,13 @@ This dispatch is a **code-test stage-worker**: autopilot-code Step 4, a depth-2
 pipeline stage dispatched by a depth-1 conductor. It verifies the implementation
 and treats **source as read-only**.
 
-### Sub-skill role + in-session team
+### Sub-skill role + delegation surface
 
-- Run `code-test`. Internal parallelism is the in-session **qa-team**
-  in test mode — graduated verification (syntax→import→smoke→functional→integration).
+- Run `code-test` in-session — graduated verification
+  (syntax→import→smoke→functional→integration).
+- A stage worker delegates to no native team (runtime team agents are
+  retired); ephemeral native helpers are allowed only for unforeseen narrow
+  scaffolding and carry no unit semantics.
 - Put top Level reached and pass/fail evidence in the test report; the terminal
   response uses only the kernel's three-line handoff.
 

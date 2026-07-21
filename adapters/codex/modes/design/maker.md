@@ -110,7 +110,7 @@ installation command only after user confirmation.
 | shadcn/ui CLI | Install components | Offer `npx shadcn init`. |
 | Tailwind token source | Single source for design tokens | Offer to create `tokens.css` or `tailwind.config.ts` if neither exists. |
 | Image-generation surface | Logos, illustrations, thumbnails | Offer an external tool or a placeholder workflow. |
-| **Design render harness** (adapter visual harness, e.g. Codex visual harness) | Render HTML/React; inspect console and DOM; primary visual self-verification surface | Check `<agent-home>/tools/design-mcp`; the adapter's design-init provisions it. Required for the visual loop. |
+| **Design render harness** (adapter visual harness, e.g. Codex visual harness) | Render HTML/React; inspect console and DOM; primary visual self-verification surface | Check the Codex visual harness (`adapters/codex/bin/preflight.sh visual-harness`); the adapter's design-init provisions it. Required for the visual loop. |
 | SVG rasterizer (`sharp`, `rsvg-convert`, `cairosvg`, `inkscape`) | Render standalone SVG/diagram assets to PNG without a browser | Offer `npm i sharp` or `apt install librsvg2-bin`. |
 
 Treat `tokens.css` or the Tailwind configuration as the single design-token source and

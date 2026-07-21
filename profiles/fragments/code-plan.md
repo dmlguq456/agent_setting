@@ -4,10 +4,15 @@ This dispatch is a **code-plan stage-worker**: autopilot-code Step 2, a depth-2
 pipeline stage dispatched by a depth-1 conductor. Its job is to author the
 implementation plan, nothing downstream.
 
-### Sub-skill role + in-session team
+### Sub-skill role + delegation surface
 
-- Run `code-plan`. Internal parallelism is the in-session **plan-team**
-  only — read source + prior artifacts and produce/refine the plan document.
+- Run `code-plan` in-session — read source + prior artifacts and
+  produce/refine the plan document. Independent plan review is not yours: the
+  depth-1 owner dispatches the sibling `plan-check` unit node
+  (`qa/plan-review`) per the compiled route.
+- A stage worker delegates to no native team (runtime team agents are
+  retired); ephemeral native helpers are allowed only for unforeseen narrow
+  scaffolding and carry no unit semantics.
 - Put plan paths and readiness evidence in the plan artifact; the terminal
   response uses only the kernel's three-line handoff.
 
@@ -31,6 +36,6 @@ implementation plan, nothing downstream.
 ### Stay in lane
 
 - No re-dispatch: depth-2 stage-workers never open another headless session
-  (depth 3+ is forbidden by the L0 bootstrap). Internal work = in-session team.
+  (depth 3+ is forbidden by the L0 bootstrap). Internal work stays in-session.
 - The conductor's `--model-role` on the dispatch line governs; this profile's
   `deep maker` default may be overridden per-dispatch (SD-5).

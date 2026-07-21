@@ -21,7 +21,7 @@ metadata:
 
 ## Delegate Refinement
 
-Invoke `plan-team` as a subagent with this task:
+Re-enter the `plan/plan-author` unit boundary with this task:
 
 ```text
 Refine mode. Update an existing implementation plan from user memos, plan-check feedback, or verification-failure notes.
@@ -33,7 +33,7 @@ Existing companion plans: {resolved paths, or none}
 Read the supplied and canonical plan files and identify user memos per your refine-mode memo forms; additionally treat any HTML comment as a user memo. Do not treat original plan prose as a memo. Then follow your refine-mode procedure and return format.
 ```
 
-Memo forms, in-place update, companion synchronization, and the single-line return contract are owned by the `plan-team` persona; do not restate them in the prompt.
+Memo forms, in-place update, companion synchronization, and the single-line return contract are owned by the `plan/plan-author` unit persona; do not restate them in the prompt.
 
 ## Refine Assurance
 
@@ -43,11 +43,11 @@ Derive verification rigor from the plan's selected `--intensity` context under [
 |---|---|---|
 | `quick` | Direct invocation only: one fast sanity review or self-check | Record residual concerns; no repeated loop |
 | `light` | One focused fast review when changed steps could affect execution | One bounded correction for blocking issues |
-| `standard` | One lightweight `qa-team` plan-review pass over changed steps | At most one correction |
+| `standard` | One lightweight `qa/plan-review` unit pass (the `plan-check` boundary) over changed steps | At most one correction |
 | `thorough` | Multi-axis review only when selected by `intensity=thorough` | Up to two synthesized corrections |
 | `adversarial` | Thorough review plus explicit failure-mode, security, and adversarial critique when available | Explicit unavailable requests fail loudly; automatic escalation falls back to thorough and reports it |
 
-After `plan-team` returns, run only the review action selected by the caller's graph. Do not open a repeated QA loop merely because the rigor tier is high. Add unresolved concerns to the plan's risk or unresolved section after the selected budget and report them to the caller.
+After the `plan/plan-author` unit returns, run only the review action selected by the caller's graph. Do not open a repeated QA loop merely because the rigor tier is high. Add unresolved concerns to the plan's risk or unresolved section after the selected budget and report them to the caller.
 
 ## Task
 

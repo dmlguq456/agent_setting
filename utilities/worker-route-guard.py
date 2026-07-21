@@ -150,12 +150,21 @@ def main() -> int:
     parser.add_argument("--cwd", required=True); parser.add_argument("--artifact-root", required=True)
     parser.add_argument("--capability"); parser.add_argument("--intensity"); parser.add_argument("--write-scope")
     parser.add_argument("--route-id"); parser.add_argument("--route-hash"); parser.add_argument("--registry-digest")
+    parser.add_argument("--unit", default=None,
+                        help="catalog unit the caller intends to run; must match the sealed node")
     parser.add_argument("--current-attempt")
     args = parser.parse_args()
     try:
         route, node, git = validate_route_contract(args.route, args.node, args.cwd, args.artifact_root,
             args.capability, args.intensity, args.write_scope, args.route_id, args.route_hash, args.registry_digest,
             args.current_attempt)
+        # Unit binding: a worker may not run a bare or substituted persona against a
+        # sealed node (2026-07-22 verify finding). Empty/None observed == unbound claim.
+        expected_unit = node.get("unit") or None
+        observed_unit = args.unit or None
+        if observed_unit != expected_unit:
+            raise WorkerRouteError("route-node-unit-mismatch",
+                f"expected={expected_unit} observed={observed_unit}", route.get("route_id"))
     except WorkerRouteError as exc:
         print(json.dumps({"status":"blocked","reason":exc.reason,"detail":str(exc),"route_id":exc.route_id,"route_file":args.route}, sort_keys=True), file=sys.stderr)
         return 65

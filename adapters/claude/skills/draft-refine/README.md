@@ -19,7 +19,7 @@ flowchart TD
     DETECT -->|/draft/| DR["draft mode (canonical draft + existing or required companion)"]
     STR --> VER["Pre-Refine: Versioning Setup"]
     DR --> VER
-    VER --> RT["Delegate to 연구팀: detect memos, ground references, apply"]
+    VER --> RT["Dispatch research/research-survey unit: detect memos, ground references, apply"]
     RT --> WRITE["Write latest + v{N} archive + frontmatter changelog array"]
     WRITE --> QA["Selected post-refine review pass: quality/source check, max 2 rounds"]
     QA -->|No 🔴| DONE["Report to user"]
@@ -103,7 +103,7 @@ changelog:
 
 ## 5. Selected Post-Refine Review Pass
 
-After `연구팀` finishes, run the quality/source checks required by the selected graph and QA budget, for at most two rounds.
+After the `research/research-survey` unit finishes, run the quality/source checks required by the selected graph and QA budget, for at most two rounds.
 
 | Level | Condition | Quality reviewer | Parallel fact-checker |
 |---|---|---|---|
@@ -115,7 +115,7 @@ After `연구팀` finishes, run the quality/source checks required by the select
 - **Quality reviewer:** narrative arc, cohesion, strategy coverage, and all reviewer points in rebuttal mode
 - **Fact-checker:** verbatim comparison with `analysis_project/paper/*.md`
 
-On a 🔴 finding, reinvoke `연구팀`, up to two rounds. If 🔴 remains after two rounds, record it under the functional compatibility heading `## 미해결 이슈` and tag factual residuals `[FACT-RESIDUAL]`.
+On a 🔴 finding, re-dispatch the `research/research-survey` unit, up to two rounds. If 🔴 remains after two rounds, record it under the functional compatibility heading `## 미해결 이슈` and tag factual residuals `[FACT-RESIDUAL]`.
 
 ## Relationship to Other Skills
 

@@ -49,6 +49,11 @@ def sanitize_portable_contract(text: str) -> str:
     text = re.sub(r"`?mcp__design__\*`?", "`adapters/codex/bin/preflight.sh visual-harness <file.html>`", text)
     text = re.sub(r"`?node <agent-home>/tools/design-mcp/console-check\.mjs <file(?:\.html)?>`?", "`adapters/codex/bin/preflight.sh visual-harness <file.html>`", text)
     text = text.replace("<agent-home>/tools/design-mcp/", "adapters/codex/bin/preflight.sh visual-harness ")
+    # Unit-catalog design bodies carry the mined MCP environment table (재홈 2026-07-22):
+    # neutralize the remaining Claude-surface tool tokens for the Codex projection.
+    text = text.replace("`<agent-home>/tools/design-mcp`", "the Codex visual harness (`adapters/codex/bin/preflight.sh visual-harness`)")
+    text = text.replace("tools/design-mcp/console-check.mjs", "adapters/codex/bin/preflight.sh visual-harness")
+    text = text.replace("tools/design-mcp", "the Codex visual harness")
 
     replacements = {
         "<agent-home>/agent-modes/": "roles/units/",

@@ -4,7 +4,7 @@ Reusable starting points for bezels, deck shells, tweak panels, and comparison
 canvases. Each self-contained HTML file is copied into the design artifact
 folder, filled with real content, and verified through the active runtime
 adapter's visual harness. The portable rendering contract lives in
-[`roles/modes/design/_design_rules.md`](../roles/modes/design/_design_rules.md).
+[`roles/units/design/_design-rules.md`](../roles/units/design/_design-rules.md).
 
 | Scaffold | File | Purpose | Key behavior |
 |---|---|---|---|
@@ -31,5 +31,5 @@ adapter's visual harness. The portable rendering contract lives in
 ## Rules
 
 - Every scaffold has zero external build dependencies and opens directly in a browser, preserving standalone-artifact parity.
-- Scale rules such as body text ≥ 24 px for decks and touch targets ≥ 44 px for mobile live in `roles/modes/design/_design_rules.md`.
+- Scale rules such as body text ≥ 24 px for decks and touch targets ≥ 44 px for mobile live in `roles/units/design/_design-rules.md`.
 - All five scaffolds have passed render verification with zero console errors.

@@ -2,7 +2,7 @@
 
 Select the stage graph from `--intensity` before QA. `direct` performs produce plus sanity/report without this durable pipeline. `quick` uses one registered-headless dispatch-depth-1 one-shot owner with an inline micro-plan, plan-check-lite, and focused verification. standard+ follows the durable pipeline below.
 
-Use independent plan review only when selected by the graph: UI or visual risk → the `design/critic` unit; research or domain risk → the `research/plan-review` unit; construction quality → the `qa/plan-review` unit. Each runs as a sibling review node dispatched by the owner per the compiled route.
+The compiled standard+ route always carries the `plan-check` review node; select its unit by risk axis: UI or visual risk → the `design/critic` unit; research or domain risk → the `research/plan-review` unit; construction quality (the compiled default) → the `qa/plan-review` unit. Each runs as a sibling review node dispatched by the owner per the compiled route.
 
 ### Standard+ Stage Dispatch
 
@@ -76,7 +76,7 @@ If a stage dies immediately from usage, session, or authentication limits, the w
 
 ### Optional Material Delegation
 
-When implementation or reporting requires result plots, experiment-log visualization, or result tables, the code-execute or code-report worker records the need in its artifact, and the owner dispatches the matching `material/*` unit (e.g. `material/figure-gen`, `material/data-script`) as a sibling node per the compiled route. Training and experiment execution remain in autopilot-code; the material units own postprocessing. Record generated asset paths in the relevant dev log.
+When implementation or reporting requires result plots, experiment-log visualization, or result tables, the code-execute or code-report worker records the need in its artifact. The enumerated autopilot-code recipe compiles no `material/*` node, so the owner satisfies the need per the WORKFLOW compose-on-demand doctrine: a composed route extension node bound to the matching `material/*` unit (e.g. `material/figure-gen`, `material/data-script`) that passes the same validator and hash-seal as a recipe route — or, for narrow throwaway scaffolding only, an ephemeral native helper with no unit semantics. Training and experiment execution remain in autopilot-code; the material units own postprocessing. Record generated asset paths in the relevant dev log.
 
 ### Step 1: code-plan
 
@@ -100,19 +100,16 @@ sh "$AGENT_HOME/utilities/dispatch-wait.sh" --parent <cycle-slug>
 
 Loop until exit 0. Then read only plan status and paths. On exit 3, inspect liveness and transcript tail, then redispatch using existing artifacts. For direct, quick, or unavailable headless runtime, invoke `code-plan` in-session.
 
-### Step 2: Plan Check and Optional Refinement
+### Step 2: plan-check and Optional Refinement
 
 Only durable standard+ graphs use this step. direct has none; quick already completed plan-check-lite.
 
-The self-check is inline because it writes no new durable artifact. An independently warranted review may be a bounded dispatch-depth-2 review worker.
+The compiled standard+ route contains the `plan-check` review node unconditionally (default unit `qa/plan-review`, completion gate `code-plan-check`); `execute` is record-bound to its completion marker and cannot start without it. Intensity scales the review's depth and reviewer role/family, never whether the node runs.
 
 1. Resolve `en_plan_path`, `ko_plan_path`, and `log_dir`.
-2. Select review only when the graph and risk require it:
-   - standard: one lightweight review when warranted;
-   - strong: one review at the riskiest point;
-   - thorough or adversarial: bounded dispatch-depth-2 or axis-separated reviewers, each returning a short memo.
-3. If blocking findings exist, pause when `--user-refine` is set; otherwise run one `code-refine` within the correction budget.
-4. Without findings or selected review, continue.
+2. Run the route-bound dispatch transaction with `NODE_ID=plan-check`: the node reads `plan.md` and `checklist.md` and writes `_internal/plan_reviews/round_1.md`. Poll, then publish exact completion from the review memo.
+3. Read only the memo verdict. If it reports blocking findings, pause when `--user-refine` is set; otherwise run one `code-refine` within the correction budget.
+4. On a clean memo (or after the bounded refinement), continue to Step 3.
 
 ### Step 3: code-execute
 
@@ -123,9 +120,17 @@ to in-session only under the closed rules above.
 
 Read plan frontmatter after harvest:
 
-- `done` → Step 4;
-- `partial` → Step 4 for completed work;
+- `done` → impl-review, then Step 4;
+- `partial` → impl-review, then Step 4 for completed work;
 - `failed` → source has been rolled back. Write failed `pipeline_summary.md`, report, and stop before test or report.
+
+The compiled route also contains the `impl-review` review node unconditionally (unit
+`qa/code-review`, completion gate `code-impl-review`) between `execute` and `test`; `test`
+is record-bound to its completion marker. After publishing execute's completion, run the
+route-bound dispatch transaction with `NODE_ID=impl-review`: it reads the plan, source
+diff, and dev logs, writes `_internal/dev_reviews/phase_review.md`, and stays read-only.
+Publish its exact completion, read only the memo verdict, and route blocking findings
+through the bounded refine/retry path in Step 4 — never an inline hotfix.
 
 ### Step 4: code-test
 

@@ -34,7 +34,7 @@ Do not generate a language-companion pair by default. Preserve the target artifa
 
 ## Prepare Versioning
 
-Before invoking `research-team`, establish the next version and snapshot the current state.
+Before dispatching the `research/research-survey` unit, establish the next version and snapshot the current state.
 
 1. **Determine the convention and version.**
    - Modern: when `{artifact_root}/_internal/` exists, scan `_internal/versions/v{N}/`; use max `N + 1`, or `2` when none exists.
@@ -43,7 +43,7 @@ Before invoking `research-team`, establish the next version and snapshot the cur
 2. **Snapshot the current previous version**, skipping an already existing snapshot.
    - Modern: preserve each canonical and existing companion file at the same relative strategy/draft path under `_internal/versions/v{prev_version}/`.
    - Legacy: copy each existing file to its sibling `{stem}_v{prev_version}.md`.
-3. Pass `next_version`, `prev_version`, convention, snapshot paths, canonical path, and existing companion paths to `research-team`.
+3. Pass `next_version`, `prev_version`, convention, snapshot paths, canonical path, and existing companion paths to the `research/research-survey` unit.
 
 Use these commands with the files that actually exist:
 
@@ -62,7 +62,7 @@ The `ko_path` and `en_path` variables are legacy compatibility names, not a requ
 
 ## Delegate Refinement
 
-Load [references/delegate-prompt.md](references/delegate-prompt.md), substitute its variables, and invoke `research-team` with the complete prompt. Read [references/changelog-example.md](references/changelog-example.md) for the legacy-to-frontmatter example.
+Load [references/delegate-prompt.md](references/delegate-prompt.md), substitute its variables, and dispatch the `research/research-survey` unit with the complete prompt. Read [references/changelog-example.md](references/changelog-example.md) for the legacy-to-frontmatter example.
 
 Check these invariants:
 
@@ -83,11 +83,11 @@ Derive rigor from the selected intensity and changed sections. At Standard+, run
 | **Thorough** | Major overhaul or new evidence | Two deep reviewers in parallel | One fast fact-checker | 2 |
 | **Adversarial** | Imminent external review or explicit adversarial intensity | Two deep reviewers plus one external adversary | One fast fact-checker | 2 plus one external pass |
 
-Use a fast fact-checker because source comparison is bounded matching, not creative drafting. Load the active adapter's projected `research-team` classification contract. When the Claude compatibility projection is the only available reference, its canonical 8-row classification table remains at `adapters/claude/agents/research-team.md` lines 258–300.
+Use a fast fact-checker because source comparison is bounded matching, not creative drafting. The canonical 8-row classification table lives in `roles/units/research/fact-check.md`.
 
 ## Post-Refine Review
 
-After `research-team` returns:
+After the `research/research-survey` unit returns:
 
 1. Set `{log_dir}` to the document artifact root and create the selected review directory:
 
@@ -133,8 +133,8 @@ Return ONLY the path and one-line verdict.
 3. Branch on the combined verdict.
    - No critical finding → report both selected verdicts.
    - Quick → stop after round 1, add remaining critical findings to the artifact's localized Unresolved Issues section, and report them.
-   - Quality critical → re-invoke `research-team` with quality findings.
-   - Fact critical → re-invoke `research-team` with mandatory source re-grounding against the named analyses or PDFs.
+   - Quality critical → re-dispatch the `research/research-survey` unit with quality findings.
+   - Fact critical → re-dispatch the `research/research-survey` unit with mandatory source re-grounding against the named analyses or PDFs.
    - Both → combine findings in one bounded correction.
 4. After two rounds, write remaining issues to the localized Unresolved Issues section, report resolved and unresolved items with reasons, and tag fact residuals `[FACT-RESIDUAL]`.
 

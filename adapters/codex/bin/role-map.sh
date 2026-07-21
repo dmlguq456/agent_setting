@@ -7,9 +7,9 @@ _cmdir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 usage() {
   cat <<'EOF'
-usage: role-map.sh <portable-role|role-profile|pipeline-stage>
+usage: role-map.sh <portable-role|pipeline-stage>
 
-Prints a Codex adapter mapping for a portable model role or role profile.
+Prints a Codex adapter mapping for a portable model role or pipeline-stage alias.
 
 Config knobs:
   AGENT_MODEL_FAST / AGENT_REASONING_FAST
@@ -29,75 +29,36 @@ EOF
 raw=$*
 role=$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr '_-' '  ' | awk '{$1=$1; print}')
 
-profile=""
+# Runtime team agents are retired (재홈 2026-07-22, core/CONVENTIONS.md §2.3):
+# dispatchable behavior lives in the portable unit catalog (roles/units/), and a
+# pipeline-stage alias resolves to its portable ROLE, never to a native team
+# agent. The only remaining Codex native agent is the kernel helper
+# (memory-scout); native_agent_path is emitted only when that concrete file
+# actually exists, so retired team tomls can never be re-emitted here.
 pipeline_stage=""
-profile_portable_role=""
-profile_role_input=""
+portable_model_role=""
+native_agent=""
 case "$role" in
-  "planning"|"plan team")
-    profile=plan-team
+  "planning")
     pipeline_stage=planning
-    profile_portable_role="deep maker"
-    profile_role_input="deep maker"
+    portable_model_role="deep maker"
     ;;
-  "implementation"|"dev team")
-    profile=dev-team
+  "implementation")
     pipeline_stage=implementation
-    profile_portable_role="fast implementer by default"
-    profile_role_input="fast implementer"
+    portable_model_role="fast implementer"
     ;;
-  "verification"|"qa team")
-    profile=qa-team
+  "verification")
+    # variable reviewer/verifier budget derived from intensity (CONVENTIONS §2.3)
     pipeline_stage=verification
-    profile_portable_role="variable reviewer"
-    profile_role_input="fast reviewer"
+    portable_model_role="variable reviewer"
     ;;
-  "report"|"reporting"|"editorial team")
-    profile=editorial-team
+  "report"|"reporting")
     pipeline_stage=report
-    profile_portable_role="deep maker / fast reviewer by mode"
-    profile_role_input="fast reviewer"
-    ;;
-  "research team")
-    profile=research-team
-    profile_portable_role="variable research reviewer"
-    profile_role_input="deep reviewer"
-    ;;
-  "material team")
-    profile=material-team
-    profile_portable_role="deep maker plus fast tool worker"
-    profile_role_input="fast tool worker"
-    ;;
-  "design team")
-    profile=design-team
-    profile_portable_role="deep maker plus verifier"
-    profile_role_input="deep maker"
-    ;;
-  "external adversary"|"external adversary team")
-    if [ "$role" = "external adversary team" ]; then
-      profile=external-adversary
-      profile_portable_role="external adversary plus orchestrator"
-      profile_role_input="external adversary"
-    fi
+    portable_model_role="fast writer"
     ;;
 esac
-
-if [ -n "$profile" ]; then
-  printf 'role=%s\n' "$role"
-  printf 'adapter=codex\n'
-  printf 'source=roles/README.md\n'
-  printf 'family=role-profile\n'
-  printf 'role_profile=%s\n' "$profile"
-  [ -z "$pipeline_stage" ] || printf 'pipeline_stage=%s\n' "$pipeline_stage"
-  printf 'native_agent_path=adapters/codex/agents/%s.toml\n' "$profile"
-  printf 'portable_model_role=%s\n' "$profile_portable_role"
-  printf 'codex_role_map_input=%s\n' "$profile_role_input"
-  printf 'concrete_role_check=preflight.sh role %s\n' "$profile_role_input"
-  printf 'model=role-profile\n'
-  printf 'reasoning=select-via-codex-agent\n'
-  printf 'available=1\n'
-  printf 'status=role-profile\n'
-  exit 0
+if [ -n "$pipeline_stage" ]; then
+  role=$portable_model_role
 fi
 
 family=fast
@@ -219,6 +180,14 @@ printf 'role=%s\n' "$canonical"
 printf 'adapter=codex\n'
 printf 'source=roles/README.md\n'
 printf 'family=%s\n' "$family"
+if [ -n "$pipeline_stage" ]; then
+  printf 'pipeline_stage=%s\n' "$pipeline_stage"
+  printf 'portable_model_role=%s\n' "$portable_model_role"
+  printf 'unit_catalog=roles/units/\n'
+fi
+if [ -n "$native_agent" ] && [ -f "$_cmdir/../agents/$native_agent.toml" ]; then
+  printf 'native_agent_path=adapters/codex/agents/%s.toml\n' "$native_agent"
+fi
 if [ -n "$role_set" ]; then
   printf 'role_set=%s\n' "$role_set"
 fi

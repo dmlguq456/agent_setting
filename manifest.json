@@ -580,6 +580,10 @@
       "unit": "editorial/polish",
       "status": "portable-persona"
     },
+    "editorial/report": {
+      "unit": "editorial/report",
+      "status": "portable-persona"
+    },
     "editorial/review": {
       "unit": "editorial/review",
       "status": "portable-persona"
@@ -607,6 +611,10 @@
     "material/web-image-search": {
       "unit": "material/web-image-search",
       "status": "portable-with-tool-contract"
+    },
+    "plan/plan-author": {
+      "unit": "plan/plan-author",
+      "status": "portable-persona"
     },
     "qa/code-review": {
       "unit": "qa/code-review",
@@ -781,10 +789,12 @@
         "dev/new-lib",
         "dev/refactor",
         "editorial/polish",
+        "editorial/report",
         "editorial/translate",
         "material/data-script",
         "material/figure-gen",
         "material/pdf-extract",
+        "plan/plan-author",
         "qa/code-review",
         "qa/data-curate",
         "qa/ml-debug",
@@ -797,12 +807,12 @@
       "kernel_agents": [
         "memory-scout"
       ],
-      "digest": "a54b4c152c4b8947de14fc3c983871a8a8347d8dc7702f6b4169fb1e32453838",
+      "digest": "a745a9831d1697cb776109cf37abd5445eb5e137dc142e23213590ed9abd17ea",
       "counts": {
         "capabilities": 14,
         "units": 19,
         "roles": 7,
-        "modes": 17
+        "modes": 19
       }
     },
     "full": {
@@ -892,6 +902,7 @@
         "dev/new-lib",
         "dev/refactor",
         "editorial/polish",
+        "editorial/report",
         "editorial/review",
         "editorial/translate",
         "material/browser-fetch",
@@ -899,6 +910,7 @@
         "material/figure-gen",
         "material/pdf-extract",
         "material/web-image-search",
+        "plan/plan-author",
         "qa/code-review",
         "qa/data-curate",
         "qa/ml-debug",
@@ -913,12 +925,12 @@
       "kernel_agents": [
         "memory-scout"
       ],
-      "digest": "635d4e9fadd92f85ff34ee52fb1d688658a5832460d0aa282627f76077e6d2df",
+      "digest": "f1a57d0f6930f323c1adbdd039e02f94a2cda04624f0f6a8771ea597389ae5d3",
       "counts": {
         "capabilities": 27,
         "units": 27,
         "roles": 8,
-        "modes": 26
+        "modes": 28
       }
     },
     "starter": {
@@ -958,7 +970,9 @@
         "dev/frontend",
         "dev/new-lib",
         "dev/refactor",
+        "editorial/report",
         "editorial/translate",
+        "plan/plan-author",
         "qa/code-review",
         "qa/plan-review",
         "qa/test"
@@ -966,12 +980,12 @@
       "kernel_agents": [
         "memory-scout"
       ],
-      "digest": "e6d28d47e8bfd4390d0a26b15b917010ab7642f6f77f9c93901d25c1b07b6de5",
+      "digest": "d34db7a7cf9db08d5132eb1704b00f59d46208d8a777d76144a3aca01a0697f4",
       "counts": {
         "capabilities": 6,
         "units": 10,
         "roles": 5,
-        "modes": 8
+        "modes": 10
       }
     }
   },

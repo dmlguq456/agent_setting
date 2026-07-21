@@ -1371,22 +1371,33 @@ if AGENT_MODEL_FAST=fast-model AGENT_REASONING_FAST=low "$CODEX" role fast revie
 else
   bad "codex role wrapper should map fast portable role"
 fi
-if "$CODEX" role planning >/tmp/codex_role_profile.out 2>/tmp/codex_role_profile.err \
-  && grep -q '^family=role-profile$' /tmp/codex_role_profile.out \
-  && grep -q '^role_profile=plan-team$' /tmp/codex_role_profile.out \
-  && grep -q '^pipeline_stage=planning$' /tmp/codex_role_profile.out \
-  && grep -q '^native_agent_path=adapters/codex/agents/plan-team.toml$' /tmp/codex_role_profile.out \
-  && grep -q '^concrete_role_check=preflight.sh role deep maker$' /tmp/codex_role_profile.out \
+# 재홈 2026-07-22 (CONVENTIONS §2.3): pipeline-stage aliases resolve deterministically to
+# portable ROLES with unit-catalog guidance; retired team profiles/paths must not reappear.
+if "$CODEX" role planning >/tmp/codex_role_planning.out 2>/tmp/codex_role_planning.err \
+  && grep -q '^pipeline_stage=planning$' /tmp/codex_role_planning.out \
+  && grep -q '^portable_model_role=deep maker$' /tmp/codex_role_planning.out \
+  && grep -q '^unit_catalog=roles/units/$' /tmp/codex_role_planning.out \
+  && ! grep -q '^role_profile=' /tmp/codex_role_planning.out \
+  && ! grep -q '^native_agent_path=' /tmp/codex_role_planning.out \
+  && ! grep -q 'team' /tmp/codex_role_planning.out \
   && "$CODEX" role implementation >/tmp/codex_role_impl.out 2>/tmp/codex_role_impl.err \
-  && grep -q '^role_profile=dev-team$' /tmp/codex_role_impl.out \
-  && grep -q '^concrete_role_check=preflight.sh role fast implementer$' /tmp/codex_role_impl.out \
+  && grep -q '^pipeline_stage=implementation$' /tmp/codex_role_impl.out \
+  && grep -q '^portable_model_role=fast implementer$' /tmp/codex_role_impl.out \
   && "$CODEX" role verification >/tmp/codex_role_verify.out 2>/tmp/codex_role_verify.err \
-  && grep -q '^role_profile=qa-team$' /tmp/codex_role_verify.out \
+  && grep -q '^pipeline_stage=verification$' /tmp/codex_role_verify.out \
+  && grep -q '^portable_model_role=variable reviewer$' /tmp/codex_role_verify.out \
+  && grep -q '^role_set=fast reviewer,deep reviewer,external adversary$' /tmp/codex_role_verify.out \
   && "$CODEX" role report >/tmp/codex_role_report.out 2>/tmp/codex_role_report.err \
-  && grep -q '^role_profile=editorial-team$' /tmp/codex_role_report.out; then
-  ok "codex role wrapper maps pipeline stages to native role profiles"
+  && grep -q '^pipeline_stage=report$' /tmp/codex_role_report.out \
+  && grep -q '^portable_model_role=fast writer$' /tmp/codex_role_report.out; then
+  ok "codex role wrapper maps pipeline stages to portable unit-catalog roles"
 else
-  bad "codex role wrapper should map pipeline stages to native role profiles"
+  bad "codex role wrapper should map pipeline stages to portable unit-catalog roles"
+fi
+if "$CODEX" role plan team >/tmp/codex_role_retired.out 2>/tmp/codex_role_retired.err; then
+  bad "codex role wrapper should reject the retired 'plan team' profile alias"
+else
+  ok "codex role wrapper rejects the retired 'plan team' profile alias"
 fi
 if "$CODEX" role variable reviewer >/tmp/role_set.out 2>/tmp/role_set.err \
   && grep -q '^role=variable reviewer$' /tmp/role_set.out \
@@ -1484,7 +1495,7 @@ if "$CODEX" capability-info autopilot-code >/tmp/cap.out 2>/tmp/cap.err \
   && grep -q '^pipeline_contract=code-plan>code-execute>code-test>code-report$' /tmp/cap.out \
   && grep -q '^optional_pipeline_step=code-refine$' /tmp/cap.out \
   && grep -q '^artifact_contract=plans/<date>_<slug>:plan.md,checklist.md,pipeline_summary.md,dev_logs/,test_logs/$' /tmp/cap.out \
-  && grep -q '^role_contract=planning=plan-team,implementation=dev-team,verification=qa-team,report=editorial-team$' /tmp/cap.out \
+  && grep -q '^role_contract=planning=plan/plan-author,plan-check=qa/plan-review,implementation=dev/\*,impl-review=qa/code-review,verification=qa/test,report=editorial/report$' /tmp/cap.out \
   && grep -Fq 'dispatch_contract=preflight.sh dispatch --capability autopilot-code --mode <family/mode> --qa <level> --intensity <level> --dispatch-depth 1|2 [--parent <slug>]' /tmp/cap.out; then
   ok "codex capability wrapper reports native skill realization"
 else
@@ -1499,7 +1510,7 @@ if "$CODEX" capability-info code-test >/tmp/cap_code_test.out 2>/tmp/cap_code_te
   && grep -q '^runtime_surface=adapter-owned-verification-runner$' /tmp/cap_code_test.out \
   && grep -q '^artifact_contract=plans/<date>_<slug>:test_logs/,_internal/test_reviews/;handoff=code-report$' /tmp/cap_code_test.out \
   && grep -Fq '`code-report` alone updates `pipeline_summary.md`' "$ROOT/capabilities/code-test.md" \
-  && grep -q '^role_contract=verification=qa-team,review=qa-team$' /tmp/cap_code_test.out \
+  && grep -q '^role_contract=verification=qa/test,review=qa/code-review$' /tmp/cap_code_test.out \
   && grep -q 'graduated verification' "$ROOT/adapters/codex/skills/code-test/SKILL.md"; then
   ok "codex code-test capability reports verification-runner contract"
 else

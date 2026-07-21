@@ -59,18 +59,18 @@ Read [references/delegate-prompt.md](references/delegate-prompt.md) for the comp
 ## Flow
 
 1. Parse arguments and verify `{output_dir}/analysis/`.
-2. Load the complete prompt from `references/delegate-prompt.md` and invoke `research-team`. Require it to write the strategy file directly and return only paths plus a 3–5 line summary.
+2. Load the complete prompt from `references/delegate-prompt.md` and dispatch the `research/research-survey` unit. Require it to write the strategy file directly and return only paths plus a 3–5 line summary.
 3. Apply QA scaling and the bounded quality/fact review in `references/qa-review.md`; run the selected reviewers in parallel and allow at most two rounds.
-4. Create a translated companion only when an explicit second-language or external-audience contract requires it. Use `editorial-team` with `references/mirror.md`; do not infer a fixed mirror language from the conversation.
+4. Create a translated companion only when an explicit second-language or external-audience contract requires it. Use the `editorial/translate` unit with `references/mirror.md`; do not infer a fixed mirror language from the conversation.
 5. Report strategy paths, compact summary, and QA verdict in the conversation language.
 
 ## Reference Index
 
 | File | Load when | Contents |
 |---|---|---|
-| `references/delegate-prompt.md` | Building the `research-team` prompt | Inputs, paragraph-cohesion precheck, mode mapping, six strategy templates, tone detection, slide conventions, quality requirements, and return contract |
+| `references/delegate-prompt.md` | Building the `research/research-survey` unit prompt | Inputs, paragraph-cohesion precheck, mode mapping, six strategy templates, tone detection, slide conventions, quality requirements, and return contract |
 | `references/qa-review.md` | Selecting and running QA | Rigor scaling, fast fact-check rationale, reviewer and fact-checker prompts, verdict branches, and two-round cap |
-| `references/mirror.md` | An explicit companion-language artifact is required | `editorial-team` translation procedure, primary-language decision, and final report line |
+| `references/mirror.md` | An explicit companion-language artifact is required | `editorial/translate` unit procedure, primary-language decision, and final report line |
 
 ## Task
 

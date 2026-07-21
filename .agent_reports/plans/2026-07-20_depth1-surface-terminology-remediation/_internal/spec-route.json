@@ -1,0 +1,280 @@
+{
+  "schema_version": 1,
+  "capability": "autopilot-spec",
+  "capability_mode": "update",
+  "requested_intensity": "strong",
+  "effective_intensity": "strong",
+  "execution_topology": "transactional-owner",
+  "owner_depth": 1,
+  "tracking": "tracked",
+  "tracked_gate_evidence": {
+    "spec_read": {
+      "satisfied": true,
+      "source": "stage-dispatch-prd-v19"
+    },
+    "drift_verdict": "SPEC-SIGNIFICANT: SD-19 quick fallback policy",
+    "workflow_mode": "tracked",
+    "artifact_guard": {
+      "satisfied": true,
+      "source": "preflight-write-pass"
+    }
+  },
+  "spec_touch": true,
+  "cwd": "/home/Uihyeop/agent_setting-wt/depth1-surface-terminology",
+  "artifact_root": "/home/Uihyeop/agent_setting/.agent_reports",
+  "source_commit": "6b3a34bc320fc5d89c1b254e0314cf33aabc5824",
+  "registry_digest": "sha256:161b5539ad48dfd354aae3605daf27a9203ec3a676b450ba27b4856bfcea03c1",
+  "dispatch_defaults_digest": "sha256:b3e8dd08b3b52872a1ffbc873dec370b5c8ea900a27f6190f8cfcd30032e072b",
+  "selection": {
+    "direct_predicates": [],
+    "promotion_signals": [
+      {
+        "signal": "shared-contract",
+        "source": "caller"
+      }
+    ],
+    "selection_basis": [
+      {
+        "axis": "promotion",
+        "signal": "shared-contract",
+        "source": "caller"
+      }
+    ],
+    "escalation_basis": [
+      {
+        "signal": "shared-contract",
+        "source": "caller"
+      }
+    ],
+    "transport": "headless",
+    "transport_evidence": "checked-nested-headless",
+    "inline_reason": null
+  },
+  "nodes": [
+    {
+      "id": "research",
+      "kind": "map-worker",
+      "depth": 2,
+      "depends_on": [],
+      "role": "deep maker",
+      "inputs": [
+        "intent",
+        "prior-evidence"
+      ],
+      "outputs": [
+        "shards/spec-research/**"
+      ],
+      "write_scope": [
+        "shards/spec-research/**"
+      ],
+      "resource_class": "normal",
+      "transport": [
+        "headless",
+        "native-subagent",
+        "inline-fallback"
+      ],
+      "completion_gate": "spec-research",
+      "dispatch_fallback": [
+        {
+          "ordinal": 1,
+          "hop": "same-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "codex",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-auth+headless-check",
+              "probe_time": "2026-07-20T08:47:23.022154Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "hop": "cross-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "claude",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-command-check",
+              "probe_time": "2026-07-20T08:47:20.668348Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "hop": "native-subagent",
+          "candidates": [],
+          "fleet_visibility": "degraded"
+        },
+        {
+          "ordinal": 4,
+          "hop": "inline",
+          "status": "eligible-after-prior-hop-exhaustion",
+          "reason_enum": "runtime-unavailable",
+          "fleet_visibility": "none"
+        }
+      ],
+      "harness_affinity": "unspecified"
+    },
+    {
+      "id": "review",
+      "kind": "review-worker",
+      "depth": 2,
+      "depends_on": [
+        "research"
+      ],
+      "role": "deep reviewer",
+      "inputs": [
+        "intent",
+        "shards/spec-research/**"
+      ],
+      "outputs": [
+        "reviews/spec-verdict.json"
+      ],
+      "write_scope": [
+        "reviews/spec/**"
+      ],
+      "resource_class": "normal",
+      "transport": [
+        "headless",
+        "native-subagent",
+        "inline-fallback"
+      ],
+      "completion_gate": "spec-review",
+      "dispatch_fallback": [
+        {
+          "ordinal": 1,
+          "hop": "same-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "codex",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-auth+headless-check",
+              "probe_time": "2026-07-20T08:47:23.022154Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "hop": "cross-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "claude",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-command-check",
+              "probe_time": "2026-07-20T08:47:20.668348Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "hop": "native-subagent",
+          "candidates": [],
+          "fleet_visibility": "degraded"
+        },
+        {
+          "ordinal": 4,
+          "hop": "inline",
+          "status": "eligible-after-prior-hop-exhaustion",
+          "reason_enum": "runtime-unavailable",
+          "fleet_visibility": "none"
+        }
+      ],
+      "harness_affinity": "unspecified"
+    },
+    {
+      "id": "prd-transaction",
+      "kind": "capability-owner",
+      "depth": 1,
+      "depends_on": [
+        "review"
+      ],
+      "role": "deep maker",
+      "inputs": [
+        "intent",
+        "shards/spec-research/**",
+        "reviews/spec-verdict.json"
+      ],
+      "outputs": [
+        "spec/prd.md",
+        "spec/pipeline_state.yaml",
+        "spec/pipeline_summary.md",
+        "version-snapshot"
+      ],
+      "write_scope": [
+        "spec/prd.md",
+        "spec/pipeline_state.yaml",
+        "spec/pipeline_summary.md",
+        "spec/_internal/versions/**"
+      ],
+      "resource_class": "normal",
+      "transport": [
+        "headless",
+        "inline-fallback"
+      ],
+      "completion_gate": "spec-atomic-transaction"
+    }
+  ],
+  "completion_gates": [
+    "spec-research",
+    "spec-review",
+    "spec-atomic-transaction"
+  ],
+  "human_gates": [
+    "intent-confirmation"
+  ],
+  "resume_retry_boundaries": [
+    "research",
+    "review",
+    "prd-transaction"
+  ],
+  "dispatch_evidence": {
+    "tuples": [
+      {
+        "child_harness": "codex",
+        "failure_class": "",
+        "launch_authority": "conductor",
+        "parent_harness": "codex",
+        "parent_sandbox": "workspace-write",
+        "parent_transport": "headless",
+        "probe_source": "codex-owner-network-contract+direct-auth+headless-check",
+        "probe_time": "2026-07-20T08:47:23.022154Z",
+        "status": "supported"
+      },
+      {
+        "child_harness": "claude",
+        "failure_class": "",
+        "launch_authority": "conductor",
+        "parent_harness": "codex",
+        "parent_sandbox": "workspace-write",
+        "parent_transport": "headless",
+        "probe_source": "codex-owner-network-contract+direct-command-check",
+        "probe_time": "2026-07-20T08:47:20.668348Z",
+        "status": "supported"
+      }
+    ],
+    "native_subagent": []
+  },
+  "dispatch_contract_version": 3,
+  "route_hash": "sha256:24a883963a582a4a179760de8b5865f4cfcfcfaa04f7ce2f24bc4480dfb3ecab",
+  "route_id": "rt-24a883963a582a4a"
+}

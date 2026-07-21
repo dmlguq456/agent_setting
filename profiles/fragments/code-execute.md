@@ -4,10 +4,15 @@ This dispatch is a **code-execute stage-worker**: autopilot-code Step 3, a
 depth-2 pipeline stage dispatched by a depth-1 conductor. It implements the plan
 and is the **only stage that mutates source**.
 
-### Sub-skill role + in-session team
+### Sub-skill role + delegation surface
 
-- Run `code-execute`. Internal parallelism is the in-session **dev-team**
-  only — implement the plan's phases/steps and record progress.
+- Run `code-execute` in-session — implement the plan's phases/steps and
+  record progress. Implementation review is not yours: the depth-1 owner
+  dispatches the sibling `impl-review` unit node (`qa/code-review`) per the
+  compiled route.
+- A stage worker delegates to no native team (runtime team agents are
+  retired); ephemeral native helpers are allowed only for unforeseen narrow
+  scaffolding and carry no unit semantics.
 - Put implemented phase count and plan `status` in the checklist/plan; the
   terminal response uses only the kernel's three-line handoff.
 

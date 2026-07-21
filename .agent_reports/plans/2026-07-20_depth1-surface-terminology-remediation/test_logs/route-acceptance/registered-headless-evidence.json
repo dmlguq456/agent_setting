@@ -1,0 +1,12 @@
+{
+  "candidates": [
+    {
+      "harness": "codex",
+      "transport": "headless",
+      "surface": "registered-headless",
+      "status": "supported",
+      "probe_source": "v20-acceptance-fixture",
+      "probe_time": "2026-07-20T00:00:00Z"
+    }
+  ]
+}

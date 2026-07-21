@@ -1,0 +1,17 @@
+{
+  "tuples": [
+    {"parent_harness":"codex","parent_transport":"headless","parent_sandbox":"workspace-write","child_harness":"codex","launch_authority":"conductor","status":"supported","probe_source":"v20-acceptance-fixture","probe_time":"2026-07-20T00:00:00Z","failure_class":""},
+    {"parent_harness":"codex","parent_transport":"headless","parent_sandbox":"workspace-write","child_harness":"claude","launch_authority":"conductor","status":"supported","probe_source":"v20-acceptance-fixture","probe_time":"2026-07-20T00:00:00Z","failure_class":""},
+    {"parent_harness":"codex","parent_transport":"headless","parent_sandbox":"workspace-write","child_harness":"opencode","launch_authority":"conductor","status":"supported","probe_source":"v20-acceptance-fixture","probe_time":"2026-07-20T00:00:00Z","failure_class":""},
+    {"parent_harness":"claude","parent_transport":"headless","parent_sandbox":"workspace-write","child_harness":"codex","launch_authority":"conductor","status":"supported","probe_source":"v20-acceptance-fixture","probe_time":"2026-07-20T00:00:00Z","failure_class":""},
+    {"parent_harness":"claude","parent_transport":"headless","parent_sandbox":"workspace-write","child_harness":"claude","launch_authority":"conductor","status":"supported","probe_source":"v20-acceptance-fixture","probe_time":"2026-07-20T00:00:00Z","failure_class":""},
+    {"parent_harness":"claude","parent_transport":"headless","parent_sandbox":"workspace-write","child_harness":"opencode","launch_authority":"conductor","status":"supported","probe_source":"v20-acceptance-fixture","probe_time":"2026-07-20T00:00:00Z","failure_class":""},
+    {"parent_harness":"opencode","parent_transport":"headless","parent_sandbox":"workspace-write","child_harness":"codex","launch_authority":"conductor","status":"supported","probe_source":"v20-acceptance-fixture","probe_time":"2026-07-20T00:00:00Z","failure_class":""},
+    {"parent_harness":"opencode","parent_transport":"headless","parent_sandbox":"workspace-write","child_harness":"claude","launch_authority":"conductor","status":"supported","probe_source":"v20-acceptance-fixture","probe_time":"2026-07-20T00:00:00Z","failure_class":""},
+    {"parent_harness":"opencode","parent_transport":"headless","parent_sandbox":"workspace-write","child_harness":"opencode","launch_authority":"conductor","status":"supported","probe_source":"v20-acceptance-fixture","probe_time":"2026-07-20T00:00:00Z","failure_class":""}
+  ],
+  "native_subagent": [
+    {"harness":"codex","status":"supported","check_source":"v20-acceptance-fixture"},
+    {"harness":"claude","status":"supported","check_source":"v20-acceptance-fixture"}
+  ]
+}

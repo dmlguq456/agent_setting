@@ -1,5 +1,5 @@
 name: code-execute
-description: "code-execute stage worker — autopilot-code Step 3 depth-2 delegation (development team; the only source-mutating stage)"
+description: "code-execute stage worker — autopilot-code Step 3 depth-2 delegation (dev/* unit; the only source-mutating stage)"
 harness: claude
 worker_type: stage
 model_role: fast implementer
@@ -7,5 +7,5 @@ fragments:
   - profiles/fragments/code-execute.md
 expose:
   skills: [code-execute, autopilot-code, post-it]
-  agents: [dev-team]
+  agents: []
   triggers: []

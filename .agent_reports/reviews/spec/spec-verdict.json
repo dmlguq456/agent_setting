@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "review": "stage-dispatch-v20-proposed-delta",
+  "reviewed_at": "2026-07-20",
+  "route_id": "rt-24a883963a582a4a",
+  "route_node": "review",
+  "attempt_id": "att-396e4d60d717d905ae3cf7add2df7ffc28873e8d329489f9",
+  "verdict": "FAIL",
+  "summary": "The proposed delta is directionally faithful: it makes quick registered-headless-only, rejects native/inline/unknown quick transports, preserves direct inline and standard+ fallback behavior, adopts qualified dispatch-depth fields, and excludes composition. It is not ready for the atomic PRD transaction because the normative terminology omits Codex native subagents, dispatch_depth is defined in a way that conflicts with direct and fallback execution, quick node/session/attempt cardinality can accidentally override retained v19 retry semantics, and the transport vocabulary remains internally ambiguous.",
+  "findings": [
+    {
+      "id": "V20-R1",
+      "priority": 1,
+      "severity": "major",
+      "title": "The execution-surface terminology contract omits Codex native subagents",
+      "locations": [
+        "/home/Uihyeop/agent_setting/.agent_reports/shards/spec-research/depth1-surface-terminology.md §3 SD-75",
+        "/home/Uihyeop/agent_setting/.agent_reports/documents/2026-07-20_depth1-surface-terminology-audit.md findings 1-2",
+        "/home/Uihyeop/agent_setting/.agent_reports/spec/stage-dispatch/prd.md §13.1.8 SD-38 and §13.7.2 SD-62"
+      ],
+      "evidence": "SD-75 normatively defines Claude subagent, Claude agent-team teammate session, and registered headless worker session, but it does not define Codex native subagent. SD-74 mentions Codex agents.max_depth only as a setting boundary. The assigned decision requires four explicit surfaces: Codex native subagents, Claude subagents, Claude agent-team teammate sessions, and registered headless worker sessions.",
+      "impact": "A projection can satisfy SD-75 while still using an ambiguous generic subagent label for Codex, so the requested surface distinction is not fully enforceable.",
+      "required_change": "Add a normative SD-75 row for 'Codex native subagent': a runtime-native Codex child thread/session governed by Codex native subagent configuration such as agents.max_depth; it is not a registered headless worker and its evidence cannot satisfy headless eligibility. Keep 'runtime-native subagent' as the cross-runtime category for Codex native subagents and Claude subagents only; explicitly exclude Claude agent-team teammates."
+    },
+    {
+      "id": "V20-R2",
+      "priority": 2,
+      "severity": "major",
+      "title": "dispatch_depth is conflated with registration even though direct and fallback execution are not registered",
+      "locations": [
+        "/home/Uihyeop/agent_setting/.agent_reports/shards/spec-research/depth1-surface-terminology.md §3 SD-74 items 2 and 4",
+        "/home/Uihyeop/agent_setting/.agent_reports/shards/spec-research/depth1-surface-terminology.md §5 criteria 5-6",
+        "/home/Uihyeop/agent_setting/.agent_reports/spec/stage-dispatch/prd.md §13.1.2 SD-32, §13.3.3 SD-50, and §13.7.1 SD-61"
+      ],
+      "evidence": "SD-74.2 calls dispatch_depth a 'portable registered-dispatch ownership level', but the proposal also assigns dispatch_depth=0 to unregistered direct inline execution and allows a standard+ route node to retain dispatch_depth while the actual attempt executes as a native subagent or inline fallback. SD-74.4 recognizes the node/attempt difference but does not resolve the contradictory definition.",
+      "impact": "Implementers could either erase logical node depth during fallback or falsely describe native/inline attempts as registered workers, breaking Fleet and eligibility evidence semantics.",
+      "required_change": "Define dispatch_depth as the portable logical route-ownership/topology level, independent of runtime transport, process ancestry, runtime-native nesting, and registration. Define attempt execution surface separately. State that only an attempt launched through the repo registration contract is a registered headless worker; direct inline and native/inline fallback attempts retain their route node's dispatch_depth metadata without acquiring registered-worker status. Require node and attempt fields to be unambiguous in route, registry, completion, and Fleet evidence."
+    },
+    {
+      "id": "V20-R3",
+      "priority": 3,
+      "severity": "major",
+      "title": "Quick node/session/attempt cardinality is ambiguous and can override retained v19 retry policy",
+      "locations": [
+        "/home/Uihyeop/agent_setting/.agent_reports/shards/spec-research/depth1-surface-terminology.md §3 SD-73 items 1-2",
+        "/home/Uihyeop/agent_setting/.agent_reports/shards/spec-research/depth1-surface-terminology.md §5 criteria 3 and 11",
+        "/home/Uihyeop/agent_setting/.agent_reports/spec/stage-dispatch/prd.md §13.6.3 SD-59, §13.7.3 SD-63, and §13.10.2 SD-70"
+      ],
+      "evidence": "The proposal requires exactly one quick capability-owner worker session and criterion 11 says exactly one canonical attempt row. V19 separately permits a serial capacity failover attempt for the same route node and preserves distinct exact attempt rows. The approved v20 decision forbids native/inline substitution; it does not approve removal of headless-only retry/failover behavior.",
+      "impact": "The transaction could unintentionally repeal SD-59 or make Fleet evidence contradictory whenever a registered headless quick attempt terminates and a permitted registered headless retry occurs.",
+      "required_change": "Specify exactly one quick route node, no child nodes, and at most one live attempt/session at a time. Preserve existing serial retry/capacity rules unless separately superseded, but require every retry to remain registered headless and to have its own canonical terminal attempt row. Reword Fleet acceptance to require exactly one current/open quick attempt row, while historical terminal rows remain valid. If all eligible registered-headless attempts fail, terminate quick with a structured failure; native-subagent and inline attempt counts remain zero."
+    },
+    {
+      "id": "V20-R4",
+      "priority": 4,
+      "severity": "major",
+      "title": "The closed transport vocabulary is not defined consistently with SD-32 and SD-72",
+      "locations": [
+        "/home/Uihyeop/agent_setting/.agent_reports/shards/spec-research/depth1-surface-terminology.md §3 SD-73 items 3, 5, and 6",
+        "/home/Uihyeop/agent_setting/.agent_reports/shards/spec-research/depth1-surface-terminology.md §5 criteria 2 and 4",
+        "/home/Uihyeop/agent_setting/.agent_reports/spec/stage-dispatch/prd.md §13.1.2 SD-32 and §13.11.1 SD-72"
+      ],
+      "evidence": "V19 SD-32 lists headless, native-subagent, detached-process, and inline-fallback as transport values, while SD-72 says the canonical dispatch-tuple transport is headless|interactive. The proposed delta calls native-subagent, inline-fallback, and interactive transports and demands a closed vocabulary without declaring whether these are one enum or separate launch-transport, execution-surface, and fallback-hop namespaces.",
+      "impact": "A compiler can reject arbitrary strings yet still disagree across adapters about which known values are globally valid, recipe-valid, or merely fallback labels.",
+      "required_change": "Add an explicit closed schema for each namespace. Keep the registered wrapper transport machine value headless. Identify native-subagent and inline-fallback as execution-surface/fallback choices if they are not canonical dispatch-tuple transports, and define where interactive and detached-process are valid. Apply recipe allowlists after global vocabulary validation. Quick must allow only the registered headless surface; explicit empty, interactive, native-subagent, inline-fallback, and arbitrary values must fail before route emission."
+    },
+    {
+      "id": "V20-R5",
+      "priority": 5,
+      "severity": "moderate",
+      "title": "Fail-closed error and recovery semantics are suggestive rather than normative",
+      "locations": [
+        "/home/Uihyeop/agent_setting/.agent_reports/shards/spec-research/depth1-surface-terminology.md §3 SD-73 item 4",
+        "/home/Uihyeop/agent_setting/.agent_reports/shards/spec-research/depth1-surface-terminology.md §5 criterion 3",
+        "/home/Uihyeop/agent_setting/.agent_reports/shards/spec-research/depth1-surface-terminology.md §7 risk 4"
+      ],
+      "evidence": "SD-73 says the structured error may be 'such as quick-headless-unavailable', while the acceptance criterion expects that exact value. The risk section says recovery requires a new route/intensity decision, but the normative decision does not state that recovery boundary or distinguish compile-time ineligibility from post-compile headless failure.",
+      "impact": "Adapters can emit incompatible errors or silently recompile at another intensity while still claiming conceptual compliance.",
+      "required_change": "Make quick-headless-unavailable the exact compile-time error for checked headless ineligibility, with route file, registry claim, and child spawn all absent. Define the post-compile terminal error for exhausted registered-headless attempts. State normatively that recovery requires owner-authorized route recompilation at a different intensity; the compiler must not mutate intensity, transport, or execution location in place."
+    },
+    {
+      "id": "V20-R6",
+      "priority": 6,
+      "severity": "moderate",
+      "title": "The migration rule needs a deterministic boundary for normative prose and legacy artifacts",
+      "locations": [
+        "/home/Uihyeop/agent_setting/.agent_reports/shards/spec-research/depth1-surface-terminology.md §3 SD-74 item 5",
+        "/home/Uihyeop/agent_setting/.agent_reports/shards/spec-research/depth1-surface-terminology.md §4 required amendments",
+        "/home/Uihyeop/agent_setting/.agent_reports/shards/spec-research/depth1-surface-terminology.md §7 risks 3 and 7"
+      ],
+      "evidence": "The proposal permits legacy read-only compatibility and acknowledges extensive historical bare-depth prose, but it does not define how a conformance check distinguishes retained historical quotation/history from current normative text or prevents legacy records from being resumed and re-emitted.",
+      "impact": "The PRD or generated projections can retain ambiguous current language while tests only inspect newly emitted JSON fields.",
+      "required_change": "Require zero ambiguous bare depth/max_depth/owner_depth in current normative prose, schemas, and generated portable/adapter projections. Permit old terms only inside explicitly labeled historical/legacy blocks or versioned read-only records. Require legacy readers to tag the source schema version and prohibit resume/re-emit until recompilation produces qualified v20 fields."
+    }
+  ],
+  "required_changes": [
+    "Add Codex native subagent to SD-75 and define the four required execution surfaces explicitly.",
+    "Redefine dispatch_depth as logical portable route ownership, then separate route-node depth from actual attempt execution surface and registered-worker status.",
+    "Clarify quick cardinality as one node and at most one live registered-headless attempt, preserving any existing serial headless-only retry semantics and forbidding native/inline attempts.",
+    "Define closed, non-overlapping vocabularies for dispatch transport, execution surface, and fallback hop; apply quick's headless-only allowlist after global validation.",
+    "Make fail-closed error enums and owner-authorized recovery behavior normative for compile-time and post-compile failures.",
+    "Set an explicit current-versus-legacy terminology migration boundary and conformance gate.",
+    "Keep SD-19 visibly superseded by SD-73; preserve its text only as labeled history, never as a current fallback rule.",
+    "Do not add composition schema, co-primary routing, cross-capability DAGs, source implementation details, concrete model selection, or runtime configuration changes."
+  ],
+  "coverage": {
+    "approved_decision": {
+      "quick_registered_headless_only": "covered but blocked by findings V20-R3 and V20-R4",
+      "quick_native_subagent_fail_closed": "covered",
+      "quick_inline_fallback_fail_closed": "covered",
+      "quick_unknown_transport_fail_closed": "covered but vocabulary must be normalized by V20-R4",
+      "direct_inline_preserved": "covered",
+      "standard_plus_fallback_preserved": "covered; must remain explicitly scoped to standard+ and must not be weakened by v20",
+      "dispatch_depth_terminology": "covered directionally but definition must be corrected by V20-R2",
+      "four_surface_distinction": "not fully covered; Codex native subagent is missing from SD-75",
+      "no_multi_capability_composition": "covered"
+    },
+    "acceptance_criteria": [
+      {"id": 1, "status": "conditional", "note": "Also require the sole quick node's dispatch_depth=1 explicitly."},
+      {"id": 2, "status": "covered", "note": "Distinguish omitted transport, which derives headless, from explicit empty, which fails."},
+      {"id": 3, "status": "conditional", "note": "Make quick-headless-unavailable exact and add post-compile exhausted-headless behavior."},
+      {"id": 4, "status": "blocked", "note": "Closed vocabularies/namespaces are not yet defined consistently."},
+      {"id": 5, "status": "covered", "note": "Direct remains main-inline at dispatch_depth=0 with no worker row."},
+      {"id": 6, "status": "covered", "note": "Preserves same-harness headless, cross-harness headless, native-subagent, then inline for standard+."},
+      {"id": 7, "status": "covered", "note": "One quick node; no child or dispatch_depth=2 fan-out."},
+      {"id": 8, "status": "conditional", "note": "Add deterministic normative-versus-legacy conformance boundary."},
+      {"id": 9, "status": "covered", "note": "Codex agents.max_depth and native checks cannot establish registered-headless eligibility."},
+      {"id": 10, "status": "blocked", "note": "Claude distinction is correct, but the complete four-surface contract requires a Codex native-subagent term too."},
+      {"id": 11, "status": "blocked", "note": "Exactly one row must mean one current/open attempt, not one lifetime row, unless retry repeal is separately approved."},
+      {"id": 12, "status": "conditional", "note": "Require explicit version tagging and no resume/re-emission before v20 recompilation."},
+      {"id": 13, "status": "covered", "note": "Composition and co-primary behavior are excluded."},
+      {"id": 14, "status": "covered", "note": "Parity requirement is specification-level only and correctly requires independent adapter enforcement."}
+    ],
+    "scope_rejections": [
+      "multi-capability composition or co-primary route design",
+      "source/compiler/registry/Fleet implementation detail beyond testable acceptance behavior",
+      "changes to direct execution semantics",
+      "removal of standard+ native/inline fallback",
+      "Codex runtime setting edits",
+      "concrete model or harness-affinity selection"
+    ]
+  },
+  "atomic_prd_transaction_guidance": {
+    "decision_ids": ["SD-73", "SD-74", "SD-75"],
+    "supersession": "SD-73 explicitly supersedes SD-19. SD-19 may remain only as labeled reversal history.",
+    "minimum_normative_model": {
+      "quick": "one capability-owner route node at owner_dispatch_depth=1 and dispatch_depth=1; max_dispatch_depth=1; allowed execution surface is registered headless only; no children; no native or inline fallback",
+      "direct": "main-inline at dispatch_depth=0; no registered worker row",
+      "standard_plus": "existing capability recipe and checked same-harness headless -> cross-harness headless -> native-subagent -> inline fallback order retained",
+      "depth": "logical portable route ownership; independent of runtime-native nesting and actual fallback execution surface",
+      "surfaces": [
+        "Codex native subagent",
+        "Claude subagent",
+        "Claude agent-team teammate session",
+        "registered headless worker session"
+      ]
+    },
+    "transaction_gate": "Apply all required changes in one locked PRD/state/summary/version transaction. Do not proceed from the research wording unchanged."
+  },
+  "qa_assurance": {
+    "policy_command": "/home/Uihyeop/agent_setting/adapters/codex/bin/preflight.sh qa-policy standard general",
+    "qa_level": "standard",
+    "qa_track": "general",
+    "required_quality_reviewers": "1x-deep-reviewer+2x-fast-reviewers",
+    "required_fact_checker": "1x-fast-fact-checker",
+    "external_adversary": "skip",
+    "max_round": 1,
+    "assurance_scope": "plan-check:selected-independent-pass:final-verify",
+    "independent_delegation_policy": "claim-only-if-separate-codex-agent-headless-or-external-pass-ran",
+    "performed": "One separate registered-headless Codex deep-review worker inspected only the assigned PRD, audit, research shard, and route record.",
+    "independent_pass_claim": true,
+    "not_performed_in_this_stage": [
+      "two fast-reviewer passes",
+      "a separate fast fact-checker pass",
+      "external adversarial review"
+    ],
+    "fact_boundary": "Vendor-runtime facts were accepted only as recorded in the assigned audit; this stage did not independently browse or re-probe vendor documentation.",
+    "read_marker_warning": "The required PRD read-marker command was attempted, but the runtime could not write under /home/Uihyeop/agent_setting/.spec-grounding because it was read-only. The route record already carries prevalidated spec_read evidence."
+  },
+  "review_scope": {
+    "inputs": [
+      "/home/Uihyeop/agent_setting/.agent_reports/spec/stage-dispatch/prd.md",
+      "/home/Uihyeop/agent_setting/.agent_reports/documents/2026-07-20_depth1-surface-terminology-audit.md",
+      "/home/Uihyeop/agent_setting/.agent_reports/shards/spec-research/depth1-surface-terminology.md",
+      "/home/Uihyeop/agent_setting/.agent_reports/plans/2026-07-20_depth1-surface-terminology-remediation/_internal/spec-route.json"
+    ],
+    "repository_source_modified": false,
+    "canonical_prd_modified": false,
+    "artifact_only": true
+  }
+}

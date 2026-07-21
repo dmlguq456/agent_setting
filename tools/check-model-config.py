@@ -24,7 +24,9 @@ CONFIG_SUFFIX = "config/models.conf"
 # Whole-file exemptions (generated projections, display palettes, tests, fixtures).
 EXEMPT_SUBSTRINGS = (
     "/config/models.conf",              # the SoT itself
-    "/agents/memory-scout",             # kernel helper, hand-authored per adapter (ONLY agents exemption)
+    "/agents/memory-scout.md",          # kernel helper (claude flat layout) — the ONLY agents exemptions
+    "/agents/memory-scout.toml",        # kernel helper (codex layout)
+    "/agents/memory-scout/",            # kernel helper (opencode dir layout); exact, no -evil lookalikes
     "/node_modules/",                   # vendored third-party code, not a harness surface
     "/roles/units/",                    # unit catalog owned by check-unit-config.py
     "/statusline.sh",                   # model-family -> color palette (display only)
@@ -33,6 +35,7 @@ EXEMPT_SUBSTRINGS = (
     ".test.",                           # test fixtures
     "/tests/",
     "check-model-config.py",            # this guard's own doc/patterns
+    "check-unit-config.py",             # sibling guard's mirrored patterns (incl. adapter projection symlink)
     "check-adaptation-boundary.sh",     # boundary guard references models in comments/tests
 )
 

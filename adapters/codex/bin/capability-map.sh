@@ -71,7 +71,7 @@ case "$cap" in
     pipeline_contract="code-plan>code-execute>code-test>code-report"
     optional_pipeline_step="code-refine"
     artifact_contract="plans/<date>_<slug>:plan.md,checklist.md,pipeline_summary.md,dev_logs/,test_logs/"
-    role_contract="planning=plan-team,implementation=dev-team,verification=qa-team,report=editorial-team"
+    role_contract="planning=plan/plan-author,plan-check=qa/plan-review,implementation=dev/*,impl-review=qa/code-review,verification=qa/test,report=editorial/report"
     dispatch_contract="preflight.sh dispatch --capability autopilot-code --mode <family/mode> --qa <level> --intensity <level> --dispatch-depth 1|2 [--parent <slug>]"
     stage_graph_contract="core/CONVENTIONS.md#pipeline-intensity-stage-graph-and-assurance"
     plan_policy="direct=no-plan;quick=registered-headless-dispatch-depth-1-one-shot-micro-plan+plan-check-lite;standard+=durable-plan"
@@ -81,7 +81,7 @@ case "$cap" in
     status="tool-contract"
     tool_contract="verification-runner"
     artifact_contract="plans/<date>_<slug>:test_logs/,_internal/test_reviews/;handoff=code-report"
-    role_contract="verification=qa-team,review=qa-team"
+    role_contract="verification=qa/test,review=qa/code-review"
     note="$note Run mode-info qa/test and the verification-runner contract before claiming code-test results."
     ;;
   autopilot-design|design-*)

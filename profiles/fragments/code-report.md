@@ -4,10 +4,13 @@ This dispatch is a **code-report stage-worker**: autopilot-code Step 5, a depth-
 pipeline stage dispatched by a depth-1 conductor. It summarizes the cycle and
 updates the code analysis project.
 
-### Sub-skill role + in-session team
+### Sub-skill role + delegation surface
 
-- Run `code-report`. Internal parallelism is the in-session **qa-team**
-  as a fast writer — synthesize plan/checklist/dev_logs/test_logs into the report.
+- Run `code-report` in-session as a fast writer — synthesize
+  plan/checklist/dev_logs/test_logs into the report.
+- A stage worker delegates to no native team (runtime team agents are
+  retired); ephemeral native helpers are allowed only for unforeseen narrow
+  scaffolding and carry no unit semantics.
 - Put the headline and evidence in the report artifact; the terminal response
   uses only the kernel's three-line handoff.
 

@@ -1,8 +1,8 @@
-## Companion Generation (`editorial-team`; native compatibility ID `편집팀`; Conditional, Not Default)
+## Companion Generation (`editorial/translate` unit; Conditional, Not Default)
 
 Skip companion generation unless the user explicitly requests a second language, an external-audience contract requires one, or the existing artifact workflow already depends on a companion. A difference between the artifact language and the conversation language is not sufficient by itself.
 
-When one of those conditions applies, invoke `editorial-team` in translation mode:
+When one of those conditions applies, dispatch the `editorial/translate` unit:
 
 ```text
 Translate from {source language} to {target language}.

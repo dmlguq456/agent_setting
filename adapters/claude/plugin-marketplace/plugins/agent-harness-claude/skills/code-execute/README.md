@@ -4,7 +4,7 @@
 
 ## Overview
 
-Executes an implementation plan with progress tracking. It delegates individual steps to the `개발팀` subagent, asks `품질관리팀` to review each phase, and establishes a Git safety checkpoint.
+Executes an implementation plan with progress tracking. It implements individual steps as the `dev/*` unit, relies on the conductor-dispatched `impl-review` sibling node (unit `qa/code-review`) for phase review, and establishes a Git safety checkpoint.
 
 ## Invocation
 
@@ -40,7 +40,7 @@ Executes an implementation plan with progress tracking. It delegates individual 
 ## Rules
 
 - Read the checklist before every step.
-- **Delegate one step at a time to the `개발팀` subagent** in auto mode, with specific files and changes plus the `dev_logs` path.
+- **Implement one step at a time as the `dev/*` unit**, with specific files and changes plus the `dev_logs` path.
 - Launch independent steps in parallel.
 - Mark each completed step `[x]` or `[FAIL]`.
 - Do not stop until every actionable step has been processed.
@@ -59,17 +59,17 @@ The plan frontmatter's `qa_level` overrides automatic phase-level detection.
 
 ## Change Log and Phase Review
 
-Each `개발팀` subagent writes `dev_logs/step_*.md`, including old/new content and a required `Decision:` entry.
+Each step writes `dev_logs/step_*.md`, including old/new content and a required `Decision:` entry.
 
 **At phase completion**:
 
-1. Evaluate the QA level and invoke `품질관리팀`.
+1. Evaluate the QA level and record the review request in the stage artifact; the conductor dispatches the `impl-review` node (unit `qa/code-review`).
 2. Inspect the review files:
    - 🟡: log and continue.
-   - 🔴 minor: ask `개발팀` to fix once, then re-verify. If still 🔴, promote to major.
+   - 🔴 minor: fix once in the execute boundary, then re-verify. If still 🔴, promote to major.
    - 🔴 major: **auto-rollback and continue** without asking the user.
 3. Rollback procedure:
-   1. Delegate rollback to `개발팀` using the `old_string` from the step log.
+   1. Roll back using the `old_string` from the step log.
    2. If that fails, restore `$SAFETY_COMMIT` with `git checkout .` (reverting all uncommitted work, including earlier phases), mark every step `[FAIL]`, and proceed to the final report.
    3. If rollback succeeds, mark the phase steps `[FAIL]` and continue to the next phase. Mark dependent steps `[SKIP-DEP]`.
 
