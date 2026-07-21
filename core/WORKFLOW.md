@@ -249,12 +249,12 @@ Autopilot entrypoints choose `intensity`; verification rigor is derived from it 
 |---|---|---|
 | One-off answer, typo, rename, or explicit no-artifact work | `direct` | No plan stage, plan check, or durable plan |
 | Small localized change that misses at least one atomic-direct predicate and has no promotion signal | `quick` | Registered-headless dispatch-depth-1 one-shot owner with orient-lite, micro-plan, plan-check-lite, focused verification, and concise report; no dispatch depth 2 |
-| Work with a promotion signal or separable durable stages | `standard` | Durable plan/checklist; thin dispatch-depth-1 conductor dispatches capability-defined stages with file-only handoff and may open a bounded verifier or planner when separable |
-| Important multi-file or risk-bearing work | `strong` | Standard stage dispatch plus one dispatch-depth-2 check at the riskiest point |
+| Work with a promotion signal or separable durable stages | `standard` | Durable plan/checklist; thin dispatch-depth-1 conductor dispatches capability-defined stages with file-only handoff and may open a bounded verifier or planner, optionally a cross-harness 2-way replica, when separable |
+| Important multi-file or risk-bearing work | `strong` | Standard stage dispatch plus a cross-harness 2-way independent replica-and-merge at the riskiest point |
 | Complex cross-domain or cross-harness work | `thorough` | Bounded dispatch-depth-2 perspective and verifier workers |
 | High-stakes, irreversible, security, or external-facing work | `adversarial` | Thorough plus an explicit adversary, failure-mode, or security pass |
 
-Only `direct` has no plan. Every other autopilot graph includes a plan check, but independent QA is not repeated after every sub-stage by default. `CONVENTIONS §1` is canonical for the graph.
+Only `direct` has no plan. Every other autopilot graph includes a plan check, but independent QA is not repeated after every sub-stage by default. Independent passes replicate across a different harness or model family, and every review — down to a `direct`/`quick` self-check — carries the refute-by-default adversarial stance regardless of the row. `CONVENTIONS §1` is canonical for the graph.
 
 ## 2. Work-Nature Map
 

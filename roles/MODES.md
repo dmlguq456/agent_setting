@@ -7,6 +7,26 @@ add runtime realization details and is not required to be byte-identical; the
 portable behavior starts here, while concrete tools and fallbacks remain
 adapter-owned.
 
+## Universal Review Stance
+
+Every review- or verification-type mode in this inventory — the qa family
+(`code-review`, `plan-review`, `test`, `security-review`, `data-curate`), the
+research review and verification modes (`plan-review`, `fact-check`,
+`claim-verify`), and the design `critic`/`verifier` and editorial `review`
+modes — operates under the refute-by-default adversarial stance of
+`CONVENTIONS §1.1`, regardless of the intensity that dispatched it. The
+reviewer tries to falsify the artifact, names at least one concrete failure
+mode, and treats inadequate evidence as not proven rather than a pass. A mode
+file may reinforce this stance in its own words but never lowers it.
+`claim-verify` is default-refute and fully satisfies it. `security-review` is
+adversarial in its threat-tracing but deliberately deviates on output: its
+high-confidence filter (confidence 8–10, drop ambiguity) may name zero
+findings, so its silence means "no HIGH/MEDIUM found," never "proven safe."
+That domain-justified deviation on the name-a-failure-mode and not-proven
+prongs is a declared carve-out, not automatic satisfaction of the stance. This
+is a stance inside whatever check runs, distinct from the separate cross-harness
+adversary *pass* that only higher intensities add.
+
 ## Status Classes
 
 | Status | Meaning |

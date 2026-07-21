@@ -27,8 +27,8 @@ Pipeline intensity controls which orchestration shape an autopilot entry uses. V
 |---|---|---|---|---|
 | `direct` | `intake → produce → sanity/report` | No plan, plan check, or durable plan; final sanity only | Inline | none/light |
 | `quick` | `intake → orient-lite → micro-plan → plan-check-lite → produce → verify-lite → report` | One dispatch-depth-1 session; 3–4 focused plan questions and one concrete sanity check | One-shot owner; no dispatch depth 2 | quick |
-| `standard` | `intake → orient → owner-plan → plan-check → optional verifier/planner → synth → produce → verify → report` | Durable plan where the capability owns a work cycle; bounded review for separable work | Thin conductor dispatches each durable stage as dispatch depth 2 with file-only handoff | standard |
-| `strong` | Standard plus a risk-focused check and optional fix loop | One independent review at the riskiest point | Stage dispatch plus one bounded risk worker | standard/thorough |
+| `standard` | `intake → orient → owner-plan → plan-check → optional verifier/planner → synth → produce → verify → report` | Durable plan where the capability owns a work cycle; bounded review for separable work, optionally a cross-harness 2-way independent replica at a risk-bearing point | Thin conductor dispatches each durable stage as dispatch depth 2 with file-only handoff | standard |
+| `strong` | Standard plus a risk-focused check and optional fix loop | One cross-harness independent review at the riskiest point, run as a 2-way independent replica whose results are merged | Stage dispatch plus a bounded cross-harness replica/merge pass (two independent sessions, merged) | standard/thorough |
 | `thorough` | Owner plan, multiple bounded perspectives, synthesis, production, and verification | Deeper plan review and bounded alternatives | Dispatch-depth-1 owner opens bounded dispatch-depth-2 perspectives | thorough |
 | `adversarial` | Thorough plus adversarial planning and failure-mode/security verification | Explicit contradiction or hostile pass | Bounded adversary/verifier workers | adversarial |
 
@@ -51,11 +51,16 @@ Rigor is an assurance budget inside the graph selected by intensity. It does not
 
 | Rigor | Derived from | Plan check | Selected independent pass | Final verification | Retry budget |
 |---|---|---|---|---|---|
-| `quick` | `quick` | Self-check or 3–4 focused questions | None by default | One concrete sanity check | None automatically |
-| `light`/none | `direct` | Focused self-check if present | At most one fast reviewer at an already selected review point | Focused command, render, or source check | One pass |
-| `standard` | `standard`, `strong` | Lightweight independent review where planning exists | One bounded dispatch-depth-2 point for separable work | Normal capability verification; source check when relevant | At most one correction |
+| `quick` | `quick` | Self-check or 3–4 focused questions | None by default; the self-check itself carries the adversarial stance below | One concrete sanity check | None automatically |
+| `light`/none | `direct` | Focused self-check if present, held to the adversarial stance below | At most one fast reviewer at an already selected review point | Focused command, render, or source check | One pass |
+| `standard` | `standard`, `strong` | Lightweight independent review where planning exists | One bounded dispatch-depth-2 point for separable work; a cross-harness 2-way independent replica whose results are merged is the default at `strong`, and at plain `standard` an option only at a risk-bearing point | Normal capability verification; source check when relevant | At most one correction |
 | `thorough` | `thorough` | Deeper or multi-axis review | Additional bounded perspectives | Broader evidence and adequacy review | Up to two corrections |
 | `adversarial` | `adversarial` | Hostile owner-plan critique | Thorough plus explicit external adversary, security, contradiction, or failure-mode pass | Verification plus adversarial evidence | Two corrections plus one adversary pass |
+
+Two properties cut across every rigor tier and do not scale away at low intensity:
+
+1. **Adversarial stance is universal (all tiers, including `direct` and `quick`).** Any review or self-check that runs adopts a refute-by-default posture: it actively tries to falsify the artifact's correctness claims, names at least one concrete failure mode, and treats inadequate evidence as *not proven* rather than a pass. This is a stance inside whatever check already runs, not an added stage, so it adds no dispatch at `direct`/`quick`. It is what makes review adversarial before any separate adversary *pass* exists.
+2. **Independent replication is cross-harness, and promoted from thorough-only to a general case.** When a tier selects an independent pass, its independence axis is a **different harness or model family** (for example Claude ↔ Codex/GPT), because same-engine replicas share systematic blind spots. Running the same plan or artifact through two independent cross-harness sessions and merging their results is a first-class option from `standard` up and the **default at `strong` and above** at the riskiest point; `thorough`/`adversarial` widen it to N-way and add an external adversary. When only one harness is available, apply the same two-branch rule as an unavailable external adversary below: if the cross-harness pass was explicitly requested, fail loudly; if it was auto-selected (the `strong`+ default), fall back to a same-harness independent session and report the reduced independence. `direct`/`quick` stay single-session but keep the adversarial stance from (1).
 
 Track rules:
 
@@ -123,16 +128,17 @@ For standard+ code stage dispatch, choose explicitly: code-plan uses deep maker;
 ## §3. Hard Cross-Document Invariants
 
 1. Intensity selects graph and depth; §1.1 derives assurance from intensity. There is no user-facing `--qa` axis, and rigor alone cannot open dispatch depth 2 or a full pipeline.
-2. Quick means one-session micro-plan, plan-check-lite, and verify-lite. Requiring a durable plan, repeated QA, or parallel reviewer fan-out for every small task is drift.
+2. Quick means one-session micro-plan, plan-check-lite, and verify-lite carrying the adversarial stance (§1.1). Requiring a durable plan, an added independent pass, or parallel/cross-harness reviewer fan-out for a small `direct`/`quick` task is still drift; the universal adversarial stance is a posture inside the existing check, not a new stage or session.
 3. Adversarial means thorough plus a selected external adversary, failure-mode, security, or claim-verification pass. `standard + external/Codex` is not the definition.
 4. Code has no fact-checker.
-5. Do not hardcode code-test to thorough or parallel QA on every call; scale final verification from intensity-derived rigor.
+5. Do not hardcode code-test to thorough or parallel QA on every call; scale final verification from intensity-derived rigor. Cross-harness 2-way independent replication is the default at `strong` and above and an option at `standard`, but it is never forced onto `direct`/`quick`.
 6. `--no-fact-check` and `--no-style-audit` must not leak to unrelated capabilities.
 7. An external review wrapper is not the reviewer; separate the independent engine from the mechanical orchestrator.
 8. New or strengthened instructions, rules, and hooks preserve why, including the motivating incident and date, inline or in the commit message. Drills are the strongest executable preservation of intent.
 9. Never reduce a semantic requirement to token or regex rules without verifying that meaning is preserved; see `DESIGN_PRINCIPLES §0.7`.
 10. Token pressure is orthogonal to intensity and cannot reduce graph, depth, dispatch, model role, assurance, required guards, or input context.
 11. Primary routing is semantic (`WORKFLOW §0.2`): new empirical work keeps the execution capability primary, and secondary capabilities never substitute for it. Native sub-agent restrictions and registered headless-dispatch restrictions are separate delegation surfaces (`OPERATIONS §5.10`); extending one to the other requires verified runtime evidence, and the fallback is inline execution with the reason recorded.
+12. Two assurance properties are intensity-independent (strengthened 2026-07-21 on the user directive that review was too weak and independent parallelism too gated behind `thorough`): (a) every review that actually runs carries the refute-by-default adversarial **stance** of §1.1, which is distinct from and prior to the separate external adversary **pass** that only the `adversarial` tier adds; (b) an independent pass's independence axis is a different harness or model family, and a cross-harness 2-way replicate-and-merge is a first-class case from `standard` up and the default at `strong` and above, not a `thorough`-only construct. Neither property may be reduced by token pressure (§1.2), and neither converts a small `direct`/`quick` task into added stages or sessions (§3.2).
 
 Token-budget accounting is observation, not attribution. Hook invocations,
 zero/emission outcomes, exact inserted-directive UTF-8 bytes, and monotonic

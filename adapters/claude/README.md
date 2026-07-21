@@ -84,10 +84,12 @@ The Claude Code adapter maps portable roles from `core/CONVENTIONS.md §2` to co
 | `deep orchestrator` | `opus` high | Stage gates, failover, and evidence judgment for standard+ dispatch-depth-1 ownership |
 | `fast implementer` | `sonnet` | Routine implementation and refactoring; escalate complex API/library design |
 | `orchestrator` | `sonnet` medium | Balanced mechanical coordination of decided calls, paths, and states |
-| `external adversary` | Codex CLI via `codex-review-team` | Independent hostile review for adversarial intensity |
+| `external adversary` | Codex CLI via `codex-review-team` | Independent cross-harness review: the 2-way independent replica/merge that is default at `strong`+ (riskiest point) and the hostile pass at `adversarial` |
 | `external adversary orchestrator` | `sonnet` wrapper | Invoke and summarize the external engine rather than perform the review |
 
 This mapping reproduces the intensity-derived rigor tiers from `CONVENTIONS §1.1`; there is no separate `--qa` axis. Wrappers never choose automatically: main or the orchestrator selects `--model-role`, concrete `--model --effort`, or explicit `--inherit-model-settings` for every job.
+
+Two `CONVENTIONS §1.1` properties are intensity-independent and this adapter honors them: every review the `품질관리팀` runs carries the refute-by-default adversarial stance (single source in `agent-modes/qa/_review_rules.md`), and an independent pass replicates across a different harness family — the Codex `codex-review-team` path — as a 2-way replica/merge by default at `strong` and above, not only at `adversarial`. When Codex is unavailable, fail loudly if the cross-harness pass was explicitly requested; otherwise fall back to a same-family independent reviewer and report the reduced independence.
 
 ## Compatibility
 
