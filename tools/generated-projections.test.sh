@@ -116,6 +116,27 @@ grep -Fq '### 0.4. Primary Entry Confirmation' "$ROOT/core/WORKFLOW.md"
 grep -Fq '[실행 확인]' "$ROOT/core/WORKFLOW.md"
 grep -Fq '작업: <무엇을 어떤 결과로 만들지>' "$ROOT/core/WORKFLOW.md"
 grep -Fq '→ 진행 / 수정: <틀린 부분> / 중단' "$ROOT/core/WORKFLOW.md"
+grep -Fq '### 0.5. Post-Execution Completion Report' "$ROOT/core/WORKFLOW.md"
+grep -Fq '[완료 보고]' "$ROOT/core/WORKFLOW.md"
+completion_task_line=$(grep -n -m1 '작업: <수행한 작업>' "$ROOT/core/WORKFLOW.md" | cut -d: -f1)
+completion_result_line=$(grep -n -m1 '결과: <완료 | 부분 완료 | 실패 | 차단 — 실제 결과>' "$ROOT/core/WORKFLOW.md" | cut -d: -f1)
+completion_verify_line=$(grep -n -m1 '검증: <실행한 검증과 결과>' "$ROOT/core/WORKFLOW.md" | cut -d: -f1)
+completion_artifact_line=$(grep -n -m1 '산출물: <사용자가 확인할 경로 또는 없음>' "$ROOT/core/WORKFLOW.md" | cut -d: -f1)
+completion_remaining_line=$(grep -n -m1 '남은 사항: <미완료 항목, 위험, 차단 요인 또는 없음>' "$ROOT/core/WORKFLOW.md" | cut -d: -f1)
+[ "$completion_task_line" -lt "$completion_result_line" ] \
+  && [ "$completion_result_line" -lt "$completion_verify_line" ] \
+  && [ "$completion_verify_line" -lt "$completion_artifact_line" ] \
+  && [ "$completion_artifact_line" -lt "$completion_remaining_line" ] || {
+  echo "not ok - completion report fields must keep canonical order" >&2
+  exit 1
+}
+grep -Fq 'A worker handoff, background-process exit, or stage verdict alone is not task' "$ROOT/core/WORKFLOW.md"
+grep -Fq 'material work with the canonical five-field post-execution card' "$ROOT/roles/response-policy.md"
+grep -Fq 'auto-proceed without another confirmation, then use the applicable concise' "$ROOT/roles/response-policy.md"
+if grep -Fq 'auto-proceed and report in one line' "$ROOT/roles/response-policy.md"; then
+  echo "not ok - one-line follow-up close contradicts the completion report card" >&2
+  exit 1
+fi
 for bootstrap in \
   "$ROOT/adapters/claude/CLAUDE.md" \
   "$ROOT/adapters/codex/AGENTS.md" \

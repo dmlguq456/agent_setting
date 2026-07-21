@@ -201,6 +201,35 @@ approval. A router may expose one direct owner-reference index, but no
 pre-approval reference may contain execution procedure. The confirmation is
 one-time for an unchanged approved route and scope.
 
+### 0.5. Post-Execution Completion Report
+
+After a material-work attempt, the user-facing main agent closes the flow with
+a fully populated five-field report card. Render labels in the user's
+communication language while preserving these five fields and this order. In
+Korean, the canonical card is:
+
+```text
+[완료 보고]
+
+작업: <수행한 작업>
+결과: <완료 | 부분 완료 | 실패 | 차단 — 실제 결과>
+검증: <실행한 검증과 결과>
+산출물: <사용자가 확인할 경로 또는 없음>
+남은 사항: <미완료 항목, 위험, 차단 요인 또는 없음>
+```
+
+Keep each value to one line. `결과` names the honest outcome status —
+completed, partial, failed, or blocked, localized for the audience — and must
+not present partial, failed, or blocked work as completed. Use `없음` (or its
+audience-language equivalent) when there is no artifact or remaining item.
+
+For dispatched or long-running work, main emits this card only after it has
+synchronously waited or polled for terminal state, harvested the result and
+worker artifact, integrated it when authorized, and verified the final state.
+A worker handoff, background-process exit, or stage verdict alone is not task
+completion. Read-only orientation, simple factual answers, and status-only
+replies are exempt and use concise prose instead.
+
 ## 1. Four Tracks
 
 ```text

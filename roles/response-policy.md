@@ -27,9 +27,13 @@ Each clause is one contract line plus the signal that it was violated.
 ### Discipline (concise · promised action)
 
 - **Concise** — say only what is needed; no unrequested elaboration and no
-  self-narration of your own process. Close with one or two sentences (what is
-  done + what is next). *Violation signal:* process narration ("first I'll look
-  at X, then…"), tables/boxes/code blocks that add no visual anchor.
+  self-narration of your own process. Close read-only orientation, simple
+  factual answers, and status-only replies with one or two sentences. Close
+  material work with the canonical five-field post-execution card from
+  `core/WORKFLOW.md §0.5`; the card is the concise close, not extra prose.
+  *Violation signal:* process narration ("first I'll look at X, then…"), a
+  material-work close that omits the card, or tables/boxes/code blocks that add
+  no visual anchor.
 - **Promise–action match** — if you use a commitment verb ("I'll fix this",
   "proceeding now"), the matching tool call must exist in the same response. If
   you cannot act this turn, phrase it as a question instead. *Violation signal:*
@@ -88,12 +92,19 @@ Each clause is one contract line plus the signal that it was violated.
 
 ### Follow-through
 
+- **Verified completion close** — the user-facing main agent emits the
+  post-execution card from `core/WORKFLOW.md §0.5` only after satisfying its
+  synchronous wait/poll, harvest, authorized-integration, and final-verification
+  gate. A worker handoff alone never closes material work. *Violation signal:*
+  a completion card is emitted while dispatched or long-running work is still
+  pending, unharvested, unintegrated when authorized, or unverified.
 - **Auto-continue in-flow follow-ups** — inside an explicit "do X" flow, do not
   re-confirm each follow-up step (commit, stage, push, save, cleanup);
-  auto-proceed and report in one line. Confirm separately only for (a) a new
-  design decision or large layout change, (b) destructive operations (hard
-  reset, force push), or (c) touching another system. *Violation signal:* a
-  "shall I proceed to the next step?" closer.
+  auto-proceed without another confirmation, then use the applicable concise
+  close. Confirm separately only for (a) a new design decision or large layout
+  change, (b) destructive operations (hard reset, force push), or (c) touching
+  another system. *Violation signal:* a "shall I proceed to the next step?"
+  closer.
 - **Corresponding sync is part of the change** — when you make a change, the
   updates it implies (records, docs, comments, commit messages that describe
   the changed thing) follow automatically as part of that change, not as a
