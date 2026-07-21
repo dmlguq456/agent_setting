@@ -19,6 +19,7 @@ dispatch_registry.test.py, stage_dispatch_*.test.py and the fleet suite; this fi
 does not duplicate them — it fills the untested boundary column.
 """
 import importlib.util
+import math
 from pathlib import Path
 import subprocess
 import sys
@@ -89,6 +90,14 @@ class OuterDeadlineBoundaryTest(unittest.TestCase):
             self.assertGreaterEqual(d, ft, msg=f"ft={ft}: outer deadline below inner bound")
         self.assertEqual(deadlines, sorted(deadlines), msg="non-monotonic finite deadlines")
 
+    def test_foreground_deadline_is_always_finite(self):
+        # "never wait indefinitely" must survive inf/nan/huge too, not just <=0.
+        # (Cross-model review found bounded_foreground_timeout let +inf through.)
+        for ft in (float("inf"), float("nan"), 1e18, 0.0, -1.0, 5.0, 3600.0):
+            d = self.deadline(ft, FG)
+            self.assertIsNotNone(d, msg=f"ft={ft}")
+            self.assertTrue(math.isfinite(d), msg=f"ft={ft} -> non-finite outer deadline {d}")
+
 
 class NamespaceLocalForegroundCellTest(unittest.TestCase):
     """foreground-scoped x namespace-local — the executed cell today's bug lived in.
@@ -120,11 +129,18 @@ class WrapperInternalWaitBoundTest(unittest.TestCase):
     keeps the wrapper self-bounding.
     """
 
-    def test_clamp_maps_nonpositive_to_finite_default(self):
+    def test_clamp_bounds_all_pathological_inputs(self):
+        # <=0 and non-finite (inf/nan) -> default; finite-above-ceiling -> ceiling;
+        # ordinary finite -> unchanged. Every result is finite and positive.
         self.assertEqual(L.bounded_foreground_timeout(0.0), L.FOREGROUND_TIMEOUT_DEFAULT)
         self.assertEqual(L.bounded_foreground_timeout(-5.0), L.FOREGROUND_TIMEOUT_DEFAULT)
+        self.assertEqual(L.bounded_foreground_timeout(float("inf")), L.FOREGROUND_TIMEOUT_DEFAULT)
+        self.assertEqual(L.bounded_foreground_timeout(float("nan")), L.FOREGROUND_TIMEOUT_DEFAULT)
+        self.assertEqual(L.bounded_foreground_timeout(1e18), L.FOREGROUND_TIMEOUT_MAX)
         self.assertEqual(L.bounded_foreground_timeout(120.0), 120.0)
-        self.assertGreater(L.bounded_foreground_timeout(0.0), 0.0)
+        for v in (0.0, -5.0, float("inf"), float("nan"), 1e18, 120.0):
+            b = L.bounded_foreground_timeout(v)
+            self.assertTrue(math.isfinite(b) and b > 0, msg=f"v={v} -> {b}")
 
     def test_wait_foreground_never_waits_indefinitely_on_sentinel(self):
         proc = mock.Mock(pid=5150)
@@ -133,6 +149,25 @@ class WrapperInternalWaitBoundTest(unittest.TestCase):
         proc.wait.assert_called_once()
         self.assertEqual(
             proc.wait.call_args.kwargs.get("timeout"), L.FOREGROUND_TIMEOUT_DEFAULT
+        )
+
+
+class HelperWiringTest(unittest.TestCase):
+    """Guard the real wrapper-launch call sites keep routing through the helper.
+
+    Cross-model review noted the unit tests would still pass if a call site were
+    reverted to the inline ``foreground_timeout + 10`` while the helper stayed
+    intact. This source-level guard fails on exactly that regression.
+    """
+
+    def test_no_inline_prefix_formula_and_both_sites_wired(self):
+        src = Path(__file__).with_name("stage-dispatch-fallback.py").read_text(encoding="utf-8")
+        self.assertNotIn("foreground_timeout + 10", src, "pre-fix inline deadline formula reintroduced")
+        self.assertNotIn("foreground_timeout+10", src)
+        # one def + two wrapper-launch call sites
+        self.assertGreaterEqual(
+            src.count("outer_subprocess_timeout("), 3,
+            "a wrapper-launch subprocess.run stopped routing its timeout through the helper",
         )
 
 
