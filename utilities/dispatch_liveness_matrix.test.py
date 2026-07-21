@@ -23,6 +23,7 @@ import math
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -169,6 +170,59 @@ class HelperWiringTest(unittest.TestCase):
             src.count("outer_subprocess_timeout("), 3,
             "a wrapper-launch subprocess.run stopped routing its timeout through the helper",
         )
+
+
+class FallbackRuntimeWiringTest(unittest.TestCase):
+    """End-to-end: drive the real capacity_retry fallback and prove the value it
+    hands subprocess.run is the CLAMPED deadline, not the 10s abandonment wall.
+
+    HelperWiringTest guards the call site textually; this proves the *runtime*
+    behavior a reverted or mis-clamped site would break (cross-model review 4b):
+    a foreground sentinel 0 must arrive at subprocess.run as ~3610s, never 10s.
+    """
+
+    def test_foreground_sentinel_reaches_subprocess_run_as_clamped_deadline(self):
+        with tempfile.TemporaryDirectory() as td:
+            jobs = Path(td) / "jobs.log"
+            jobs.write_text(
+                "2026-07-16T00:00:00Z\tdone\t/r\t/w\ts\t"
+                "route_id=r,route_node=test,attempt_id=att-initial0001,model=gpt-5.6-sol,"
+                "parent_harness=codex,parent_transport=headless,parent_sandbox=workspace-write,"
+                "child_harness=codex,launch_authority=conductor,note=dead-capacity\n",
+                encoding="utf-8",
+            )
+            args = type("Args", (), {
+                "slug": "s", "parent": "p", "jobs": jobs,
+                "capacity_model": "gpt-5.6-luna", "capacity_reasoning": "medium",
+                "capacity_effort": None, "capacity_variant": None, "direct_timeout": 2,
+                "action": "register", "progress_window_seconds": 0, "watchdog_max_windows": 2,
+                "launch_lifecycle": FG, "foreground_timeout": 0.0,  # the sentinel that caused the bug
+            })()
+            route = {"route_id": "r", "route_hash": "sha256:x"}
+            node = {"id": "test"}
+            row = {"child_harness": "codex", "parent_harness": "codex",
+                   "parent_transport": "headless", "parent_sandbox": "workspace-write",
+                   "launch_authority": "conductor"}
+            failed = {"attempt_id": "att-initial0001", "model": "gpt-5.6-sol"}
+            captured = {}
+
+            def capture(*_a, **kw):
+                captured["timeout"] = kw.get("timeout")
+                return subprocess.CompletedProcess(
+                    [], 0,
+                    stdout="check=ok\nmodel=gpt-5.6-luna\nearly_death=-\nattempt_id=att-x\nduplicate_attempt=0\n",
+                    stderr="",
+                )
+
+            with mock.patch.object(F, "allowed_capacity_settings", return_value=True), \
+                 mock.patch.object(F, "wrapper_command", return_value=["fake"]), \
+                 mock.patch.object(F.subprocess, "run", side_effect=capture):
+                F.capacity_retry(args, route, node, row, 1, failed, [])
+
+            expected = L.bounded_foreground_timeout(0.0) + 10.0  # 3610.0
+            self.assertEqual(captured.get("timeout"), expected)
+            self.assertNotEqual(captured.get("timeout"), 10.0, "sentinel 0 still collapses to the 10s wall")
+            self.assertTrue(math.isfinite(captured["timeout"]))
 
 
 if __name__ == "__main__":
