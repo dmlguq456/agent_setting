@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 import os
 from pathlib import Path
 import signal
@@ -14,21 +15,28 @@ DETACHED = "detached"
 FOREGROUND_SCOPED = "foreground-scoped"
 LIFECYCLES = (DETACHED, FOREGROUND_SCOPED)
 
-FOREGROUND_TIMEOUT_DEFAULT = 3600.0  # matches the wrappers' argparse default
+FOREGROUND_TIMEOUT_DEFAULT = 3600.0  # 1h: what a non-positive/non-finite request clamps to
+FOREGROUND_TIMEOUT_MAX = 86400.0  # 24h hard ceiling: no finite request may be effectively infinite
 
 
 def bounded_foreground_timeout(timeout: float) -> float:
-    """Clamp a foreground wait to a finite ceiling — it may never be indefinite.
+    """Clamp a foreground wait to a finite window — it may never be indefinite.
 
-    A foreground-scoped parent blocks on its child for the whole wait, so ``<= 0``
-    — the historical "disable timeout" sentinel — is a hang hazard, not a valid
-    choice: a wedged child would pin the parent forever with no visibility. Any
-    non-positive request is clamped to the safe default ceiling. (A no-progress
-    watchdog that tells slow-but-progressing apart from wedged is the planned
-    follow-up; until it lands, a generous finite ceiling is the floor of safety.)
+    A foreground-scoped parent blocks on its child for the whole wait, so an
+    unbounded wait is a hang hazard, not a valid choice: a wedged child would pin
+    the parent forever with no visibility. Two ways in are closed here:
+      * ``<= 0`` (the historical "disable timeout" sentinel) and any non-finite
+        request — ``inf``/``nan``, both accepted by ``argparse type=float`` — clamp
+        to the safe default;
+      * any finite request above the hard ceiling clamps down to it, so even an
+        absurd value like ``1e18`` cannot be effectively infinite.
+    (A no-progress watchdog that tells slow-but-progressing apart from wedged is
+    the planned follow-up; until it lands, a finite window is the floor of safety.)
     """
 
-    return timeout if timeout > 0 else FOREGROUND_TIMEOUT_DEFAULT
+    if not math.isfinite(timeout) or timeout <= 0:
+        return FOREGROUND_TIMEOUT_DEFAULT
+    return min(timeout, FOREGROUND_TIMEOUT_MAX)
 
 
 def pid_namespace_scoped(
