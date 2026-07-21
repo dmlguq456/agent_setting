@@ -436,13 +436,8 @@ def _linked_entries(
             (source_root / "adapters/claude/scaffolds", home / "scaffolds", "hook_config"),
         ]
         entries.extend(_entry(src, dst, surface) for src, dst, surface in fixed)
-        entries.extend(
-            _mode_entries(
-                source_root / "adapters/claude/agent-modes",
-                home / "agent-modes",
-                modes,
-            )
-        )
+        # agent-modes runtime surface retired with the team agents: the unit catalog is
+        # already projected through the wholesale `roles` entry (home/roles/units).
         entries.extend(
             _children(
                 source_root / "adapters/claude/skills",
@@ -454,10 +449,8 @@ def _linked_entries(
         if roles is None:
             allowed_agents = None
         else:
+            # Runtime team agents retired 2026-07-22 (재홈): only kernel helpers project.
             allowed_agents = set(roles) | kernel_agents
-            if "external-adversary" in allowed_agents:
-                allowed_agents.remove("external-adversary")
-                allowed_agents.add("codex-review-team")
         entries.extend(
             _children(
                 source_root / "adapters/claude/agents",

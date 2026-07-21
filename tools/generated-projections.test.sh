@@ -181,8 +181,7 @@ grep -Fq 'five-field confirmation card' "$ROOT/adapters/codex/skills/analyze-pro
 grep -Fq 'five-field confirmation card' "$ROOT/adapters/opencode/skills/analyze-project/SKILL.md"
 
 for figure_contract in \
-  "$ROOT/roles/modes/material/figure-gen.md" \
-  "$ROOT/adapters/claude/agent-modes/material/figure-gen.md" \
+  "$ROOT/roles/units/material/figure-gen.md" \
   "$ROOT/adapters/codex/modes/material/figure-gen.md"; do
   grep -Fq 'METRIC_BAND_HZ' "$figure_contract" || {
     echo "not ok - metric/display separation missing from $figure_contract" >&2

@@ -368,3 +368,13 @@ These rules close three gaps: a broken trail caused by over-creating plans for q
 # Capability route topology
 
 Every entry capability resolves through `capabilities/topologies.json`, the machine-readable execution-topology source. Intensity, topology class, worker kind, transport, DAG nodes, write scopes, promotion signals, and completion gates remain separate axes. `utilities/capability-route.py` compiles an immutable route bound to the registry digest, source commit, physical absolute working directory, artifact root, and transport evidence. Adapters may project compact summaries and pointers, but must not copy the graph into bootstrap or Skill metadata.
+
+The route compiler is **enforced** (promoted from report-only, 2026-07-22): every node
+references a unit in `roles/units/`, and routing happens at entry only — a
+dispatch-depth-2 worker never routes and never selects another worker. Enumerated
+recipes are curated fast paths. For a request no recipe enumerates, the entry composes a
+node graph from the same unit catalog (**compose-on-demand**): the composed graph passes
+the same validator, is hash-sealed exactly like a recipe route, is marked
+`composed: true`, and still requires the §0.4 route card. Composition changes route
+*shape only* — it never bypasses the §0.1 spec/artifact-order gates, never grants
+dispatch depth 3, and never substitutes for a capability's own completion gates.

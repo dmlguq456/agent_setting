@@ -269,14 +269,14 @@ def main() -> int:
         print(f"agent={path.stem} bytes={size_bytes}")
     surfaces["native-bootstrap:agents-total"] = agents_total
     print(f"surface=native-bootstrap-agents bytes={agents_total} path={agents_dir.relative_to(root)}")
-    modes_dir = root / "adapters/claude/agent-modes"
+    modes_dir = root / "roles/units"
     modes_total = sum(utf8_bytes(path) for path in sorted(modes_dir.rglob("*.md")))
     if modes_dir.is_dir():
         for group in sorted(path for path in modes_dir.iterdir() if path.is_dir()):
             group_bytes = sum(utf8_bytes(path) for path in group.rglob("*.md"))
-            print(f"mode-group={group.name} bytes={group_bytes}")
-    surfaces["native-bootstrap:agent-modes-total"] = modes_total
-    print(f"surface=native-bootstrap-agent-modes bytes={modes_total} path={modes_dir.relative_to(root)}")
+            print(f"unit-family={group.name} bytes={group_bytes}")
+    surfaces["unit-catalog:total"] = modes_total
+    print(f"surface=unit-catalog bytes={modes_total} path={modes_dir.relative_to(root)}")
 
     print("\n[skill-metadata]")
     codex_local, codex_local_path, codex_local_count, codex_local_names = skill_meta(root / "adapters/codex/skills")

@@ -108,20 +108,25 @@ The default role for a standard+ conductor is `deep orchestrator`. Do not alias 
 
 Every adapter maps portable roles to concrete runtime models, tools, and prompt profiles as a quality-reproduction contract. Main or the parent orchestrator explicitly chooses a role or concrete model/effort for every dispatched job; wrappers do not silently choose a default. Update and read core before changing adapter maps or generated agents.
 
-### §2.3. Role Operation Matrix
+### §2.3. Unit Catalog and Role Binding
 
-| Role family | Portable role | Operation |
-|---|---|---|
-| `plan-team` | deep maker | Planning and architecture |
-| `qa-team` | variable reviewer/verifier | Rigor-selected plan, test, code, and security checks; test owns final evidence and security review owns adversarial code checks |
-| `research-team` | variable research reviewer | Deep maker/reviewer by default; fast fact-checker or reviewer for narrow/light work |
-| `material-team` | deep maker plus fast tool workers | Fast browser/PDF/image collection; deep figure and data synthesis |
-| `dev-team` | fast implementer by default | Routine implementation; escalate complex API or library design to deep maker |
-| `design-team` | deep maker plus fast verifier | Deep maker, nuance-dependent critic, and fast mechanical verifier |
-| `editorial-team` | deep editor/maker plus fast reviewer | Translation and polish use deep editorial judgment; review uses fast reviewer |
-| external review wrapper | external adversary orchestrator | Independent engine performs review; wrapper only invokes and summarizes |
+The former runtime team agents are re-homed (2026-07-22, user decision: 승격+재홈) into the
+portable **unit catalog** at `roles/units/<family>/<unit>.md`. A unit is the single
+declaration of one dispatchable behavior atom; its frontmatter binds the portable role
+name, worker type, floor, and I/O semantics (`roles/units/_schema.md` is the authoring
+contract). `family` is a grouping label only — no runtime team agent exists on any
+harness; per-harness native agents are reduced to kernel helpers (e.g. `memory-scout`).
 
-For standard+ code stage dispatch, choose explicitly: code-plan uses deep maker; code-execute uses fast implementer unless complexity warrants deep maker; code-test uses the variable reviewer/verifier budget derived from intensity; and code-report uses fast writer.
+Role binding rules:
+
+- Every topology node references a catalog unit; the node's `role` must equal the unit's
+  `role` frontmatter, and concrete models still resolve per adapter through
+  `models.conf` — a unit never names a model.
+- Cross-harness review (including the hostile external-adversary pass) is realized by
+  dispatching the relevant review unit to a different harness through the standard
+  transport; there is no separate wrapper-team agent.
+
+For standard+ code stage dispatch, choose explicitly: code-plan uses deep maker; code-execute uses fast implementer unless complexity warrants deep maker; code-test uses the variable reviewer/verifier budget derived from intensity; and code-report uses fast writer (`editorial/report`).
 
 ---
 

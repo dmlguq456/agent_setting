@@ -24,7 +24,9 @@ CONFIG_SUFFIX = "config/models.conf"
 # Whole-file exemptions (generated projections, display palettes, tests, fixtures).
 EXEMPT_SUBSTRINGS = (
     "/config/models.conf",              # the SoT itself
-    "/agents/",                         # generated codex tomls + native agent files (see note)
+    "/agents/memory-scout",             # kernel helper, hand-authored per adapter (ONLY agents exemption)
+    "/node_modules/",                   # vendored third-party code, not a harness surface
+    "/roles/units/",                    # unit catalog owned by check-unit-config.py
     "/statusline.sh",                   # model-family -> color palette (display only)
     "/tools/fleet/",                    # Fleet render/demo palettes and fixtures (display only)
     "/loops/drill/",                    # drill fixtures pin explicit models on purpose
