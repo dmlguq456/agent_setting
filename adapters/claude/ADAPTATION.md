@@ -89,8 +89,8 @@ The current Claude distiller mapping is:
 
 | Portable worker role | Claude realization |
 |---|---|
-| `fast distiller` / turn-counter add-only worker | `adapters/claude/bin/mem-distill-worker.sh` maps `fast-distiller` to detached `claude -p` default `claude-sonnet-4-6` |
-| `deep curator` / SessionEnd action worker | `adapters/claude/bin/mem-distill-worker.sh` maps `deep-curator` to detached `claude -p` default `claude-opus-4-8` |
+| `fast distiller` / turn-counter add-only worker | `adapters/claude/bin/mem-distill-worker.sh` maps `fast-distiller` to the mini lifecycle tier declared in `adapters/claude/config/models.conf` |
+| `deep curator` / SessionEnd action worker | `adapters/claude/bin/mem-distill-worker.sh` maps `deep-curator` to the curate lifecycle tier (light) declared in `adapters/claude/config/models.conf` |
 
 `hooks/mem-distill-dispatch.sh` keeps the existing Claude behavior: opt-in via
 `MEM_DISTILL_ENABLE=1`, recursion guard through `MEM_DISTILL=1`, no-tools output

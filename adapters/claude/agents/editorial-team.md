@@ -2,7 +2,7 @@
 name: 편집팀
 description: "Router for reviewing and revising artifacts that users or external readers will read directly, regardless of language. Modes: translate, polish, and read-only review. Used for final passes on autopilot-draft, autopilot-research, code-report, audit reports, draft-strategy, and user-facing plan mirrors. Not used for agent instruction files such as runtime bootstraps, Skill files, agent routers, core contracts, or memory. Reads <agent-home>/agent-modes/editorial/<mode>.md as the canonical mode persona."
 tools: Read, Write, Edit, Grep, Glob
-model: opus
+model: fable
 color: cyan
 memory: project
 metadata:

@@ -203,10 +203,11 @@ Expose them to Codex by symlinking each generated `*.toml` file into
 `codex_setting/codex-agents` as the projection source. The TOML files define
 the required Codex custom agent fields (`name`, `description`, and
 `developer_instructions`) plus Codex-native runtime config fields: `model`,
-`model_reasoning_effort`, and `sandbox_mode`. Adapter defaults use
-`gpt-5.6-luna` for fast review/tool workers, `gpt-5.6-terra` for fast
-implementation and balanced orchestration, and `gpt-5.6-sol` for deep/demanding
-workers, and read-only sandboxing for QA, external-adversary, and memory-scout
+`model_reasoning_effort`, and `sandbox_mode`. Adapter model defaults are derived
+from `adapters/codex/config/models.conf` (the sole source of concrete Codex model
+IDs): the light tier for fast review/tool workers, the deep tier for fast
+implementation and deep/demanding workers, the light tier for balanced
+orchestration, and read-only sandboxing for QA, external-adversary, and memory-scout
 agents. The generated instructions also encode role-specific runtime boundaries
 such as QA read-only behavior, depth-one delegation, write preflight
 requirements, and external-adversary independence. Mixed or variable role
@@ -323,11 +324,11 @@ The Codex adapter maps portable roles from `core/CONVENTIONS.md §2` to equivale
 
 | Portable role | Codex adapter expectation |
 |---|---|
-| `fast reviewer` / `fast fact-checker` / `fast writer` / fast tool worker | Luna (`gpt-5.6-luna`) low/medium for surface, coverage, format, and verbatim matching |
-| `fast implementer` | Terra (`gpt-5.6-terra`) medium |
-| `deep reviewer` / `deep maker` / deep editor / `deep orchestrator` | Sol (`gpt-5.6-sol`) high for methodology, domain, architecture, and safety judgment |
+| `fast reviewer` / `fast fact-checker` / `fast writer` / fast tool worker | light tier (`config/models.conf`) for surface, coverage, format, and verbatim matching |
+| `fast implementer` | deep tier model at the fast-implementer effort (`config/models.conf`) |
+| `deep reviewer` / `deep maker` / deep editor / `deep orchestrator` | deep tier (`config/models.conf`) for methodology, domain, architecture, and safety judgment |
 | `external adversary` | Prefer a model, configuration, or process different from the primary Codex session; otherwise report unavailable and fall back to thorough |
-| `orchestrator` | balanced mechanical coordination; Terra medium via the named `AGENT_MODEL_BALANCED` override, never Luna |
+| `orchestrator` | light tier for balanced mechanical coordination, via the named `AGENT_MODEL_BALANCED` override |
 
 Codex wrappers expose this mapping through `AGENT_MODEL_TERRA`, `AGENT_MODEL_LUNA`, `AGENT_MODEL_DEEP`, `AGENT_MODEL_BALANCED`, `AGENT_MODEL_EXTERNAL`, and matching reasoning variables.
 Compatibility knobs `AGENT_MODEL_FAST`, `AGENT_REASONING_FAST`,

@@ -1,6 +1,11 @@
 #!/usr/bin/env sh
 set -eu
 
+# Concrete provider/model-id strings live only in ../config/models.conf.
+# This script owns role->bucket->tier routing (semantic), never model literals.
+_ocdir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$_ocdir/../config/models.conf"
+
 usage() {
   cat <<'EOF'
 usage: role-map.sh <portable-role>
@@ -67,19 +72,19 @@ esac
 
 case "$family" in
   fast)
-    model=${AGENT_MODEL_FAST:-opencode-default}
-    variant=${AGENT_VARIANT_FAST:-runtime-default}
-    [ "$model" = "opencode-default" ] && status=default || status=configured
+    model=${AGENT_MODEL_FAST:-$CFG_TIER_MINI_MODEL}
+    variant=${AGENT_VARIANT_FAST:-$CFG_TIER_MINI_VARIANT}
+    [ -n "${AGENT_MODEL_FAST:-}" ] && status=configured || status=default
     ;;
   balanced)
-    model=${AGENT_MODEL_BALANCED:-${AGENT_MODEL_ORCHESTRATOR:-opencode-default}}
-    variant=${AGENT_VARIANT_BALANCED:-${AGENT_VARIANT_ORCHESTRATOR:-runtime-default}}
-    [ "$model" = "opencode-default" ] && status=default || status=configured
+    model=${AGENT_MODEL_BALANCED:-${AGENT_MODEL_ORCHESTRATOR:-$CFG_TIER_LIGHT_MODEL}}
+    variant=${AGENT_VARIANT_BALANCED:-${AGENT_VARIANT_ORCHESTRATOR:-$CFG_TIER_LIGHT_VARIANT}}
+    { [ -n "${AGENT_MODEL_BALANCED:-}" ] || [ -n "${AGENT_MODEL_ORCHESTRATOR:-}" ]; } && status=configured || status=default
     ;;
   deep)
-    model=${AGENT_MODEL_DEEP:-opencode-default}
-    variant=${AGENT_VARIANT_DEEP:-runtime-default}
-    [ "$model" = "opencode-default" ] && status=default || status=configured
+    model=${AGENT_MODEL_DEEP:-$CFG_TIER_DEEP_MODEL}
+    variant=${AGENT_VARIANT_DEEP:-$CFG_TIER_DEEP_VARIANT}
+    [ -n "${AGENT_MODEL_DEEP:-}" ] && status=configured || status=default
     ;;
   external)
     model=${AGENT_MODEL_EXTERNAL:-external-command}

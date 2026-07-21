@@ -1,6 +1,10 @@
 #!/usr/bin/env sh
 set -eu
 
+# Concrete model IDs and default efforts live only in ../config/models.conf.
+_cmdir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$_cmdir/../config/models.conf"
+
 usage() {
   cat <<'EOF'
 usage: role-map.sh <portable-role|role-profile|pipeline-stage>
@@ -174,18 +178,18 @@ fi
 
 case "$family" in
   fast)
-    model=${AGENT_MODEL_LUNA:-${AGENT_MODEL_FAST:-gpt-5.6-luna}}
-    reasoning=${AGENT_REASONING_LUNA:-${AGENT_REASONING_FAST:-medium}}
+    model=${AGENT_MODEL_LUNA:-${AGENT_MODEL_FAST:-$CFG_TIER_LIGHT_MODEL}}
+    reasoning=${AGENT_REASONING_LUNA:-${AGENT_REASONING_FAST:-$CFG_TIER_LIGHT_EFFORT}}
     [ -n "${AGENT_MODEL_LUNA:-}${AGENT_REASONING_LUNA:-}${AGENT_MODEL_FAST:-}${AGENT_REASONING_FAST:-}" ] && status=configured || status=default
     ;;
   implementer)
-    model=${AGENT_MODEL_TERRA:-gpt-5.6-terra}
-    reasoning=${AGENT_REASONING_TERRA:-medium}
-    [ -n "${AGENT_MODEL_TERRA:-}${AGENT_REASONING_TERRA:-}" ] && status=configured || status=default
+    model=${AGENT_MODEL_SOL:-${AGENT_MODEL_DEEP:-$CFG_TIER_DEEP_MODEL}}
+    reasoning=${AGENT_REASONING_SOL:-$CFG_ROLE_FAST_IMPLEMENTER_EFFORT}
+    [ -n "${AGENT_MODEL_SOL:-}${AGENT_REASONING_SOL:-}${AGENT_MODEL_DEEP:-}" ] && status=configured || status=default
     ;;
   deep)
-    model=${AGENT_MODEL_DEEP:-gpt-5.6-sol}
-    reasoning=${AGENT_REASONING_DEEP:-high}
+    model=${AGENT_MODEL_DEEP:-$CFG_TIER_DEEP_MODEL}
+    reasoning=${AGENT_REASONING_DEEP:-$CFG_TIER_DEEP_EFFORT}
     [ -n "${AGENT_MODEL_DEEP:-}${AGENT_REASONING_DEEP:-}" ] && status=configured || status=default
     ;;
   external)
@@ -194,15 +198,15 @@ case "$family" in
     elif [ -n "${AGENT_EXTERNAL_CMD:-}" ] && [ -z "${AGENT_MODEL_EXTERNAL:-}" ]; then
       model=external-command
     else
-      model=${AGENT_MODEL_EXTERNAL:-gpt-5.6-sol}
+      model=${AGENT_MODEL_EXTERNAL:-$CFG_TIER_DEEP_MODEL}
     fi
-    reasoning=${AGENT_REASONING_EXTERNAL:-high}
+    reasoning=${AGENT_REASONING_EXTERNAL:-$CFG_TIER_DEEP_EFFORT}
     [ "$available" -eq 1 ] && status=configured
     ;;
   balanced)
-    model=${AGENT_MODEL_BALANCED:-${AGENT_MODEL_ORCHESTRATOR:-${AGENT_MODEL_TERRA:-gpt-5.6-terra}}}
-    reasoning=${AGENT_REASONING_BALANCED:-${AGENT_REASONING_ORCHESTRATOR:-${AGENT_REASONING_TERRA:-medium}}}
-    [ -n "${AGENT_MODEL_BALANCED:-}${AGENT_REASONING_BALANCED:-}${AGENT_MODEL_ORCHESTRATOR:-}${AGENT_REASONING_ORCHESTRATOR:-}${AGENT_MODEL_TERRA:-}${AGENT_REASONING_TERRA:-}" ] && status=configured || status=default
+    model=${AGENT_MODEL_BALANCED:-${AGENT_MODEL_ORCHESTRATOR:-$CFG_TIER_LIGHT_MODEL}}
+    reasoning=${AGENT_REASONING_BALANCED:-${AGENT_REASONING_ORCHESTRATOR:-$CFG_TIER_LIGHT_EFFORT}}
+    [ -n "${AGENT_MODEL_BALANCED:-}${AGENT_REASONING_BALANCED:-}${AGENT_MODEL_ORCHESTRATOR:-}${AGENT_REASONING_ORCHESTRATOR:-}" ] && status=configured || status=default
     ;;
   role-set)
     model=role-set

@@ -446,10 +446,11 @@ AGENT_EXTERNAL_CMD
 ```
 
 When no override is configured, the adapter reports defaults for non-external
-roles: fast reviewer/fact-checker/writer/tool=`gpt-5.6-luna`/medium,
-fast implementer=`gpt-5.6-terra`/medium, deep roles including `deep orchestrator`
-=`gpt-5.6-sol`/high, and retained balanced `orchestrator`=`gpt-5.6-terra`/medium
-through the named `AGENT_MODEL_BALANCED` override. `external adversary` remains unavailable
+roles from `adapters/codex/config/models.conf` (the sole source of concrete model
+IDs): fast reviewer/fact-checker/writer/tool = light tier, fast implementer = deep
+tier at the fast-implementer effort, deep roles including `deep orchestrator` = deep
+tier, and balanced `orchestrator` = light tier through the named `AGENT_MODEL_BALANCED`
+override. `external adversary` remains unavailable
 unless `AGENT_MODEL_EXTERNAL` or `AGENT_EXTERNAL_CMD` is configured, because
 the independent-adversary contract is stronger than the existence of a
 generated `external-adversary.toml` projection. `AGENT_EXTERNAL_CMD` can route
@@ -641,12 +642,12 @@ gate). Only the synchronous orchestration shell and the prompts are Codex-owned.
 Two tiers + one manual surface:
 
 1. `distill-delta` reads Codex JSONL session logs and emits transcript delta text.
-2. **turn-nudge = increment (fast tier, `gpt-5.4-mini`)** — add-only. The prompt
+2. **turn-nudge = increment (mini tier via `config/models.conf`)** — add-only. The prompt
    is add-only, and the shared applier now **enforces** add-only in `increment`
    mode (id-mutations `prune/merge/graduate/reattribute/reinforce` are rejected
    outside `curate`), so a prompt-injected transcript cannot bypass the snapshot
    whitelist (P-25).
-3. **session-end = curate (deep tier, `gpt-5.5`)** — snapshot-grounded
+3. **session-end = curate (light tier via `config/models.conf`)** — snapshot-grounded
    `prune/merge/graduate/consolidate`. The worker captures the current-project
    snapshot + artifact state, and id-mutations are gated by the `--snapshot-ids`
    membership whitelist (`member()` in the shared applier). Per-mode model tiers

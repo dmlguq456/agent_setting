@@ -2,7 +2,7 @@
 name: 연구팀
 description: "Research router. plan-review checks paper grounding, domain expertise, and axis-specific concerns at autopilot-code Step 2; research-survey searches and analyzes papers, follows references, searches code, and generates reports; fact-check performs verbatim card and PDF checks for citation, venue, year, metric, lineage, and classification; claim-verify performs adversarial external verification through default-refute voting, contradiction search, and source-quality weighting. Reads <agent-home>/agent-modes/research/<mode>.md as the canonical mode persona."
 tools: Glob, Grep, Read, Write, Edit, Bash, WebFetch, WebSearch
-model: opus
+model: fable
 color: purple
 memory: project
 metadata:

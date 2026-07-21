@@ -22,12 +22,23 @@ case "$mode" in
   *) echo "mem-distill-worker: unknown mode: $mode" >&2; exit 64 ;;
 esac
 
+# Concrete models come only from ../config/models.conf. fast-distiller is the
+# turn-nudge/increment tier; deep-curator is the session-end curate tier.
+_mmdir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+. "$_mmdir/../config/models.conf"
+_tier_model() {
+  case "$1" in
+    deep) printf '%s' "$CFG_TIER_DEEP_MODEL" ;;
+    mini) printf '%s' "$CFG_TIER_MINI_MODEL" ;;
+    *) printf '%s' "$CFG_TIER_LIGHT_MODEL" ;;
+  esac
+}
 case "$model" in
   fast-distiller)
-    model="${CLAUDE_MEM_DISTILL_MODEL:-claude-sonnet-4-6}"
+    model="${CLAUDE_MEM_DISTILL_MODEL:-$(_tier_model "$CFG_LIFECYCLE_NUDGE")}"
     ;;
   deep-curator)
-    model="${CLAUDE_MEM_DISTILL_MODEL_SESSIONEND:-claude-opus-4-8}"
+    model="${CLAUDE_MEM_DISTILL_MODEL_SESSIONEND:-$(_tier_model "$CFG_LIFECYCLE_CURATE")}"
     ;;
 esac
 

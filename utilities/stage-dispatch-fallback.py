@@ -242,7 +242,57 @@ def capacity_attempt_identity(args, route, node, row, ordinal, model):
     return "att-" + digest[:48]
 
 
+def _adapter_models_conf(harness: str) -> dict[str, str]:
+    conf = ROOT / f"adapters/{harness}/config/models.conf"
+    cfg: dict[str, str] = {}
+    if not conf.is_file():
+        return cfg
+    for raw in conf.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, val = line.split("=", 1)
+        val = val.strip()
+        if val[:1] in ('"', "'"):
+            end = val.find(val[0], 1)
+            val = val[1:end] if end != -1 else val[1:]
+        else:
+            hidx = val.find("#")
+            if hidx != -1:
+                val = val[:hidx].strip()
+        cfg[key.strip()] = val
+    return cfg
+
+
+def capacity_cascade(harness: str) -> list[tuple[str, str]]:
+    """Ordered (model, paired) capacity-failover candidates from the adapter config."""
+    raw = _adapter_models_conf(harness).get("CFG_TIER_DEEP_FAILOVER_CASCADE", "")
+    out: list[tuple[str, str]] = []
+    for entry in raw.split():
+        model, sep, paired = entry.partition(":")
+        if model and sep and paired:
+            out.append((model, paired))
+    return out
+
+
+def capacity_cascade_next(harness: str, failed_model: str) -> tuple[str, str] | None:
+    """Next (model, paired) after failed_model in the config cascade, else None.
+
+    Capacity failover switches MODEL (a rate-limited model does not recover by
+    lowering effort), so the cascade is model-granularity: e.g. fable -> opus.
+    """
+    cascade = capacity_cascade(harness)
+    for i, (model, _paired) in enumerate(cascade):
+        if model == failed_model and i + 1 < len(cascade):
+            return cascade[i + 1]
+    return None
+
+
 def allowed_capacity_settings(harness: str, model: str, paired: str) -> bool:
+    # A model declared in the adapter capacity cascade is proved by declaration
+    # (failover-only models such as Opus are intentionally not primary tiers).
+    if (model, paired) in capacity_cascade(harness):
+        return True
     roles = ("deep maker", "deep reviewer", "deep editor", "deep orchestrator",
              "fast implementer", "fast reviewer", "fast fact checker", "fast writer",
              "fast tool worker", "orchestrator", "external adversary")
@@ -452,25 +502,34 @@ def capacity_retry(
             return "existing", retry, ""
         return "descend", retry, "capacity-retry-terminal"
 
-    paired = capacity_pair(args, row["child_harness"])
+    harness = row["child_harness"]
     failed_model = failed.get("model", "")
+    # The alternative comes from an explicit --capacity-model, else the adapter
+    # config capacity cascade (SD-59): a rate-limited model is switched, not
+    # re-tried at lower effort. Fable exhausted -> opus, SOL -> LUNA, etc.
+    alt_model = args.capacity_model
+    alt_paired = capacity_pair(args, harness)
+    if not alt_model:
+        derived = capacity_cascade_next(harness, failed_model)
+        if derived:
+            alt_model, alt_paired = derived
     rejected = ""
-    if not args.capacity_model or not paired:
+    if not alt_model or not alt_paired:
         rejected = "capacity-alternative-unpaired"
-    elif args.capacity_model in context["cooled"] or args.capacity_model == failed_model:
+    elif alt_model in context["cooled"] or alt_model == failed_model:
         rejected = "capacity-alternative-cooled"
-    elif not allowed_capacity_settings(row["child_harness"], args.capacity_model, paired):
+    elif not allowed_capacity_settings(harness, alt_model, alt_paired):
         rejected = "capacity-alternative-unproved"
     if rejected:
         attempts.append(f"{ordinal}:{tuple_key(row)}:{rejected}")
         return "descend", {}, rejected
 
     retry_id = capacity_attempt_identity(
-        args, route, node, row, ordinal, f"{args.capacity_model}/{paired}"
+        args, route, node, row, ordinal, f"{alt_model}/{alt_paired}"
     )
     retry_command = wrapper_command(
         args, route, node, row, ordinal, retry_id,
-        (args.capacity_model, paired), failed,
+        (alt_model, alt_paired), failed,
     )
     try:
         retry = subprocess.run(

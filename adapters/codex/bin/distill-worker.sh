@@ -45,9 +45,9 @@ Set CODEX_DISTILL_CONTRACT_ACCEPTED=1 only after the Codex no-tools/action
 contract has been accepted. CODEX_DISTILL_APPLY=1 is ignored and exits 69
 until that acceptance gate is set.
 
-Per-mode model tier (P-36): increment=gpt-5.4-mini, curate=gpt-5.5. Override with
-CODEX_DISTILL_MODEL (global), CODEX_DISTILL_MODEL_INCREMENT/CURATE (per mode), or the
-harness AGENT_MODEL_FAST/AGENT_MODEL_DEEP.
+Per-mode model tier: increment=nudge tier, curate=light tier, resolved from
+adapters/codex/config/models.conf (the sole source of concrete models). Override
+with CODEX_DISTILL_MODEL (global) or CODEX_DISTILL_MODEL_INCREMENT/CURATE (per mode).
 EOF
 }
 
@@ -200,15 +200,23 @@ code fences. Emit nothing when you judge that no addition is useful.
 EOF
 fi
 
-# Per-mode model tier (P-36): CODEX_DISTILL_MODEL is a global back-compat override;
-# otherwise curate=deep (gpt-5.5), increment=fast (gpt-5.4-mini), each overridable and
-# falling back to the harness AGENT_MODEL_DEEP/FAST tiers (ADAPTATION Model Mapping).
+# Per-mode model tier: concrete models come only from ../config/models.conf.
+# CODEX_DISTILL_MODEL is a global back-compat override; otherwise the mode's
+# lifecycle tier (curate=light, increment=nudge) resolves to that tier's model.
+. "$SCRIPT_DIR/../config/models.conf"
+tier_model() {
+  case "$1" in
+    deep) printf '%s' "$CFG_TIER_DEEP_MODEL" ;;
+    mini) printf '%s' "$CFG_TIER_MINI_MODEL" ;;
+    *) printf '%s' "$CFG_TIER_LIGHT_MODEL" ;;
+  esac
+}
 if [ -n "${CODEX_DISTILL_MODEL:-}" ]; then
   model="$CODEX_DISTILL_MODEL"
 elif [ "$mode" = "curate" ]; then
-  model="${CODEX_DISTILL_MODEL_CURATE:-${AGENT_MODEL_DEEP:-gpt-5.5}}"
+  model="${CODEX_DISTILL_MODEL_CURATE:-$(tier_model "$CFG_LIFECYCLE_CURATE")}"
 else
-  model="${CODEX_DISTILL_MODEL_INCREMENT:-${AGENT_MODEL_FAST:-gpt-5.4-mini}}"
+  model="${CODEX_DISTILL_MODEL_INCREMENT:-$(tier_model "$CFG_LIFECYCLE_NUDGE")}"
 fi
 
 # Hang guard: bound a silent `codex exec`. Curate receives delta, snapshot, and

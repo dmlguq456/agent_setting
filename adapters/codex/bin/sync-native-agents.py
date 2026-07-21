@@ -16,24 +16,36 @@ sys.path.insert(0, str(ROOT / "tools"))
 import harness_manifest
 
 
-PROFILE_CONFIG = {
-    "plan-team": ("gpt-5.6-sol", "high", "workspace-write"),
-    "dev-team": ("gpt-5.6-terra", "medium", "workspace-write"),
-    "qa-team": ("gpt-5.6-luna", "medium", "read-only"),
-    "research-team": ("gpt-5.6-sol", "high", "workspace-write"),
-    "material-team": ("gpt-5.6-luna", "low", "workspace-write"),
-    "design-team": ("gpt-5.6-sol", "high", "workspace-write"),
-    "editorial-team": ("gpt-5.6-sol", "high", "workspace-write"),
-    "external-adversary": ("gpt-5.6-sol", "high", "read-only"),
-}
+MODELS_CONF = ROOT / "adapters" / "codex" / "config" / "models.conf"
+
+
+def load_models_conf() -> dict[str, str]:
+    """Parse the flat KEY=value config that is the sole source of concrete models."""
+    cfg: dict[str, str] = {}
+    for raw in MODELS_CONF.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, val = line.split("=", 1)
+        key = key.strip()
+        val = val.strip()
+        if val[:1] in ('"', "'"):
+            end = val.find(val[0], 1)
+            val = val[1:end] if end != -1 else val[1:]
+        else:
+            hidx = val.find("#")
+            if hidx != -1:
+                val = val[:hidx].strip()
+        cfg[key] = val
+    return cfg
+
+
+_CFG = load_models_conf()
 
 
 EXTRA_AGENTS = {
     "memory-scout": {
         "description": "Read-only memory scout for agent-initiated deep memory reconnaissance.",
-        "model": "gpt-5.6-luna",
-        "reasoning": "low",
-        "sandbox": "read-only",
         "instructions": """You are the Codex-native memory-scout custom agent.
 This is adapter-owned output generated from core/MEMORY.md §7.4, not a Claude Agent copy.
 
@@ -189,7 +201,9 @@ def boundary_section(profile: str) -> str:
 
 
 def codex_config(profile: str) -> tuple[str, str, str]:
-    return PROFILE_CONFIG.get(profile, ("gpt-5.6-luna", "medium", "workspace-write"))
+    key = "CFG_PROFILE_" + profile.upper().replace("-", "_")
+    tier, effort, sandbox = (_CFG.get(key) or _CFG["CFG_PROFILE_DEFAULT"]).split(":")
+    return _CFG[f"CFG_TIER_{tier.upper()}_MODEL"], effort, sandbox
 
 
 def render(profile: str, portable_role: str, responsibility: str) -> str:
@@ -240,11 +254,12 @@ developer_instructions = """
 
 
 def render_extra_agent(name: str, spec: dict[str, str]) -> str:
+    model, reasoning, sandbox = codex_config(name)
     return f'''name = "{toml_string(name)}"
 description = "{toml_string(spec["description"])}"
-model = "{toml_string(spec["model"])}"
-model_reasoning_effort = "{toml_string(spec["reasoning"])}"
-sandbox_mode = "{toml_string(spec["sandbox"])}"
+model = "{toml_string(model)}"
+model_reasoning_effort = "{toml_string(reasoning)}"
+sandbox_mode = "{toml_string(sandbox)}"
 developer_instructions = """
 {toml_multiline(spec["instructions"])}"""
 '''
