@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Generate OpenCode-native Agent projections from portable role profiles."""
+"""Generate OpenCode-native Agent projections for kernel agents.
+
+Team agents are retired: former team behavior lives in the portable unit catalog
+(`roles/units/**`) and runs as dispatched depth-2 nodes, never as native agents.
+Only kernel helpers (`kernel.agents` in `harness-manifest.json`) project here.
+"""
 
 from __future__ import annotations
 
@@ -16,7 +21,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 import harness_manifest
 
 
-EXTRA_AGENTS = {
+KERNEL_AGENTS = {
     "memory-scout": {
         "description": "Read-only memory scout for agent-initiated deep memory reconnaissance.",
         "instructions": """You are the OpenCode-native memory-scout custom agent.
@@ -40,117 +45,15 @@ Output at most 15 lines:
     }
 }
 
+# Backward-compatible alias for callers that patched/consumed the old constant name.
+EXTRA_AGENTS = KERNEL_AGENTS
+
 
 def compact(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip()).replace('"', "'")
 
 
-def strip_code(text: str) -> str:
-    text = text.strip()
-    if text.startswith("`") and text.endswith("`"):
-        return text[1:-1]
-    return text
-
-
-def clean_role_note(text: str) -> str:
-    return re.sub(r"`([^`]*)`", r"\1", text.strip())
-
-
-def mapper_role(profile: str, role_note: str) -> str:
-    note = clean_role_note(role_note).lower()
-    if "external adversary" in note:
-        return "external adversary"
-    if "fast implementer" in note:
-        return "fast implementer"
-    if "fast reviewer" in note:
-        return "fast reviewer"
-    if "fast fact" in note:
-        return "fast fact checker"
-    if "fast tool worker" in note:
-        return "fast tool worker"
-    if "deep reviewer" in note:
-        return "deep reviewer"
-    if "deep editor" in note:
-        return "deep editor"
-    if "deep maker" in note:
-        return "deep maker"
-    profile_defaults = {
-        "qa-team": "fast reviewer",
-        "research-team": "deep reviewer",
-        "editorial-team": "deep editor",
-    }
-    return profile_defaults.get(profile, "fast reviewer")
-
-
-def role_rows(text: str) -> list[tuple[str, str, str]]:
-    rows: list[tuple[str, str, str]] = []
-    for raw in text.splitlines():
-        line = raw.strip()
-        if not line.startswith("|") or line.startswith("|---"):
-            continue
-        cells = [cell.strip() for cell in line.strip("|").split("|")]
-        if len(cells) < 4 or cells[0] == "Role profile":
-            continue
-        rows.append((strip_code(cells[0]), strip_code(cells[1]), compact(cells[2])))
-    return rows
-
-
-def render(profile: str, portable_role: str, responsibility: str) -> str:
-    role_note = clean_role_note(portable_role)
-    mapped_role = mapper_role(profile, role_note)
-    read_only = profile in {"qa-team", "external-adversary"}
-    tool_lines = ["  task: false"]
-    permission_lines = ["  task: deny"]
-    if read_only:
-        tool_lines.extend(["  edit: false", "  write: false"])
-        permission_lines.append("  edit: deny")
-    description = compact(
-        f"OpenCode-native agent for portable role profile {profile}. "
-        f"Use when delegating work whose primary responsibility is: {responsibility}"
-    )
-    return f"""---
-description: "{description}"
-mode: subagent
-tools:
-{chr(10).join(tool_lines)}
-permission:
-{chr(10).join(permission_lines)}
----
-
-You are the OpenCode-native realization of the portable `{profile}` role
-profile. This is adapter-owned output generated from `harness-manifest.json`, not a non-OpenCode Agent copy.
-
-## Source
-
-- Portable metadata source: `harness-manifest.json`
-- Portable behavior source: `roles/README.md`
-- Mode inventory: `roles/MODES.md`
-- Runtime role mapper: `adapters/opencode/bin/preflight.sh role {mapped_role}`
-- Runtime mode mapper: `adapters/opencode/bin/preflight.sh mode-info <family/mode>`
-- Bootstrap: `adapters/opencode/AGENTS.md`
-
-## Role Contract
-
-- Role profile: `{profile}`
-- Portable model role note: `{role_note}`
-- OpenCode role-map input: `{mapped_role}`
-- Primary responsibility: {responsibility}
-
-## Use
-
-1. Read `roles/README.md` and the task-relevant entry in `roles/MODES.md`.
-2. Use `adapters/opencode/bin/preflight.sh role {mapped_role}` for concrete
-   model/variant availability before assuming a model tier.
-3. Use `adapters/opencode/bin/preflight.sh mode-info <family/mode>` before
-   applying a mode persona.
-4. Run normal harness guards through `adapters/opencode/bin/preflight.sh`.
-
-Do not use non-OpenCode Agent files as OpenCode-native source. Runtime-specific
-Agent files are compatibility/reference surfaces only.
-"""
-
-
-def render_extra_agent(name: str, spec: dict[str, str]) -> str:
+def render_kernel_agent(name: str, spec: dict[str, str]) -> str:
     tool_lines = ["  task: false", "  edit: false", "  write: false"]
     permission_lines = ["  task: deny", "  edit: deny"]
     description = compact(spec["description"])
@@ -172,13 +75,13 @@ def main() -> int:
     args = parser.parse_args()
 
     manifest = harness_manifest.load()
-    rows = [
-        (profile, spec["portable_role"], spec["responsibility"])
-        for profile, spec in manifest["roles"].items()
-    ]
-    expected = {OUT / profile / f"{profile}.md": render(profile, role, responsibility) for profile, role, responsibility in rows}
-    for name, spec in EXTRA_AGENTS.items():
-        expected[OUT / name / f"{name}.md"] = render_extra_agent(name, spec)
+    expected: dict[Path, str] = {}
+    for name in manifest["kernel"]["agents"]:
+        spec = KERNEL_AGENTS.get(name)
+        if spec is None:
+            print(f"unknown kernel agent (no OpenCode projection defined): {name}", file=sys.stderr)
+            return 1
+        expected[OUT / name / f"{name}.md"] = render_kernel_agent(name, spec)
 
     stale: list[str] = []
     for path, body in expected.items():

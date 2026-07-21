@@ -17,7 +17,7 @@ Outputs: `00_init/environment_check.md` and `design_state.yaml`.
 Invoke `design-refs` with the task and optional image paths. Collect:
 
 - user-provided images by attachment or path;
-- external references, optionally through `Agent(자료팀, mode=web-image-search)`;
+- external references, optionally through dispatching the `material/web-image-search` unit;
 - existing design systems, paper figures, and prior-cycle assets.
 
 Outputs: `01_refs/brief.md` and `_internal/references/` containing images, URLs, and notes.
@@ -36,7 +36,7 @@ Extend an existing token source; do not overwrite it wholesale.
 
 ### Phase 3: design-components
 
-Invoke `design-components` with the design path. It calls `Agent(디자인팀, mode=maker)`, which must render, inspect, and revise its own result.
+Invoke `design-components` with the design path. That stage runs as the `design/maker` unit, which must render, inspect, and revise its own result.
 
 Outputs under `03_components/` vary by scope:
 
@@ -54,8 +54,8 @@ Skip at `--intensity quick`; otherwise invoke `design-review` with the design pa
 
 It runs two gates:
 
-1. `Agent(디자인팀, mode=verifier)` independently checks console, layout, and token breakage, then reports `vision_passrate`.
-2. `Agent(디자인팀, mode=critic)` inspects rendered images across six quality axes.
+1. The `design/visual-verify` sibling node (unit `design/verifier`) independently checks console, layout, and token breakage, then reports `vision_passrate`.
+2. The `design/critic-review` sibling node (unit `design/critic`) inspects rendered images across six quality axes; the two nodes run concurrently with disjoint scopes.
 
 Outputs: `04_review/verifier.md` with verdict, breakage, pass rate, status, and failure reasons; plus `04_review/critique.md`.
 

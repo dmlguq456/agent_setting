@@ -446,10 +446,10 @@
 <script type="application/json" id="hub-data">
 {
   "generated_from": "harness-manifest.json + adapter-owned hook/loop/track inputs (adapters/claude/settings.json, loops/README.md, tools/build-manifest.py)",
-  "manifest_version": "1.1.0",
+  "manifest_version": "1.2.0",
   "topology_registry": {
     "source": "capabilities/topologies.json",
-    "digest": "sha256:432cce7b1db46c1e743c3c6188b8969063a97d6c654e3742a7b876968d259e05",
+    "digest": "sha256:17ac6ae656c5a9f6054195f290cd9723b1de57a28072347d1fbbbbe34602e6f9",
     "capabilities": 10,
     "recipes": 22
   },
@@ -817,98 +817,11 @@
   ],
   "agents": [
     {
-      "slug": "agent__design-team",
-      "name": "design-team",
-      "model": "",
-      "modes": [
-        "design/critic",
-        "design/maker",
-        "design/verifier"
-      ],
-      "blurb": "Visual making, critique, and independent breakage verification"
-    },
-    {
-      "slug": "agent__dev-team",
-      "name": "dev-team",
-      "model": "",
-      "modes": [
-        "dev/backend",
-        "dev/frontend",
-        "dev/new-lib",
-        "dev/refactor"
-      ],
-      "blurb": "Implement backend/frontend/refactor/new-lib work through mode personas"
-    },
-    {
-      "slug": "agent__editorial-team",
-      "name": "editorial-team",
-      "model": "",
-      "modes": [
-        "editorial/polish",
-        "editorial/review",
-        "editorial/translate"
-      ],
-      "blurb": "User-facing wording, translation, polish, and review"
-    },
-    {
-      "slug": "agent__external-adversary",
-      "name": "external-adversary",
-      "model": "",
-      "modes": [],
-      "blurb": "Independent hostile review through a different runtime/process"
-    },
-    {
-      "slug": "agent__material-team",
-      "name": "material-team",
-      "model": "",
-      "modes": [
-        "material/browser-fetch",
-        "material/data-script",
-        "material/figure-gen",
-        "material/pdf-extract",
-        "material/web-image-search"
-      ],
-      "blurb": "Fetch, extract, visualize, and analyze supporting materials"
-    },
-    {
       "slug": "agent__memory-scout",
       "name": "memory-scout",
       "model": "",
       "modes": [],
       "blurb": "Kernel agent active in every product profile."
-    },
-    {
-      "slug": "agent__plan-team",
-      "name": "plan-team",
-      "model": "",
-      "modes": [],
-      "blurb": "Read source and artifacts, produce or refine implementation plans"
-    },
-    {
-      "slug": "agent__qa-team",
-      "name": "qa-team",
-      "model": "",
-      "modes": [
-        "qa/code-review",
-        "qa/data-curate",
-        "qa/ml-debug",
-        "qa/plan-review",
-        "qa/security-review",
-        "qa/test"
-      ],
-      "blurb": "Read-only code, plan, test, ML, data, and security review"
-    },
-    {
-      "slug": "agent__research-team",
-      "name": "research-team",
-      "model": "",
-      "modes": [
-        "research/claim-verify",
-        "research/fact-check",
-        "research/plan-review",
-        "research/research-survey"
-      ],
-      "blurb": "Paper-grounded review, survey, fact-check, and adversarial claim verification"
     }
   ],
   "hooks": [

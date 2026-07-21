@@ -120,7 +120,7 @@ The Korean request strings below are quoted multilingual examples. They are not 
 → Step 4 Phase 1.5: verify the checkpoint before use
    inference command: use the accumulated Quick verify command from research/asr-conformer/07_resources
    result: ✅ one sample WAV produces valid text → proceed to Phase 2
-→ Step 4 Phase 2: `개발팀` new-lib
+→ Step 4 Phase 2: `dev/new-lib` unit
    - model/Conformer/ (preferred layers only: MHSA / Conv / FFN)
    - train.py / eval.py / config.yaml skeleton (Lightning)
    - cli.py (Typer subcommands: train / eval / inference)

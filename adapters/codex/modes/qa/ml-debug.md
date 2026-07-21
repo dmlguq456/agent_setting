@@ -6,7 +6,7 @@ inventory. It is adapter-owned output, not a legacy runtime mode copy.
 ## Source Order
 
 1. Read `roles/MODES.md`.
-2. Read `roles/modes/qa/ml-debug.md` for the portable mode contract.
+2. Read `roles/units/qa/ml-debug.md` for the portable mode contract.
 3. Run `adapters/codex/bin/preflight.sh mode-info qa/ml-debug`.
 4. Obey the reported status, tool contract, runtime surface, and fallback before claiming support.
 
@@ -27,34 +27,65 @@ inventory. It is adapter-owned output, not a legacy runtime mode copy.
 
 ## Projected Portable Mode Contract
 
-The following contract is projected from `roles/modes/qa/ml-debug.md` with non-Codex runtime
+The following contract is projected from `roles/units/qa/ml-debug.md` with non-Codex runtime
 surfaces rewritten to Codex-native preflight/tool-contract wording.
 
-# Mode: ml-debug
+---
+unit: qa/ml-debug
+family: qa
+role: deep reviewer
+worker_type: review
+floor: high
+read_only: true
+stance: _shared/stance.md
+io:
+  verdict: [diagnosed, inconclusive]
+  return: _shared/dual-io.md
+tools: []
+branches: [direct]
+aliases: {}
+---
 
-> The QA-role router reads this file, then adopts the persona. Read-only: implementation owns fixes.
+# Unit: qa/ml-debug
 
 Diagnose ML training incidents by reading code, parsing logs, and ranking hypotheses.
+**Read-only** — implementation owns fixes; you only diagnose, verify, and delegate.
+
+## Symptoms → Likely causes
 
 | Symptom | Common causes to investigate |
 |---|---|
-| NaN/Inf loss | Missing clipping, excessive learning rate, mixed-precision overflow, unstable softmax, log of zero |
-| Loss spike | Outlier batch, scheduler conflict, exploding gradients, dataloader race |
-| OOM | Batch size, missing accumulation/checkpointing, retained tensors |
-| No convergence | Data leakage, incorrect loss, initialization, low learning rate, missing normalization |
-| Attention collapse | Similar heads, temperature, positional encoding |
+| NaN/Inf loss | Missing gradient clipping, excessive learning rate, mixed-precision overflow, unstable/diverging softmax, log of zero |
+| Loss spike | Outlier batch, LR-scheduler conflict, exploding gradients, dataloader race |
+| OOM | Batch size, missing gradient accumulation, missing activation checkpointing, retained/cached tensors (e.g. calling `.backward()` while accumulating the un-detached loss instead of `loss.item()`) |
+| No convergence | Data leakage, incorrect loss function, weight initialization, learning rate too low, missing normalization |
+| Attention collapse | Many heads with identical patterns, temperature issues, missing/incorrect positional encoding |
 | GAN mode collapse | Overpowering discriminator, insufficient regularization |
-| Distributed mismatch | NCCL settings, missing DDP wrap, unsynchronized logging |
+| Distributed rank mismatch | NCCL settings, missing DDP wrap, unsynchronized logging (e.g. `sync_dist=False`) |
+| Slow training | Data-loading bottleneck (`num_workers`, `pin_memory`), GPU underutilization, unnecessary CPU↔GPU transfers |
 
 ## Procedure
 
-1. Read the provided log or recent training diff.
-2. Parse loss, gradient norm, learning rate, and memory into a reproducible script and plot when useful.
-3. Read model code and derive hypotheses from evidence rather than the symptom table alone.
-4. Report the top one to three causes with confidence, exact evidence, a small verification method, and a fix direction for implementation.
+1. **Locate the evidence** — the provided log file, or the recent training commit/diff.
+2. **Parse the log** — write a reproducible script extracting loss curve, gradient
+   norm, learning-rate schedule, and memory; plot when useful.
+3. **Read the model code and form hypotheses** — derive them from evidence and the
+   recent diff, not from the symptom table alone.
+4. **Report the top 1–3 causes** — each with confidence, exact evidence lines, a small
+   runnable verification method, and a fix direction for the implementation role.
 
-## Report Shape
+## Report
 
-State target and symptom, then list each hypothesis with confidence, evidence lines, a runnable check, and delegated fix direction. Recommend the next hypothesis to test. Route code changes to `new-lib` or `refactor`, data concerns to `data-curate`, and metric plausibility checks to the material role.
+State target (log file or commit) and a 1–2 line symptom summary. Then per hypothesis:
+confidence (high/medium/low), evidence (specific log and code lines), a short runnable
+check the caller can execute, and the delegated fix direction. Close with the
+recommended next step (which hypothesis to verify first, and how to hand off).
 
-Retain useful project incident patterns, root causes, and verification templates only through the authorized memory flow.
+Collaboration boundaries: route training-code changes to the dev implementation units
+(`new-lib`/`refactor`), data suspicion to `qa/data-curate`, and result-metric
+plausibility checks to the material family.
+
+## Memory
+
+Per `_shared/memory-flow.md`: retain project incident patterns (normal ranges per
+model/dataset), recurring root causes, and hypothesis-verification script templates.

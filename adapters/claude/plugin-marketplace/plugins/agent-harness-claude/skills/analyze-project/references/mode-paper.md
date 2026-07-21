@@ -2,9 +2,9 @@
 
 Analyze academic reference PDFs and produce per-paper analysis plus an integrated overview.
 
-## Delegate to the Research Team
+## Dispatch the Survey Unit
 
-Invoke the **research-team** agent with this prompt:
+Dispatch the `research/research-survey` unit with this prompt:
 
 ```text
 Analyze the target paper(s) and generate documentation. FIRST determine the purpose, because paper-mode analysis differs by purpose:
@@ -25,7 +25,7 @@ Date: {YYYY-MM-DD}
 
 ### 0. Purpose B: complete content analysis of the owned paper [REQUIRED, PRIMARY OUTPUT]
 
-When the target is the project's own in-progress `main.tex`, read the entire paper before reviewing it and write `analysis_project/paper/00_self_paper_analysis.md`. This is the primary source that autopilot-draft, research-team review, and autopilot-apply must understand before acting. A shallow structure map can cause downstream agents to misidentify tables and figures, report wrong numbers, or miss duplicate labels. The 2026-05-27 incident misread `tab:VCTK_ND`, which defines evaluation-set generation, as dedicated SR training because only a structure map existed.
+When the target is the project's own in-progress `main.tex`, read the entire paper before reviewing it and write `analysis_project/paper/00_self_paper_analysis.md`. This is the primary source that autopilot-draft, the survey-unit review, and autopilot-apply must understand before acting. A shallow structure map can cause downstream agents to misidentify tables and figures, report wrong numbers, or miss duplicate labels. The 2026-05-27 incident misread `tab:VCTK_ND`, which defines evaluation-set generation, as dedicated SR training because only a structure map existed.
 
 Do not stop at a section map or page count. Analyze content and reasoning:
 
@@ -36,7 +36,7 @@ Do not stop at a section map or page count. Analyze content and reasoning:
 5. **Label, number, and reference consistency:** mechanically extract PDF numbering from `main.aux` `\newlabel`, duplicate labels from `main.log` `multiply defined`, and undefined `\ref` or `\cite`. Never infer these values.
 6. **Terminology and prose consistency:** abbreviation definition sites, naming drift, and clear grammatical defects.
 
-This analysis lets the research-team review the paper from an informed content model. Skip Section 0 for purpose A.
+This analysis lets the survey unit review the paper from an informed content model. Skip Section 0 for purpose A.
 
 ### 1. Read all reference PDFs
 Extract each paper's core contributions, architecture, key equations, experimental findings, design constraints, and ablation results.
@@ -51,7 +51,7 @@ Read analysis_project/code/ and relevant source files to verify paper-to-code al
 For each paper, create or update a file under `<artifact-root>/analysis_project/paper/`. Include title, venue, year, contribution, architecture, design decisions and reasons, important equations, constraining ablations, and paper-to-code mapping.
 
 ### 5. Generate or update 00_overview_and_constraints.md
-This is the primary reference for research-team plan review.
+This is the primary reference for `research/plan-review`.
 
 ```markdown
 # Project Overview and Design Constraints
@@ -75,7 +75,7 @@ Write in the selected target artifact language. Preserve code identifiers and so
 
 ## Post-Analysis
 
-After the research-team returns:
+After the survey unit returns:
 
 1. Relay the file paths and summary to the user.
 2. Recommend reading `00_overview_and_constraints.md` first.

@@ -15,7 +15,7 @@ metadata:
 
 # code-report
 
-> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated dispatch-depth-2 stage worker dispatched by the `autopilot-code` conductor. Read the plan, checklist, `dev_logs/`, `test_logs/`, `_internal/*_reviews/`, and `pipeline_summary.md` from disk; never assume prior-stage conversation is available. The write class is `final_report.md`, `<artifact-root>/analysis_project/code/*.md`, and lock-protected `pipeline_summary.md`. Any `qa-team` or `editorial-team` delegation remains inside this stage session.
+> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated dispatch-depth-2 stage worker dispatched by the `autopilot-code` conductor. Read the plan, checklist, `dev_logs/`, `test_logs/`, `_internal/*_reviews/`, and `pipeline_summary.md` from disk; never assume prior-stage conversation is available. The write class is `final_report.md`, `<artifact-root>/analysis_project/code/*.md`, and lock-protected `pipeline_summary.md`. The stage runs as the `editorial/report` unit (the node's unit); it dispatches no units itself.
 
 > **Plan resolution**: Treat [arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) as the single authority for resolving `$ARG`.
 
@@ -34,7 +34,7 @@ Use one portable `fast writer` at every rigor tier. Prior stages already review 
 
 ## Generate the Report
 
-Invoke `qa-team` with the portable `fast writer` profile and this task:
+Run the `editorial/report` unit (portable `fast writer` role) with this task:
 
 ```text
 Generate a final change report.
@@ -102,7 +102,7 @@ After the writer returns:
 1. Read `final_report.md` once.
 2. Cross-check it against the best available cycle evidence. When in-session, current orchestration context may help; in an isolated stage session, rely on the artifact files: checklist marks, `dev_logs/`, `test_logs/test_report.md`, `_internal/*_reviews/`, and `git log` or `git diff <safety-commit>..HEAD`. Artifacts remain authoritative.
 3. Verify step counts, critical-finding rounds, test pass/fail counts, commit hashes, file counts, cited `file.py:NNN` locations, resolved versus pending follow-ups, and plan deviations. Correct report wording or data when evidence disagrees.
-4. Invoke `editorial-team` once in polish mode on `{log_directory}/final_report.md` when the polish invocation contract selects it — `agent-modes/editorial/polish.md` is the single source for that gating (currently plan-frontmatter `qa_level` standard+).
+4. Apply one in-place polish pass on `{log_directory}/final_report.md` when the polish invocation contract selects it — `roles/units/editorial/polish.md` is the single source for that gating (currently plan-frontmatter `qa_level` standard+). The pass runs inside this stage's `editorial/report` unit, not as a separate dispatch.
 
 Use this editorial instruction:
 
@@ -111,7 +111,7 @@ Polish {log_directory}/final_report.md in place for natural phrasing, notation c
 Apply your content-boundary contract: edit wording only.
 ```
 
-The must-not-change list (change content, rationale, QA summary, decision record, numbers, `file:line` references, decision meaning) is owned by the `editorial-team` content boundary; do not restate it in the prompt.
+The must-not-change list (change content, rationale, QA summary, decision record, numbers, `file:line` references, decision meaning) is owned by the `editorial/polish` content-boundary contract; do not restate it in the prompt.
 
 Do not run a separate report QA pass. Reconciliation is the lightweight accuracy check; code and test assurance remain owned by earlier stages.
 

@@ -48,7 +48,7 @@ Unless `--no-web` is set, derive focused image-search queries from scope. Useful
 - `icon`: `<concept> icon set minimalist`
 - `diagram`: `<concept> architecture diagram`
 
-Delegate to `material-team` in `web-image-search` mode:
+Dispatch the `material/web-image-search` unit:
 
 ```text
 Design brief: <brief>

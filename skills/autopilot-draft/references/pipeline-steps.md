@@ -1,14 +1,14 @@
 ## Pipeline
 
-> **Stage dispatch** (`standard+`, OPERATIONS §5.10 ③④, SD-1, SD-2): dispatch each durable stage below as an independent dispatch-depth-2 headless session. The named team runs inside that stage session. The dispatch-depth-1 conductor passes artifact paths and reads verdicts or status only; each stage reads its inputs from files. Keep `direct`, `quick`, and micro-stages inline. Stage sessions must not redispatch because dispatch depth 3+ is forbidden.
+> **Stage dispatch** (`standard+`, OPERATIONS §5.10 ③④, SD-1, SD-2): dispatch each durable stage below as an independent dispatch-depth-2 headless session. The named unit runs inside that stage session. The dispatch-depth-1 conductor passes artifact paths and reads verdicts or status only; each stage reads its inputs from files. Keep `direct`, `quick`, and micro-stages inline. Stage sessions must not redispatch because dispatch depth 3+ is forbidden.
 
 | Stage | In-session owner | Input artifacts | Output artifacts | Write class |
 |---|---|---|---|---|
 | Step 1: Material Analysis | Orchestrator; candidate stage | Discovered reference and analysis materials | `analysis/material_index.md`, `analysis/{ref,reviewer}_analysis.md` | analysis |
 | Step 2: draft-strategy | `draft-strategy` subskill | `analysis/*`, discovered inputs | `strategy/strategy.md`, optional mirror | strategy |
-| Step 4.0b: On-demand Figure Extraction | 자료팀; candidate stage | Paper-card PDF paths | `figures/figure_index.md` | figures |
-| Step 4.1: Draft Generation | 연구팀 | Strategy, Style Guide, analysis, discovered inputs | `draft/draft.md` | draft |
-| Step 5.5: Editorial Polish | 편집팀 mode B | Primary draft and optional mirror | Same files, polished in place | draft, sequential single writer |
+| Step 4.0b: On-demand Figure Extraction | `material/pdf-extract` unit; candidate stage | Paper-card PDF paths | `figures/figure_index.md` | figures |
+| Step 4.1: Draft Generation | `research/research-survey` unit | Strategy, Style Guide, analysis, discovered inputs | `draft/draft.md` | draft |
+| Step 5.5: Editorial Polish | finalize node (`editorial/report` unit), mode-B polish | Primary draft and optional mirror | Same files, polished in place | draft, sequential single writer |
 | Step 4b: Post-draft Factual Detector | Orchestrator | Primary draft and optional mirror | Decision Points row | inline micro-stage |
 | Step 4c: Report Figure Semantic Gate | Orchestrator/QA | Spectrogram report, JSON manifest, generated PNG | Fail-closed verifier result and visual-review evidence | inline micro-stage |
 
@@ -163,20 +163,20 @@ Merge every discovered index into a paper-ID-to-path map. On duplicates, prefer 
 When all indexes and figure directories are empty:
 
 1. Search paper cards for functional fields such as `**PDF 위치**` and `**arXiv ID**` under both analysis and research artifacts.
-2. If PDFs exist, invoke 자료팀 in `pdf-extract` mode to create a shared `figures/figure_index.md` and mapped images.
+2. If PDFs exist, dispatch the `material/pdf-extract` unit to create a shared `figures/figure_index.md` and mapped images.
 3. Reparse the generated index.
 4. If no PDF exists, warn that `analyze-project --mode paper` or autopilot-research can materialize figure sources, then continue without embeds.
 
 Extraction specification:
 
 ```text
-Agent(subagent_type="자료팀",
-      description="PDF figure/table extraction for document drafting",
-      prompt="pdf-extract mode. Inputs: {pdf_paths}.
+Dispatch unit material/pdf-extract:
+      description="PDF figure/table extraction for document drafting"
+      prompt="Inputs: {pdf_paths}.
               Output a figure_index.md mapping paper_id to paths.
               Use 600–800 DPI, default 800, for paper figures and tables.
               Crop to figure body plus caption and remove neighboring-column,
-              body-text, and footer noise. Preserve page-wide elements.")
+              body-text, and footer noise. Preserve page-wide elements."
 ```
 
 #### Step 4.0b-quality: Resolution and crop policy
@@ -202,9 +202,9 @@ Compute paths from the draft automatically:
 
 Apply the same pattern to `figure_index.md`. Users must not have to calculate these paths.
 
-#### Step 4.1: Invoke 연구팀
+#### Step 4.1: Dispatch the Survey Unit
 
-Require `strategy/strategy.md` and ensure any `## 미해결 이슈` section is resolved or explicitly accepted. Then invoke 연구팀 with the primary strategy, optional mirror, analysis directory, discovered inputs, figure map, and this contract:
+Require `strategy/strategy.md` and ensure any `## 미해결 이슈` section is resolved or explicitly accepted. Then dispatch the `research/research-survey` unit with the primary strategy, optional mirror, analysis directory, discovered inputs, figure map, and this contract:
 
 ```text
 Generate a complete working draft from the finalized strategy.
@@ -274,13 +274,13 @@ Do not reread and rewrite the draft in the orchestrator after the agent writes i
 
 #### Step 4 companion generation — explicit contract only
 
-Skip companion generation unless the user explicitly requests a second language, an external audience contract requires one, or the existing artifact workflow already depends on a companion. A difference between artifact and conversation languages is not sufficient by itself. When a companion is required, invoke 편집팀 in mode A and use the explicit target language and the existing project naming convention.
+Skip companion generation unless the user explicitly requests a second language, an external audience contract requires one, or the existing artifact workflow already depends on a companion. A difference between artifact and conversation languages is not sufficient by itself. When a companion is required, dispatch the `editorial/translate` unit (mode A, appended as a conditional companion node at compile) and use the explicit target language and the existing project naming convention.
 
 ```text
 Mode A — translate from {source language} to {target language}.
 Source: {strategy_folder}/draft/draft.md
 Target: {strategy_folder}/draft/draft_{language-code}.md
-Use the active runtime adapter's `editorial-team` translation mode.
+Use the `editorial/translate` unit contract.
 
 Preserve LaTeX commands, paper titles, author names, venues, acronyms, model
 names, datasets, metrics, organization names, project names, technical terms,
@@ -329,16 +329,14 @@ when the draft contains no generated spectrogram.
 
 ### Step 5.5: Editorial polish
 
-At `standard`, `thorough`, or `adversarial` rigor, invoke one final 편집팀 mode-B pass after review. Skip it at `direct` and `quick`.
+At `standard`, `thorough`, or `adversarial` rigor, run one final mode-B polish pass inside the `finalize` node (`editorial/report` unit) after review. Skip it at `direct` and `quick`.
 
 ```text
-Agent({
-  subagent_type: "편집팀",
+Finalize polish task:
   prompt: `Polish {strategy_folder}/draft/draft.md and its mirror, if present.
 This is a user-reviewed, paste-ready artifact. Improve natural wording,
 terminology consistency, and sentence rhythm in the selected language.
 Preserve claims, numbers, citations, decisions, LaTeX, code, and formulas.`
-})
 ```
 
 Edit in place once, without a new snapshot, then continue to Step 6. For a paper paste-ready cheatsheet, read but do not alter content inside LaTeX blocks; polish only the surrounding instructions.

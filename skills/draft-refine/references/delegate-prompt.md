@@ -1,6 +1,6 @@
-# Prompt Template for Delegation to `연구팀`
+# Prompt Template for the `research/research-survey` Unit Dispatch
 
-Invoke the **research-team** (`연구팀`) agent as a subagent with the prompt below. Substitute `{...}` variables, then invoke it verbatim; this is the actual subagent prompt, not documentation.
+Dispatch the `research/research-survey` unit with the prompt below. Substitute `{...}` variables, then use it verbatim; this is the actual worker prompt, not documentation.
 
 ```
 Refine mode (versioned + ref-grounded). Update an existing document {doc_type} based on user memos and review feedback.

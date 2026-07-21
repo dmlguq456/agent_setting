@@ -15,7 +15,7 @@ metadata:
 
 # code-test
 
-> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated dispatch-depth-2 stage worker dispatched by the `autopilot-code` conductor. Read the verification section in `plan/plan.md` and marks in `plan/checklist.md` from disk; never depend on prior-stage conversation. Source is read-only in this stage. The write class is `test_logs/` and `_internal/test_reviews/`. Any `qa-team` delegation remains inside this stage session.
+> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated dispatch-depth-2 stage worker dispatched by the `autopilot-code` conductor. Read the verification section in `plan/plan.md` and marks in `plan/checklist.md` from disk; never depend on prior-stage conversation. Source is read-only in this stage. The write class is `test_logs/` and `_internal/test_reviews/`. The stage runs as the `qa/test` unit (the node's unit); it dispatches no units itself.
 
 > **Plan resolution**: Treat [arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) as the single authority for resolving `$ARG`. If no plan matches, interpret the argument as the file or directory test target instead of returning a plan-resolution error.
 
@@ -23,7 +23,7 @@ metadata:
 
 ## Run Graduated Tests
 
-Invoke `qa-team` in test mode. Select one prompt form:
+Run the `qa/test` unit. Select one prompt form:
 
 - Plan path:
 
@@ -52,18 +52,18 @@ Invoke `qa-team` in test mode. Select one prompt form:
 
 ## Test Log Contract
 
-Always include this requirement in the `qa-team` test prompt:
+Always include this requirement in the `qa/test` unit test prompt:
 
 ```text
 Write a detailed test log to: {log_dir}/test_logs/test_report.md
 ```
 
-The report structure is owned by the qa test-mode persona (`agent-modes/qa/test.md`): exact command, full stdout/stderr (or the last 50 lines when long), and a per-test PASS/FAIL verdict with the error reason. Do not restate a competing format in the prompt.
+The report structure is owned by the `qa/test` unit persona (`roles/units/qa/test.md`): exact command, full stdout/stderr (or the last 50 lines when long), and a per-test PASS/FAIL verdict with the error reason. Do not restate a competing format in the prompt.
 
 Run test commands through the active adapter's bounded verification runner when its contract requires one. Preserve the actual exit status in the log.
 
 When changed outputs include a report spectrogram, add the report-figure
-semantic level from `roles/modes/qa/test.md`: run
+semantic level from `roles/units/qa/test.md`: run
 `tools/figure-semantic-verify.py` or the adapter-native `figure-gen
 --verify-report` wrapper against the manifest and report. Exit 2 is a test
 failure; unavailable or unreadable required inputs are blockers. Record the
@@ -82,7 +82,7 @@ This is the concrete final verify stage. Derive rigor from plan frontmatter or c
 | `thorough` | Broaden target coverage and add behavioral runtime observation for changed user-facing surfaces | Parallel or dispatch-depth-2 review only when selected by `intensity=thorough` |
 | `adversarial` | Thorough verification plus applicable security, failure-mode, and external-adversary evidence | Prove every claimed adversary or security pass ran |
 
-After `qa-team` returns, read `test_logs/test_report.md`. Run a separate adequacy review only when the selected assurance budget requires it, and append its findings to the report. Otherwise return the concrete verification verdict directly.
+After the `qa/test` unit returns, read `test_logs/test_report.md`. Run a separate adequacy review only when the selected assurance budget requires it, and append its findings to the report. Otherwise return the concrete verification verdict directly.
 
 Do not modify source or invoke a hotfix worker from this stage. Any repair belongs to the caller's bounded retry/fix path.
 

@@ -69,7 +69,7 @@ Resolve lookup sources in this order:
 3. **Default:** for research, grep the artifact's own `cards/`; for documents, grep all `<artifact-root>/research/*/cards/*.md`. Match both filename tokens and H1 or `## 메타` fields such as `**Venue**` and `**arXiv ID**`.
 4. **No cards available:** skip the factual aspect entirely, keep style lint, and emit `ℹ Stage B.5: no cards source available in this workspace — fact-check skipped`. Do not flood a non-research workspace with `⚠ Unverified` markers.
 
-When cards exist, use the eight-row single-source classification table in the **Fact-checker subrole** section of `adapters/claude/agents/research-team.md`: cards-verbatim, cards-name-only, external-marker, external-reverified, conflict, no-match, ambiguous, and circular-ref. This orchestrator document defines only emitted wording:
+When cards exist, use the eight-row single-source classification table in `roles/units/research/fact-check.md`: cards-verbatim, cards-name-only, external-marker, external-reverified, conflict, no-match, ambiguous, and circular-ref. This orchestrator document defines only emitted wording:
 
 - **cards-verbatim ✅:** verified silently
 - **cards-name-only 🟡:** `⚠ Unverified (name-only match): {claim} — cards/{file}.md contains the name but no verbatim venue/metric. External reverify required (WebSearch/WebFetch)`

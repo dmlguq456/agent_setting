@@ -3,11 +3,11 @@
   "canonical_manifest": "harness-manifest.json",
   "topology_registry": {
     "source": "capabilities/topologies.json",
-    "digest": "sha256:432cce7b1db46c1e743c3c6188b8969063a97d6c654e3742a7b876968d259e05",
+    "digest": "sha256:17ac6ae656c5a9f6054195f290cd9723b1de57a28072347d1fbbbbe34602e6f9",
     "capabilities": 10,
     "recipes": 22
   },
-  "manifest_version": "1.1.0",
+  "manifest_version": "1.2.0",
   "skills": [
     {
       "slug": "skill__analyze-project",
@@ -372,238 +372,280 @@
   ],
   "agents": [
     {
-      "slug": "agent__design-team",
-      "name": "design-team",
-      "model": "",
-      "modes": [
-        "design/critic",
-        "design/maker",
-        "design/verifier"
-      ],
-      "blurb": "Visual making, critique, and independent breakage verification"
-    },
-    {
-      "slug": "agent__dev-team",
-      "name": "dev-team",
-      "model": "",
-      "modes": [
-        "dev/backend",
-        "dev/frontend",
-        "dev/new-lib",
-        "dev/refactor"
-      ],
-      "blurb": "Implement backend/frontend/refactor/new-lib work through mode personas"
-    },
-    {
-      "slug": "agent__editorial-team",
-      "name": "editorial-team",
-      "model": "",
-      "modes": [
-        "editorial/polish",
-        "editorial/review",
-        "editorial/translate"
-      ],
-      "blurb": "User-facing wording, translation, polish, and review"
-    },
-    {
-      "slug": "agent__external-adversary",
-      "name": "external-adversary",
-      "model": "",
-      "modes": [],
-      "blurb": "Independent hostile review through a different runtime/process"
-    },
-    {
-      "slug": "agent__material-team",
-      "name": "material-team",
-      "model": "",
-      "modes": [
-        "material/browser-fetch",
-        "material/data-script",
-        "material/figure-gen",
-        "material/pdf-extract",
-        "material/web-image-search"
-      ],
-      "blurb": "Fetch, extract, visualize, and analyze supporting materials"
-    },
-    {
       "slug": "agent__memory-scout",
       "name": "memory-scout",
       "model": "",
       "modes": [],
       "blurb": "Kernel agent active in every product profile."
-    },
-    {
-      "slug": "agent__plan-team",
-      "name": "plan-team",
-      "model": "",
-      "modes": [],
-      "blurb": "Read source and artifacts, produce or refine implementation plans"
-    },
-    {
-      "slug": "agent__qa-team",
-      "name": "qa-team",
-      "model": "",
-      "modes": [
-        "qa/code-review",
-        "qa/data-curate",
-        "qa/ml-debug",
-        "qa/plan-review",
-        "qa/security-review",
-        "qa/test"
-      ],
-      "blurb": "Read-only code, plan, test, ML, data, and security review"
-    },
-    {
-      "slug": "agent__research-team",
-      "name": "research-team",
-      "model": "",
-      "modes": [
-        "research/claim-verify",
-        "research/fact-check",
-        "research/plan-review",
-        "research/research-survey"
-      ],
-      "blurb": "Paper-grounded review, survey, fact-check, and adversarial claim verification"
     }
   ],
-  "portable_roles": {
-    "design-team": {
-      "portable_role": "deep maker plus verifier",
-      "responsibility": "Visual making, critique, and independent breakage verification"
+  "units": {
+    "design/critic": {
+      "family": "design",
+      "role": "fast reviewer",
+      "worker_type": "review",
+      "floor": "high"
     },
-    "dev-team": {
-      "portable_role": "fast implementer by default",
-      "responsibility": "Implement backend/frontend/refactor/new-lib work through mode personas"
+    "design/maker": {
+      "family": "design",
+      "role": "deep maker",
+      "worker_type": "stage",
+      "floor": "highest"
     },
-    "editorial-team": {
-      "portable_role": "deep maker / fast reviewer by mode",
-      "responsibility": "User-facing wording, translation, polish, and review"
+    "design/verifier": {
+      "family": "design",
+      "role": "fast reviewer",
+      "worker_type": "review",
+      "floor": "near-zero"
     },
-    "external-adversary": {
-      "portable_role": "external adversary plus orchestrator",
-      "responsibility": "Independent hostile review through a different runtime/process"
+    "dev/backend": {
+      "family": "dev",
+      "role": "fast implementer",
+      "worker_type": "stage",
+      "floor": "low"
     },
-    "material-team": {
-      "portable_role": "deep maker plus fast tool worker",
-      "responsibility": "Fetch, extract, visualize, and analyze supporting materials"
+    "dev/frontend": {
+      "family": "dev",
+      "role": "fast implementer",
+      "worker_type": "stage",
+      "floor": "low"
     },
-    "plan-team": {
-      "portable_role": "deep maker",
-      "responsibility": "Read source and artifacts, produce or refine implementation plans"
+    "dev/new-lib": {
+      "family": "dev",
+      "role": "fast implementer",
+      "worker_type": "stage",
+      "floor": "low"
     },
-    "qa-team": {
-      "portable_role": "variable reviewer",
-      "responsibility": "Read-only code, plan, test, ML, data, and security review"
+    "dev/refactor": {
+      "family": "dev",
+      "role": "fast implementer",
+      "worker_type": "stage",
+      "floor": "low"
     },
-    "research-team": {
-      "portable_role": "variable research reviewer",
-      "responsibility": "Paper-grounded review, survey, fact-check, and adversarial claim verification"
+    "editorial/polish": {
+      "family": "editorial",
+      "role": "deep editor",
+      "worker_type": "stage",
+      "floor": "low"
+    },
+    "editorial/report": {
+      "family": "editorial",
+      "role": "fast writer",
+      "worker_type": "stage",
+      "floor": "low"
+    },
+    "editorial/review": {
+      "family": "editorial",
+      "role": "fast reviewer",
+      "worker_type": "review",
+      "floor": "low"
+    },
+    "editorial/translate": {
+      "family": "editorial",
+      "role": "deep editor",
+      "worker_type": "stage",
+      "floor": "low"
+    },
+    "material/browser-fetch": {
+      "family": "material",
+      "role": "fast tool worker",
+      "worker_type": "support",
+      "floor": "near-zero"
+    },
+    "material/data-script": {
+      "family": "material",
+      "role": "deep maker",
+      "worker_type": "stage",
+      "floor": "low"
+    },
+    "material/figure-gen": {
+      "family": "material",
+      "role": "deep maker",
+      "worker_type": "stage",
+      "floor": "low"
+    },
+    "material/pdf-extract": {
+      "family": "material",
+      "role": "fast tool worker",
+      "worker_type": "support",
+      "floor": "near-zero"
+    },
+    "material/web-image-search": {
+      "family": "material",
+      "role": "fast tool worker",
+      "worker_type": "support",
+      "floor": "near-zero"
+    },
+    "plan/plan-author": {
+      "family": "plan",
+      "role": "deep maker",
+      "worker_type": "stage",
+      "floor": "highest"
+    },
+    "qa/code-review": {
+      "family": "qa",
+      "role": "fast reviewer",
+      "worker_type": "review",
+      "floor": "moderate"
+    },
+    "qa/data-curate": {
+      "family": "qa",
+      "role": "fast reviewer",
+      "worker_type": "review",
+      "floor": "low"
+    },
+    "qa/ml-debug": {
+      "family": "qa",
+      "role": "deep reviewer",
+      "worker_type": "review",
+      "floor": "high"
+    },
+    "qa/plan-review": {
+      "family": "qa",
+      "role": "fast reviewer",
+      "worker_type": "review",
+      "floor": "moderate"
+    },
+    "qa/security-review": {
+      "family": "qa",
+      "role": "deep reviewer",
+      "worker_type": "review",
+      "floor": "moderate"
+    },
+    "qa/test": {
+      "family": "qa",
+      "role": "fast reviewer",
+      "worker_type": "review",
+      "floor": "near-zero"
+    },
+    "research/claim-verify": {
+      "family": "research",
+      "role": "fast fact-checker",
+      "worker_type": "review",
+      "floor": "high"
+    },
+    "research/fact-check": {
+      "family": "research",
+      "role": "fast fact-checker",
+      "worker_type": "review",
+      "floor": "near-zero"
+    },
+    "research/plan-review": {
+      "family": "research",
+      "role": "deep reviewer",
+      "worker_type": "review",
+      "floor": "highest"
+    },
+    "research/research-survey": {
+      "family": "research",
+      "role": "deep maker",
+      "worker_type": "stage",
+      "floor": "high"
     }
   },
   "modes": {
     "design/_design_rules": {
-      "role": "design-team",
       "status": "adapter-coupled",
       "internal": true
     },
     "design/critic": {
-      "role": "design-team",
+      "unit": "design/critic",
       "status": "adapter-coupled"
     },
     "design/maker": {
-      "role": "design-team",
+      "unit": "design/maker",
       "status": "adapter-coupled"
     },
     "design/verifier": {
-      "role": "design-team",
+      "unit": "design/verifier",
       "status": "adapter-coupled"
     },
     "dev/backend": {
-      "role": "dev-team",
+      "unit": "dev/backend",
       "status": "portable-persona"
     },
     "dev/frontend": {
-      "role": "dev-team",
+      "unit": "dev/frontend",
       "status": "portable-persona"
     },
     "dev/new-lib": {
-      "role": "dev-team",
+      "unit": "dev/new-lib",
       "status": "portable-persona"
     },
     "dev/refactor": {
-      "role": "dev-team",
+      "unit": "dev/refactor",
       "status": "portable-persona"
     },
     "editorial/polish": {
-      "role": "editorial-team",
+      "unit": "editorial/polish",
       "status": "portable-persona"
     },
     "editorial/review": {
-      "role": "editorial-team",
+      "unit": "editorial/review",
       "status": "portable-persona"
     },
     "editorial/translate": {
-      "role": "editorial-team",
+      "unit": "editorial/translate",
       "status": "portable-persona"
     },
     "material/browser-fetch": {
-      "role": "material-team",
+      "unit": "material/browser-fetch",
       "status": "portable-with-tool-contract"
     },
     "material/data-script": {
-      "role": "material-team",
+      "unit": "material/data-script",
       "status": "portable-with-tool-contract"
     },
     "material/figure-gen": {
-      "role": "material-team",
+      "unit": "material/figure-gen",
       "status": "portable-with-tool-contract"
     },
     "material/pdf-extract": {
-      "role": "material-team",
+      "unit": "material/pdf-extract",
       "status": "portable-with-tool-contract"
     },
     "material/web-image-search": {
-      "role": "material-team",
+      "unit": "material/web-image-search",
       "status": "portable-with-tool-contract"
     },
     "qa/code-review": {
-      "role": "qa-team",
+      "unit": "qa/code-review",
       "status": "portable-persona"
     },
     "qa/data-curate": {
-      "role": "qa-team",
+      "unit": "qa/data-curate",
       "status": "portable-persona"
     },
     "qa/ml-debug": {
-      "role": "qa-team",
+      "unit": "qa/ml-debug",
       "status": "portable-persona"
     },
     "qa/plan-review": {
-      "role": "qa-team",
+      "unit": "qa/plan-review",
       "status": "portable-persona"
     },
     "qa/security-review": {
-      "role": "qa-team",
+      "unit": "qa/security-review",
       "status": "portable-with-tool-contract"
     },
     "qa/test": {
-      "role": "qa-team",
+      "unit": "qa/test",
       "status": "portable-with-tool-contract"
     },
     "research/claim-verify": {
-      "role": "research-team",
+      "unit": "research/claim-verify",
       "status": "portable-with-tool-contract"
     },
     "research/fact-check": {
-      "role": "research-team",
+      "unit": "research/fact-check",
       "status": "portable-persona"
     },
     "research/plan-review": {
-      "role": "research-team",
+      "unit": "research/plan-review",
       "status": "portable-persona"
     },
     "research/research-survey": {
-      "role": "research-team",
+      "unit": "research/research-survey",
       "status": "portable-persona"
     }
   },
@@ -668,8 +710,8 @@
         "design",
         "operations"
       ],
-      "roles": [
-        "external-adversary"
+      "units": [
+        "material/browser-fetch"
       ]
     },
     "starter": {
@@ -703,51 +745,64 @@
         "code-test",
         "post-it"
       ],
-      "roles": [
-        "design-team",
-        "dev-team",
-        "editorial-team",
-        "material-team",
-        "plan-team",
-        "qa-team",
-        "research-team"
-      ],
-      "modes": [
-        "design/_design_rules",
-        "design/critic",
-        "design/maker",
-        "design/verifier",
+      "units": [
         "dev/backend",
         "dev/frontend",
         "dev/new-lib",
         "dev/refactor",
         "editorial/polish",
-        "editorial/review",
+        "editorial/report",
         "editorial/translate",
-        "material/browser-fetch",
         "material/data-script",
         "material/figure-gen",
         "material/pdf-extract",
-        "material/web-image-search",
+        "plan/plan-author",
         "qa/code-review",
         "qa/data-curate",
         "qa/ml-debug",
         "qa/plan-review",
         "qa/security-review",
         "qa/test",
-        "research/claim-verify",
-        "research/fact-check",
+        "research/plan-review",
+        "research/research-survey"
+      ],
+      "roles": [
+        "deep editor",
+        "deep maker",
+        "deep reviewer",
+        "fast implementer",
+        "fast reviewer",
+        "fast tool worker",
+        "fast writer"
+      ],
+      "modes": [
+        "dev/backend",
+        "dev/frontend",
+        "dev/new-lib",
+        "dev/refactor",
+        "editorial/polish",
+        "editorial/translate",
+        "material/data-script",
+        "material/figure-gen",
+        "material/pdf-extract",
+        "qa/code-review",
+        "qa/data-curate",
+        "qa/ml-debug",
+        "qa/plan-review",
+        "qa/security-review",
+        "qa/test",
         "research/plan-review",
         "research/research-survey"
       ],
       "kernel_agents": [
         "memory-scout"
       ],
-      "digest": "96c16571d2835703d021d304b6b1848bd5822e7d9dd3b5a2220d5691b3c673ba",
+      "digest": "a54b4c152c4b8947de14fc3c983871a8a8347d8dc7702f6b4169fb1e32453838",
       "counts": {
         "capabilities": 14,
+        "units": 19,
         "roles": 7,
-        "modes": 26
+        "modes": 17
       }
     },
     "full": {
@@ -788,15 +843,44 @@
         "draft-strategy",
         "post-it"
       ],
+      "units": [
+        "design/critic",
+        "design/maker",
+        "design/verifier",
+        "dev/backend",
+        "dev/frontend",
+        "dev/new-lib",
+        "dev/refactor",
+        "editorial/polish",
+        "editorial/report",
+        "editorial/review",
+        "editorial/translate",
+        "material/browser-fetch",
+        "material/data-script",
+        "material/figure-gen",
+        "material/pdf-extract",
+        "material/web-image-search",
+        "plan/plan-author",
+        "qa/code-review",
+        "qa/data-curate",
+        "qa/ml-debug",
+        "qa/plan-review",
+        "qa/security-review",
+        "qa/test",
+        "research/claim-verify",
+        "research/fact-check",
+        "research/plan-review",
+        "research/research-survey"
+      ],
       "roles": [
-        "design-team",
-        "dev-team",
-        "editorial-team",
-        "external-adversary",
-        "material-team",
-        "plan-team",
-        "qa-team",
-        "research-team"
+        "deep editor",
+        "deep maker",
+        "deep reviewer",
+        "fast fact-checker",
+        "fast implementer",
+        "fast reviewer",
+        "fast tool worker",
+        "fast writer"
       ],
       "modes": [
         "design/_design_rules",
@@ -829,9 +913,10 @@
       "kernel_agents": [
         "memory-scout"
       ],
-      "digest": "4d6f4c49f75ee6a7680ddbb13567c9b14764310f84a133752ce0a40e20f5954b",
+      "digest": "635d4e9fadd92f85ff34ee52fb1d688658a5832460d0aa282627f76077e6d2df",
       "counts": {
         "capabilities": 27,
+        "units": 27,
         "roles": 8,
         "modes": 26
       }
@@ -849,35 +934,44 @@
         "code-report",
         "code-test"
       ],
+      "units": [
+        "dev/backend",
+        "dev/frontend",
+        "dev/new-lib",
+        "dev/refactor",
+        "editorial/report",
+        "editorial/translate",
+        "plan/plan-author",
+        "qa/code-review",
+        "qa/plan-review",
+        "qa/test"
+      ],
       "roles": [
-        "dev-team",
-        "editorial-team",
-        "plan-team",
-        "qa-team"
+        "deep editor",
+        "deep maker",
+        "fast implementer",
+        "fast reviewer",
+        "fast writer"
       ],
       "modes": [
         "dev/backend",
         "dev/frontend",
         "dev/new-lib",
         "dev/refactor",
-        "editorial/polish",
-        "editorial/review",
         "editorial/translate",
         "qa/code-review",
-        "qa/data-curate",
-        "qa/ml-debug",
         "qa/plan-review",
-        "qa/security-review",
         "qa/test"
       ],
       "kernel_agents": [
         "memory-scout"
       ],
-      "digest": "ca0864a426dea8ae3c55c7f307ed0f1d4c9eb077db0af041a75500477044dec2",
+      "digest": "e6d28d47e8bfd4390d0a26b15b917010ab7642f6f77f9c93901d25c1b07b6de5",
       "counts": {
         "capabilities": 6,
-        "roles": 4,
-        "modes": 13
+        "units": 10,
+        "roles": 5,
+        "modes": 8
       }
     }
   },

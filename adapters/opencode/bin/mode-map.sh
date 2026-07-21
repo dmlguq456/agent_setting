@@ -20,7 +20,7 @@ esac
 
 family=${mode%%/*}
 name=${mode#*/}
-source="roles/modes/$family/$name.md"
+source="roles/units/$family/$name.md"
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 if command -v git >/dev/null 2>&1 && ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null); then

@@ -1,18 +1,18 @@
 ## Pipeline
 
-> **Stage-dispatch contract** (`standard+`, OPERATIONS §5.10 ③④, SD-1, SD-2): dispatch each durable stage as an independent dispatch-depth-2 headless session. The named team runs inside that stage. The dispatch-depth-1 conductor passes artifact paths and reads verdicts or status only; each stage reads inputs from files. Keep `direct`, `quick`, and micro-stages inline. Dispatch depth-gated stages only when their depth condition is met. Stage sessions must not redispatch because dispatch depth 3+ is forbidden.
+> **Stage-dispatch contract** (`standard+`, OPERATIONS §5.10 ③④, SD-1, SD-2): dispatch each durable stage as an independent dispatch-depth-2 headless session. The named unit runs inside that stage. The dispatch-depth-1 conductor passes artifact paths and reads verdicts or status only; each stage reads inputs from files. Keep `direct`, `quick`, and micro-stages inline. Dispatch depth-gated stages only when their depth condition is met. Stage sessions must not redispatch because dispatch depth 3+ is forbidden.
 
-| Stage | In-session team | Inputs | Outputs | Write class |
+| Stage | Unit | Inputs | Outputs | Write class |
 |---|---|---|---|---|
-| Step 2: Source Search | 연구팀 | Orchestrator queries, optional HF `paper_search` results | `_internal/search_results.json` | T3 raw |
-| Step 2e: Query Expansion | 연구팀 | Existing search results plus new keyword queries | Merged `_internal/search_results.json` | T3 append/merge |
-| Step 3b: Parallel Skimming | 연구팀, parallel batches | Search results and browser extracts | `cards/{paper}.md` | T1/T2 deliverables |
-| Step 3c: Reference Chaining | 연구팀 | Cards and search results | `_internal/chaining_results.md` | T3 raw |
-| Step 3e: Analysis Summary | 연구팀 | Cards, optional chaining and code search | `analysis_summary.md` | T1/T2 deliverable |
-| Step 4a: [Report Generation](report-generation.md) | 연구팀 | Analysis summary, internal evidence, cards | Mode-specific `{00-08}_*.md` set | T1/T2 deliverables |
-| Step 4b: [QA Loop](report-generation.md) | 연구팀 subroles; external review team in adversarial mode | Reports and cards | `_internal/reviews/*`, optional `unresolved.md` | T3 raw |
+| Step 2: Source Search | `research/research-survey` unit | Orchestrator queries, optional HF `paper_search` results | `_internal/search_results.json` | T3 raw |
+| Step 2e: Query Expansion | `research/research-survey` unit | Existing search results plus new keyword queries | Merged `_internal/search_results.json` | T3 append/merge |
+| Step 3b: Parallel Skimming | `research/research-survey` unit, parallel batches | Search results and browser extracts | `cards/{paper}.md` | T1/T2 deliverables |
+| Step 3c: Reference Chaining | `research/research-survey` unit | Cards and search results | `_internal/chaining_results.md` | T3 raw |
+| Step 3e: Analysis Summary | `research/research-survey` unit | Cards, optional chaining and code search | `analysis_summary.md` | T1/T2 deliverable |
+| Step 4a: [Report Generation](report-generation.md) | `research/research-survey` unit | Analysis summary, internal evidence, cards | Mode-specific `{00-08}_*.md` set | T1/T2 deliverables |
+| Step 4b: [QA Loop](report-generation.md) | review units (`research/fact-check`, `research/claim-verify`); external-adversary review via the codex transport in adversarial mode | Reports and cards | `_internal/reviews/*`, optional `unresolved.md` | T3 raw |
 
-자료팀 browser and image work is subdelegation inside these stages, not another durable stage. Step 2e merges rounds sequentially. Parallel Step 3b batches write distinct card files, so no lock-free concurrent mutation targets the same file.
+`material/*` unit browser and image work is owner-dispatched support work inside these steps, not another durable stage. Step 2e merges rounds sequentially. Parallel Step 3b batches write distinct card files, so no lock-free concurrent mutation targets the same file.
 
 ### Step 1: Parse and validate input
 
@@ -63,12 +63,12 @@ This differs from Step 2e: Step 2a uses prior semantic knowledge; Step 2e extrac
 
 #### Step 2b: Hugging Face prefetch
 
-Attempt `paper_search` for every query before invoking 연구팀. Store combined results as `hf_results_json`; set it to null and log the failure when unavailable.
+Attempt `paper_search` for every query before dispatching the survey unit. Store combined results as `hf_results_json`; set it to null and log the failure when unavailable.
 
-#### Step 2c: Invoke 연구팀
+#### Step 2c: Dispatch the Survey Unit
 
 ```text
-Agent(subagent_type="연구팀"):
+Dispatch unit research/research-survey:
   "Research survey mode: Paper search.
    Queries: {queries_list}
    Original query: {original_query}
@@ -127,10 +127,10 @@ For each round:
 
 1. Read paper titles and extract recurring or newly introduced terms.
 2. Create two or three queries absent from the existing query set.
-3. Invoke 연구팀 on only the new queries in merge mode:
+3. Dispatch the `research/research-survey` unit on only the new queries in merge mode:
 
    ```text
-   Agent(subagent_type="연구팀"):
+   Dispatch unit research/research-survey:
      "Research survey mode: Paper search.
       Queries: {new_queries_only}
       Original query: {original_query}; context only, do not search it again.
@@ -154,12 +154,11 @@ Activate phases by mode:
 
 #### Step 3a: Browser precheck and prefetch
 
-Use the runtime's browser-fetch preflight contract. When rendered browser access is available, identify records with neither `arxiv_id` nor `oa_url` and ask 자료팀 to prefetch their landing pages into `_internal/browser_extracts/{filename}.txt`.
+Use the runtime's browser-fetch preflight contract. When rendered browser access is available, identify records with neither `arxiv_id` nor `oa_url` and dispatch the `material/browser-fetch` unit to prefetch their landing pages into `_internal/browser_extracts/{filename}.txt`.
 
 ```text
-Agent(subagent_type="자료팀"):
-  "Mode: browser-fetch
-   URLs: {paywall_url_list}
+Dispatch unit material/browser-fetch:
+  "URLs: {paywall_url_list}
    Output directory: {artifact_dir}
    Write extracted text to `_internal/browser_extracts/`.
    Return successes and failures."
@@ -182,7 +181,7 @@ Batching:
 - Never repeatedly fetch a paywall-only source.
 
 ```text
-Agent(subagent_type="연구팀"):
+Dispatch unit research/research-survey:
   "Research survey mode: Paper analysis.
    Papers: {batch_json}
    Output directory: {artifact_dir}
@@ -200,7 +199,7 @@ Launch independent batches in parallel. Log an individual failure and continue; 
 Skip at `shallow` or in modes where citation-graph chaining is disabled.
 
 ```text
-Agent(subagent_type="연구팀"):
+Dispatch unit research/research-survey:
   "Research survey mode: Reference chaining.
    Paper cards: {artifact_dir}/cards/
    Search results: {artifact_dir}/_internal/search_results.json
@@ -213,7 +212,7 @@ Extract papers with `reference_frequency >= 2`. If new papers exist and the loop
 #### Step 3d: Code and model search
 
 ```text
-Agent(subagent_type="연구팀"):
+Dispatch unit research/research-survey:
   "Research survey mode: Code and model search.
    Paper cards: {artifact_dir}/cards/
    Output: {artifact_dir}/code_resources/
@@ -223,7 +222,7 @@ Agent(subagent_type="연구팀"):
 #### Step 3e: Compile the analysis summary
 
 ```text
-Agent(subagent_type="연구팀"):
+Dispatch unit research/research-survey:
   "Research survey mode: Compile analysis summary.
    Inputs: cards/, optional _internal/chaining_results.md,
    optional _internal/code_search.md.
@@ -239,9 +238,8 @@ Require a non-empty `analysis_summary.md`. At `shallow`, disabled chaining is an
 After cards are written, extract figures only for accessible papers. Skip paywall-only papers, `quick` intensity, or `--no-figures`.
 
 ```text
-Agent(subagent_type="자료팀"):
-  "Mode: web-image-search
-   Papers: [{arxiv_id, paper_id, title}, ...]
+Dispatch unit material/web-image-search:
+  "Papers: [{arxiv_id, paper_id, title}, ...]
    Output: {artifact_dir}/figures/
 
    Per paper:

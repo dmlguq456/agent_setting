@@ -64,7 +64,7 @@ Prompt variables:
 
 Default: false. Set this flag only when the user explicitly requests a review pause, such as `--user-refine`, “사용자 검토 끼워,” or “memo 추가하게 멈춰줘.” Do not invent the pause.
 
-After 연구팀 writes memos in Step 3 or Step 5:
+After the `research/research-survey` unit writes memos in Step 3 or Step 5:
 
 1. Set `user_refine: true` and `paused_at_stage: strategy-refine|draft-refine` in `{strategy_folder}/pipeline_state.yaml`.
 2. In the user's communication language, report the memo path and the equivalent resume command:

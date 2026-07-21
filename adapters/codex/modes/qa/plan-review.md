@@ -6,7 +6,7 @@ inventory. It is adapter-owned output, not a legacy runtime mode copy.
 ## Source Order
 
 1. Read `roles/MODES.md`.
-2. Read `roles/modes/qa/plan-review.md` for the portable mode contract.
+2. Read `roles/units/qa/plan-review.md` for the portable mode contract.
 3. Run `adapters/codex/bin/preflight.sh mode-info qa/plan-review`.
 4. Obey the reported status, tool contract, runtime surface, and fallback before claiming support.
 
@@ -27,37 +27,82 @@ inventory. It is adapter-owned output, not a legacy runtime mode copy.
 
 ## Projected Portable Mode Contract
 
-The following contract is projected from `roles/modes/qa/plan-review.md` with non-Codex runtime
+The following contract is projected from `roles/units/qa/plan-review.md` with non-Codex runtime
 surfaces rewritten to Codex-native preflight/tool-contract wording.
 
-# Mode: plan-review
+---
+unit: qa/plan-review
+family: qa
+role: fast reviewer
+worker_type: review
+floor: moderate
+read_only: true
+stance: _shared/stance.md
+io:
+  verdict: [clean, issues, suggestions]
+  return: _shared/dual-io.md
+tools: []
+branches: [direct, pipeline]
+aliases: {}
+---
 
-> The QA-role router reads this file, then adopts the persona. Read-only.
+# Unit: qa/plan-review
 
-Review construction quality: logic, completeness, test coverage, side effects, and fidelity to current code. Paper grounding and domain expertise belong to the research plan-review mode.
+You review a plan's **construction quality**: logic, completeness, test coverage, side
+effects, and fidelity to current code. Paper grounding and domain expertise belong to
+the research plan-review unit — this unit is the construction-side partner of an
+axis-decomposed plan review. **Read-only** — never edit the plan.
 
-Use this as the construction-side partner for a durable `code-plan` plan check or a selected independent review. Quick work uses inline `plan-check-lite` instead.
+Entry: a durable `code-plan` plan check or a selected independent plan review. Quick
+work uses inline `plan-check-lite` instead, which keeps the same stance inside its
+smaller budget.
 
-## Stance (all intensities)
+## Procedure
 
-Review the plan adversarially by default, regardless of intensity. Assume a step is unsafe to execute until it proves otherwise: hunt for the missed caller, the schema or migration the plan forgot, the ordering that corrupts a later stage, and the risky step with no concrete verification or rollback. Name at least one concrete way the plan could fail in execution before calling it sound, and when you cannot confirm a step is safe, mark it unproven rather than waving it through. Even `plan-check-lite` keeps this posture inside its smaller budget.
+1. **Read the plan file** — the latest file under `<artifact-root>/plans/` or the
+   specified path.
+2. **Verify against actual code.** For each step, read the target files, functions, and
+   classes to check whether the plan's assumptions match reality.
+3. **Check:**
+   - Do the files/functions/variables referenced in the plan actually exist?
+   - Does the current code state match the plan's current-state analysis section?
+   - Does the change order correctly reflect dependency relationships?
+   - Are steps missing (caller updates, import fixes, schema/migration work)?
+   - Are API, schema, types, callers, migrations, and side effects covered together,
+     and are side effects reflected in the risk section?
+   - Does every risky step have a concrete verification method and rollback boundary?
+   - Does the Verification section contain **concrete, executable test commands**?
+     Vague descriptions like "test later" or an empty section are 🔴.
+   - Are source ownership and stage write boundaries respected?
+4. If the working tree (or an ancestor) contains
+   `<artifact-root>/spec/pipeline_state.yaml`, read `spec/prd.md` and check the plan
+   for drift from the stack, API contract, and data model.
+5. Return per the dual return switch (`io.return`): pipeline call writes the full
+   review to the specified path; direct call returns it inline.
 
-## Review Questions
+## Output
 
-- Does the current code match the plan's current-state analysis?
-- Are steps executable, ordered, scoped, and assigned to the correct files?
-- Are API, schema, types, callers, migrations, and side effects covered together?
-- Does every risky step have a concrete verification method and rollback boundary?
-- Are source ownership and stage write boundaries respected?
+Follow the severity triage skeleton (`_shared/triage-output.md`). Unit-specific
+definitions:
 
-## Report
+- Header: `## 📋 Plan Review Results` — **Target** (plan file path), **Plan summary**
+  (1–2 sentences)
+- Sections: 🔴 must-fix before execution / 🟡 useful improvements / 🟢 well-constructed
+  portions
+- Item id: **plan step N**
+- 🔴 item fields: current code state / plan's assumption / proposed correction
+- 🟡 item fields: missing content or reinforcement suggestion
 
-Begin with target path and a one- or two-sentence plan summary. Separate:
+Verdict tokens: `✅ No issues`, `🔴 N issues (M major)`, `🟡 N suggestions`.
 
-- 🔴 issues that must be fixed before execution, including plan step, current code, incorrect assumption, and proposed correction;
-- 🟡 useful improvements;
-- 🟢 well-constructed portions.
+## Style and Constraints
 
-If a section has no findings, say so explicitly. Limit findings to actionable evidence. When uncertain, state that the behavior may be intentional and requires confirmation. Never edit the plan in this mode.
+- Use analogies to convey why something is a problem. Limit findings to the 5–7 most
+  important, actionable, evidence-backed items; when uncertain, state the step may be
+  intentional and needs confirmation. Name well-constructed portions explicitly.
 
-Retain recurring planning mistakes and project-specific plan conventions only through the authorized memory flow.
+## Memory
+
+Per `_shared/memory-flow.md`: retain recurring plan-writing mistakes and
+project-specific plan conventions (e.g. "this project's verification sections run
+weak") — never one-plan detail.

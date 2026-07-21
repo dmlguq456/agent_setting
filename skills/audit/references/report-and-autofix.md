@@ -68,15 +68,13 @@ Match when the P2 `file:line` belongs to a minor entry's `Files touched`.
 
 #### Stage D.5: Editorial Polish
 
-Before chat output, invoke the native **editorial-team** ID with in-place polish:
+Before chat output, invoke the `editorial/polish` unit with in-place polish (inline at direct intensity, or as a one-node composed route):
 
 ```text
-Agent({
-  subagent_type: "편집팀",
+Dispatch unit editorial/polish:
   prompt: `polish {audit_log_path}
-This audit report is user-facing. Apply editorial-team polish for natural phrasing, notation consistency, and readable cadence in the selected language.
+This audit report is user-facing. Apply the editorial/polish pass for natural phrasing, notation consistency, and readable cadence in the selected language.
 Preserve severity, aspect, file:line, issue identity, and suggested-fix meaning. Edit wording only.`
-})
 ```
 
 Then print at most eight localized lines containing completion, artifact name and type, aspects, totals, report path, verdict, and—when 🔴 exists—the recommended corrective invocation.

@@ -16,7 +16,7 @@ Updates an existing plan from user annotations, plan-check feedback, or verifica
 
 > The single authority for resolving `$ARGUMENTS` to a plan path is [autopilot-code/references/arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md). Recognize canonical `plan.md` and an existing companion such as legacy `plan_ko.md`; swap between known companion paths only when both files belong to the same plan.
 
-## Delegation — `기획팀`
+## Refinement — `plan/plan-author` unit
 
 ```
 Refine mode. Update an existing implementation plan from user memos, plan-check feedback, or verification-failure notes.
@@ -46,7 +46,7 @@ Derive the verification rigor tier from the plan's selected `--intensity` contex
 |---|---|---|
 | Quick | Direct invocation only: one fast sanity review or self-check | Record residual concerns; no repeated loop |
 | Light | One focused fast review when execution could be affected | One bounded correction for blocking issues |
-| Standard | One lightweight `qa-team` plan-review pass over changed steps | At most one correction |
+| Standard | One lightweight `qa/plan-review` unit pass (the `plan-check` boundary) over changed steps | At most one correction |
 | Thorough | Multi-axis review only when selected by `intensity=thorough` | Up to two synthesized corrections |
 | Adversarial | Thorough review plus explicit failure-mode, security, and adversarial critique when available | Fail loudly when explicitly requested and unavailable; otherwise report a fallback to Thorough |
 
@@ -60,7 +60,7 @@ Create `{log_dir}/_internal/plan_reviews` and run only the review action selecte
 **Verdict handling**:
 
 - No 🔴 → finish and report to the user.
-- Any blocking finding → invoke `기획팀` for no more than the selected correction budget, then rerun only the selected check.
+- Any blocking finding → re-enter the `plan/plan-author` unit for no more than the selected correction budget, then rerun only the selected check.
 - Any finding remaining after the budget → add it to the plan's risk or unresolved section, preserving an existing functional compatibility heading such as `## 미해결 이슈`, and report changed steps plus resolved and unresolved issues to the caller.
 
 ---

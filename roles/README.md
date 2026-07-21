@@ -11,16 +11,35 @@ through adapter-owned wrappers or native agent surfaces.
 ## Role Catalog
 <!-- GENERATED: harness-manifest.json -->
 
-| Role profile | Portable model role | Primary responsibility | Claude realization | Codex realization | OpenCode realization |
+| Family | Unit | Portable model role | Worker type | Floor | Catalog source |
 |---|---|---|---|---|---|
-| `design-team` | `deep maker plus verifier` | Visual making, critique, and independent breakage verification | `adapters/claude/agents/design-team.md` | `adapters/codex/agents/design-team.toml` | `adapters/opencode/agents/design-team/design-team.md` |
-| `dev-team` | `fast implementer by default` | Implement backend/frontend/refactor/new-lib work through mode personas | `adapters/claude/agents/dev-team.md` | `adapters/codex/agents/dev-team.toml` | `adapters/opencode/agents/dev-team/dev-team.md` |
-| `editorial-team` | `deep maker / fast reviewer by mode` | User-facing wording, translation, polish, and review | `adapters/claude/agents/editorial-team.md` | `adapters/codex/agents/editorial-team.toml` | `adapters/opencode/agents/editorial-team/editorial-team.md` |
-| `external-adversary` | `external adversary plus orchestrator` | Independent hostile review through a different runtime/process | `adapters/claude/agents/codex-review-team.md` | `adapters/codex/agents/external-adversary.toml` | `adapters/opencode/agents/external-adversary/external-adversary.md` |
-| `material-team` | `deep maker plus fast tool worker` | Fetch, extract, visualize, and analyze supporting materials | `adapters/claude/agents/material-team.md` | `adapters/codex/agents/material-team.toml` | `adapters/opencode/agents/material-team/material-team.md` |
-| `plan-team` | `deep maker` | Read source and artifacts, produce or refine implementation plans | `adapters/claude/agents/plan-team.md` | `adapters/codex/agents/plan-team.toml` | `adapters/opencode/agents/plan-team/plan-team.md` |
-| `qa-team` | `variable reviewer` | Read-only code, plan, test, ML, data, and security review | `adapters/claude/agents/qa-team.md` | `adapters/codex/agents/qa-team.toml` | `adapters/opencode/agents/qa-team/qa-team.md` |
-| `research-team` | `variable research reviewer` | Paper-grounded review, survey, fact-check, and adversarial claim verification | `adapters/claude/agents/research-team.md` | `adapters/codex/agents/research-team.toml` | `adapters/opencode/agents/research-team/research-team.md` |
+| `design` | `design/critic` | `fast reviewer` | `review` | `high` | `roles/units/design/critic.md` |
+| `design` | `design/maker` | `deep maker` | `stage` | `highest` | `roles/units/design/maker.md` |
+| `design` | `design/verifier` | `fast reviewer` | `review` | `near-zero` | `roles/units/design/verifier.md` |
+| `dev` | `dev/backend` | `fast implementer` | `stage` | `low` | `roles/units/dev/backend.md` |
+| `dev` | `dev/frontend` | `fast implementer` | `stage` | `low` | `roles/units/dev/frontend.md` |
+| `dev` | `dev/new-lib` | `fast implementer` | `stage` | `low` | `roles/units/dev/new-lib.md` |
+| `dev` | `dev/refactor` | `fast implementer` | `stage` | `low` | `roles/units/dev/refactor.md` |
+| `editorial` | `editorial/polish` | `deep editor` | `stage` | `low` | `roles/units/editorial/polish.md` |
+| `editorial` | `editorial/report` | `fast writer` | `stage` | `low` | `roles/units/editorial/report.md` |
+| `editorial` | `editorial/review` | `fast reviewer` | `review` | `low` | `roles/units/editorial/review.md` |
+| `editorial` | `editorial/translate` | `deep editor` | `stage` | `low` | `roles/units/editorial/translate.md` |
+| `material` | `material/browser-fetch` | `fast tool worker` | `support` | `near-zero` | `roles/units/material/browser-fetch.md` |
+| `material` | `material/data-script` | `deep maker` | `stage` | `low` | `roles/units/material/data-script.md` |
+| `material` | `material/figure-gen` | `deep maker` | `stage` | `low` | `roles/units/material/figure-gen.md` |
+| `material` | `material/pdf-extract` | `fast tool worker` | `support` | `near-zero` | `roles/units/material/pdf-extract.md` |
+| `material` | `material/web-image-search` | `fast tool worker` | `support` | `near-zero` | `roles/units/material/web-image-search.md` |
+| `plan` | `plan/plan-author` | `deep maker` | `stage` | `highest` | `roles/units/plan/plan-author.md` |
+| `qa` | `qa/code-review` | `fast reviewer` | `review` | `moderate` | `roles/units/qa/code-review.md` |
+| `qa` | `qa/data-curate` | `fast reviewer` | `review` | `low` | `roles/units/qa/data-curate.md` |
+| `qa` | `qa/ml-debug` | `deep reviewer` | `review` | `high` | `roles/units/qa/ml-debug.md` |
+| `qa` | `qa/plan-review` | `fast reviewer` | `review` | `moderate` | `roles/units/qa/plan-review.md` |
+| `qa` | `qa/security-review` | `deep reviewer` | `review` | `moderate` | `roles/units/qa/security-review.md` |
+| `qa` | `qa/test` | `fast reviewer` | `review` | `near-zero` | `roles/units/qa/test.md` |
+| `research` | `research/claim-verify` | `fast fact-checker` | `review` | `high` | `roles/units/research/claim-verify.md` |
+| `research` | `research/fact-check` | `fast fact-checker` | `review` | `near-zero` | `roles/units/research/fact-check.md` |
+| `research` | `research/plan-review` | `deep reviewer` | `review` | `highest` | `roles/units/research/plan-review.md` |
+| `research` | `research/research-survey` | `deep maker` | `stage` | `high` | `roles/units/research/research-survey.md` |
 
 ## Adapter Requirements
 

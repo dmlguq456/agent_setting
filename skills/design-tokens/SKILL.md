@@ -55,7 +55,7 @@ Before components consume the tokens, create the self-contained `02_tokens/speci
 - the complete `xs` through `2xl` type scale with line heights
 - visual rulers or boxes for spacing, radius, and shadow steps
 
-Render the specimen, inspect the resulting image, critique contrast, harmony, collisions, and uneven scale jumps, adjust tokens, and rerender until clean. Use the active adapter's equivalent of `preview` → `screenshot` → `view_image` under the [visual self-verification loop](../../roles/modes/design/_design_rules.md). When the native design MCP owns the run, preserve `mcp__design__eval_js` for `getComputedStyle` evidence.
+Render the specimen, inspect the resulting image, critique contrast, harmony, collisions, and uneven scale jumps, adjust tokens, and rerender until clean. Use the active adapter's equivalent of `preview` → `screenshot` → `view_image` under the [visual self-verification loop](../../roles/units/design/_design-rules.md). When the native design MCP owns the run, preserve `mcp__design__eval_js` for `getComputedStyle` evidence.
 
 This specimen-consume gate is mandatory: components may consume the tokens only after rendered verification succeeds.
 

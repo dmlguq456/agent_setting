@@ -2,14 +2,14 @@
 
 The full cycle is **setup** → user training → **eval**. With `--mode auto`, infer the branch from the request. Each mode is an independent invocation and persists state in `pipeline_state.yaml`.
 
-> **Stage-dispatch contract for standard+:** dispatch durable setup, eval, and report stages as separate dispatch-depth-2 headless sessions under OPERATIONS §5.10. In-session teams run inside their stage session. Use file-only handoff: read inputs from artifacts and never rely on earlier conversational context. The dispatch-depth-1 conductor passes paths and collects only verdicts and status. **Do not dispatch the actual experiment run:** it is long, asynchronous, and human-gated by the pending `_RUNLOG.md` row. Keep using the existing `lab-runner.yaml` profile for that segment. Direct, quick, and one-off run guidance remain inline. Stage sessions never redispatch; dispatch depth 3+ is forbidden.
+> **Stage-dispatch contract for standard+:** dispatch durable setup, eval, and report stages as separate dispatch-depth-2 headless sessions under OPERATIONS §5.10. Units run inside their assigned stage session. Use file-only handoff: read inputs from artifacts and never rely on earlier conversational context. The dispatch-depth-1 conductor passes paths and collects only verdicts and status. **Do not dispatch the actual experiment run:** it is long, asynchronous, and human-gated by the pending `_RUNLOG.md` row. Keep using the existing `lab-runner.yaml` profile for that segment. Direct, quick, and one-off run guidance remain inline. Stage sessions never redispatch; dispatch depth 3+ is forbidden.
 
 #### Setup stage-worker mapping
 
-| Stage | In-session team | Input artifacts | Output artifacts | Write class |
+| Stage | Unit | Input artifacts | Output artifacts | Write class |
 |---|---|---|---|---|
-| S1 spec | 연구팀, plan-review | Recent `_RUNLOG.md` rows and research artifacts | `experiments/{date}_{slug}/experiment_spec.md` | Dispatched dispatch depth 2 |
-| S2 scaffold | 개발팀, new-lib | `experiment_spec.md` plus reference or parent config | `train.py`, `eval.py`, `config.yaml`, and `metrics.jsonl` logger | Dispatched dispatch depth 2 |
+| S1 spec | `research/plan-review` unit | Recent `_RUNLOG.md` rows and research artifacts | `experiments/{date}_{slug}/experiment_spec.md` | Dispatched dispatch depth 2 |
+| S2 scaffold | `dev/new-lib` unit | `experiment_spec.md` plus reference or parent config | `train.py`, `eval.py`, `config.yaml`, and `metrics.jsonl` logger | Dispatched dispatch depth 2 |
 | S3 run | User or cluster submit | `config.yaml` | Pending `_RUNLOG.md` row and `run.json` with running status | **Not dispatched**; long, asynchronous, human-gated |
 
 See `eval-procedure.md` for E2, E3-2, and E3-3.
@@ -47,7 +47,7 @@ Research plan-review: on or off
 Proceed? (continue / revise / stop)
 ```
 
-**S1-4. Invoke research plan-review only at standard+.** Use `Agent(subagent_type="연구팀")` with `Mode: plan-review` and provide the latest five RUNLOG rows, the draft `experiment_spec.md`, and any research directory. Ask it to check:
+**S1-4. Invoke research plan-review only at standard+.** Dispatch the `research/plan-review` unit and provide the latest five RUNLOG rows, the draft `experiment_spec.md`, and any research directory. Ask it to check:
 
 - whether a completed or pending row already represents the same ablation;
 - whether motivation follows from the previous or parent result;
@@ -66,7 +66,7 @@ Have it add `<!-- review: ... -->` comments to `experiment_spec.md` and return t
 - For a new reference, copy the `--ref` model or the recommendation from `similar_models.md`, then vary it.
 - Obtain one-line user confirmation.
 
-**S2-2. Invoke `Agent(subagent_type="개발팀", mode="new-lib")`.** Provide the reference or parent checkpoint/config, experiment directory, and spec. Enforce four rules:
+**S2-2. Dispatch the `dev/new-lib` unit.** Provide the reference or parent checkpoint/config, experiment directory, and spec. Enforce four rules:
 
 1. Make the smallest change by copying and varying the reference or parent; do not introduce a new layer by default.
 2. Prefer layers listed in `experiment_conventions.md`.
@@ -107,6 +107,6 @@ At the same point, create `experiments/{date}_{slug}/run.json` with `status: "ru
 
 **S3-3. Mandatory hash-bound smoke before full-run entry.** Run one epoch or the minimum batch through `tools/smoke-attestation.py attest`, binding the exact config, source, input/checkpoint signature, working directory, and command. Validate data loading, forward/backward, loss, and optimizer step, not convergence. A detached full run must verify that attestation immediately before launch and reject missing, failed, or stale hashes. If a one-batch probe is impossible, the capability registry must name the bounded substitute; there is no free-form skip.
 
-**S3-4. Escalate convergence failures on user request.** For prompts such as `loss 가 안 떨어져`, `NaN`, or `수렴 이상`, invoke `Agent(subagent_type="품질관리팀", mode="ml-debug")`. Provide the experiment directory, symptom, available logs, and `experiment_spec.md`. Check data shape/range/NaN/balance, model initialization/freezing/gradient flow, loss scale/sign/stability, optimizer learning rate/weight decay/warmup, and batch/device/mixed precision. Return the one or two most likely causes plus commands that distinguish them.
+**S3-4. Escalate convergence failures on user request.** For prompts such as `loss 가 안 떨어져`, `NaN`, or `수렴 이상`, dispatch the `qa/ml-debug` unit. Provide the experiment directory, symptom, available logs, and `experiment_spec.md`. Check data shape/range/NaN/balance, model initialization/freezing/gradient flow, loss scale/sign/stability, optimizer learning rate/weight decay/warmup, and batch/device/mixed precision. Return the one or two most likely causes plus commands that distinguish them.
 
 After training, continue with `/autopilot-lab "결과 평가"` in eval mode.

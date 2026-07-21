@@ -91,7 +91,7 @@ Defaults:
 Direct boundaries:
 
 - One-shot conversion or cleanup → `/autopilot-code --intensity quick`
-- Plot-only work → `material-team` in figure-generation mode
+- Plot-only work → the `material/figure-gen` unit
 - Productionization, packaging, or broader spec work → `/autopilot-code` or `/autopilot-spec`
 - Document wording/structure-only fixes with no new empirical work → `/autopilot-refine`
 - An explicit `/autopilot-lab <args>` invocation supplies the routing choice directly
@@ -128,7 +128,7 @@ Derive verification rigor from intensity; there is no separate `--qa` axis. Use 
 
 ## Coding Constraints for Scaffold Work
 
-Before delegating scaffold changes to `dev-team` in new-library mode, load `analysis_project/code/experiment_conventions.md` when available. The acting agent may also consult `mem profile 07_coding_convention` when cross-project preferences would materially help; project conventions take precedence.
+Before dispatching scaffold changes to the `dev/new-lib` unit, load `analysis_project/code/experiment_conventions.md` when available. The acting agent may also consult `mem profile 07_coding_convention` when cross-project preferences would materially help; project conventions take precedence.
 
 1. **Minimize changes**: copy and adapt an existing model folder selected by `--ref` or `similar_models.md`; do not introduce a new layer by default.
 2. **Prefer existing layers**: follow the project's preferred-layer list. Require an explicit design decision before adding a new layer.

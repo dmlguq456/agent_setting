@@ -77,7 +77,7 @@ The signal strings below are quoted multilingual examples, not fixed trigger phr
 | "Component diagram 손보자" / "Deployment 자리 추가" | Step 3b: Architecture Diagrams | refinement v{N+1} |
 | "복합 mode 추가 — Y mode 도" / "이 spec 에 cli 도 같이" | Step 3c: another combined-mode section | refine and add the mode |
 | "skeleton 다시 — ref 바꾸자" / "ref repo 다른 자리" | Step 4 Phase 0: reference source | rerun Phases 1, 1.5, 2, and 3 |
-| "skeleton 의 train.py 수정" / "scaffold 결과 손보자" | Step 4 Phase 2: `개발팀` new-lib | rerun Phases 2 and 3 |
+| "skeleton 의 train.py 수정" / "scaffold 결과 손보자" | Step 4 Phase 2: `dev/new-lib` unit | rerun Phases 2 and 3 |
 
 > Requests such as "Vercel 셋업", "배포 셋업", "env 변경", or "도메인 연결" route to the separate [`autopilot-ship`](../../autopilot-ship/SKILL.md) skill.
 

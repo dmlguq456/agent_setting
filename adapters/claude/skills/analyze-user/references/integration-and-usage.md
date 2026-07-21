@@ -2,17 +2,17 @@
 
 Each role runs the relevant `mem profile <stem>` commands at work start. The DB record is the source of truth; this agent-centered view mirrors the aspect-centered canonical matrix in [`MEMORY.md §7.6`](../../../core/MEMORY.md). If they drift, MEMORY wins.
 
-| Portable role | Profiles | Purpose |
+| Unit family | Profiles | Purpose |
 |---|---|---|
-| material-team | `01_paper_figure_style`, `03_presentation_strategy`, `04_analysis_methodology`, `05_domain_expertise` | Figures, slides, data analysis, captions, and domain abbreviations |
-| design-team | `01_paper_figure_style`, `03_presentation_strategy`, `05_domain_expertise` | UI mockups, slide visuals, diagrams, and domain terms |
-| research-team | `01_paper_figure_style`, `02_paper_writing_style`, `04_analysis_methodology`, `05_domain_expertise` | Figure citation, prose, validation method, and terminology |
-| editorial-team | `01_paper_figure_style`, `02_paper_writing_style`, `03_presentation_strategy`, `04_analysis_methodology`, `05_domain_expertise` | User-facing captions, papers, presentations, analytical prose, and terminology |
-| plan-team | `02_paper_writing_style`, `04_analysis_methodology`, `05_domain_expertise`, `07_coding_convention` | Plan tone, verification patterns, domain terms, and code conventions |
-| dev-team | `04_analysis_methodology`, `05_domain_expertise`, `07_coding_convention` | Metrics, verification, identifier terminology, structure, config, prefixes, and layers; project-local `experiment_conventions.md` wins |
+| `material/*` units | `01_paper_figure_style`, `03_presentation_strategy`, `04_analysis_methodology`, `05_domain_expertise` | Figures, slides, data analysis, captions, and domain abbreviations |
+| `design/*` units | `01_paper_figure_style`, `03_presentation_strategy`, `05_domain_expertise` | UI mockups, slide visuals, diagrams, and domain terms |
+| `research/*` units | `01_paper_figure_style`, `02_paper_writing_style`, `04_analysis_methodology`, `05_domain_expertise` | Figure citation, prose, validation method, and terminology |
+| `editorial/*` units | `01_paper_figure_style`, `02_paper_writing_style`, `03_presentation_strategy`, `04_analysis_methodology`, `05_domain_expertise` | User-facing captions, papers, presentations, analytical prose, and terminology |
+| `plan/*` units | `02_paper_writing_style`, `04_analysis_methodology`, `05_domain_expertise`, `07_coding_convention` | Plan tone, verification patterns, domain terms, and code conventions |
+| `dev/*` units | `04_analysis_methodology`, `05_domain_expertise`, `07_coding_convention` | Metrics, verification, identifier terminology, structure, config, prefixes, and layers; project-local `experiment_conventions.md` wins |
 | main agent | `04_analysis_methodology`, `05_domain_expertise`, `07_coding_convention` | Analytical replies, user terminology, and code defaults for lab, spec, and code pipelines |
 
-Aspect 06, conversational meta rules, is main-agent-only because subagents do not speak directly to the user. Its profile record remains the default `/post-it --scope user` collaboration target. Aspect 07 applies only to implementation, planning, and main-agent code work. Each role normally reads three to five relevant profiles. These lookups are encoded in role definitions.
+Aspect 06, conversational meta rules, is main-agent-only because subagents do not speak directly to the user. Its profile record remains the default `/post-it --scope user` collaboration target. Aspect 07 applies only to implementation, planning, and main-agent code work. Each role normally reads three to five relevant profiles. These lookups are encoded in the unit definitions.
 
 ## Relationship to Project Memory
 

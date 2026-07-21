@@ -27,7 +27,7 @@ Output remains `plans/<date>_<slug>/` in both cases. Report spec detection and m
 
 | Mode | Additional behavior |
 |---|---|
-| **app** | Use design-team critic for UI changes; never auto-run destructive DB migration; account for post-push CI/CD; consume the design-owned token source rather than redefining hex or spacing inline. Route substantial direction, token, layout, or structural decisions through autopilot-design; allow only trivial visual tweaks directly. |
+| **app** | Dispatch the `design/critic` unit for UI changes; never auto-run destructive DB migration; account for post-push CI/CD; consume the design-owned token source rather than redefining hex or spacing inline. Route substantial direction, token, layout, or structural decisions through autopilot-design; allow only trivial visual tweaks directly. |
 | **library** | Analyze semver impact, export consistency, and usage-example updates for public API changes. |
 | **api** | Check endpoint, body, error, and spec-contract consistency; review auth changes; explain rate-limit migration. |
 | **cli** | Check command, option, I/O format, and exit-code consistency. |

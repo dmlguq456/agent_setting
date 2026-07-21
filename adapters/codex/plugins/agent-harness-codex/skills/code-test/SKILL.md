@@ -66,7 +66,7 @@ belong in adapter files.
 
 Minimum role mapping:
 
-- verification: QA role using `roles/modes/qa/test.md`;
+- verification: QA role using `roles/units/qa/test.md`;
 - review: optional QA reviewer for test adequacy when selected by QA/intensity risk;
 - reporting: editorial/reporting role only for user-facing summary polish, not
   for changing the test verdict.
@@ -83,7 +83,7 @@ Adapters must preserve the portable invariants relevant to this capability:
 
 Additional test-entry gates:
 
-- run `roles/modes/qa/test.md` semantics or the adapter-native projection of
+- run `roles/units/qa/test.md` semantics or the adapter-native projection of
   that mode before claiming verification;
 - if the adapter reports a `verification-runner` tool contract, run its
   contract check or report unavailable;
@@ -99,7 +99,7 @@ Additional test-entry gates:
    - if changed files are provided, use them directly;
    - otherwise infer recent changed files from git state and report the
      inference.
-2. Select the applicable graduated levels from `roles/modes/qa/test.md`:
+2. Select the applicable graduated levels from `roles/units/qa/test.md`:
    syntax, import, smoke, functional, integration, and behavioral runtime
    observation for user-facing surfaces.
    If changed outputs include a spectrogram report, also run the fail-closed

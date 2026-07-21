@@ -168,13 +168,13 @@ For each missing asset, choose one path:
 
 ### Path A — `--figures auto` (default)
 
-Delegate `Agent(자료팀, "<asset spec>")`. Derive the specification from the caption and surrounding prose: function, axes, curves, target dimensions, and venue style. After the agent creates the PDF, reproducibility script, and preview PNG, update the entry with their paths.
+Dispatch the `material/figure-gen` unit with an `<asset spec>`. Derive the specification from the caption and surrounding prose: function, axes, curves, target dimensions, and venue style. After the unit creates the PDF, reproducibility script, and preview PNG, update the entry with their paths.
 
 ### Path B — `--figures flag`
 
-Flag the missing asset in the entry and provide a complete specification, including curve functions, axes, and recommended dimensions. The user can create it or invoke `Agent(자료팀)` separately.
+Flag the missing asset in the entry and provide a complete specification, including curve functions, axes, and recommended dimensions. The user can create it or dispatch the `material/figure-gen` unit separately.
 
-Asset generation belongs to 자료팀 so paste-ready LaTeX remains focused and figure style stays consistent across the paper.
+Asset generation belongs to the `material/*` units so paste-ready LaTeX remains focused and figure style stays consistent across the paper.
 
 Default locations:
 

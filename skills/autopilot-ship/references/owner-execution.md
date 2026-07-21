@@ -58,8 +58,8 @@ Perform these checks read-only:
 
 Before a first production deployment, recommend the applicable checks unless the user explicitly skips them:
 
-- **Security**: when changes touch authentication, secrets, external input, or database migration, have `qa-team` run the portable security-review mode against the change surface. Report new high-confidence findings scored at least 8 and recommend holding deployment while critical findings remain.
-- **Runtime behavior**: have `qa-team` run Level 5b runtime observation against the deployable surface and capture evidence. Recommend holding deployment when it fails.
+- **Security**: when changes touch authentication, secrets, external input, or database migration, dispatch the `qa/security-review` unit against the change surface. Report new high-confidence findings scored at least 8 and recommend holding deployment while critical findings remain.
+- **Runtime behavior**: dispatch the `qa/test` unit for Level 5b runtime observation against the deployable surface and capture evidence. Recommend holding deployment when it fails.
 
 These gates advise; they do not execute production deployment. Record the evidence and any skipped gate in `ship.md`.
 

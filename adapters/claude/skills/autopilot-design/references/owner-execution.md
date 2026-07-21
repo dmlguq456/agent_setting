@@ -27,9 +27,9 @@ Defaults:
 
 Direct boundaries:
 
-- One component or asset may go directly to `design-team` in maker mode.
-- Critique-only work may go directly to `design-team` in critic mode.
-- Reference-only collection may go directly to `material-team` in web-image-search mode.
+- One component or asset may go directly to the `design/maker` unit.
+- Critique-only work may go directly to the `design/critic` unit.
+- Reference-only collection may go directly to the `material/web-image-search` unit.
 - An explicit `/autopilot-design <args>` invocation supplies the routing choice directly.
 
 ## Language Rule
@@ -66,7 +66,7 @@ Accepted phases: `init`, `refs`, `tokens`, `components`, `review`, `handoff`. Wh
 
 - quick-tier: review may be skipped when the selected graph permits
 - standard-tier: run the standard review phase
-- thorough-tier: add `design-team` critic review and external-reference cross-checking
+- thorough-tier: add a `design/critic` review node and external-reference cross-checking
 
 ## Context Auto-Detection
 
@@ -96,10 +96,10 @@ Keep `direct`, `quick`, and artifact-free micro-stages inline. Between dispatche
 | Stage | In-session role | Inputs | Outputs | Write class |
 |---|---|---|---|---|
 | Phase 0 `design-init` | orchestrator | Request + cwd | `00_init/environment_check.md`, `design_state.yaml` | init |
-| Phase 1 `design-refs` | orchestrator; `material-team` for external search | User images, existing design assets, request | `01_refs/brief.md`, `_internal/references/` | refs |
+| Phase 1 `design-refs` | orchestrator; `material/web-image-search` unit for external search | User images, existing design assets, request | `01_refs/brief.md`, `_internal/references/` | refs |
 | Phase 2 `design-tokens` | orchestrator | `01_refs/brief.md`, existing token files | `02_tokens/tokens.md`, `02_tokens/specimen.html`, `tokens.css` or `tailwind.config.ts` | tokens |
-| Phase 3 `design-components` | `design-team` maker | `02_tokens/tokens.*`, `01_refs/brief.md` | `03_components/` specs, mockups, code, and previews | components |
-| Phase 4 `design-review` | `design-team` verifier, then critic | Rendered `03_components/` output | `04_review/verifier.md`, `04_review/critique.md` | review; read-only against components |
+| Phase 3 `design-components` | `design/maker` unit | `02_tokens/tokens.*`, `01_refs/brief.md` | `03_components/` specs, mockups, code, and previews | components |
+| Phase 4 `design-review` | `design/verifier` unit, then `design/critic` unit | Rendered `03_components/` output | `04_review/verifier.md`, `04_review/critique.md` | review; read-only against components |
 | Phase 5 `design-handoff` | orchestrator | Components, reviews, and tokens | `05_handoff/handoff.md`, `05_handoff/exports/` | handoff |
 
 Serialize shared writes. In particular, one phase at a time may update only its own `phases.<phase>` entry in `design_state.yaml` after the preceding confirmation gate.
@@ -116,7 +116,7 @@ Read [references/harness.md](harness.md) for the visual feedback loop, rendering
 
 Complete token, component, and review phases only after rendering and inspecting the result. Valid coordinates, source code, or XML are not visual evidence.
 
-- Load the shared design rules (`<agent-home>/roles/modes/design/_design_rules.md`) and follow their render, self-critique, and bounded iteration loop for HTML/React, SVG, and diagrams.
+- Load the shared design rules (`<agent-home>/roles/units/design/_design-rules.md`) and follow their render, self-critique, and bounded iteration loop for HTML/React, SVG, and diagrams.
 - Inspect overlap, clipping, alignment, hierarchy, contrast, and responsive states relevant to the scope.
 - Show the rendered result to the user; a text-only report is not completion evidence.
 - When the primary visual integration is unavailable, use an available static renderer such as `sharp`, `rsvg`, or `mmdc`, and report the fallback.

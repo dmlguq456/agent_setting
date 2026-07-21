@@ -47,7 +47,7 @@ Verification rigor is derived deterministically from `--intensity`, not selected
 | **light** (default) | Add one fast reviewer on linking precision and one batched editorial polish pass in Stage D.5. Use for daily cron. |
 | **standard** | Add one deep reviewer, two fast reviewers for linking precision, note narrative, and catalog/triage quality, plus one fast source-to-note fact checker. One round. Use for weekly cleanup. |
 | **thorough** | Use two deep reviewers, two fast reviewers, and one fast fact checker for two rounds. Use for monthly cleanup or Notion-migration verification. |
-| **adversarial** | Add one external adversary (`codex-review-team` in the Claude adapter) to thorough. Use for high-stakes work such as initial Phase 3 Notion migration verification. |
+| **adversarial** | Add one external adversary (the review unit dispatched to the codex harness via `stage-dispatch-fallback`) to thorough. Use for high-stakes work such as initial Phase 3 Notion migration verification. |
 
 Fact and source checks follow the rigor budget derived from intensity. This entry point exposes no fact-check opt-out flag.
 

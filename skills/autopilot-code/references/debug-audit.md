@@ -29,7 +29,7 @@ Use `<artifact-root>/plans/{YYYY-MM-DD}_fix_{short-error-name}/`.
 
 ### Step 3: Check the Fix Plan
 
-- Skip research-team review by default; debugging should stay minimal.
+- Skip a `research/plan-review` unit pass by default; debugging should stay minimal.
 - Run a focused plan-check only when selected risk or assurance requires it.
 - Apply one bounded correction for blocking issues; do not reopen a multi-round review loop.
 
@@ -67,8 +67,8 @@ The main agent orchestrates; reviewers and fixers fan out. Write findings, triag
 
 Run multiple parallel reviewers by area and axis; requests for broad or numerous review may justify 10–16 or more workers.
 
-- UI, responsiveness, accessibility, and visual quality → native `디자인팀`, render-aware.
-- Code, behavior, performance, consistency, and data layer → native `품질관리팀` in code-review mode.
+- UI, responsiveness, accessibility, and visual quality → `design/verifier` / `design/critic` review units, render-aware.
+- Code, behavior, performance, consistency, and data layer → `qa/code-review` review units.
 - Each reviewer reads code and renders when possible, then writes findings shaped as `{title, severity, category, files, proposed_fix, risk(low|med|high), confidence}`.
 - Reviewers never edit. Report only source-backed findings and omit unsupported guesses.
 
@@ -89,7 +89,7 @@ git worktree add <repo>-wt/audit-<key> -b <branch> main
 
 Do not use a workflow helper that may branch from a stale base. The 2026-06-15 incident created a worktree 32 commits behind main and produced a merge reverting more than 5,000 lines. Review isolation is harmless; correction bases must be explicit and current.
 
-Link required local dependencies such as `node_modules`, `.cache`, `<artifact-root>`, and `.env.local`, then dispatch one headless correction per cluster. Each fixer stays within its cluster, respects token contracts, and verifies with `tsc --noEmit`, a full `next build` when applicable, and native `디자인팀` verifier evidence for UI changes at light, dark, and mobile-390 views. Commit but do not merge.
+Link required local dependencies such as `node_modules`, `.cache`, `<artifact-root>`, and `.env.local`, then dispatch one headless correction per cluster. Each fixer stays within its cluster, respects token contracts, and verifies with `tsc --noEmit`, a full `next build` when applicable, and `design/verifier` unit evidence for UI changes at light, dark, and mobile-390 views. Commit but do not merge.
 
 ### Step 4: Harvest and Report
 

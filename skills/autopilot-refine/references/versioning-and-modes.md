@@ -61,7 +61,7 @@ Most daily edits are entry-level changes. Running a full QA, snapshot, and versi
 
 ### Adversarial-tier propagation
 
-At `adversarial` intensity, after thorough reviewers return, spawn the external adversary (`Agent(codex-review-team)` in the Claude adapter) with:
+At `adversarial` intensity, after thorough reviewers return, spawn the external adversary (the review unit dispatched to the codex harness via `stage-dispatch-fallback`) with:
 
 1. the proposed diff;
 2. artifact intent from `pipeline_summary.md`; and

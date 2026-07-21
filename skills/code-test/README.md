@@ -16,7 +16,7 @@ Record concrete verification evidence after code-execute or on demand. code-test
 
 The single authority for resolving `$ARG` is [autopilot-code plan resolution](../autopilot-code/references/arguments-and-decisions.md#plan-resolution). When no plan matches, code-test may interpret the argument as a file or directory to test.
 
-## Delegation to 품질관리팀
+## Verification — `qa/test` unit
 
 Run the applicable graduated verification levels from 1 through 5 and stop at the first failure. For a user-facing surface change, add Level 5b behavioral runtime observation when the selected assurance permits it.
 

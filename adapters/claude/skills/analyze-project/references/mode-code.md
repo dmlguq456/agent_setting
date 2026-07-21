@@ -69,7 +69,7 @@ Write role-separated Markdown in the selected target artifact language under `<a
 | `function_name` | file.py:L | `(arg1, ...) → return` | `caller.func1`, `caller.func2` |
 ```
 
-Include every public class, key function, and function with cross-module callers. The `Called by` column lets downstream roles, especially **plan-team**, assess impact without re-searching source.
+Include every public class, key function, and function with cross-module callers. The `Called by` column lets downstream roles, especially the `plan/plan-author` unit, assess impact without re-searching source.
 
 ## Phase 3: Project Instruction File
 
@@ -81,7 +81,7 @@ Write four flat files at the `code/` root. `autopilot-lab` reads them on every S
 
 ### 3.5.1 `experiment_conventions.md`
 
-This is the project's experiment-pattern source of truth. Project-local conventions take priority; `mem profile 07_coding_convention` fills only missing entries. autopilot-lab, autopilot-spec, and **dev-team new-lib** receive this file first and the cross-project profile second.
+This is the project's experiment-pattern source of truth. Project-local conventions take priority; `mem profile 07_coding_convention` fills only missing entries. autopilot-lab, autopilot-spec, and the `dev/new-lib` unit receive this file first and the cross-project profile second.
 
 Extract the project's actual structure:
 
@@ -189,7 +189,7 @@ Confirm that every source file in major directories such as `models/`, `utils/`,
 
 ## Phase 5: QA Verification
 
-Unless `--skip-qa` is set, invoke **qa-team code-review** to compare updated Interface Reference entries with live source.
+Unless `--skip-qa` is set, dispatch the `qa/code-review` unit to compare updated Interface Reference entries with live source.
 
 - Scope: files updated in this run.
 - Minimum: two entries per file, checking signature, path, and line number.

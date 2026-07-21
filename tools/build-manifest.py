@@ -187,18 +187,9 @@ def build_skills(canonical):
 
 
 def build_agents(canonical):
+    """Native agent rows are kernel-only: team agents retired into the unit catalog
+    (roles/units/**), which is dispatched, never instantiated as a native agent."""
     rows = []
-    for profile, spec in canonical["roles"].items():
-        rows.append({
-            "slug": "agent__%s" % profile,
-            "name": profile,
-            "model": "",
-            "modes": [
-                mode for mode, mode_spec in canonical["modes"].items()
-                if mode_spec["role"] == profile and not mode_spec.get("internal")
-            ],
-            "blurb": spec["responsibility"],
-        })
     for agent in canonical["kernel"]["agents"]:
         rows.append({
             "slug": "agent__%s" % agent,
@@ -566,28 +557,24 @@ def _capability_catalog(canonical):
 
 
 def _role_catalog(canonical):
+    """Render the unit catalog (the former team-role rows retired into roles/units/**)."""
     lines = [
         "## Role Catalog",
         "<!-- GENERATED: harness-manifest.json -->",
         "",
-        "| Role profile | Portable model role | Primary responsibility | Claude realization | Codex realization | OpenCode realization |",
+        "| Family | Unit | Portable model role | Worker type | Floor | Catalog source |",
         "|---|---|---|---|---|---|",
     ]
-    for profile, spec in canonical["roles"].items():
-        claude_name = "codex-review-team" if profile == "external-adversary" else profile
+    for unit, spec in canonical["units"].items():
         lines.append(
-            "| `%s` | `%s` | %s | "
-            "`adapters/claude/agents/%s.md` | "
-            "`adapters/codex/agents/%s.toml` | "
-            "`adapters/opencode/agents/%s/%s.md` |"
+            "| `%s` | `%s` | `%s` | `%s` | `%s` | `roles/units/%s.md` |"
             % (
-                profile,
-                _md_cell(spec["portable_role"]),
-                _md_cell(spec["responsibility"]),
-                claude_name,
-                profile,
-                profile,
-                profile,
+                _md_cell(spec["family"]),
+                unit,
+                _md_cell(spec["role"]),
+                _md_cell(spec["worker_type"]),
+                _md_cell(spec["floor"]),
+                unit,
             )
         )
     return "\n".join(lines)
@@ -634,7 +621,7 @@ def build_manifest(canonical):
         "manifest_version": canonical["product"]["manifest_version"],
         "skills": skills,
         "agents": build_agents(canonical),
-        "portable_roles": canonical["roles"],
+        "units": canonical["units"],
         "modes": canonical["modes"],
         "packs": canonical["packs"],
         "profiles": canonical["profiles"],

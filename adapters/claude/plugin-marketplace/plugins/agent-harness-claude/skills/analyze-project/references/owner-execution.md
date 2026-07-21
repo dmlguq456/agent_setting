@@ -78,17 +78,17 @@ For doc mode, derive `{name}` from the input folder basename (positional argumen
 
 ## Mode Overview
 
-All three modes follow the same flow: discover input → analyze directly or delegate to `research-team` → write structured output under `<artifact-root>/analysis_project/` → verify. The relevant reference preserves each mode's complete phase procedures, prompts, and templates.
+All three modes follow the same flow: discover input → analyze directly or dispatch the `research/research-survey` unit (composed route) → write structured output under `<artifact-root>/analysis_project/` → verify. The relevant reference preserves each mode's complete phase procedures, prompts, and templates.
 
-- **code** — Analyze codebase modules; produce topic-specific Markdown, an Interface Reference, an update to the project's active instruction file when applicable, and four lab inputs (`experiment_conventions`, `experiment_readiness`, `cleanup_candidates`, and `similar_models`). In Phase 0, inspect `_last_run.yaml` to choose incremental or full analysis. Run Phase 5 QA with `qa-team`. → `mode-code.md`
-- **paper** — Delegate analysis of reference PDFs and the user's own paper to `research-team`. Branch by purpose: (A) survey external PDFs for citation and grounding, or (B) review an in-progress `main.tex`, with `00_self_paper_analysis.md` as the main output. Treat `00_overview_and_constraints.md` as the highest-priority integrated output. → `mode-paper.md`
-- **doc** — Classify writing materials (reviewer comments, templates, samples, and miscellaneous inputs), then delegate analysis to `research-team`; produce per-task `doc/{name}/` output and a `00_overview.md` inventory. → `mode-doc.md`
+- **code** — Analyze codebase modules; produce topic-specific Markdown, an Interface Reference, an update to the project's active instruction file when applicable, and four lab inputs (`experiment_conventions`, `experiment_readiness`, `cleanup_candidates`, and `similar_models`). In Phase 0, inspect `_last_run.yaml` to choose incremental or full analysis. Run Phase 5 QA by dispatching the `qa/code-review` unit. → `mode-code.md`
+- **paper** — Dispatch analysis of reference PDFs and the user's own paper to the `research/research-survey` unit. Branch by purpose: (A) survey external PDFs for citation and grounding, or (B) review an in-progress `main.tex`, with `00_self_paper_analysis.md` as the main output. Treat `00_overview_and_constraints.md` as the highest-priority integrated output. → `mode-paper.md`
+- **doc** — Classify writing materials (reviewer comments, templates, samples, and miscellaneous inputs), then dispatch analysis to the `research/research-survey` unit; produce per-task `doc/{name}/` output and a `00_overview.md` inventory. → `mode-doc.md`
 
 ## Reference Index
 
 | File | When to load (mandatory) | Content |
 |---|---|---|
 | `mode-code.md` | When running `--mode code` (required) | Phase 0 incremental/full branch and `_last_run.yaml` schema; Phase 1 codebase analysis; Phase 2 documentation and required Interface Reference sections; Phase 3 project-instruction update; Phase 3.5 templates for the four lab inputs; Phase 4 coverage verification; Phase 5 QA verification |
-| `mode-paper.md` | When running `--mode paper` (required) | Complete `research-team` delegation prompt: inputs, §0 complete own-paper analysis, §1-6 reference survey, `00_overview_and_constraints.md` structure, and post-analysis steps |
+| `mode-paper.md` | When running `--mode paper` (required) | Complete `research/research-survey` dispatch prompt: inputs, §0 complete own-paper analysis, §1-6 reference survey, `00_overview_and_constraints.md` structure, and post-analysis steps |
 | `mode-doc.md` | When running `--mode doc` (required) | Phase 1 input-scope resolution and classification heuristics; Phase 2 per-category delegation prompt for reviewers, formats, samples, and miscellaneous input plus `00_overview.md`; Phase 3 verification |
 | `outputs-and-integration.md` | When finalizing output structure or selecting follow-up capabilities | Standard output structure by mode, integration rules for `autopilot-code`, `autopilot-lab`, `autopilot-draft`, and `autopilot-research`, and a typical workflow |

@@ -21,8 +21,8 @@ Read `status: pending` items under `<target>/_feedback/`. Frontmatter contains `
 
 **B. UI-code feedback** (`kind: ui-code`, general screen feedback) — split into three risk levels (PRD §16.5 Q4):
 
-- **Visual polish, low risk** — fix it on a worktree branch, have `Agent(디자인팀 verifier)` inspect the real screen in light, dark, and mobile modes, then create a **change-review** entry in the worklog-board `lib/change-review.ts` queue (`_change_review/<id>.md`, `risk: visual`) with the diff and screenshots. Approval marks it `approved-for-merge`; the agent harvest step performs the merge under PRD §16.5 Q2. Rejection marks the worktree for disposal.
-- **Component structure, medium risk** — **do not modify automatically**. Create only a `_change_review` entry with `risk: structure` and a confirmation-required marker. Start `autopilot-code` only after user confirmation. The design-team render gate can catch visual regressions but cannot validate structural or data intent.
+- **Visual polish, low risk** — fix it on a worktree branch, dispatch the `design/verifier` unit to inspect the real screen in light, dark, and mobile modes, then create a **change-review** entry in the worklog-board `lib/change-review.ts` queue (`_change_review/<id>.md`, `risk: visual`) with the diff and screenshots. Approval marks it `approved-for-merge`; the agent harvest step performs the merge under PRD §16.5 Q2. Rejection marks the worktree for disposal.
+- **Component structure, medium risk** — **do not modify automatically**. Create only a `_change_review` entry with `risk: structure` and a confirmation-required marker. Start `autopilot-code` only after user confirmation. The `design/verifier` render gate can catch visual regressions but cannot validate structural or data intent.
 - **DB, enum, or API specification, high risk** — this conflicts with the zero-DB-write invariant from v45–v48 and **must go through the specification**. Do not touch code. Create a `_change_review` item with `risk: db` and confirmation required, and state in the report that it must escalate through an `autopilot-spec` update and then `autopilot-code`.
 
 ### After processing

@@ -40,7 +40,7 @@ Route narrower work directly:
 
 - implementation, refactoring, or debugging → `autopilot-code`
 - UI design without blueprint changes → `autopilot-design`
-- a small implementation-only edit or rename → `dev-team` under the owning code workflow
+- a small implementation-only edit or rename → the `dev/*` units under the owning code workflow
 - deployment, environment, domain, or migration setup → [`autopilot-ship`](../../autopilot-ship/SKILL.md)
 
 ## Language Rule
@@ -63,5 +63,5 @@ Follow an explicit artifact or audience language when provided. Otherwise, write
 |---|---|---|
 | `invocation-and-modes.md` | Parsing options, inferring modes, or choosing new versus resumed work | `--mode`, `--intensity`, `--user-refine`, mode clues, `pipeline_state.yaml` detection, step classification, confirmation summary, update-mode contract, and version management |
 | `prd-authoring.md` | Writing or updating the PRD, Steps 1–3.5 | Information collection, one-screen confirmation, concurrency guard, three-part PRD authoring, semantic/rule boundary checks, PRD template, architecture diagrams, and bundled-update logic |
-| `scaffolding.md` | Scaffolding and skeleton work, Step 4 | Reference-source selection, repository or checkpoint acquisition, pretrained-checkpoint preflight, `dev-team` new-library work, result confirmation, and Step 5 gate |
+| `scaffolding.md` | Scaffolding and skeleton work, Step 4 | Reference-source selection, repository or checkpoint acquisition, pretrained-checkpoint preflight, `dev/new-lib` unit work, result confirmation, and Step 5 gate |
 | `operations-and-examples.md` | Deployment routing, gate behavior, return format, continuity, or examples | `autopilot-ship` routing, forbidden zones, gate branches, pipeline-state management, return format, optional agent-owned continuity notes, and worked examples |

@@ -62,7 +62,7 @@ For the complete aspect table, source mapping, argument semantics, decision defa
 | Phase | Content |
 |---|---|
 | 1 Source Discovery | Discover, classify, and index sources; convert docx, pptx, and hwpx inputs to a PDF-and-PNG representation when needed |
-| 2 Aspect Analysis | 2.1 three parallel `research-team` extraction passes → 2.2 consensus synthesis (confidence 1.0/0.6/0.3) |
+| 2 Aspect Analysis | 2.1 three parallel `research/research-survey` unit shards (composed map-reduce) → 2.2 consensus synthesis (confidence 1.0/0.6/0.3) |
 | 3 Cross-reference | Check consistency across aspects such as color, font, terminology, metrics, and layers |
 | 3.5 Prior-version dialectic | `--mode update` only — thesis/antithesis → synthesis (confirm/refine/contradict/new) |
 | 4 Multi-agent QA | Run four adversarial review axes in parallel: coverage, accuracy, fact-checking, and external review |

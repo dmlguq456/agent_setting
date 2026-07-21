@@ -47,7 +47,7 @@ Proceed? (proceed / modify — change mode or stack / stop)
 
 ### Step 3: Author the PRD in Three Reviewed Sections
 
-> **Stage-dispatch note:** PRD authoring is conductor-inline. The conductor writes `spec/prd.md` at a point that requires its own judgment, so it is not dispatched to a stage worker. The only dispatched stage is scaffold (`개발팀` new-lib); see the stage-worker mapping in `scaffolding.md`.
+> **Stage-dispatch note:** PRD authoring is conductor-inline. The conductor writes `spec/prd.md` at a point that requires its own judgment, so it is not dispatched to a stage worker. The only dispatched stage is scaffold (`dev/new-lib` unit); see the stage-worker mapping in `scaffolding.md`.
 
 Do not write all of `spec/prd.md` at once. Draft it in three sections and offer review after each. Batch them automatically when the user asks to move quickly.
 

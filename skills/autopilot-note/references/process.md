@@ -59,12 +59,12 @@ When a reviewer raises an issue, record it in `_internal/reviews/round_{N}.md` a
 
 ### Stage D.5 — Editorial polish (light+, once per batch)
 
-Notes are user-facing artifacts. Send all note bodies created or updated in the run, plus the Stage E digest, to `Agent(편집팀)` in polish mode as one batch:
+Notes are user-facing artifacts. Send all note bodies created or updated in the run, plus the Stage E digest, to the `editorial/polish` unit as one batch:
 
 - Scope: wording in the selected audience language, including literal-translation artifacts, awkward prose, excessive expansion, and consistency of concise note style
 - Preserve all frontmatter, `[[links]]`, slugs, numbers, metrics, code identifiers, headings, tables, and structure
 - Invoke once for the batch, never once per note. Skip when the run creates no notes.
-- Skip in quick mode. Keep responsibilities separate: reviewers in C.5 check consistency and accuracy; the editorial team checks readability.
+- Skip in quick mode. Keep responsibilities separate: reviewers in C.5 check consistency and accuracy; the editorial unit checks readability.
 
 ### Stage E — Generate the digest as a run-based review group
 

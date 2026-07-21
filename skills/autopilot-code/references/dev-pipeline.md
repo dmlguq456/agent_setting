@@ -2,7 +2,7 @@
 
 Select the stage graph from `--intensity` before QA. `direct` performs produce plus sanity/report without this durable pipeline. `quick` uses one registered-headless dispatch-depth-1 one-shot owner with an inline micro-plan, plan-check-lite, and focused verification. standard+ follows the durable pipeline below.
 
-Use independent plan review only when selected by the graph: UI or visual risk → native `디자인팀`; research or domain risk → native `연구팀`; construction quality → native `품질관리팀`.
+Use independent plan review only when selected by the graph: UI or visual risk → the `design/critic` unit; research or domain risk → the `research/plan-review` unit; construction quality → the `qa/plan-review` unit. Each runs as a sibling review node dispatched by the owner per the compiled route.
 
 ### Standard+ Stage Dispatch
 
@@ -76,7 +76,7 @@ If a stage dies immediately from usage, session, or authentication limits, the w
 
 ### Optional Material Delegation
 
-When implementation or reporting requires result plots, experiment-log visualization, or result tables, invoke native `자료팀` inside code-execute or code-report. Training and experiment execution remain in autopilot-code; material-team owns postprocessing. Record generated asset paths in the relevant dev log.
+When implementation or reporting requires result plots, experiment-log visualization, or result tables, the code-execute or code-report worker records the need in its artifact, and the owner dispatches the matching `material/*` unit (e.g. `material/figure-gen`, `material/data-script`) as a sibling node per the compiled route. Training and experiment execution remain in autopilot-code; the material units own postprocessing. Record generated asset paths in the relevant dev log.
 
 ### Step 1: code-plan
 

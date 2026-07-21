@@ -6,7 +6,7 @@ inventory. It is adapter-owned output, not a legacy runtime mode copy.
 ## Source Order
 
 1. Read `roles/MODES.md`.
-2. Read `roles/modes/editorial/polish.md` for the portable mode contract.
+2. Read `roles/units/editorial/polish.md` for the portable mode contract.
 3. Run `adapters/codex/bin/preflight.sh mode-info editorial/polish`.
 4. Obey the reported status, tool contract, runtime surface, and fallback before claiming support.
 
@@ -27,51 +27,70 @@ inventory. It is adapter-owned output, not a legacy runtime mode copy.
 
 ## Projected Portable Mode Contract
 
-The following contract is projected from `roles/modes/editorial/polish.md` with non-Codex runtime
+The following contract is projected from `roles/units/editorial/polish.md` with non-Codex runtime
 surfaces rewritten to Codex-native preflight/tool-contract wording.
 
-# Mode: polish
+---
+unit: editorial/polish
+family: editorial
+role: deep editor
+worker_type: stage
+floor: low
+read_only: false
+stance: none
+io:
+  verdict: [DONE, BLOCKED]
+  return: _shared/dual-io.md
+tools: []
+branches: [direct, pipeline]
+aliases: {}
+---
 
-> The editorial-role router reads this file, then adopts the persona.
+# Unit: editorial/polish
+
+In-place editing of an artifact that already uses the right language but needs natural
+phrasing, consistent terminology, reduced unnecessary language mixing, and better
+readability for its audience. Shared persona, scope, language guidance, catch-net,
+quality check, and return discipline: `roles/units/editorial/_voice.md` (read it before
+acting).
 
 Invocation: `polish <document path>`.
 
-Use this mode when the artifact already uses the right language but needs natural phrasing, consistent terminology, reduced unnecessary language mixing, and better readability for its audience.
+## Invocation gate (single source — every caller follows this)
 
-## Invocation Gate
+For pipeline calls, both conditions must hold — forcing polish on intermediates the
+user never sees wastes cost:
 
-For pipeline calls, both conditions must hold:
+1. **The artifact is directly user-facing**: a final report (code-report, audit report,
+   research report set, final draft), or a pause surface the user will inspect (e.g. a
+   user-refine pause).
+2. **The selected graph's derived rigor is standard or higher.** Quick and light paths
+   skip polish.
 
-1. The artifact is directly user-facing, such as a final report, audit, research report, final draft, or a pause surface the user will inspect.
-2. The selected graph's derived rigor is standard or higher. Quick and light paths skip polish.
-
-Capabilities without an independent rigor flag, such as audit, apply only the first condition. A direct editorial call is explicitly user-directed and bypasses this gate.
+Capabilities without an independent rigor flag (such as audit) apply only condition 1.
+A direct editorial call is explicitly user-directed and bypasses this gate entirely.
 
 ## Procedure
 
 1. Read the entire document.
-2. Rewrite borrowed or transliterated wording that harms audience understanding, explain necessary foreign terms, replace literal source-language order with natural target-language order, unify terminology, and improve rhythm with paragraphs, bullets, and spacing.
-3. Preserve LaTeX, code, equations, domain terms, and formal notation.
-4. Edit in place without creating a snapshot.
-5. Report 3–5 lines in the user's communication language unless an explicit reporting contract overrides it.
+2. Sentence-level pass: rewrite borrowed or transliterated wording that harms audience
+   understanding; split or explain unexplained foreign terms that break the flow;
+   replace literal source-language order with natural target-language order; unify
+   divergent spellings of one concept; use line breaks, bullets, and whitespace to
+   create breathing room.
+3. Preserve LaTeX, code, equations, domain terms, and formal notation untouched.
+4. Edit in place; create no snapshot.
+5. Report per the voice fragment's return discipline.
 
-## Structural Catch-Net
+## Structural catch-net
 
-Polish is not the authoring stage. Report and recommend refinement rather than redesigning paragraphs when you find:
-
-- a paste-ready block detached from surrounding argument flow;
-- section-level repetition of the same substance;
-- verbatim metrics or hyperparameters inside an introductory or framing paragraph;
-- rebuttal-style comparison tables, structured Q&A, or point-by-point lists pasted into paper prose;
-- marketing superlatives, hooks, calls to action, or decision boxes in an administrative artifact.
-
-Perform sentence-level polish, then list structural issues separately for `draft-refine` or `autopilot-refine`.
+Polish is not the authoring stage. Apply the catch-net in the voice fragment: perform
+sentence-level polish only, then list structural signals as separate severity-marked
+items recommending `draft-refine` or `autopilot-refine` — never redesign paragraphs.
 
 ## Output
 
-- Path of the in-place edited document
-- 3–5 line summary in the appropriate audience/reporting language
-- One or two intentional terminology choices
-- Separate catch-net findings when present
-
-Do not return the full document body.
+- Path of the in-place edited document, summary, terminology decisions, and any
+  catch-net findings as separate items — per the voice fragment. Never the body.
+- Verdict: `DONE` on a completed pass (catch-net findings do not block); `BLOCKED` when
+  the target is unreadable or an agent-facing surface the unit must decline.

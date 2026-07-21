@@ -2,18 +2,18 @@
 
 At `standard+`, dispatch report generation and QA as separate dispatch-depth-2 stages under the [pipeline stage contract](pipeline-search-analysis.md). QA reads report files, not the prior session's conversation or hidden reasoning.
 
-| Stage | In-session team | Inputs | Outputs | Write class |
+| Stage | Unit | Inputs | Outputs | Write class |
 |---|---|---|---|---|
-| Step 4a: Report Generation | 연구팀 | `analysis_summary.md`, optional chaining and code search, search results, cards | Mode-specific report set | T1/T2 deliverables |
-| Step 4b: QA Loop | 연구팀 review subroles; external adversary at adversarial rigor | Reports and cards | `_internal/reviews/*`, optional `unresolved.md` | T3 raw |
+| Step 4a: Report Generation | `research/research-survey` unit (report branch) | `analysis_summary.md`, optional chaining and code search, search results, cards | Mode-specific report set | T1/T2 deliverables |
+| Step 4b: QA Loop | review units (`research/fact-check`, `research/claim-verify`); external adversary at adversarial rigor | Reports and cards | `_internal/reviews/*`, optional `unresolved.md` | T3 raw |
 
-When the reports require a new aggregate visualization or cross-card metric plot, Step 4a may invoke `Agent(자료팀, "<spec>")`. 연구팀 owns ordinary taxonomy tables, ASCII lineage diagrams, and per-paper cards.
+When the reports require a new aggregate visualization or cross-card metric plot, the Step 4a worker records the asset `<spec>` in its artifact and the owner dispatches the `material/figure-gen` unit as a sibling node. The survey unit owns ordinary taxonomy tables, ASCII lineage diagrams, and per-paper cards.
 
 #### Step 4a: Generate reports
 
 ```text
-Agent(subagent_type="연구팀"):
-  "Research survey mode: Report generation.
+Dispatch unit research/research-survey:
+  "Report generation.
    Analysis directory: {artifact_dir}
    Topic: {topic}
    Output directory: {artifact_dir}
@@ -39,7 +39,7 @@ Shared report rules:
 - End every comparison table with a bold **Takeaway** line.
 - Source numbers and claims only from the analysis summary and cards.
 - Link sibling reports as `[text](filename.md)`.
-- After adversarial claim verification, label material findings with `high`, `medium`, or `low` confidence. Follow [claim-verify](../../../roles/modes/research/claim-verify.md).
+- After adversarial claim verification, label material findings with `high`, `medium`, or `low` confidence. Follow [claim-verify](../../../roles/units/research/claim-verify.md).
 - Remove or qualify killed and abstained claims. Record them transparently in a localized section equivalent to `## Refuted or unverified claims`, with the contradiction source URL.
 
 ## Academic mode: nine files
@@ -206,14 +206,14 @@ Identify unmet needs, compare organic, partnership, and acquisition entry option
 
 #### Step 4a polish: optional editorial pass
 
-At `standard+`, invoke one 편집팀 mode-B pass over the selected report set. Skip at `direct`, `quick`, or on explicit user request.
+At `standard+`, dispatch one `editorial/polish` unit mode-B pass over the selected report set. Skip at `direct`, `quick`, or on explicit user request.
 
 ```text
 Mode B — polish multiple files in place.
 Directory: {artifact_dir}/
 Files: the complete report set for the selected mode.
 
-Use the active runtime adapter's `editorial-team` polish mode.
+Use the `editorial/polish` unit contract.
 Improve natural phrasing in the selected report language, terminology consistency,
 line breaks, bullets, and spacing. Preserve claims, values, and citations. Preserve
 canonical domain terms when translation would reduce precision. Apply terminology
@@ -234,7 +234,7 @@ Derive rigor from `--intensity`; see [CONVENTIONS §1.1](../../../core/CONVENTIO
 | `thorough` | Two deep reviews | One fast fact-check | Skip | Up to two |
 | `adversarial` | Two deep reviews plus external adversary | One fast fact-check | One skeptical N-vote verifier | Two plus one external pass |
 
-The quality reviewer owns coverage, non-fabrication, progressive disclosure, and roadmap actionability. The fact-checker compares report claims verbatim against cards. The adversarial claim verifier searches for external contradictory evidence under [claim-verify](../../../roles/modes/research/claim-verify.md).
+The quality reviewer owns coverage, non-fabrication, progressive disclosure, and roadmap actionability. The fact-checker compares report claims verbatim against cards. The adversarial claim verifier searches for external contradictory evidence under [claim-verify](../../../roles/units/research/claim-verify.md).
 
 ```text
 round = 0
@@ -264,7 +264,7 @@ Loop:
 
   if no red findings: exit
   if quick: write unresolved.md with any residuals and exit
-  if round < 2: reinvoke 연구팀 with quality findings, mandatory named-card
+  if round < 2: re-dispatch the survey unit with quality findings, mandatory named-card
      grounding, and removal or qualification of killed claims
   otherwise: write unresolved.md, tag fact residuals [FACT-RESIDUAL], and exit
 ```

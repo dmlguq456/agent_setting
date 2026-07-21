@@ -65,4 +65,4 @@ Follow an explicit artifact or audience language when provided. Otherwise, write
 | `scope-qa-usage.md` | When resolving sources, outputs, rigor, boundaries, or post-run checks | Six input families, output locations, intensity-derived rigor, examples, when-not-to-use guidance, and checklist |
 | `feedback-mode.md` | When processing `--feedback` | Feedback inputs, proposal/UI-code routing, risk branches, completion state, and boundaries |
 | `resolution.md` | When running Stage A or C matching | Source-change detection and target resolution for cards, backbones, tasks, papers, intent, and work status |
-| `process.md` | When running Stages A-F (required) | Scan, analyze, match, verify, apply, `editorial-team` polish, digest, and report |
+| `process.md` | When running Stages A-F (required) | Scan, analyze, match, verify, apply, `editorial/polish` unit polish, digest, and report |

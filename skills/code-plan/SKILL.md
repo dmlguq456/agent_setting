@@ -17,7 +17,7 @@ metadata:
 
 Use the deepest eligible planning profile selected by the active adapter when cross-file reasoning or call-site analysis would benefit from it.
 
-> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated dispatch-depth-2 stage worker dispatched by the `autopilot-code` conductor. Inputs are the task description and `<artifact-root>/plans/`; never depend on prior-stage conversation. The write class is `plan/plan.md`, an existing or explicitly requested audience-language companion such as legacy `plan/plan_ko.md`, and `_internal/plan_reviews/`. Any `plan-team` delegation remains inside this stage session.
+> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated dispatch-depth-2 stage worker dispatched by the `autopilot-code` conductor. Inputs are the task description and `<artifact-root>/plans/`; never depend on prior-stage conversation. The write class is `plan/plan.md`, an existing or explicitly requested audience-language companion such as legacy `plan/plan_ko.md`, and `_internal/plan_reviews/`. The stage runs as the `plan/plan-author` unit (the node's unit); independent plan review is the sibling `plan-check` node dispatched by the conductor, not an in-stage delegation.
 
 > **Language rule**: Follow the audience and artifact language contract in [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md). Write the canonical plan in the selected artifact language; do not generate a language mirror merely because the skill source is English or the conversation uses a particular language.
 
@@ -33,7 +33,7 @@ Record any user-facing pause for `pipeline_summary.md` Decision Points.
 
 ## Delegate Planning
 
-Invoke `plan-team` as a subagent with this task, adapted only for the selected artifact language and known prior-plan state:
+Run the `plan/plan-author` unit with this task, adapted only for the selected artifact language and known prior-plan state:
 
 ```text
 Plan mode. Create a new implementation plan.
@@ -46,7 +46,7 @@ Date: {YYYY-MM-DD}
 {If partial: "Failed steps from previous execution: [list from plan frontmatter failed_steps]"}
 ```
 
-Plan procedure, plan structure, and the single-line return contract are owned by the `plan-team` persona; do not restate them in the prompt. The stage orchestrator receives only the plan-team return line (`{path} -- {verdict}`); plan content stays in the file.
+Plan procedure, plan structure, and the single-line return contract are owned by the `plan/plan-author` unit persona; do not restate them in the prompt. The stage orchestrator receives only the unit's return line (`{path} -- {verdict}`); plan content stays in the file.
 
 ## Plan-Check Assurance
 
@@ -62,11 +62,11 @@ Set `{log_dir}` to the task root above `plan/`; for example, `<artifact-root>/pl
 | `thorough` | Deeper or multi-axis review when explicitly selected by the graph | Up to two corrections after synthesizing reviews |
 | `adversarial` | Thorough review plus failure-mode, security, and adversarial critique when the adapter proves availability | Explicit unavailable requests fail loudly; automatic escalation falls back to thorough |
 
-After `plan-team` returns:
+After the `plan/plan-author` unit returns:
 
 1. Check whether the selected graph requires independent review. Otherwise run an inline plan-check.
-2. When independent review is required, invoke `qa-team` in plan-review mode and write `{log_dir}/_internal/plan_reviews/round_{N}.md`. Use bounded separate reviewers only when the owner-worker graph and rigor select them.
-3. If blocking issues exist, re-invoke `plan-team` for at most one correction at standard or the selected thorough/adversarial budget. Do not loop solely because rigor is high.
+2. When independent review is required, the conductor dispatches the `plan-check` sibling node (unit `qa/plan-review`), which writes `{log_dir}/_internal/plan_reviews/round_{N}.md`. Use bounded separate reviewers only when the owner-worker graph and rigor select them.
+3. If blocking issues exist, re-enter the plan boundary for at most one correction at standard or the selected thorough/adversarial budget. Do not loop solely because rigor is high.
 4. If concerns remain after the budget, add them to the plan's risk or unresolved section and continue only when the caller can safely own the risk.
 
 Record any user-facing pause, including active-plan ambiguity, for the pipeline summary.
@@ -75,7 +75,7 @@ Record any user-facing pause, including active-plan ambiguity, for the pipeline 
 
 The canonical `plan.md` should normally be sufficient because its prose already follows the selected artifact language while code identifiers and paths remain unchanged. Create or update a companion only when the user explicitly requests a second language, an external audience contract requires it, or an existing workflow depends on a legacy companion such as `plan_ko.md`.
 
-When a companion is required, have `editorial-team` translate from canonical `plan.md` while preserving code identifiers, file paths, library names, step numbering, and semantics. Use the existing project naming convention for the output. Consult memory for writing preferences only when the acting agent judges the retrieved preference relevant; project and explicit audience requirements take precedence.
+When a companion is required, dispatch the `editorial/translate` unit (a conditional companion node appended at compile) to translate from canonical `plan.md` while preserving code identifiers, file paths, library names, step numbering, and semantics. Use the existing project naming convention for the output. Consult memory for writing preferences only when the acting agent judges the retrieved preference relevant; project and explicit audience requirements take precedence.
 
 Report the canonical plan path, any requested companion path, a compact summary, and the QA verdict in the conversation language.
 

@@ -74,14 +74,14 @@ Run `Stage A → B (B.1/B.2) → B.5 → C → D (D.5) → E` in order. The refe
 | Stage B · B.1 · B.2 | Determine effective scope from auto-scope signals and type-specific aspect mappings | `scope-and-baseline.md` |
 | Stage B.5 | Ingest the minor-log baseline for document and research artifacts (P1 input) | `scope-and-baseline.md` |
 | Stage C | Run per-aspect pre-checks and lints for document, research, or plan artifacts | `aspect-lints.md` |
-| Stage D · D.5 | Render the report, polish through `editorial-team`, and format the chat summary | `report-and-autofix.md` |
+| Stage D · D.5 | Render the report, polish through the `editorial/polish` unit, and format the chat summary | `report-and-autofix.md` |
 | Stage E | Auto-fix chain (default — `--report-only` opt-out) | `report-and-autofix.md` |
 
 ## Constraints
 
 - **Audit pass is read-only** — Stage A-D never modify the audited artifact (the audit log is written under `_internal/audit/`). Stage E _dispatches a separate skill_ (`autopilot-code` or `autopilot-refine`) which then makes edits per its own confirmation flow. With `--report-only`, Stage E is skipped entirely.
 - **No web fetch** — inspect only local `<artifact-root>/*` files through direct reads, searches, and static scans.
-- **No delegated role invocation** — run `/audit` in the current agent session without `research-team` or `qa-team` workers. A future version may add intensity-derived, agent-backed linting.
+- **No delegated role invocation** — run `/audit` in the current agent session without dispatching `research/*` or `qa/*` units. A future version may add intensity-derived, agent-backed linting.
 - **Type-specific aspects** — research aspects do not run on documents artifacts and vice versa. `--scope cross-ref` on plans warns and skips.
 - **Suggestions only in Stages A-D** — each 🔴 or 🟡 finding may include a "Suggested fix" line. Stage E dispatches those suggestions to the appropriate capability, which follows its own application, halt, review, QA, commit, and reporting protocol.
 
@@ -98,5 +98,5 @@ Run `Stage A → B (B.1/B.2) → B.5 → C → D (D.5) → E` in order. The refe
 |---|---|---|
 | `scope-and-baseline.md` | Every invocation, before Stages A-B.5 (required) | Artifact-type detection, effective-scope signals and mappings, and minor-log baseline ingestion with P1 diffing, cross-correlation, and chat output |
 | `aspect-lints.md` | When running Stage C | Pre-checks for `--no-fact-check`; document fact/style/structure/cross-reference/coverage lints; research consistency/tier/coverage/cross-card lints; plan test/lint/code-review/TODO/implementation/semantic-deterministic checks |
-| `report-and-autofix.md` | When running Stages D-E | Report template, `editorial-team` polish, chat format, and auto-fix chain conditions, prompt, dispatch, logging, and rationale |
+| `report-and-autofix.md` | When running Stages D-E | Report template, `editorial/polish` unit polish, chat format, and auto-fix chain conditions, prompt, dispatch, logging, and rationale |
 | `examples-and-checklist.md` | For invocation examples or follow-up after `--report-only` | Examples and the post-audit checklist |

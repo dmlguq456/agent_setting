@@ -4,7 +4,7 @@
 
 ## Overview
 
-Creates an initial document strategy for rebuttal, paper, review, report, proposal, or presentation from analyzed reference materials. It delegates to `연구팀`, runs the selected review/source-check pass, and creates a language companion only when the user explicitly requests one, an external audience requires one, or the existing workflow already depends on one.
+Creates an initial document strategy for rebuttal, paper, review, report, proposal, or presentation from analyzed reference materials. It dispatches the `research/research-survey` unit, runs the selected review/source-check pass, and creates a language companion only when the user explicitly requests one, an external audience requires one, or the existing workflow already depends on one.
 
 autopilot-draft invokes this skill automatically at Step 2. Direct use is uncommon.
 
@@ -37,7 +37,7 @@ Require these analysis files under `{output_dir}/analysis/`:
 
 If one is missing, fail: autopilot-draft Step 1 should have created it.
 
-## Delegation — `연구팀`
+## Delegation — `research/research-survey` unit
 
 Write the strategy from the mode-specific template. When an automatically discovered format spec exists, extract venue-specific sections, length, and tone.
 
@@ -60,7 +60,7 @@ Write the strategy from the mode-specific template. When an automatically discov
 - Make the strategy concrete and actionable.
 - Apply venue-specific norms to academic work and domain-relevant industry practice to professional work.
 
-`연구팀` writes the file directly. The orchestrator receives only the path and a three- to five-line summary.
+The `research/research-survey` unit writes the file directly. The orchestrator receives only the path and a three- to five-line summary.
 
 ## QA Scaling
 
@@ -83,9 +83,9 @@ Run at most two rounds:
    - Fact-check output → `round_N_factcheck.md`
 2. Handle verdicts:
    - No 🔴 in either review → generate a language companion only when the explicit audience or workflow contract requires one.
-   - Quality 🔴 → ask `연구팀` to revise from quality findings.
-   - Fact-check 🔴 → ask `연구팀` to revise with mandatory reference grounding and reread the named paper analyses.
-   - Both → ask `연구팀` to revise from the combined findings.
+   - Quality 🔴 → ask the survey unit to revise from quality findings.
+   - Fact-check 🔴 → ask the survey unit to revise with mandatory reference grounding and reread the named paper analyses.
+   - Both → ask the survey unit to revise from the combined findings.
 3. If 🔴 remains after two rounds, record it under the functional compatibility heading `## 미해결 이슈`; tag factual residuals `[FACT-RESIDUAL]`.
 
 ## Conditional Language Companion

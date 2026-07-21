@@ -15,12 +15,12 @@ Always write `{strategy_folder}/pipeline_summary.md` before reporting completion
 | 0 | Scope Clarification | clarified / skipped | {questions or "--no-clarify"} |
 | 1 | Material Analysis | completed | {N} files |
 | 2 | draft-strategy | created | {strategy path} |
-| 3 | Strategy Review (연구팀) | memos added / no issues | {memo count} |
+| 3 | Strategy Review (`strategy-review` node, `research/fact-check`) | memos added / no issues | {memo count} |
 | 3b | draft-refine | refined / skipped | |
 | 4 | Draft Generation | created | {draft path} |
-| 5 | Draft Review (연구팀) | memos added / no issues | {memo count} |
+| 5 | Draft Review (`quality-review` + `fact-verify` nodes) | memos added / no issues | {memo count} |
 | 5b | draft-refine (draft) | refined / skipped | |
-| 5.5 | 편집팀 polish (mode B) | polished / skipped (rigor < standard) | |
+| 5.5 | finalize polish (`editorial/report` unit, mode B) | polished / skipped (rigor < standard) | |
 
 ## Artifacts
 - Strategy: {primary path} | Mirror: {mirror path or "not needed"}

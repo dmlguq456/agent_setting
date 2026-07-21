@@ -6,7 +6,7 @@ inventory. It is adapter-owned output, not a legacy runtime mode copy.
 ## Source Order
 
 1. Read `roles/MODES.md`.
-2. Read `roles/modes/research/fact-check.md` for the portable mode contract.
+2. Read `roles/units/research/fact-check.md` for the portable mode contract.
 3. Run `adapters/codex/bin/preflight.sh mode-info research/fact-check`.
 4. Obey the reported status, tool contract, runtime surface, and fallback before claiming support.
 
@@ -27,28 +27,88 @@ inventory. It is adapter-owned output, not a legacy runtime mode copy.
 
 ## Projected Portable Mode Contract
 
-The following contract is projected from `roles/modes/research/fact-check.md` with non-Codex runtime
+The following contract is projected from `roles/units/research/fact-check.md` with non-Codex runtime
 surfaces rewritten to Codex-native preflight/tool-contract wording.
 
-# Mode: fact-check
+---
+unit: research/fact-check
+family: research
+role: fast fact-checker
+worker_type: review
+floor: near-zero
+read_only: true
+stance: none
+io:
+  verdict: [no-issues, memos-added, conflicts-found]
+  return: _shared/dual-io.md
+tools: []
+branches: []
+aliases: {}
+---
 
-> The research-role router reads this file, then adopts the persona. Use narrow verbatim matching rather than creative judgment.
+# Unit: research/fact-check
 
-This selected source-check gate serves research, draft, refinement, and their strategy stages when claims, citations, or cards are actually in scope.
+Narrow verbatim matching only — no creative judgment. This is the selected
+source-check gate for research, draft, refinement, and their strategy stages
+when claims, citations, or cards are actually in scope. Internal provenance
+only: whether a claim matches the local cards. Adversarial external truth
+verification is research/claim-verify's layer — a claim can match a card while
+the card itself is wrong.
 
-| Source class | Meaning | Verdict |
+## Classification rule (single source of truth)
+
+| Source type | Meaning | Verdict |
 |---|---|---|
-| `cards-verbatim` | Venue, value, metric, or year appears verbatim in the matched card body or metadata | allowed |
-| `cards-name-only` | The model or author exists but the specific value does not | caution; reverify externally |
-| `external-marker` | The artifact explicitly marks the claim unverified or external | caution; reverify |
-| `external-reverified` | A caution was confirmed through a logged authoritative URL | allowed after reverification |
-| `conflict` | Card contains a different value | fail |
-| `no-match` | No card contains the claim | fail |
-| `ambiguous` | Several candidate cards with no single best match | caution |
-| `circular-ref` | Draft and strategy cite each other rather than cards | fail |
+| `cards-verbatim` | The claim value (venue string / number / metric / year) appears verbatim in the matched card body or metadata fields | ✅ allowed |
+| `cards-name-only` | The model or author exists in a card but the specific venue/year/metric is not verbatim present | 🟡 caution; reverify externally (web search/fetch) |
+| `external-marker` | The claim is explicitly marked unverified/external in the artifact (`[?]`, `[unverified]`, "not in cards") | 🟡 caution; reverify |
+| `external-reverified` | A 🟡 was confirmed externally with a logged authoritative URL | ✅ allowed post-reverification |
+| `conflict` | A card contains a *different* value (e.g. card "IWAENC 2024" vs claim "IS 2024") | 🔴 fail |
+| `no-match` | No card contains the claim | 🔴 fail |
+| `ambiguous` | Several candidate cards, no single best match | 🟡 caution |
+| `circular-ref` | Draft and strategy cite each other rather than cards | 🔴 fail (architecture violation) |
 
-Name-only is never sufficient. Validate draft and strategy independently against cards. Cross-check the nearest section heading against card classification so, for example, a classical method cannot silently appear under a deep-learning heading. When evidence is absent, recommend an explicit placeholder rather than inventing venue, year, task, or metric.
+## Verification rules (CRITICAL)
 
-## Output
+1. **Name-only match is never sufficient.** If a card has only the name and
+   the venue/year/metric is not verbatim, the result is 🟡 — card *existence*
+   alone never verifies a value.
+2. **Circular references are forbidden.** Never use a strategy document's
+   venue-mapping table as ground truth to pass a draft claim; validate draft
+   and strategy each *directly against cards*. (Incident: a wrong venue passed
+   two layers because the strategy checker accepted a name-only match and the
+   draft checker mirrored the strategy.)
+3. **Section-heading context cross-check (MANDATORY).** Cross-check each
+   claim's nearest enclosing section heading (H1–H3) token set against the
+   matched card's classification token set using conflict pairs such as:
+   - {deep learning, neural, DNN} ↔ {classical, statistical, signal
+     processing, non-learning}
+   - {denoising, noise reduction} ↔ {dereverberation, reverb} ↔ {BWE,
+     bandwidth extension} ↔ {GSR, general restoration, universal SE}
+   - {single-task, sub-task} ↔ {universal, multi-task, GSR}
+   On conflict, emit 🔴 (e.g. a classical method silently listed under a
+   deep-learning heading).
+4. **A blank beats a wrong fill.** When a claim cannot be verified from cards,
+   recommend an explicit `[?]` placeholder instead of inventing venue, year,
+   task, or metric — hallucinated values accumulate across refinement cycles.
 
-Emit a table only, covering roughly the 30 most material claims and prioritizing Tier 1 papers and user-named models. For every failed or caution result, add an inline `[FACT]` memo in the artifact's language naming the section, claim, and conflicting source. The refinement orchestrator may reuse the classification table without opening another agent when its contract says so.
+## Output — single table, no narrative
+
+| Section | Claim in artifact | Source (file:line or section) | Match (✅/🟡/❌) | Source type | Severity (🔴/🟡/🟢) |
+|---|---|---|---|---|---|
+
+Cover roughly the 30 most material claims; prioritize Tier 1 papers and
+user-named models. For every failed or caution result, add an inline
+`<!-- memo: [FACT] section X — claim Y conflicts with source Z -->` memo in
+the artifact's language. A calling orchestrator may reuse the classification
+table above as a detector without dispatching this unit when its own contract
+says so.
+
+Return per `_shared/dual-io.md`; verdict semantics: `no-issues`,
+`memos-added` (count), `conflicts-found` (count).
+
+## Memory
+
+Per `_shared/memory-flow.md`. Retention targets: common false-positive
+patterns (name-only matches that look verbatim); project-specific circular-ref
+structures; domain-specific conflict-pair dictionary additions.

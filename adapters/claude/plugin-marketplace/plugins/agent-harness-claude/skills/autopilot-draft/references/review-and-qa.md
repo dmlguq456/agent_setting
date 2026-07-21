@@ -10,8 +10,8 @@ Use the intensity-derived rigor in CONVENTIONS §1.1. At `standard+`, quality re
 
 | Rigor | Review configuration | Logs |
 |---|---|---|
-| `quick` | One fast 연구팀 spot-check; do not run draft-refine | `_internal/strategy_reviews/research_review.md` |
-| `light` | One fast 연구팀 review of critical issues | `_internal/strategy_reviews/research_review.md` |
+| `quick` | One fast `research/fact-check` unit spot-check; do not run draft-refine | `_internal/strategy_reviews/research_review.md` |
+| `light` | One fast `research/fact-check` unit review of critical issues | `_internal/strategy_reviews/research_review.md` |
 | `standard` | One deep quality reviewer plus one fast fact-checker | `research_review_quality.md`, `research_review_factcheck.md` |
 | `thorough` | Selected axis-specific reviewers plus a fact-checker when sourced claims are in scope | One log per axis under `_internal/strategy_reviews/` |
 

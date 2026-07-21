@@ -10,9 +10,9 @@ Infer the mode from the request and propose sensible options when confirmation i
 
 Route narrower requests directly:
 
-- Send a single-paper fetch or paywall lookup to `material-team`.
-- Send bulk PDF figure extraction to `material-team` in `pdf-extract` mode.
-- Send web reference-image search to `material-team` in `web-image-search` mode.
+- Send a single-paper fetch or paywall lookup to the `material/browser-fetch` unit.
+- Send bulk PDF figure extraction to the `material/pdf-extract` unit.
+- Send web reference-image search to the `material/web-image-search` unit.
 - Use `autopilot-refine` for a small addition or correction in an existing research folder.
 - Honor an explicit `autopilot-research` invocation without adding another confirmation step.
 
@@ -58,9 +58,9 @@ Proceed through routine decisions automatically. Pause only when the workflow re
 | Stage | Steps | Work | Required reference |
 |---|---|---|---|
 | Intake | 1, 1.5 | Parse and validate input; clarify scope when needed | `pipeline-search-analysis.md` |
-| Search | 2a–2e | Expand queries; prefetch Hugging Face metadata; have `research-team` search; validate results; run depth-gated expansion rounds | `pipeline-search-analysis.md` |
+| Search | 2a–2e | Expand queries; prefetch Hugging Face metadata; dispatch the `research/research-survey` unit to search; validate results; run depth-gated expansion rounds | `pipeline-search-analysis.md` |
 | Analyze | 3a–3e, 3.5 | Check browser access; run Phase A skim, Phase B chaining, and Phase C code search as enabled; write the analysis summary; extract web figures when enabled | `pipeline-search-analysis.md` |
-| Report | 4a–4c | Generate the mode-specific report set; have `editorial-team` polish it; run the intensity-derived QA loop | `report-generation.md` |
+| Report | 4a–4c | Generate the mode-specific report set; have the `editorial/polish` unit polish it; run the intensity-derived QA loop | `report-generation.md` |
 | Close | 5, 6 | Write `pipeline_summary` and present the briefing | `summary-and-briefing.md` |
 
 The references preserve detailed prompts, batching rules, QA tables, report templates, and decision-logging requirements.

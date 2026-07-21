@@ -1,8 +1,8 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "product": {
     "id": "agent-harness",
-    "manifest_version": "1.1.0",
+    "manifest_version": "1.2.0",
     "default_profile": "builder",
     "runtimes": [
       "claude",
@@ -28,10 +28,11 @@
       "argument_shape": "[--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa]",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "material-team",
-          "qa-team",
-          "research-team"
+        "units": [
+          "material/pdf-extract",
+          "qa/code-review",
+          "qa/test",
+          "research/research-survey"
         ]
       }
     },
@@ -51,10 +52,8 @@
       "argument_shape": "<aspect> [--source <path>] [--mode init|update] [--from discover|analyze|verify|qa|output|summary] [--user-refine]",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "editorial-team",
-          "qa-team",
-          "research-team"
+        "units": [
+          "research/research-survey"
         ]
       }
     },
@@ -71,8 +70,8 @@
       "argument_shape": "<artifact_path> [--scope auto|facts|style|structure|cross-ref|coverage|all] [--read-only] [--report-only] [--no-fact-check]",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "qa-team"
+        "units": [
+          "editorial/polish"
         ]
       }
     },
@@ -89,9 +88,9 @@
       "argument_shape": "\"<cheatsheet hint / task>\" [--target latex] [--source <path-to-real-source>] [--isolation branch|worktree] [--from preflight|apply|verify|handback]",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "dev-team",
-          "qa-team"
+        "units": [
+          "dev/refactor",
+          "qa/code-review"
         ]
       }
     },
@@ -118,11 +117,16 @@
           "code-report",
           "code-refine"
         ],
-        "roles": [
-          "dev-team",
-          "editorial-team",
-          "plan-team",
-          "qa-team"
+        "units": [
+          "dev/backend",
+          "dev/frontend",
+          "dev/new-lib",
+          "dev/refactor",
+          "editorial/report",
+          "plan/plan-author",
+          "qa/code-review",
+          "qa/plan-review",
+          "qa/test"
         ]
       }
     },
@@ -146,8 +150,12 @@
           "design-review",
           "design-handoff"
         ],
-        "roles": [
-          "design-team"
+        "units": [
+          "design/critic",
+          "design/maker",
+          "design/verifier",
+          "editorial/report",
+          "material/web-image-search"
         ]
       }
     },
@@ -171,10 +179,12 @@
           "draft-strategy",
           "draft-refine"
         ],
-        "roles": [
-          "editorial-team",
-          "qa-team",
-          "research-team"
+        "units": [
+          "editorial/report",
+          "editorial/review",
+          "research/claim-verify",
+          "research/fact-check",
+          "research/research-survey"
         ]
       }
     },
@@ -194,9 +204,15 @@
       "argument_shape": "<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "dev-team",
-          "qa-team"
+        "units": [
+          "dev/backend",
+          "dev/new-lib",
+          "dev/refactor",
+          "editorial/report",
+          "material/data-script",
+          "material/figure-gen",
+          "qa/ml-debug",
+          "qa/test"
         ]
       }
     },
@@ -213,8 +229,8 @@
       "argument_shape": "[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "editorial-team"
+        "units": [
+          "qa/data-curate"
         ]
       }
     },
@@ -231,10 +247,10 @@
       "argument_shape": "\"<prompt>\" [--intensity direct|quick|standard|strong|thorough|adversarial] [--review-only | --memo <file>] [--confirm] [--no-fact-check] [--no-style-audit]",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "editorial-team",
-          "qa-team",
-          "research-team"
+        "units": [
+          "editorial/review",
+          "qa/code-review",
+          "research/claim-verify"
         ]
       }
     },
@@ -255,10 +271,9 @@
       "argument_shape": "<query> [--mode academic|technology|market] [--depth shallow|medium|deep] [--intensity direct|quick|standard|strong|thorough|adversarial] [--no-clarify] [--no-figures] [--from search|analyze|report]",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "material-team",
-          "qa-team",
-          "research-team"
+        "units": [
+          "research/claim-verify",
+          "research/research-survey"
         ]
       }
     },
@@ -275,9 +290,9 @@
       "argument_shape": "<task description (optional)> [--intensity direct|quick|standard|strong|thorough|adversarial]",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "dev-team",
-          "qa-team"
+        "units": [
+          "qa/code-review",
+          "qa/security-review"
         ]
       }
     },
@@ -301,11 +316,9 @@
       "argument_shape": "<task description> [--mode auto|app|library|api|cli|research|update (comma-separated for multiple)] [--intensity direct|quick|standard|strong|thorough|adversarial] [--user-refine]",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "design-team",
-          "material-team",
-          "plan-team",
-          "qa-team"
+        "units": [
+          "research/plan-review",
+          "research/research-survey"
         ]
       }
     },
@@ -322,8 +335,12 @@
       "argument_shape": "<plan name or path>",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "dev-team"
+        "units": [
+          "dev/backend",
+          "dev/frontend",
+          "dev/new-lib",
+          "dev/refactor",
+          "qa/code-review"
         ]
       }
     },
@@ -340,9 +357,10 @@
       "argument_shape": "<task description> [--intensity direct|quick|standard|strong|thorough|adversarial]",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "plan-team",
-          "qa-team"
+        "units": [
+          "editorial/translate",
+          "plan/plan-author",
+          "qa/plan-review"
         ]
       }
     },
@@ -359,8 +377,9 @@
       "argument_shape": "<plan name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "plan-team"
+        "units": [
+          "plan/plan-author",
+          "qa/plan-review"
         ]
       }
     },
@@ -377,8 +396,8 @@
       "argument_shape": "<plan name or path>",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "editorial-team"
+        "units": [
+          "editorial/report"
         ]
       }
     },
@@ -395,8 +414,8 @@
       "argument_shape": "<plan name, path, or test scope> [--intensity direct|quick|standard|strong|thorough|adversarial]",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "qa-team"
+        "units": [
+          "qa/test"
         ]
       }
     },
@@ -413,8 +432,8 @@
       "argument_shape": "<design path or app path>",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "design-team"
+        "units": [
+          "design/maker"
         ]
       }
     },
@@ -431,9 +450,8 @@
       "argument_shape": "<design path or app path>",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "design-team",
-          "editorial-team"
+        "units": [
+          "editorial/report"
         ]
       }
     },
@@ -450,8 +468,8 @@
       "argument_shape": "<design task description> [--scope ui|slide|icon|diagram|mixed]",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "design-team"
+        "units": [
+          "design/maker"
         ]
       }
     },
@@ -468,9 +486,8 @@
       "argument_shape": "<design task> [--design <path>] [--refs <image paths>] [--no-web]",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "design-team",
-          "material-team"
+        "units": [
+          "material/web-image-search"
         ]
       }
     },
@@ -487,8 +504,9 @@
       "argument_shape": "<design path or app path>",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "design-team"
+        "units": [
+          "design/critic",
+          "design/verifier"
         ]
       }
     },
@@ -505,8 +523,8 @@
       "argument_shape": "<design path or app path>",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "design-team"
+        "units": [
+          "design/maker"
         ]
       }
     },
@@ -523,8 +541,9 @@
       "argument_shape": "<strategy or draft name or path> [--intensity direct|quick|standard|strong|thorough|adversarial]",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "editorial-team"
+        "units": [
+          "editorial/review",
+          "research/claim-verify"
         ]
       }
     },
@@ -548,9 +567,10 @@
       "argument_shape": "<mode> --inputs <comma-separated-paths> --output <artifact-dir> [--intensity direct|quick|standard|strong|thorough|adversarial] <task description>",
       "requires": {
         "capabilities": [],
-        "roles": [
-          "editorial-team",
-          "research-team"
+        "units": [
+          "editorial/translate",
+          "research/fact-check",
+          "research/research-survey"
         ]
       }
     },
@@ -567,148 +587,277 @@
       "argument_shape": "[show] | add <category> <text> | resolve <hint> | decide <text> | handoff [--no-confirm] | sweep [--no-confirm] | promote [<hint>] [--scope project|user [<aspect>]]",
       "requires": {
         "capabilities": [],
-        "roles": []
+        "units": []
       }
     }
   },
-  "roles": {
-    "design-team": {
-      "portable_role": "deep maker plus verifier",
-      "responsibility": "Visual making, critique, and independent breakage verification"
+  "units": {
+    "design/critic": {
+      "family": "design",
+      "role": "fast reviewer",
+      "worker_type": "review",
+      "floor": "high"
     },
-    "dev-team": {
-      "portable_role": "fast implementer by default",
-      "responsibility": "Implement backend/frontend/refactor/new-lib work through mode personas"
+    "design/maker": {
+      "family": "design",
+      "role": "deep maker",
+      "worker_type": "stage",
+      "floor": "highest"
     },
-    "editorial-team": {
-      "portable_role": "deep maker / fast reviewer by mode",
-      "responsibility": "User-facing wording, translation, polish, and review"
+    "design/verifier": {
+      "family": "design",
+      "role": "fast reviewer",
+      "worker_type": "review",
+      "floor": "near-zero"
     },
-    "external-adversary": {
-      "portable_role": "external adversary plus orchestrator",
-      "responsibility": "Independent hostile review through a different runtime/process"
+    "dev/backend": {
+      "family": "dev",
+      "role": "fast implementer",
+      "worker_type": "stage",
+      "floor": "low"
     },
-    "material-team": {
-      "portable_role": "deep maker plus fast tool worker",
-      "responsibility": "Fetch, extract, visualize, and analyze supporting materials"
+    "dev/frontend": {
+      "family": "dev",
+      "role": "fast implementer",
+      "worker_type": "stage",
+      "floor": "low"
     },
-    "plan-team": {
-      "portable_role": "deep maker",
-      "responsibility": "Read source and artifacts, produce or refine implementation plans"
+    "dev/new-lib": {
+      "family": "dev",
+      "role": "fast implementer",
+      "worker_type": "stage",
+      "floor": "low"
     },
-    "qa-team": {
-      "portable_role": "variable reviewer",
-      "responsibility": "Read-only code, plan, test, ML, data, and security review"
+    "dev/refactor": {
+      "family": "dev",
+      "role": "fast implementer",
+      "worker_type": "stage",
+      "floor": "low"
     },
-    "research-team": {
-      "portable_role": "variable research reviewer",
-      "responsibility": "Paper-grounded review, survey, fact-check, and adversarial claim verification"
+    "editorial/polish": {
+      "family": "editorial",
+      "role": "deep editor",
+      "worker_type": "stage",
+      "floor": "low"
+    },
+    "editorial/report": {
+      "family": "editorial",
+      "role": "fast writer",
+      "worker_type": "stage",
+      "floor": "low"
+    },
+    "editorial/review": {
+      "family": "editorial",
+      "role": "fast reviewer",
+      "worker_type": "review",
+      "floor": "low"
+    },
+    "editorial/translate": {
+      "family": "editorial",
+      "role": "deep editor",
+      "worker_type": "stage",
+      "floor": "low"
+    },
+    "material/browser-fetch": {
+      "family": "material",
+      "role": "fast tool worker",
+      "worker_type": "support",
+      "floor": "near-zero"
+    },
+    "material/data-script": {
+      "family": "material",
+      "role": "deep maker",
+      "worker_type": "stage",
+      "floor": "low"
+    },
+    "material/figure-gen": {
+      "family": "material",
+      "role": "deep maker",
+      "worker_type": "stage",
+      "floor": "low"
+    },
+    "material/pdf-extract": {
+      "family": "material",
+      "role": "fast tool worker",
+      "worker_type": "support",
+      "floor": "near-zero"
+    },
+    "material/web-image-search": {
+      "family": "material",
+      "role": "fast tool worker",
+      "worker_type": "support",
+      "floor": "near-zero"
+    },
+    "plan/plan-author": {
+      "family": "plan",
+      "role": "deep maker",
+      "worker_type": "stage",
+      "floor": "highest"
+    },
+    "qa/code-review": {
+      "family": "qa",
+      "role": "fast reviewer",
+      "worker_type": "review",
+      "floor": "moderate"
+    },
+    "qa/data-curate": {
+      "family": "qa",
+      "role": "fast reviewer",
+      "worker_type": "review",
+      "floor": "low"
+    },
+    "qa/ml-debug": {
+      "family": "qa",
+      "role": "deep reviewer",
+      "worker_type": "review",
+      "floor": "high"
+    },
+    "qa/plan-review": {
+      "family": "qa",
+      "role": "fast reviewer",
+      "worker_type": "review",
+      "floor": "moderate"
+    },
+    "qa/security-review": {
+      "family": "qa",
+      "role": "deep reviewer",
+      "worker_type": "review",
+      "floor": "moderate"
+    },
+    "qa/test": {
+      "family": "qa",
+      "role": "fast reviewer",
+      "worker_type": "review",
+      "floor": "near-zero"
+    },
+    "research/claim-verify": {
+      "family": "research",
+      "role": "fast fact-checker",
+      "worker_type": "review",
+      "floor": "high"
+    },
+    "research/fact-check": {
+      "family": "research",
+      "role": "fast fact-checker",
+      "worker_type": "review",
+      "floor": "near-zero"
+    },
+    "research/plan-review": {
+      "family": "research",
+      "role": "deep reviewer",
+      "worker_type": "review",
+      "floor": "highest"
+    },
+    "research/research-survey": {
+      "family": "research",
+      "role": "deep maker",
+      "worker_type": "stage",
+      "floor": "high"
     }
   },
   "modes": {
     "design/_design_rules": {
-      "role": "design-team",
       "status": "adapter-coupled",
       "internal": true
     },
     "design/critic": {
-      "role": "design-team",
+      "unit": "design/critic",
       "status": "adapter-coupled"
     },
     "design/maker": {
-      "role": "design-team",
+      "unit": "design/maker",
       "status": "adapter-coupled"
     },
     "design/verifier": {
-      "role": "design-team",
+      "unit": "design/verifier",
       "status": "adapter-coupled"
     },
     "dev/backend": {
-      "role": "dev-team",
+      "unit": "dev/backend",
       "status": "portable-persona"
     },
     "dev/frontend": {
-      "role": "dev-team",
+      "unit": "dev/frontend",
       "status": "portable-persona"
     },
     "dev/new-lib": {
-      "role": "dev-team",
+      "unit": "dev/new-lib",
       "status": "portable-persona"
     },
     "dev/refactor": {
-      "role": "dev-team",
+      "unit": "dev/refactor",
       "status": "portable-persona"
     },
     "editorial/polish": {
-      "role": "editorial-team",
+      "unit": "editorial/polish",
       "status": "portable-persona"
     },
     "editorial/review": {
-      "role": "editorial-team",
+      "unit": "editorial/review",
       "status": "portable-persona"
     },
     "editorial/translate": {
-      "role": "editorial-team",
+      "unit": "editorial/translate",
       "status": "portable-persona"
     },
     "material/browser-fetch": {
-      "role": "material-team",
+      "unit": "material/browser-fetch",
       "status": "portable-with-tool-contract"
     },
     "material/data-script": {
-      "role": "material-team",
+      "unit": "material/data-script",
       "status": "portable-with-tool-contract"
     },
     "material/figure-gen": {
-      "role": "material-team",
+      "unit": "material/figure-gen",
       "status": "portable-with-tool-contract"
     },
     "material/pdf-extract": {
-      "role": "material-team",
+      "unit": "material/pdf-extract",
       "status": "portable-with-tool-contract"
     },
     "material/web-image-search": {
-      "role": "material-team",
+      "unit": "material/web-image-search",
       "status": "portable-with-tool-contract"
     },
     "qa/code-review": {
-      "role": "qa-team",
+      "unit": "qa/code-review",
       "status": "portable-persona"
     },
     "qa/data-curate": {
-      "role": "qa-team",
+      "unit": "qa/data-curate",
       "status": "portable-persona"
     },
     "qa/ml-debug": {
-      "role": "qa-team",
+      "unit": "qa/ml-debug",
       "status": "portable-persona"
     },
     "qa/plan-review": {
-      "role": "qa-team",
+      "unit": "qa/plan-review",
       "status": "portable-persona"
     },
     "qa/security-review": {
-      "role": "qa-team",
+      "unit": "qa/security-review",
       "status": "portable-with-tool-contract"
     },
     "qa/test": {
-      "role": "qa-team",
+      "unit": "qa/test",
       "status": "portable-with-tool-contract"
     },
     "research/claim-verify": {
-      "role": "research-team",
+      "unit": "research/claim-verify",
       "status": "portable-with-tool-contract"
     },
     "research/fact-check": {
-      "role": "research-team",
+      "unit": "research/fact-check",
       "status": "portable-persona"
     },
     "research/plan-review": {
-      "role": "research-team",
+      "unit": "research/plan-review",
       "status": "portable-persona"
     },
     "research/research-survey": {
-      "role": "research-team",
+      "unit": "research/research-survey",
       "status": "portable-persona"
     }
   },
@@ -773,8 +922,8 @@
         "design",
         "operations"
       ],
-      "roles": [
-        "external-adversary"
+      "units": [
+        "material/browser-fetch"
       ]
     },
     "starter": {
@@ -797,10 +946,10 @@
     ]
   },
   "ownership": {
-      "generated": [
-        "manifest.json",
-        "tools/skill-conformance/invocation-policy.tsv",
-        "capabilities/README.md#catalog",
+    "generated": [
+      "manifest.json",
+      "tools/skill-conformance/invocation-policy.tsv",
+      "capabilities/README.md#catalog",
       "roles/README.md#role-catalog",
       "capabilities/*#capability-contract",
       "adapters/claude/skills/*/SKILL.md#frontmatter",

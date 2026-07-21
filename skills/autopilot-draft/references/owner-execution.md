@@ -25,7 +25,7 @@ Defaults:
 
 Direct boundaries:
 
-- One-paragraph polish, notation cleanup, or localized wording → `editorial-team`
+- One-paragraph polish, notation cleanup, or localized wording → the `editorial/polish` unit
 - Structural or drift inspection without edits → `/audit`
 - Minor changes to an existing document artifact → the minor path in `/autopilot-refine`
 - An explicit `/autopilot-draft <args>` invocation supplies the routing choice directly
@@ -61,11 +61,11 @@ Write the artifact under `<artifact-root>/documents/{YYYY-MM-DD}_{short-name}/`.
 | — | Step 0 Scope Clarification | Resolve materially ambiguous scope with 2-4 concise questions; skip with `--no-clarify` | `pipeline-steps.md` |
 | `analyze` | Step 1 Material Analysis | Inventory references and write mode-specific analysis under `analysis/` | `pipeline-steps.md` |
 | `strategy` | Step 2 `draft-strategy` | Produce the strategy and required `## Style Guide` | `pipeline-steps.md` |
-| `strategy-refine` | Step 3 Strategy Review | Use `research-team` review and fact-checking; call `draft-refine` only when revision is needed | `review-and-qa.md` |
-| `draft` | Step 4 Draft Generation | Discover or extract figures and produce the cheatsheet draft through `research-team`; add an audience-language mirror only when required | `pipeline-steps.md` |
+| `strategy-refine` | Step 3 Strategy Review | Dispatch the `strategy-review` sibling node (`research/fact-check` unit); call `draft-refine` only when revision is needed | `review-and-qa.md` |
+| `draft` | Step 4 Draft Generation | Discover or extract figures and produce the cheatsheet draft through the `research/research-survey` unit; add an audience-language mirror only when required | `pipeline-steps.md` |
 | — | Step 4b Factual Detector | Run the orchestrator-side factual scan selected by the graph | `pipeline-steps.md` |
-| `draft-refine` | Step 5 Draft Review | Use `research-team` review and fact-checking; call `draft-refine` when revision is needed | `review-and-qa.md` |
-| — | Step 5.5 Editorial Polish | Apply `editorial-team` polish for `standard+` | `pipeline-steps.md` |
+| `draft-refine` | Step 5 Draft Review | Dispatch the `quality-review` (`editorial/review`) and `fact-verify` (`research/claim-verify`) sibling nodes; call `draft-refine` when revision is needed | `review-and-qa.md` |
+| — | Step 5.5 Editorial Polish | Apply the finalize polish pass (`editorial/report` unit) for `standard+` | `pipeline-steps.md` |
 | `finalize` | Step 6 Pipeline Summary | Write `pipeline_summary.md` and report the result in the selected user-facing language | `summary-and-safety.md` |
 
 The Step 4 drafting prompt embeds tone propagation, mode-specific conventions, draft structure, and quality requirements. Treat `convention-{common,paper,presentation,doc}.md` as the single source for those conventions.

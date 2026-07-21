@@ -20,11 +20,11 @@ Classify every file:
 | PDF has academic structure such as abstract and citations | paper-like | Recommend `--mode paper`, or place under `samples/` |
 | Notes, sketches, or other mixed material | miscellaneous | `misc/` |
 
-If classification remains ambiguous, delegate the judgment to the **research-team**.
+If classification remains ambiguous, delegate the judgment to the `research/research-survey` unit.
 
 ## Phase 2: Analyze Each Category
 
-Delegate to the **research-team** with this prompt:
+Dispatch the `research/research-survey` unit with this prompt:
 
 ```text
 Analyze doc-creation materials in this folder: {input_folder}

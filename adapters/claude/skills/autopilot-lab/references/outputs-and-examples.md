@@ -17,11 +17,11 @@
 │   │       ├── ckpt/
 │   │       ├── log.txt
 │   │       └── eval_result.json    Optional one-off result; never name it metrics.json(l)
-│   ├── figures/                    [T2] Plots from the material team
+│   ├── figures/                    [T2] Plots from the `material/figure-gen` unit
 │   ├── report/                     [T2] Iframe HTML: lab audio/media plus draft/design prose
 │   └── _internal/                  [T3]
-│       ├── plan_reviews/           Research-team plan-review logs
-│       └── debug_reviews/          QA-team ml-debug logs
+│       ├── plan_reviews/           `research/plan-review` unit logs
+│       └── debug_reviews/          `qa/ml-debug` unit logs
 ```
 
 When project convention keeps variants beside each model, as with TF_Restormer, use:
@@ -114,7 +114,7 @@ The Korean user prompts below are intentional multilingual request fixtures and 
 
 사용자: lr_sweep 결과 평가해                          [eval mode; infer the latest experiment]
 → E1: resolve experiment and checkpoint, then confirm
-→ E2: provide eval guidance or use the test team for a lightweight run
+→ E2: provide eval guidance or use the `qa/test` unit for a lightweight run
 → E3: draft summary, confirm, and update the row to done with 28.4→28.7 (+0.3)
 ```
 

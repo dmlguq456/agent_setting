@@ -49,12 +49,13 @@ pdftoppm -png -r 150 _internal/converted_pdfs/<file>.pdf _internal/converted_png
 
 ### Phase 2: Aspect Analysis with Three-Instance Consensus
 
-Extract reusable patterns independently through three research-team instances per aspect. Each instance receives the same source index and prompt in a separate context; no cross-talk is allowed.
+Extract reusable patterns independently through three `research/research-survey` unit shards per aspect (composed map-reduce dispatch). Each instance receives the same source index and prompt in a separate context; no cross-talk is allowed.
 
 Use this operational prompt, adapting only the aspect-specific extraction axes:
 
 ```text
-Agent(연구팀, prompt="""
+Dispatch unit research/research-survey with prompt:
+"""
 Analyze the user's artifacts — aspect: figure (instance {A|B|C})
 Source index: <agent-home>/user_profile/_internal/source_index.md
 Existing profile record (mem profile 01_paper_figure_style): {existing content}
@@ -79,7 +80,7 @@ Extract independently without reading the results from other instances.
 In `mode=init`, replace the record completely; in `mode=update`, accumulate verified additions.
 
 Output: <agent-home>/user_profile/_internal/aspect_{aspect}_run_{A|B|C}.md
-""")
+"""
 ```
 
 For `writing`, `presentation`, `analysis`, `domain`, and `coding_convention`, keep the same process and change only the extraction axes. `all` dispatches six aspects × three instances.

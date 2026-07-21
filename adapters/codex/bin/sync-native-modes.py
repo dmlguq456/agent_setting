@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-MODES = ROOT / "roles" / "modes"
+MODES = ROOT / "roles" / "units"
 OUT = ROOT / "adapters" / "codex" / "modes"
 MODE_MAP = ROOT / "adapters" / "codex" / "bin" / "mode-map.sh"
 sys.path.insert(0, str(ROOT / "tools"))
@@ -51,8 +51,8 @@ def sanitize_portable_contract(text: str) -> str:
     text = text.replace("<agent-home>/tools/design-mcp/", "adapters/codex/bin/preflight.sh visual-harness ")
 
     replacements = {
-        "<agent-home>/agent-modes/": "roles/modes/",
-        "agent-modes/": "roles/modes/",
+        "<agent-home>/agent-modes/": "roles/units/",
+        "agent-modes/": "roles/units/",
         "Design MCP": "Codex visual harness",
         "`node <agent-home>/tools/design-mcp/console-check.mjs <file.html>` 또는 adapter equivalent": "`adapters/codex/bin/preflight.sh visual-harness <file.html>`",
         "`node <agent-home>/tools/design-mcp/console-check.mjs <file>` 또는 adapter equivalent": "`adapters/codex/bin/preflight.sh visual-harness <file.html>`",
@@ -90,7 +90,7 @@ def render(mode_file: Path) -> tuple[Path, str]:
     rel = mode_file.relative_to(MODES)
     mode = rel.with_suffix("").as_posix()
     fields = mode_metadata(mode)
-    source = f"roles/modes/{mode}.md"
+    source = f"roles/units/{mode}.md"
     status = fields.get("status", "unsupported")
     realization = fields.get("realization", "compat-reference")
     requirement = fields.get("requirement", "")
@@ -150,7 +150,13 @@ def main() -> int:
     args = parser.parse_args()
 
     manifest = harness_manifest.load()
-    mode_files = [MODES / f"{mode}.md" for mode in manifest["modes"]]
+    # unit-bearing modes only: internal law fragments (e.g. design/_design_rules) have no
+    # standalone codex projection — unit bodies reference them by catalog path directly.
+    mode_files = [
+        MODES / f"{spec['unit']}.md"
+        for spec in manifest["modes"].values()
+        if isinstance(spec, dict) and spec.get("unit")
+    ]
     expected = dict(render(path) for path in mode_files)
 
     stale: list[str] = []

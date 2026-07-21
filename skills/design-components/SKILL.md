@@ -43,7 +43,7 @@ Find `design_state.yaml` under `<artifact-root>/designs/<name>/` or the app's `d
 
 #### `scope=ui`
 
-Extract the required component list from the PRD or explicit request. Invoke `design-team` in maker mode:
+Extract the required component list from the PRD or explicit request. Run the `design/maker` unit (this node's own unit) with this task:
 
 ```text
 Build UI components.
@@ -66,7 +66,7 @@ The `.tsx` file is the working React component; the `.md` file records props, us
 
 #### `scope=slide`
 
-Invoke `design-team` in maker mode:
+Run the `design/maker` unit with this task:
 
 ```text
 Build presentation slides from the brief and tokens.
@@ -86,7 +86,7 @@ Render and inspect every slide through the Step 4 visual loop before completion.
 
 #### `scope=icon`
 
-Invoke `design-team` in maker mode:
+Run the `design/maker` unit with this task:
 
 ```text
 Create icons or a logo.
@@ -101,7 +101,7 @@ Write:
 
 #### `scope=diagram`
 
-Invoke `design-team` in maker mode:
+Run the `design/maker` unit with this task:
 
 ```text
 Create a diagram.
@@ -129,7 +129,7 @@ Place integrated code under the project root `components/ui/`. Keep customizatio
 
 ### Step 4: Rendered Visual Verification
 
-Completion requires rendering and visual inspection; coordinates or source code alone are not evidence. Follow `roles/modes/design/maker.md` and the [visual self-verification loop](../../roles/modes/design/_design_rules.md).
+Completion requires rendering and visual inspection; coordinates or source code alone are not evidence. Follow `roles/units/design/maker.md` and the [visual self-verification loop](../../roles/units/design/_design-rules.md).
 
 Use the active adapter's equivalent of `preview` → `getConsoleLogs` → `screenshot` → `view_image`. Inspect every applicable state or slide for overlap, clipping, alignment, hierarchy, spacing, and color-role errors. Iterate up to 3–5 times when needed. Present the validated render through the available user-facing preview surface.
 

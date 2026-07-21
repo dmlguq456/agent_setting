@@ -15,7 +15,7 @@ metadata:
 
 # code-execute
 
-> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated dispatch-depth-2 stage worker dispatched by the `autopilot-code` conductor. Resolve the plan path from arguments, read `plan/plan.md` from disk, and never depend on prior-stage conversation. This is the only source-mutating stage. Its write class is source code, `plan/checklist.md`, `dev_logs/`, `_internal/dev_reviews/`, and plan-frontmatter `status`. Any `dev-team` delegation remains inside this stage session.
+> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated dispatch-depth-2 stage worker dispatched by the `autopilot-code` conductor. Resolve the plan path from arguments, read `plan/plan.md` from disk, and never depend on prior-stage conversation. This is the only source-mutating stage. Its write class is source code, `plan/checklist.md`, `dev_logs/`, `_internal/dev_reviews/`, and plan-frontmatter `status`. The stage runs as the compiled route's `dev/*` unit (sealed at compile); it never dispatches units itself, and any unforeseen narrow scaffolding uses an ephemeral native helper without unit semantics.
 
 > **Plan resolution**: Treat [arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) as the single authority for resolving `$ARG` to a plan path.
 
@@ -67,7 +67,7 @@ Use the checklist as the sole orchestration tracker. Keep plan files immutable d
 ## Execution Rules
 
 - Read the checklist before every step and execute steps in dependency order.
-- Delegate implementation to `dev-team` in auto mode with concrete file and change instructions.
+- Implement each step as the node's `dev/*` unit (default `dev/backend`; the compiled route seals the member) with concrete file and change instructions.
 - Give each worker `{log_dir}/dev_logs/` and require a step log such as `dev_logs/step_01_model_py.md`.
 - Run independent steps in parallel when the active workflow supports in-session parallel delegation.
 - After a successful step, mark it `[x]`. The phase review owns syntax and import verification.
@@ -91,21 +91,21 @@ Before selecting Adversarial, use the active adapter's external-adversary availa
 
 ## Change Logs and Phase Review
 
-Each `dev-team` worker writes its own step log under `{log_dir}/dev_logs/`. Record exact old/new edits and a `Decision:` field explaining the rationale.
+Each implementation step writes its own step log under `{log_dir}/dev_logs/`. Record exact old/new edits and a `Decision:` field explaining the rationale.
 
 At the end of each phase:
 
 1. Select the review level from plan override or phase scope.
-2. Invoke `qa-team` with the phase's step-log paths, `{log_dir}`, changed source files, focus, and output path.
+2. Record the phase's step-log paths, `{log_dir}`, changed source files, focus, and output path in the stage artifact; the conductor dispatches the `impl-review` sibling node (unit `qa/code-review`) against them per the compiled route.
    - Light/Standard: one reviewer.
    - Thorough: parallel correctness, consistency, and optional safety reviewers using the portable fast/deep profiles above.
    - Adversarial: the Thorough batch plus one external adversary.
    - Require every reviewer to write its report and return only the path and a one-line verdict.
 3. Read the review files and act:
    - Advisory-only findings: record them in the checklist and continue.
-   - Minor critical finding: have `dev-team` fix it once and re-review to `phase_{NN}_fix.md`; treat a remaining critical finding as major.
+   - Minor critical finding: re-enter the execute boundary to fix it once and re-review to `phase_{NN}_fix.md`; treat a remaining critical finding as major.
    - Major critical finding: roll back the phase automatically and continue under the family autonomy policy.
-     1. Have `dev-team` restore every `old_string` recorded in the phase logs.
+     1. Restore every `old_string` recorded in the phase logs.
      2. If rollback fails, read `$SAFETY_COMMIT`, run `git checkout .`, mark all steps `[FAIL]` with `Reverted by git checkout due to rollback failure in Phase N`, and stop at Final Report.
      3. If rollback succeeds, mark the phase steps `[FAIL]` with the reason.
      4. Continue to the next independent phase; mark dependent steps `[SKIP-DEP]`.
@@ -122,7 +122,7 @@ git status
 
 ## Critical Safety Rules
 
-- Signature-change safety (find every call site, update every caller, inspect implicit contracts) is owned by the dev role contract — `dev-team` common rules and `agent-modes/dev/refactor.md` — and by plan-team call-site coverage; hold workers to it through phase review instead of restating it per step.
+- Signature-change safety (find every call site, update every caller, inspect implicit contracts) is owned by the dev unit contract — the `dev/*` unit common rules and `roles/units/dev/refactor.md` — and by `plan/plan-author` call-site coverage; hold workers to it through phase review instead of restating it per step.
 - If a step causes cascading errors beyond plan scope, mark it `[FAIL]`, roll it back from the step log, and continue only with independent steps.
 - Do not change code outside plan scope except where a required contract change makes a caller update unavoidable.
 

@@ -1,13 +1,13 @@
 ### Step 4: Scaffolding and Skeleton Generation for All Five Modes
 
-> **Stage dispatch (`standard+`, OPERATIONS §5.10 ③④, SD-1, SD-2)**: autopilot-spec is intentionally asymmetric. PRD authoring stays conductor-inline because the conductor writes `spec/prd.md` at the point where its own judgment is required; it is not a dispatched stage. The only clearly dispatchable stage is **scaffold** (`개발팀` new-lib), a separable artifact-producing stage. At `standard+`, dispatch it as a **dispatch-depth-2 headless session** with **file-only handoff**: inputs come from files, never from prior-stage conversation. The dispatch-depth-1 conductor passes paths and reads only verdict/status. `direct` and `quick` stay inline, stage sessions never redispatch, and dispatch depth 3+ is forbidden. Pipelines need not have symmetric four-stage structures.
+> **Stage dispatch (`standard+`, OPERATIONS §5.10 ③④, SD-1, SD-2)**: autopilot-spec is intentionally asymmetric. PRD authoring stays conductor-inline because the conductor writes `spec/prd.md` at the point where its own judgment is required; it is not a dispatched stage. The only clearly dispatchable stage is **scaffold** (`dev/new-lib` unit), a separable artifact-producing stage. At `standard+`, dispatch it as a **dispatch-depth-2 headless session** with **file-only handoff**: inputs come from files, never from prior-stage conversation. The dispatch-depth-1 conductor passes paths and reads only verdict/status. `direct` and `quick` stay inline, stage sessions never redispatch, and dispatch depth 3+ is forbidden. Pipelines need not have symmetric four-stage structures.
 
 #### Stage-Worker Mapping
 
-| Stage | In-session team | Input artifacts | Output artifacts | Write class |
+| Stage | Unit | Input artifacts | Output artifacts | Write class |
 |---|---|---|---|---|
 | PRD authoring | conductor-inline (N/A) | research/analysis outputs | `spec/prd.md` | conductor-inline, not dispatched |
-| scaffold (Phase 2) | `개발팀` new-lib | `prd.md` | scaffolded source/directories | scaffold source |
+| scaffold (Phase 2) | `dev/new-lib` unit | `prd.md` | scaffolded source/directories | scaffold source |
 
 All five modes use the same scaffold stage. Even in an empty project, the spec phase produces structure and a skeleton; autopilot-code then adds logic to that layout. Reuse existing repositories whenever possible: prefer an external reference from autopilot-research or the closest internal model in the user's codebase, and use a generic skeleton only as the final fallback.
 
@@ -21,7 +21,7 @@ Priority, highest first:
 | 2 | External: `research/{topic}/code_resources/`, `07_resources.md` with a pretrained-checkpoint URL, or explicit user `--ref <url>` | Research output such as an official paper repository, Hugging Face Transformers, ESPnet, or Lightning |
 | 3 | Generic skeleton fallback | Use only when neither 1 nor 2 exists, after user confirmation |
 
-> **Convention-prepend priority** is independent of reference-source priority. Always load `analysis_project/code/experiment_conventions.md` first as the per-project source of truth, then `mem profile 07_coding_convention` via `python3 <agent-home>/tools/memory/mem.py profile 07_coding_convention` only as a cross-project default that fills missing details. Prepend both relevant bodies to the Phase 2 `개발팀` new-lib prompt. On conflict, the per-project convention wins.
+> **Convention-prepend priority** is independent of reference-source priority. Always load `analysis_project/code/experiment_conventions.md` first as the per-project source of truth, then `mem profile 07_coding_convention` via `python3 <agent-home>/tools/memory/mem.py profile 07_coding_convention` only as a cross-project default that fills missing details. Prepend both relevant bodies to the Phase 2 `dev/new-lib` unit prompt. On conflict, the per-project convention wins.
 
 Render the confirmation naturally in the user's communication language:
 
@@ -53,7 +53,7 @@ Verification flow:
 
 1. Identify the checkpoint URL or path from the Phase 0 external reference or explicit user input.
 2. Extract the reference repository's inference command. Reuse an accumulated Quick verify command from autopilot-research `07_resources` or `06_implementation`; otherwise inspect its README, `inference.py`, or `demo.py`.
-3. Run one-sample inference directly in Bash or invoke `테스트팀` in smoke mode.
+3. Run one-sample inference directly in Bash or dispatch the `qa/test` unit in smoke mode.
 4. Pass only if the command completes without error and produces a reasonable output shape/value.
 5. Report the result and confirm the next action with the user.
 
@@ -78,10 +78,10 @@ Narrow automatic-skip cases:
 
 For a lightweight checkpoint, from tens of MB to a few GB, enforce verification even if the user asks to skip. This protects the user from beginning fine-tuning when the baseline reference does not run in the empty environment.
 
-#### Phase 2: Adapt to Project Conventions (`개발팀` new-lib)
+#### Phase 2: Adapt to Project Conventions (`dev/new-lib` unit)
 
 ```
-Agent(개발팀, mode="new-lib"):
+Dispatch unit dev/new-lib:
   "Mode: scaffold for {target_mode}.
    Reference source: {ref_path}
    Target directories: spec/ + mode-specific directories
