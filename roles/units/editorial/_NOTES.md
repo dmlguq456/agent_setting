@@ -15,7 +15,7 @@ the units/_voice or were resolved with a judgment call.
    `editorial-team.md:4` (`tools: Read, Write, Edit, Grep, Glob`), `:6` (`color`),
    `:7` (`memory: project`), `:8-10` (metadata modes/blurb). Surface-owned runtime
    config; node/dispatch config must grant equivalent tool access when these units run
-   as depth-2 workers (WS B/C).
+   as dispatch-depth-2 workers (WS B/C).
 
 3. **Session-start reads not placed.**
    `editorial-team.md:103-105`: read the runtime adapter bootstrap (CLAUDE.md) and

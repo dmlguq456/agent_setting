@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compile, verify, and complete immutable capability routes."""
 from __future__ import annotations
-import argparse, contextlib, fcntl, hashlib, importlib.util, json, os, subprocess, sys, uuid
+import argparse, contextlib, fcntl, hashlib, importlib.util, json, os, re, subprocess, sys, uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -252,15 +252,50 @@ def _seal_dispatch_defaults(nodes, capability):
             node["harness_affinity"] = DEFAULTS.query_stage_affinity(cfg, capability, node["id"])
     return "sha256:" + hashlib.sha256(canonical(cfg)).hexdigest()
 
+def unit_catalog_digest(units_root=None):
+    """Digest of unit frontmatter blocks (machine contracts); unit BODY prose stays un-hashed."""
+    units_root=Path(units_root) if units_root else ROOT/"roles"/"units"
+    blocks=[]
+    for path in sorted(units_root.glob("*/*.md")):
+        if path.name.startswith("_"): continue
+        match=re.match(r"\A---\n.*?\n---\n", path.read_text(encoding="utf-8"), re.DOTALL)
+        if match: blocks.append(f"{path.relative_to(units_root)}\n{match.group(0)}")
+    return "sha256:"+hashlib.sha256("\n".join(blocks).encode()).hexdigest()
+
 def compile_route(capability, capability_mode, requested_intensity, cwd, artifact_root,
                   predicates=(), signals=(), transport=None,
                   transport_evidence="caller-selected", inline_reason=None,
                   tracking="tracked", tracked_gate_evidence=None, dispatch_evidence=None,
                   registered_headless_evidence=None):
-    cwd=Path(cwd).resolve(strict=True); artifact=Path(artifact_root).resolve()
-    if not cwd.is_absolute() or not artifact.is_absolute(): raise ValueError("cwd and artifact root must be absolute")
     registry=TOPO.load_registry(); TOPO.validate_registry(registry)
     recipe=TOPO.resolve_recipe(registry, capability, capability_mode)
+    return _compile_from_recipe(
+        registry, recipe, capability, capability_mode, requested_intensity, cwd, artifact_root,
+        predicates=predicates, signals=signals, transport=transport,
+        transport_evidence=transport_evidence, inline_reason=inline_reason,
+        tracking=tracking, tracked_gate_evidence=tracked_gate_evidence,
+        dispatch_evidence=dispatch_evidence,
+        registered_headless_evidence=registered_headless_evidence)
+
+def compile_composed_route(composed_recipe, capability_mode, requested_intensity, cwd, artifact_root,
+                           **kwargs):
+    """Compile a compose-on-demand recipe through the SAME validate/seal path (composed: true)."""
+    registry=TOPO.load_registry(); TOPO.validate_registry(registry)
+    if not isinstance(composed_recipe, dict): raise ValueError("composed recipe must be an object")
+    TOPO._validate_recipe(composed_recipe, registry)
+    if capability_mode not in composed_recipe.get("modes", []):
+        raise ValueError("composed recipe does not declare the requested capability mode")
+    return _compile_from_recipe(
+        registry, composed_recipe, composed_recipe["capability"], capability_mode,
+        requested_intensity, cwd, artifact_root, composed=True, **kwargs)
+
+def _compile_from_recipe(registry, recipe, capability, capability_mode, requested_intensity,
+                         cwd, artifact_root, predicates=(), signals=(), transport=None,
+                         transport_evidence="caller-selected", inline_reason=None,
+                         tracking="tracked", tracked_gate_evidence=None, dispatch_evidence=None,
+                         registered_headless_evidence=None, composed=False):
+    cwd=Path(cwd).resolve(strict=True); artifact=Path(artifact_root).resolve()
+    if not cwd.is_absolute() or not artifact.is_absolute(): raise ValueError("cwd and artifact root must be absolute")
     known_pred=set(recipe["direct_predicates"]); predicates=sorted(set(predicates))
     unknown=set(predicates)-known_pred
     if unknown: raise ValueError("unknown predicates: "+",".join(sorted(unknown)))
@@ -274,6 +309,8 @@ def compile_route(capability, capability_mode, requested_intensity, cwd, artifac
         raise ValueError(f"invalid transport: {transport!r}")
     inferred="standard" if signals else ("direct" if set(predicates)==known_pred else "quick")
     effective=max((requested,inferred),key=ORDER.get)
+    if composed and effective in ("direct","quick"):
+        raise ValueError("composed routes require a standard+ effective intensity")
     registered_headless_candidates=None
     if effective=="direct":
         transport="interactive"
@@ -338,7 +375,11 @@ def compile_route(capability, capability_mode, requested_intensity, cwd, artifac
       "dispatch_evidence":checked_dispatch,
       "dispatch_contract_version":DISPATCH_CONTRACT_VERSION,
       "registered_headless_candidates":registered_headless_candidates,
-      "registered_headless_policy":"serial-attempt" if effective=="quick" else None}
+      "registered_headless_policy":"serial-attempt" if effective=="quick" else None,
+      "unit_catalog_digest":unit_catalog_digest()}
+    if composed:
+        payload["composed"]=True
+        payload["composed_recipe"]=json.loads(json.dumps(recipe))
     digest=route_hash(payload); payload["route_hash"]=digest; payload["route_id"]="rt-"+digest.split(":",1)[1][:16]
     return payload
 
@@ -354,6 +395,20 @@ def verify_route(route, expected_cwd=None):
     if expected_cwd and Path(expected_cwd).resolve()!=Path(route["cwd"]): raise ValueError("route cwd mismatch")
     registry=TOPO.load_registry()
     if route["registry_digest"] != TOPO.registry_digest(registry): raise ValueError("stale registry digest")
+    if route.get("unit_catalog_digest") is not None and route["unit_catalog_digest"] != unit_catalog_digest():
+        raise ValueError("stale unit catalog digest")
+    if route.get("composed"):
+        if route.get("effective_intensity") in ("direct","quick"):
+            raise ValueError("composed routes require a standard+ effective intensity")
+        composed_recipe=route.get("composed_recipe")
+        if not isinstance(composed_recipe, dict):
+            raise ValueError("composed route lacks embedded composed_recipe")
+        TOPO._validate_recipe(composed_recipe, registry)
+        def _node_identity(node):
+            return {k:v for k,v in node.items() if k not in ("fallback_hops","harness_affinity")}
+        if ([_node_identity(n) for n in route.get("nodes",[])]
+                != [_node_identity(n) for n in composed_recipe["standard_plus"]["nodes"]]):
+            raise ValueError("composed route nodes differ from embedded composed recipe")
     if route.get("owner_dispatch_depth") not in {0, 1} or route.get("max_dispatch_depth") not in {0, 1, 2}:
         raise ValueError("invalid qualified dispatch depth")
     if any(key in route for key in ("depth", "owner_depth", "max_depth")):
@@ -848,6 +903,7 @@ def main():
     c.add_argument("--inline-reason"); c.add_argument("--tracking",choices=sorted(TRACKING),required=True)
     c.add_argument("--dispatch-evidence",help="JSON file with checked nested tuples/native evidence")
     c.add_argument("--registered-headless-evidence",help="JSON file with checked quick candidates")
+    c.add_argument("--composed-recipe",help="JSON file with a compose-on-demand recipe (sealed composed: true)")
     c.add_argument("--spec-read",required=True); c.add_argument("--drift-verdict",required=True)
     c.add_argument("--workflow-mode",choices=sorted(TRACKING),required=True); c.add_argument("--artifact-guard",required=True)
     c.add_argument("--output")
@@ -871,11 +927,24 @@ def main():
             json.loads(Path(a.registered_headless_evidence).read_text())
             if a.registered_headless_evidence else None
         )
-        route=compile_route(
-            a.capability,a.capability_mode,a.intensity,a.cwd,a.artifact_root,
-            a.predicate,a.signal,a.transport,a.transport_evidence,a.inline_reason,
-            a.tracking,gate,dispatch_evidence,registered_headless_evidence,
-        )
+        if a.composed_recipe:
+            composed_recipe=json.loads(Path(a.composed_recipe).read_text())
+            if composed_recipe.get("capability") != a.capability:
+                raise ValueError("composed recipe capability differs from --capability")
+            route=compile_composed_route(
+                composed_recipe,a.capability_mode,a.intensity,a.cwd,a.artifact_root,
+                predicates=a.predicate,signals=a.signal,transport=a.transport,
+                transport_evidence=a.transport_evidence,inline_reason=a.inline_reason,
+                tracking=a.tracking,tracked_gate_evidence=gate,
+                dispatch_evidence=dispatch_evidence,
+                registered_headless_evidence=registered_headless_evidence,
+            )
+        else:
+            route=compile_route(
+                a.capability,a.capability_mode,a.intensity,a.cwd,a.artifact_root,
+                a.predicate,a.signal,a.transport,a.transport_evidence,a.inline_reason,
+                a.tracking,gate,dispatch_evidence,registered_headless_evidence,
+            )
         if a.output: write_once(a.output,route)
         print(json.dumps(route,sort_keys=True))
     else:

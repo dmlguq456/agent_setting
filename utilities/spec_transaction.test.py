@@ -30,7 +30,7 @@ class SpecTransactionTest(unittest.TestCase):
   with tempfile.TemporaryDirectory() as td:
    root=Path(td); artifact=root/".agent_reports"; artifact.mkdir(); subprocess.run(["git","init","-q",str(root)],check=True)
    gate={"spec_read":{"satisfied":True,"source":"fixture"},"drift_verdict":"within-spec","workflow_mode":"tracked","artifact_guard":{"satisfied":True,"source":"fixture"}}
-   route=R.compile_route("autopilot-code","dev","direct",root,artifact,predicates=["atomic-outcome","known-scope","no-shared-contract","no-resource-run","no-artifact-handoff","no-independent-verifier","focused-verification"],transport="inline-fallback",inline_reason="atomic-direct",tracking="tracked",tracked_gate_evidence=gate)
+   route=R.compile_route("autopilot-code","dev","direct",root,artifact,predicates=["atomic-outcome","known-scope","no-shared-contract","no-resource-run","no-artifact-handoff","no-independent-verifier","focused-verification"],inline_reason="atomic-direct",tracking="tracked",tracked_gate_evidence=gate)
    path=root/"route.json"; path.write_text(json.dumps(route)); p=subprocess.run([sys.executable,str(ROOT/"utilities/spec-transaction.py"),"run","--artifact-root",str(artifact),"--worktree",str(root),"--route",str(path),"--node","inline","--",sys.executable,"-c","pass"],text=True,capture_output=True)
    self.assertEqual(p.returncode,65); self.assertIn("spec-touch-not-declared",p.stdout)
  def test_component_spec_root_owns_its_version_sequence(self):

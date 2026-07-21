@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "intensities": [
     "direct",
     "quick",
@@ -44,8 +44,7 @@
     "spec": "autopilot-spec"
   },
   "rollout": {
-    "route_compiler": "report-only",
-    "legacy_low_level_dispatch": true
+    "route_compiler": "enforced"
   },
   "inline_reasons": [
     "atomic-direct",
@@ -114,7 +113,8 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
-            ]
+            ],
+            "unit": "dev/refactor"
           },
           {
             "id": "verify",
@@ -141,7 +141,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "unit": "qa/code-review"
           },
           {
             "id": "handback",
@@ -166,7 +167,8 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
-            ]
+            ],
+            "unit": "_kernel/owner"
           }
         ],
         "owner_dispatch_depth": 1,
@@ -239,8 +241,7 @@
               "checklist.md"
             ],
             "write_scope": [
-              "plan/**",
-              "_internal/plan_reviews/**"
+              "plan/**"
             ],
             "resource_class": "normal",
             "completion_gate": "code-plan",
@@ -249,13 +250,42 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
+            ],
+            "unit": "plan/plan-author"
+          },
+          {
+            "id": "plan-check",
+            "kind": "review-worker",
+            "depends_on": [
+              "plan"
+            ],
+            "role": "fast reviewer",
+            "unit": "qa/plan-review",
+            "inputs": [
+              "plan.md",
+              "checklist.md"
+            ],
+            "outputs": [
+              "_internal/plan_reviews/round_1.md"
+            ],
+            "write_scope": [
+              "_internal/plan_reviews/**"
+            ],
+            "resource_class": "normal",
+            "completion_gate": "code-plan-check",
+            "dispatch_depth": 2,
+            "fallback_hops": [
+              "same-harness-headless",
+              "cross-harness-headless",
+              "native-subagent",
+              "inline"
             ]
           },
           {
             "id": "execute",
             "kind": "pipeline-stage",
             "depends_on": [
-              "plan"
+              "plan-check"
             ],
             "role": "fast implementer",
             "inputs": [
@@ -269,8 +299,7 @@
             "write_scope": [
               "source/**",
               "checklist.md",
-              "dev_logs/**",
-              "_internal/dev_reviews/**"
+              "dev_logs/**"
             ],
             "resource_class": "normal",
             "completion_gate": "code-execute",
@@ -279,15 +308,51 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
+            ],
+            "unit": "dev/backend",
+            "unit_choices": [
+              "dev/backend",
+              "dev/frontend",
+              "dev/new-lib",
+              "dev/refactor"
+            ]
+          },
+          {
+            "id": "impl-review",
+            "kind": "review-worker",
+            "depends_on": [
+              "execute"
+            ],
+            "role": "fast reviewer",
+            "unit": "qa/code-review",
+            "inputs": [
+              "plan.md",
+              "source-diff",
+              "dev_logs/**"
+            ],
+            "outputs": [
+              "_internal/dev_reviews/phase_review.md"
+            ],
+            "write_scope": [
+              "_internal/dev_reviews/**"
+            ],
+            "resource_class": "normal",
+            "completion_gate": "code-impl-review",
+            "dispatch_depth": 2,
+            "fallback_hops": [
+              "same-harness-headless",
+              "cross-harness-headless",
+              "native-subagent",
+              "inline"
             ]
           },
           {
             "id": "test",
             "kind": "pipeline-stage",
             "depends_on": [
-              "execute"
+              "impl-review"
             ],
-            "role": "deep reviewer",
+            "role": "fast reviewer",
             "inputs": [
               "plan.md",
               "checklist.md",
@@ -308,7 +373,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "unit": "qa/test"
           },
           {
             "id": "report",
@@ -339,7 +405,8 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
-            ]
+            ],
+            "unit": "editorial/report"
           }
         ],
         "owner_dispatch_depth": 1,
@@ -347,14 +414,18 @@
       },
       "completion_gates": [
         "code-plan",
+        "code-plan-check",
         "code-execute",
+        "code-impl-review",
         "code-test",
         "code-report"
       ],
       "human_gates": [],
       "resume_retry_boundaries": [
         "plan",
+        "plan-check",
         "execute",
+        "impl-review",
         "test",
         "report"
       ]
@@ -396,7 +467,7 @@
             "id": "refs",
             "kind": "map-worker",
             "depends_on": [],
-            "role": "deep maker",
+            "role": "fast tool worker",
             "inputs": [
               "design-task",
               "references"
@@ -415,7 +486,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "unit": "material/web-image-search"
           },
           {
             "id": "build",
@@ -445,28 +517,59 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
-            ]
+            ],
+            "unit": "design/maker"
           },
           {
-            "id": "visual-review",
+            "id": "visual-verify",
             "kind": "review-worker",
             "depends_on": [
               "build"
             ],
-            "role": "deep reviewer",
+            "role": "fast reviewer",
+            "unit": "design/verifier",
             "inputs": [
               "render",
               "tokens",
               "components"
             ],
             "outputs": [
-              "reviews/visual-verdict.json"
+              "reviews/visual/verify/verdict.yaml"
             ],
             "write_scope": [
-              "reviews/visual/**"
+              "reviews/visual/verify/**"
             ],
             "resource_class": "normal",
-            "completion_gate": "design-review",
+            "completion_gate": "design-verify",
+            "dispatch_depth": 2,
+            "fallback_hops": [
+              "same-harness-headless",
+              "cross-harness-headless",
+              "native-subagent",
+              "inline"
+            ]
+          },
+          {
+            "id": "critic-review",
+            "kind": "review-worker",
+            "depends_on": [
+              "build"
+            ],
+            "role": "fast reviewer",
+            "unit": "design/critic",
+            "inputs": [
+              "render",
+              "tokens",
+              "components"
+            ],
+            "outputs": [
+              "reviews/visual/critic/verdict.json"
+            ],
+            "write_scope": [
+              "reviews/visual/critic/**"
+            ],
+            "resource_class": "normal",
+            "completion_gate": "design-critic",
             "dispatch_depth": 2,
             "fallback_hops": [
               "same-harness-headless",
@@ -479,11 +582,13 @@
             "id": "handoff",
             "kind": "pipeline-stage",
             "depends_on": [
-              "visual-review"
+              "visual-verify",
+              "critic-review"
             ],
             "role": "fast writer",
             "inputs": [
-              "reviews/visual-verdict.json",
+              "reviews/visual/verify/verdict.yaml",
+              "reviews/visual/critic/verdict.json",
               "tokens",
               "components"
             ],
@@ -500,7 +605,8 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
-            ]
+            ],
+            "unit": "editorial/report"
           }
         ],
         "owner_dispatch_depth": 1,
@@ -509,7 +615,8 @@
       "completion_gates": [
         "design-refs",
         "design-build",
-        "design-review",
+        "design-verify",
+        "design-critic",
         "design-handoff"
       ],
       "human_gates": [
@@ -518,7 +625,8 @@
       "resume_retry_boundaries": [
         "refs",
         "build",
-        "visual-review",
+        "visual-verify",
+        "critic-review",
         "handoff"
       ]
     },
@@ -582,13 +690,42 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
+            ],
+            "unit": "research/research-survey"
+          },
+          {
+            "id": "strategy-review",
+            "kind": "review-worker",
+            "depends_on": [
+              "material-strategy"
+            ],
+            "role": "fast fact-checker",
+            "unit": "research/fact-check",
+            "inputs": [
+              "evidence-map",
+              "strategy"
+            ],
+            "outputs": [
+              "reviews/strategy/verdict.json"
+            ],
+            "write_scope": [
+              "reviews/strategy/**"
+            ],
+            "resource_class": "normal",
+            "completion_gate": "draft-strategy-review",
+            "dispatch_depth": 2,
+            "fallback_hops": [
+              "same-harness-headless",
+              "cross-harness-headless",
+              "native-subagent",
+              "inline"
             ]
           },
           {
             "id": "draft-production",
             "kind": "pipeline-stage",
             "depends_on": [
-              "material-strategy"
+              "strategy-review"
             ],
             "role": "deep maker",
             "inputs": [
@@ -608,27 +745,57 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
-            ]
+            ],
+            "unit": "research/research-survey"
           },
           {
-            "id": "review-refine",
+            "id": "quality-review",
             "kind": "review-worker",
             "depends_on": [
               "draft-production"
             ],
-            "role": "deep reviewer",
+            "role": "fast reviewer",
+            "unit": "editorial/review",
             "inputs": [
               "draft/**",
               "evidence-map"
             ],
             "outputs": [
-              "reviews/draft-verdict.json"
+              "reviews/draft/quality/verdict.json"
             ],
             "write_scope": [
-              "reviews/draft/**"
+              "reviews/draft/quality/**"
             ],
             "resource_class": "normal",
-            "completion_gate": "draft-review",
+            "completion_gate": "draft-quality-review",
+            "dispatch_depth": 2,
+            "fallback_hops": [
+              "same-harness-headless",
+              "cross-harness-headless",
+              "native-subagent",
+              "inline"
+            ]
+          },
+          {
+            "id": "fact-verify",
+            "kind": "review-worker",
+            "depends_on": [
+              "draft-production"
+            ],
+            "role": "fast fact-checker",
+            "unit": "research/claim-verify",
+            "inputs": [
+              "draft/**",
+              "evidence-map"
+            ],
+            "outputs": [
+              "reviews/draft/facts/verdict.json"
+            ],
+            "write_scope": [
+              "reviews/draft/facts/**"
+            ],
+            "resource_class": "normal",
+            "completion_gate": "draft-fact-verify",
             "dispatch_depth": 2,
             "fallback_hops": [
               "same-harness-headless",
@@ -641,12 +808,14 @@
             "id": "finalize",
             "kind": "pipeline-stage",
             "depends_on": [
-              "review-refine"
+              "quality-review",
+              "fact-verify"
             ],
             "role": "fast writer",
             "inputs": [
               "draft/**",
-              "reviews/draft-verdict.json"
+              "reviews/draft/quality/verdict.json",
+              "reviews/draft/facts/verdict.json"
             ],
             "outputs": [
               "final-artifact",
@@ -663,7 +832,8 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
-            ]
+            ],
+            "unit": "editorial/report"
           }
         ],
         "owner_dispatch_depth": 1,
@@ -671,8 +841,10 @@
       },
       "completion_gates": [
         "draft-strategy",
+        "draft-strategy-review",
         "draft-production",
-        "draft-review",
+        "draft-quality-review",
+        "draft-fact-verify",
         "draft-finalize"
       ],
       "human_gates": [
@@ -680,8 +852,10 @@
       ],
       "resume_retry_boundaries": [
         "material-strategy",
+        "strategy-review",
         "draft-production",
-        "review-refine",
+        "quality-review",
+        "fact-verify",
         "finalize"
       ]
     },
@@ -743,6 +917,12 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
+            ],
+            "unit": "dev/new-lib",
+            "unit_choices": [
+              "dev/new-lib",
+              "dev/backend",
+              "dev/refactor"
             ]
           },
           {
@@ -770,7 +950,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "unit": "qa/ml-debug"
           },
           {
             "id": "full-run",
@@ -794,7 +975,8 @@
             ],
             "resource_class": "long-running",
             "completion_gate": "authorized-full-run",
-            "resource_transport": "detached-process"
+            "resource_transport": "detached-process",
+            "unit": "_kernel/resource"
           }
         ],
         "owner_dispatch_depth": 1,
@@ -871,7 +1053,8 @@
             ],
             "resource_class": "gpu",
             "completion_gate": "hash-bound-eval",
-            "resource_transport": "detached-process"
+            "resource_transport": "detached-process",
+            "unit": "_kernel/resource"
           },
           {
             "id": "metrics",
@@ -879,7 +1062,7 @@
             "depends_on": [
               "eval-run"
             ],
-            "role": "fast implementer",
+            "role": "deep maker",
             "inputs": [
               "raw-results/**",
               "run.json"
@@ -899,7 +1082,8 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
-            ]
+            ],
+            "unit": "material/data-script"
           },
           {
             "id": "media",
@@ -927,7 +1111,8 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
-            ]
+            ],
+            "unit": "material/figure-gen"
           },
           {
             "id": "report",
@@ -956,7 +1141,8 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
-            ]
+            ],
+            "unit": "editorial/report"
           },
           {
             "id": "independent-verify",
@@ -964,7 +1150,7 @@
             "depends_on": [
               "report"
             ],
-            "role": "deep reviewer",
+            "role": "fast reviewer",
             "inputs": [
               "REPORT.md",
               "report.html",
@@ -984,7 +1170,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "unit": "qa/test"
           },
           {
             "id": "sync",
@@ -1009,7 +1196,8 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
-            ]
+            ],
+            "unit": "_kernel/owner"
           }
         ],
         "owner_dispatch_depth": 1,
@@ -1090,7 +1278,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "unit": "qa/data-curate"
           },
           {
             "id": "route-apply",
@@ -1119,7 +1308,8 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
-            ]
+            ],
+            "unit": "_kernel/owner"
           }
         ],
         "owner_dispatch_depth": 1,
@@ -1173,7 +1363,7 @@
             "id": "review",
             "kind": "review-worker",
             "depends_on": [],
-            "role": "deep reviewer",
+            "role": "fast reviewer",
             "inputs": [
               "target-artifact",
               "source-evidence"
@@ -1192,6 +1382,12 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
+            ],
+            "unit": "editorial/review",
+            "unit_choices": [
+              "editorial/review",
+              "research/claim-verify",
+              "qa/code-review"
             ]
           },
           {
@@ -1222,7 +1418,8 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
-            ]
+            ],
+            "unit": "_kernel/owner"
           }
         ],
         "owner_dispatch_depth": 1,
@@ -1279,7 +1476,7 @@
             "id": "retrieval",
             "kind": "map-worker",
             "depends_on": [],
-            "role": "fast reviewer",
+            "role": "deep maker",
             "inputs": [
               "query",
               "source-policy"
@@ -1298,7 +1495,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "unit": "research/research-survey"
           },
           {
             "id": "synthesis",
@@ -1325,7 +1523,8 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
-            ]
+            ],
+            "unit": "research/research-survey"
           },
           {
             "id": "report",
@@ -1333,7 +1532,7 @@
             "depends_on": [
               "synthesis"
             ],
-            "role": "fast writer",
+            "role": "deep maker",
             "inputs": [
               "analysis_summary.md",
               "cards/**"
@@ -1351,7 +1550,8 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
-            ]
+            ],
+            "unit": "research/research-survey"
           },
           {
             "id": "claim-verify",
@@ -1359,7 +1559,7 @@
             "depends_on": [
               "report"
             ],
-            "role": "deep reviewer",
+            "role": "fast fact-checker",
             "inputs": [
               "report/**",
               "cards/**"
@@ -1378,7 +1578,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "unit": "research/claim-verify"
           }
         ],
         "owner_dispatch_depth": 1,
@@ -1456,7 +1657,8 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
-            ]
+            ],
+            "unit": "_kernel/owner"
           },
           {
             "id": "security-review",
@@ -1483,7 +1685,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "unit": "qa/security-review"
           },
           {
             "id": "release-review",
@@ -1510,7 +1713,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "unit": "qa/code-review"
           }
         ],
         "owner_dispatch_depth": 1,
@@ -1595,7 +1799,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "unit": "research/research-survey"
           },
           {
             "id": "review",
@@ -1622,7 +1827,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "unit": "research/plan-review"
           },
           {
             "id": "prd-transaction",
@@ -1655,7 +1861,8 @@
               "same-harness-headless",
               "cross-harness-headless",
               "inline"
-            ]
+            ],
+            "unit": "_kernel/owner"
           }
         ],
         "owner_dispatch_depth": 1,
@@ -1688,5 +1895,214 @@
     "cross-harness-headless",
     "native-subagent",
     "inline"
-  ]
+  ],
+  "unit_catalog": "roles/units",
+  "unit_families": [
+    "design",
+    "dev",
+    "editorial",
+    "material",
+    "plan",
+    "qa",
+    "research"
+  ],
+  "reserved_units": {
+    "_kernel/owner": "roles/worker-types/owner.md",
+    "_kernel/resource": "detached-process lifecycle; no agent persona"
+  },
+  "unit_kind_compatibility": {
+    "capability-owner": [
+      "_kernel/owner"
+    ],
+    "resource-runner": [
+      "_kernel/resource"
+    ],
+    "pipeline-stage": [
+      "stage",
+      "review",
+      "support"
+    ],
+    "review-worker": [
+      "review"
+    ],
+    "map-worker": [
+      "support",
+      "stage",
+      "review"
+    ]
+  },
+  "completion_gate_contracts": {
+    "apply-hash": {
+      "kind": "custom",
+      "doc": "hash-verified application of the cheatsheet onto the target artifact; bespoke integrity gate"
+    },
+    "apply-verify": {
+      "kind": "unit-io",
+      "unit": "qa/code-review"
+    },
+    "apply-handback": {
+      "kind": "custom",
+      "doc": "owner handback record; conductor-owned, no unit persona"
+    },
+    "code-plan": {
+      "kind": "capability-doc",
+      "contract": "capabilities/code-plan.md"
+    },
+    "code-plan-check": {
+      "kind": "unit-io",
+      "unit": "qa/plan-review"
+    },
+    "code-execute": {
+      "kind": "capability-doc",
+      "contract": "capabilities/code-execute.md"
+    },
+    "code-impl-review": {
+      "kind": "unit-io",
+      "unit": "qa/code-review"
+    },
+    "code-test": {
+      "kind": "capability-doc",
+      "contract": "capabilities/code-test.md"
+    },
+    "code-report": {
+      "kind": "capability-doc",
+      "contract": "capabilities/code-report.md"
+    },
+    "design-refs": {
+      "kind": "capability-doc",
+      "contract": "capabilities/design-refs.md"
+    },
+    "design-build": {
+      "kind": "unit-io",
+      "unit": "design/maker"
+    },
+    "design-verify": {
+      "kind": "unit-io",
+      "unit": "design/verifier"
+    },
+    "design-critic": {
+      "kind": "unit-io",
+      "unit": "design/critic"
+    },
+    "design-handoff": {
+      "kind": "capability-doc",
+      "contract": "capabilities/design-handoff.md"
+    },
+    "draft-strategy": {
+      "kind": "capability-doc",
+      "contract": "capabilities/draft-strategy.md"
+    },
+    "draft-strategy-review": {
+      "kind": "unit-io",
+      "unit": "research/fact-check"
+    },
+    "draft-production": {
+      "kind": "unit-io",
+      "unit": "research/research-survey"
+    },
+    "draft-quality-review": {
+      "kind": "unit-io",
+      "unit": "editorial/review"
+    },
+    "draft-fact-verify": {
+      "kind": "unit-io",
+      "unit": "research/claim-verify"
+    },
+    "draft-finalize": {
+      "kind": "unit-io",
+      "unit": "editorial/report"
+    },
+    "lab-scaffold": {
+      "kind": "unit-io",
+      "unit": "dev/new-lib"
+    },
+    "hash-bound-smoke": {
+      "kind": "custom",
+      "doc": "smoke attestation hash-bound to scaffold content; bespoke integrity gate"
+    },
+    "authorized-full-run": {
+      "kind": "custom",
+      "doc": "human-gated detached resource run; not an agent gate"
+    },
+    "hash-bound-eval": {
+      "kind": "custom",
+      "doc": "eval run hash-bound to checkpoint + eval-spec; bespoke integrity gate"
+    },
+    "lab-metrics": {
+      "kind": "unit-io",
+      "unit": "material/data-script"
+    },
+    "lab-media": {
+      "kind": "unit-io",
+      "unit": "material/figure-gen"
+    },
+    "lab-report": {
+      "kind": "unit-io",
+      "unit": "editorial/report"
+    },
+    "lab-independent-verify": {
+      "kind": "unit-io",
+      "unit": "qa/test"
+    },
+    "lab-sync": {
+      "kind": "custom",
+      "doc": "owner spec/note synchronization; conductor-owned"
+    },
+    "note-scan": {
+      "kind": "unit-io",
+      "unit": "qa/data-curate"
+    },
+    "note-single-writer": {
+      "kind": "custom",
+      "doc": "owner single-writer merge invariant; conductor-owned"
+    },
+    "refine-review": {
+      "kind": "unit-io",
+      "unit": "editorial/review"
+    },
+    "refine-transaction": {
+      "kind": "custom",
+      "doc": "owner snapshot/diff/atomic-apply transaction; conductor-owned"
+    },
+    "research-retrieval": {
+      "kind": "unit-io",
+      "unit": "research/research-survey"
+    },
+    "research-synthesis": {
+      "kind": "unit-io",
+      "unit": "research/research-survey"
+    },
+    "research-report": {
+      "kind": "unit-io",
+      "unit": "research/research-survey"
+    },
+    "research-claims": {
+      "kind": "unit-io",
+      "unit": "research/claim-verify"
+    },
+    "ship-setup": {
+      "kind": "custom",
+      "doc": "owner release configuration; conductor-owned"
+    },
+    "ship-security": {
+      "kind": "unit-io",
+      "unit": "qa/security-review"
+    },
+    "ship-release": {
+      "kind": "unit-io",
+      "unit": "qa/code-review"
+    },
+    "spec-research": {
+      "kind": "unit-io",
+      "unit": "research/research-survey"
+    },
+    "spec-review": {
+      "kind": "unit-io",
+      "unit": "research/plan-review"
+    },
+    "spec-atomic-transaction": {
+      "kind": "custom",
+      "doc": "owner atomic PRD transaction with version snapshot; conductor-owned"
+    }
+  }
 }

@@ -57,6 +57,36 @@ class WorkerBootstrapTest(unittest.TestCase):
         self.assertNotIn("# Worker Type: Owner", rendered)
         self.assertNotIn("# Worker Type: Review", rendered)
 
+    def test_render_appends_unit_persona_body(self):
+        bare = W.render_worker_bootstrap(ROOT, "review")
+        rendered = W.render_worker_bootstrap(ROOT, "review", unit="qa/code-review")
+        self.assertTrue(rendered.startswith(bare.rstrip("\n")))
+        self.assertIn("# Unit: qa/code-review", rendered)
+        self.assertNotIn("worker_type: review\n", rendered)  # frontmatter stripped
+        self.assertEqual(rendered.count("# Portable Worker Kernel"), 1)
+        self.assertEqual(rendered.count("# Worker Type:"), 1)
+
+    def test_reserved_and_absent_units_render_unchanged(self):
+        bare = W.render_worker_bootstrap(ROOT, "owner")
+        self.assertEqual(W.render_worker_bootstrap(ROOT, "owner", unit="_kernel/owner"), bare)
+        self.assertEqual(W.render_worker_bootstrap(ROOT, "owner", unit=None), bare)
+        self.assertIsNone(W.unit_persona_path(ROOT, "_kernel/resource"))
+        self.assertIsNone(W.unit_persona_body(ROOT, None))
+
+    def test_unknown_or_malformed_unit_fails_loud(self):
+        with self.assertRaisesRegex(ValueError, "unknown unit"):
+            W.unit_persona_path(ROOT, "qa/does-not-exist")
+        with self.assertRaisesRegex(ValueError, "invalid unit ref"):
+            W.unit_persona_path(ROOT, "../escape/path")
+        with self.assertRaisesRegex(ValueError, "invalid unit ref"):
+            W.render_worker_bootstrap(ROOT, "stage", unit="Bad/Unit")
+
+    def test_unit_persona_path_points_into_catalog(self):
+        path = W.unit_persona_path(ROOT, "editorial/report")
+        self.assertEqual(path, ROOT / "roles" / "units" / "editorial" / "report.md")
+        body = W.unit_persona_body(ROOT, "editorial/report")
+        self.assertTrue(body.startswith("# Unit: editorial/report"))
+
     def test_profile_type_scalar(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

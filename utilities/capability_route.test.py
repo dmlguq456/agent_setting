@@ -120,7 +120,16 @@ class TestRoute(unittest.TestCase):
      self.assertTrue(route["nodes"][0]["registered_worker"])
  def test_promotion_standard(self):
   evidence=self.dispatch(self.nested())
-  a=R.compile_route(**self.args(signals=["public-api"],transport="headless",inline_reason=None,dispatch_evidence=evidence)); self.assertEqual([x["id"] for x in a["nodes"]],["plan","execute","test","report"])
+  a=R.compile_route(**self.args(signals=["public-api"],transport="headless",inline_reason=None,dispatch_evidence=evidence)); self.assertEqual([x["id"] for x in a["nodes"]],["plan","plan-check","execute","impl-review","test","report"])
+ def test_nodes_carry_sealed_unit_refs(self):
+  route=self.compile_v3(self.dispatch(self.nested()))
+  units={n["id"]:n.get("unit") for n in route["nodes"]}
+  self.assertEqual(units,{
+   "plan":"plan/plan-author","plan-check":"qa/plan-review","execute":"dev/backend",
+   "impl-review":"qa/code-review","test":"qa/test","report":"editorial/report"})
+  tampered=json.loads(json.dumps(route)); tampered["nodes"][0]["unit"]="dev/backend"
+  with self.assertRaisesRegex(ValueError,"stale or modified route hash"):
+   R.verify_route(tampered,R.ROOT)
  def test_standard_plus_without_checked_headless_evidence_fails_closed(self):
   with self.assertRaisesRegex(ValueError,"checked dispatch evidence required"):
    R.compile_route(**self.args(signals=["public-api"],inline_reason=None))
@@ -193,9 +202,11 @@ class TestRoute(unittest.TestCase):
   with dispatch_defaults_config(DD_CONFIG_A):
    route=self._standard()
   by_id={n["id"]:n["harness_affinity"] for n in route["nodes"]}
-  self.assertEqual(set(by_id),{"plan","execute","test","report"})
+  self.assertEqual(set(by_id),{"plan","plan-check","execute","impl-review","test","report"})
   for value in by_id.values(): self.assertIn(value,R.VALID_AFFINITY)
   self.assertEqual(by_id["plan"],"unspecified")
+  self.assertEqual(by_id["plan-check"],"unspecified")
+  self.assertEqual(by_id["impl-review"],"unspecified")
   self.assertEqual(by_id["execute"],"codex")
   self.assertEqual(by_id["test"],"diverse")
   self.assertEqual(by_id["report"],"claude")
@@ -240,5 +251,58 @@ class TestRoute(unittest.TestCase):
   with dispatch_defaults_config(DD_CONFIG_CORRUPT):
    with self.assertRaisesRegex(ValueError,"corrupt dispatch-defaults config"):
     self._standard()
+ def _composed_recipe(self):
+  recipe=json.loads(json.dumps(R.TOPO.resolve_recipe(R.TOPO.load_registry(),"autopilot-code","dev")))
+  recipe["modes"]=["composed-fixture"]
+  return recipe
+ def _composed(self,recipe=None):
+  return R.compile_composed_route(
+   recipe or self._composed_recipe(),"composed-fixture","strong",R.ROOT,R.ROOT,
+   predicates=[],signals=["shared-contract"],transport="headless",
+   tracking="tracked",tracked_gate_evidence=self.args()["tracked_gate_evidence"],
+   dispatch_evidence=self.dispatch(self.nested()))
+ def test_composed_round_trip_and_tamper_rejection(self):
+  route=self._composed()
+  self.assertIs(route["composed"],True)
+  self.assertEqual(route["composed_recipe"]["modes"],["composed-fixture"])
+  R.verify_route(route,R.ROOT)
+  tampered=json.loads(json.dumps(route))
+  tampered["nodes"][0]["unit"]="dev/backend"
+  tampered["route_hash"]=R.route_hash(tampered)
+  tampered["route_id"]="rt-"+tampered["route_hash"].split(":",1)[1][:16]
+  with self.assertRaisesRegex(ValueError,"composed route nodes differ"):
+   R.verify_route(tampered,R.ROOT)
+ def test_composed_requires_standard_plus(self):
+  with self.assertRaisesRegex(ValueError,"standard\\+ effective intensity"):
+   R.compile_composed_route(
+    self._composed_recipe(),"composed-fixture","direct",R.ROOT,R.ROOT,
+    predicates=ALL,tracking="tracked",tracked_gate_evidence=self.args()["tracked_gate_evidence"])
+ def test_composed_spec_touch_gate(self):
+  recipe=self._composed_recipe()
+  execute=next(n for n in recipe["standard_plus"]["nodes"] if n["id"]=="execute")
+  execute["write_scope"]=["spec/**"]
+  execute["guard_preconditions"]=["artifact-order-prechecked"]
+  route=self._composed(recipe)
+  self.assertTrue(route["spec_touch"])
+  R.verify_route(route,R.ROOT)
+ def test_composed_invalid_recipe_fails_closed(self):
+  recipe=self._composed_recipe()
+  recipe["standard_plus"]["nodes"][0]["unit"]="dev/does-not-exist"
+  with self.assertRaisesRegex(ValueError,"unknown unit"):
+   self._composed(recipe)
+ def test_unit_catalog_digest_staleness(self):
+  route=self._standard()
+  self.assertTrue(route["unit_catalog_digest"].startswith("sha256:"))
+  stale=json.loads(json.dumps(route))
+  stale["unit_catalog_digest"]="sha256:"+"0"*64
+  stale["route_hash"]=R.route_hash(stale)
+  stale["route_id"]="rt-"+stale["route_hash"].split(":",1)[1][:16]
+  with self.assertRaisesRegex(ValueError,"stale unit catalog digest"):
+   R.verify_route(stale,R.ROOT)
+  legacy=json.loads(json.dumps(route))
+  legacy.pop("unit_catalog_digest")
+  legacy["route_hash"]=R.route_hash(legacy)
+  legacy["route_id"]="rt-"+legacy["route_hash"].split(":",1)[1][:16]
+  R.verify_route(legacy,R.ROOT)
 
 if __name__=="__main__": unittest.main()

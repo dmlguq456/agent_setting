@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 import sys
 
@@ -14,6 +15,9 @@ from dispatch_contract import EXECUTION_SURFACES, FALLBACK_HOPS, WRAPPER_TRANSPO
 
 REGISTRY = ROOT / "capabilities" / "topologies.json"
 MANIFEST = ROOT / "harness-manifest.json"
+UNITS = ROOT / "roles" / "units"
+UNIT_REF_RE = re.compile(r"^[a-z-]+/[a-z-]+$")
+_UNIT_CACHE: dict = {}
 
 
 class TopologyError(ValueError):
@@ -74,6 +78,115 @@ def _validate_guard_scope(recipe, scopes, preconditions, registry, node_id):
             )
 
 
+def _unit_frontmatter(unit):
+    """Read the few scalars the validator needs from a unit file (stdlib regex only)."""
+    key = (str(UNITS), unit)
+    if key in _UNIT_CACHE:
+        return _UNIT_CACHE[key]
+    path = UNITS / f"{unit}.md"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        raise TopologyError(f"unknown unit: {unit} (no roles/units/{unit}.md)")
+    match = re.match(r"\A---\n(.*?\n)---\n", text, re.DOTALL)
+    if not match:
+        raise TopologyError(f"unit {unit}: missing frontmatter block")
+    block = match.group(1)
+
+    def scalar(name):
+        found = re.search(rf"^{name}:\s*([^#\n]+?)\s*(?:#.*)?$", block, re.MULTILINE)
+        return found.group(1).strip() if found else None
+
+    fields = {name: scalar(name) for name in ("unit", "role", "worker_type", "read_only")}
+    if fields["unit"] != unit:
+        raise TopologyError(f"unit {unit}: frontmatter unit id mismatch ({fields['unit']!r})")
+    if not fields["role"]:
+        raise TopologyError(f"unit {unit}: frontmatter role required")
+    if fields["worker_type"] not in ("owner", "stage", "review", "support"):
+        raise TopologyError(f"unit {unit}: invalid worker_type {fields['worker_type']!r}")
+    if fields["read_only"] not in ("true", "false"):
+        raise TopologyError(f"unit {unit}: read_only must be true or false")
+    _UNIT_CACHE[key] = fields
+    return fields
+
+
+def _validate_unit_ref(recipe, node, registry):
+    capability, node_id, kind = recipe.get("capability"), node.get("id"), node.get("kind")
+    unit = node.get("unit")
+    compat = registry.get("unit_kind_compatibility", {}).get(kind)
+    if compat is None:
+        raise TopologyError(f"{capability}:{node_id}: no unit compatibility row for kind {kind}")
+    if not isinstance(unit, str) or not unit:
+        raise TopologyError(f"{capability}:{node_id}: node unit ref required")
+    if kind in ("capability-owner", "resource-runner"):
+        if unit not in compat or unit not in registry.get("reserved_units", {}):
+            raise TopologyError(
+                f"{capability}:{node_id}: kind {kind} requires reserved unit {sorted(compat)}"
+            )
+        if "unit_choices" in node:
+            raise TopologyError(f"{capability}:{node_id}: reserved-unit node cannot carry unit_choices")
+        return
+    if unit in registry.get("reserved_units", {}):
+        raise TopologyError(f"{capability}:{node_id}: reserved unit {unit} not allowed on kind {kind}")
+    choices = node.get("unit_choices")
+    if choices is not None:
+        if not isinstance(choices, list) or not choices:
+            raise TopologyError(f"{capability}:{node_id}: unit_choices must be a non-empty list")
+        if unit not in choices:
+            raise TopologyError(f"{capability}:{node_id}: unit {unit} not in unit_choices")
+    members = [unit] + [c for c in (choices or []) if c != unit]
+    for member in members:
+        if not UNIT_REF_RE.match(member or ""):
+            raise TopologyError(f"{capability}:{node_id}: invalid unit ref {member!r}")
+        fields = _unit_frontmatter(member)
+        if fields["worker_type"] not in compat:
+            raise TopologyError(
+                f"{capability}:{node_id}: unit {member} worker_type {fields['worker_type']} "
+                f"incompatible with kind {kind}"
+            )
+        if kind == "review-worker" and fields["read_only"] != "true":
+            raise TopologyError(
+                f"{capability}:{node_id}: review-worker unit {member} must declare read_only: true"
+            )
+    if node.get("role") != _unit_frontmatter(unit)["role"]:
+        raise TopologyError(
+            f"{capability}:{node_id}: node role {node.get('role')!r} differs from "
+            f"unit role {_unit_frontmatter(unit)['role']!r}"
+        )
+
+
+def _validate_gate_contracts(recipe, registry):
+    contracts = registry.get("completion_gate_contracts")
+    if not isinstance(contracts, dict):
+        raise TopologyError("completion_gate_contracts table required")
+    node_by_gate = {
+        node.get("completion_gate"): node
+        for node in recipe["standard_plus"].get("nodes", [])
+    }
+    for gate in recipe["completion_gates"]:
+        entry = contracts.get(gate)
+        if not isinstance(entry, dict):
+            raise TopologyError(f"{recipe['capability']}: gate {gate} lacks a completion_gate_contracts entry")
+        kind = entry.get("kind")
+        if kind == "unit-io":
+            node = node_by_gate.get(gate)
+            if node is None or entry.get("unit") != node.get("unit"):
+                raise TopologyError(
+                    f"{recipe['capability']}: unit-io gate {gate} must name the carrying node's unit"
+                )
+        elif kind == "capability-doc":
+            contract = entry.get("contract")
+            if not contract or not (ROOT / contract).is_file():
+                raise TopologyError(
+                    f"{recipe['capability']}: capability-doc contract missing for gate {gate}: {contract!r}"
+                )
+        elif kind == "custom":
+            if not entry.get("doc"):
+                raise TopologyError(f"{recipe['capability']}: custom gate {gate} requires a recorded reason")
+        else:
+            raise TopologyError(f"{recipe['capability']}: unknown gate contract kind {kind!r} for {gate}")
+
+
 def _validate_recipe(recipe, registry):
     required = {"capability", "modes", "topology_class", "direct_predicates", "promotion_signals",
                 "quick", "standard_plus", "completion_gates", "human_gates", "resume_retry_boundaries"}
@@ -117,6 +230,7 @@ def _validate_recipe(recipe, registry):
     for node in nodes:
         if node.get("kind") not in registry["worker_kinds"]:
             raise TopologyError(f"{recipe['capability']}:{node['id']}: invalid worker kind")
+        _validate_unit_ref(recipe, node, registry)
         if node["kind"] == "resource-runner":
             if any(
                 key in node
@@ -177,7 +291,7 @@ def _validate_recipe(recipe, registry):
 
 
 def validate_registry(registry, manifest=None):
-    if registry.get("schema_version") != 2:
+    if registry.get("schema_version") != 3:
         raise TopologyError("legacy topology registry is read-only")
     if set(registry.get("transports", [])) != WRAPPER_TRANSPORTS:
         raise TopologyError("transport vocabulary differs from portable dispatch contract")
@@ -195,12 +309,16 @@ def validate_registry(registry, manifest=None):
         raise TopologyError("artifact-order-prechecked guard precondition missing")
     if registry.get("artifact_owners", {}).get("spec") != "autopilot-spec":
         raise TopologyError("spec sole-update-path owner must be autopilot-spec")
-    if registry.get("rollout", {}).get("route_compiler") != "report-only":
-        raise TopologyError("route compiler rollout must remain report-only")
+    if registry.get("rollout", {}).get("route_compiler") != "enforced":
+        raise TopologyError("route compiler rollout must be enforced")
+    if "legacy_low_level_dispatch" in registry.get("rollout", {}):
+        raise TopologyError("legacy_low_level_dispatch is retired")
     actual, expected = recipe_keys(registry), expected_recipe_keys(manifest)
     if actual != expected:
         raise TopologyError(f"coverage mismatch missing={sorted(expected-actual)} extra={sorted(actual-expected)}")
-    for recipe in registry["recipes"]: _validate_recipe(recipe, registry)
+    for recipe in registry["recipes"]:
+        _validate_recipe(recipe, registry)
+        _validate_gate_contracts(recipe, registry)
     return {"capabilities": len({x[0] for x in actual}), "recipes": len(actual), "registry_digest": registry_digest(registry)}
 
 

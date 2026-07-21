@@ -130,7 +130,7 @@ In focus-axis mode, prefix every memo with `[<axis_name>]` (e.g. `[STYLE]`,
 
 If `Focus axis` is absent from the prompt, cover *all* axes from the Step 3
 task-type table in a single pass. Use this for standard plan checks and any
-graph that did not explicitly open a multi-axis depth-2 review.
+graph that did not explicitly open a multi-axis dispatch-depth-2 review.
 
 Multi-axis review exists so narrow parallel instances collectively cover what a
 careful user would catch without overloading one reviewer. It changes

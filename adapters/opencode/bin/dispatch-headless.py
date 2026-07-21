@@ -148,6 +148,7 @@ def parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--worker-role", help="legacy compatibility metadata; not bootstrap identity")
     p.add_argument("--worker-type", choices=("owner", "stage", "review", "support"))
+    p.add_argument("--unit", default="", help="catalog unit ref for the assigned route node (roles/units/<unit>.md)")
     p.add_argument("--assigned-contract")
     p.add_argument("--owner", dest="capability_owner")
     p.add_argument("--route-file")
@@ -358,7 +359,7 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
         route_node=args.route_node,
         profile_type=None,
     )
-    bootstrap = render_worker_bootstrap(ROOT, args.worker_type)
+    bootstrap = render_worker_bootstrap(ROOT, args.worker_type, unit=(args.unit or None))
     args.assigned_contract = assigned_contract(
         capability=args.capability,
         worker_type=args.worker_type,

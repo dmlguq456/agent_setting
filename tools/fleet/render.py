@@ -716,7 +716,7 @@ _ROUTE_STAGE_ZONE_MAX = 42     # user 2026-07-21 ("전부 표시해줘"): a disp
                                # › report), not just "where now". A 4-stage code route is 32 cells,
                                # over _STAGE_ZONE_MAX, so plan was silently folded by
                                # _drop_past_stages; this wider bound is CONDUCTOR-only (route_seq
-                               # path, ~:851) so depth-2 / narrow-card zones keep the tuned 30.
+                               # path, ~:851) so dispatch-depth-2 / narrow-card zones keep the tuned 30.
 
 
 def _drop_past_stages(items, cur_i, max_width):

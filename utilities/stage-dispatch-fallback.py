@@ -378,6 +378,7 @@ def wrapper_command(
         "--dispatch-depth", "2",
         "--parent", args.parent,
         "--worker-type", worker_type,
+        "--unit", node.get("unit", ""),
         "--assigned-contract", contract,
         "--owner", route["capability"],
         "--owner-harness", row["parent_harness"],

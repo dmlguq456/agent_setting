@@ -206,13 +206,15 @@ class CompletionMarkerTest(unittest.TestCase):
                 self.assertIn("child_spawned=0", result.stdout)
                 self.assertFalse(self.jobs.exists())
 
-        # Write the "plan" marker this route depends on, then re-run: the
-        # gate itself must no longer be the blocker (other reasons -- e.g.
-        # missing real claude/codex/opencode binaries -- are acceptable).
-        evidence = self.base / "plan.md"
-        evidence.write_text("plan body\n", encoding="utf-8")
-        completed = self.complete(route_path, "plan", evidence)
-        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        # Write the markers this route's "execute" node depends on (plan and
+        # the hoisted plan-check review sibling), then re-run: the gate itself
+        # must no longer be the blocker (other reasons -- e.g. missing real
+        # claude/codex/opencode binaries -- are acceptable).
+        for node_id, body in (("plan", "plan body\n"), ("plan-check", "plan review verdict\n")):
+            evidence = self.base / f"{node_id}.md"
+            evidence.write_text(body, encoding="utf-8")
+            completed = self.complete(route_path, node_id, evidence)
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         for harness in ADAPTERS:
             with self.subTest(harness=harness, phase="after-marker"):
                 command = self.wrapper_command(harness, "start", route_path, route, "execute")

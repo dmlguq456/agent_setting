@@ -7,6 +7,9 @@ import re
 from pathlib import Path
 
 WORKER_TYPES = ("owner", "stage", "review", "support")
+UNIT_REF_RE = re.compile(r"^[a-z-]+/[a-z-]+$")
+RESERVED_UNITS = ("_kernel/owner", "_kernel/resource")
+_FRONTMATTER_RE = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
 WORKER_KIND_TYPES = {
     "capability-owner": "owner",
     "pipeline-stage": "stage",
@@ -92,15 +95,52 @@ def worker_type_for_kind(kind: str) -> str:
         raise ValueError(f"unsupported headless worker kind: {kind}") from exc
 
 
-def render_worker_bootstrap(root: Path, worker_type: str) -> str:
-    """Return exactly one canonical kernel plus one type fragment."""
+def unit_persona_path(root: Path, unit: str | None) -> Path | None:
+    """Resolve a route node's unit ref to its catalog persona file.
+
+    Reserved kernel refs (`_kernel/owner`, `_kernel/resource`) carry no catalog
+    persona — the owner overlay / detached lifecycle is the contract — and an
+    absent unit means a pre-unit route node. Both return None. A malformed or
+    dangling catalog ref fails loud: silently dropping an assigned persona
+    would dispatch a bare kernel worker.
+    """
+    if not unit or unit in RESERVED_UNITS:
+        return None
+    if not UNIT_REF_RE.match(unit):
+        raise ValueError(f"invalid unit ref: {unit!r}")
+    path = root / "roles" / "units" / f"{unit}.md"
+    if not path.is_file():
+        raise ValueError(f"unknown unit: {unit} (no roles/units/{unit}.md)")
+    return path
+
+
+def unit_persona_body(root: Path, unit: str | None) -> str | None:
+    """Return the unit BODY as plain markdown (frontmatter stripped), or None."""
+    path = unit_persona_path(root, unit)
+    if path is None:
+        return None
+    text = path.read_text(encoding="utf-8")
+    return _FRONTMATTER_RE.sub("", text, count=1).strip()
+
+
+def render_worker_bootstrap(root: Path, worker_type: str, unit: str | None = None) -> str:
+    """Return exactly one canonical kernel plus one type fragment.
+
+    When the assigned route node carries a catalog ``unit``, the unit BODY from
+    ``roles/units/<unit>.md`` is appended as the worker persona (kernel +
+    worker-type overlay + unit body); kernel and overlay mechanics are unchanged.
+    """
     if worker_type not in WORKER_TYPES:
         raise ValueError(f"invalid worker type: {worker_type}")
     paths = (
         root / "roles" / "worker-bootstrap.md",
         root / "roles" / "worker-types" / f"{worker_type}.md",
     )
-    return "\n\n".join(path.read_text(encoding="utf-8").strip() for path in paths) + "\n"
+    fragments = [path.read_text(encoding="utf-8").strip() for path in paths]
+    persona = unit_persona_body(root, unit)
+    if persona:
+        fragments.append(persona)
+    return "\n\n".join(fragments) + "\n"
 
 
 def assigned_contract(
