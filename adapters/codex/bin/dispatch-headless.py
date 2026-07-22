@@ -356,6 +356,13 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
             )
         # 역할 티어 고정 + 상황별 reasoning 오버라이드 (2026-07-22 사용자 원칙).
         if args.reasoning:
+            if args.model_role.startswith("deep ") and args.reasoning in ("medium", "low"):
+                # 사다리: deep 기본 xhigh → 아래는 high; medium 이하는 '정말 쉬운 것만'.
+                print(
+                    f"caution=deep-tier-low-effort role={args.model_role!r} reasoning={args.reasoning} "
+                    "(step-down is high; medium/low is for genuinely easy work only)",
+                    file=sys.stderr,
+                )
             return {"source": "role+effort", "role": args.model_role, "model": model, "reasoning": args.reasoning}
         return {"source": "role", "role": args.model_role, "model": model, "reasoning": reasoning}
     if not args.model and not args.reasoning:

@@ -247,6 +247,14 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
         fields = role_map(args.model_role)
         effort = args.effort or fields["effort"]
         source = "role+effort" if args.effort else "role"
+        if args.model_role.startswith("deep ") and effort in ("medium", "low"):
+            # 사다리(2026-07-22): deep 기본 xhigh, 아래 단계는 high; medium 이하는
+            # '정말 쉬운 것만'의 예외적 선택 — 허용하되 조심을 상기시킨다.
+            print(
+                f"caution=deep-tier-low-effort role={args.model_role!r} effort={effort} "
+                "(step-down is high; medium/low is for genuinely easy work only)",
+                file=sys.stderr,
+            )
         return {"source": source, "role": args.model_role, "model": fields["model"], "effort": effort}
     if not args.model and not args.effort:
         raise ModelSelectionError(

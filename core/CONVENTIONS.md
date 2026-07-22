@@ -116,6 +116,11 @@ this as `--model-role <role> [--effort|--reasoning|--variant <level>]`; combinin
 `--model-role` with `--model` is rejected as tier-hopping. Cross-tier per-role special
 cases in config are equally forbidden.
 
+Deep-tier effort ladder (user, 2026-07-22): the step below the `xhigh` default is
+`high`; `medium` on a deep role is **exceptional — genuinely easy work only** (the
+wrappers emit a caution); the hardest work steps **up to `max`** (both claude and codex
+engines accept it, probe-verified).
+
 ### §2.3. Unit Catalog and Role Binding
 
 The former runtime team agents are re-homed (2026-07-22, user decision: 승격+재홈) into the
