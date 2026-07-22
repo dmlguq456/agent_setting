@@ -84,6 +84,41 @@ All three modes follow the same flow: discover input → analyze directly or dis
 - **paper** — Dispatch analysis of reference PDFs and the user's own paper to the `research/research-survey` unit. Branch by purpose: (A) survey external PDFs for citation and grounding, or (B) review an in-progress `main.tex`, with `00_self_paper_analysis.md` as the main output. Treat `00_overview_and_constraints.md` as the highest-priority integrated output. → `mode-paper.md`
 - **doc** — Classify writing materials (reviewer comments, templates, samples, and miscellaneous inputs), then dispatch analysis to the `research/research-survey` unit; produce per-task `doc/{name}/` output and a `00_overview.md` inventory. → `mode-doc.md`
 
+## Composed-route dispatch (large analysis)
+
+`analyze-project` owns no registry recipe (it is a `pre`-group capability, not
+`entry`), so unit-grade analysis dispatches through a **composed route**, never a
+native sub-agent. Native sub-agents are one-shot helpers; unit-grade work is
+registered dispatch (v3 boundary). Assemble the route with
+`utilities/compose-route.py`, which turns a unit list into a full-shape recipe,
+assembles nested-eligibility dispatch evidence, and delegates sealing to
+`capability-route.py compile --composed-recipe`:
+
+```bash
+python3 "$AGENT_HOME/utilities/compose-route.py" \
+  --capability analyze-project --capability-mode code \
+  --units-json '[{"id":"survey","unit":"research/research-survey","write_scope":["analysis_project/code/**"],"gate":"research-retrieval"}]' \
+  --cwd "$PWD" --artifact-root "$ARTIFACT_ROOT" \
+  --tracking tracked --spec-read "$PRD_SHA" --drift-verdict within-spec \
+  --workflow-mode tracked --artifact-guard conductor-prechecked \
+  --output "$ARTIFACT_ROOT/plans/<slug>/route.json"
+```
+
+- `role` and `kind` are derived from each unit's frontmatter — do not restate them.
+- `gate` is required for a unit that backs several unit-io gates (e.g.
+  `research/research-survey` → `research-retrieval` / `research-synthesis` /
+  `research-report`); a single-gate unit (e.g. `qa/plan-review`) auto-derives it.
+- The tracked-gate fields (`--spec-read`, `--drift-verdict`, ...) are stated by
+  the caller and passed through unchanged; the helper never fabricates them.
+- Dispatch evidence comes from the live nested-eligibility probe by default; pass
+  `--dispatch-evidence <file>` when you already hold checked evidence. With no
+  supported tuple the route fails closed.
+
+**Small or incremental analysis stays inline.** A single-module reanalysis or a
+Phase 0 incremental pass (typically 10-20% of files) does not justify a composed
+route — run it in the owner session and reserve compose-on-demand for large,
+fan-out analyses.
+
 ## Reference Index
 
 | File | When to load (mandatory) | Content |
