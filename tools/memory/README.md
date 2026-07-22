@@ -16,7 +16,7 @@ pending protection, lifecycle execution, bounded telemetry, and recovery.
 
 | Layer | Location | Git | Purpose |
 |---|---|---|---|
-| Source of truth | `<agent-home>/memory/memory.db` (SQLite WAL) | ignored binary | `records`, FTS5 `unicode61`, and the CJK trigram index |
+| Source of truth | `<agent-home>/memory/memory.db` (SQLite WAL) | ignored binary | `records`, FTS5 `unicode61`, and the CJK bigram shadow index |
 | Git mirror | `<agent-home>/memory/dump.jsonl` (one ID-sorted record per line) | tracked in the memory repository | deterministic text export and exact `mem import` recovery source |
 | Harness projection | `<agent-home>/projects/<cwd>/memory/` | ignored | compatibility surface for stray auto-memory writes absorbed by `mem sync`; `mem project` can rebuild the projection |
 
@@ -25,8 +25,8 @@ A record combines `tier` (`working|durable`), `scope` (`project|global`),
 a finite lifecycle; durable records persist until an agent chooses another
 action. New `handoff` records and threads created with `--requires-consume`
 start pending and remain protected from destructive operations until explicit
-consumption. FTS5 and CJK trigram data live inside `memory.db`, not in a separate
-`.index.db` file.
+consumption. FTS5 and CJK bigram-shadow data live inside `memory.db`, not in a
+separate `.index.db` file.
 
 ## Commands
 
@@ -40,7 +40,7 @@ python3 <agent-home>/tools/memory/mem.py <command>
 |---|---|
 | `add <tier> <type> "<body>" [--scope] [--tags] [--links] [--source] [--requires-consume]` | Add a record after mechanical validation, deduplication, and injection-safety checks. `handoff` or `--requires-consume` starts pending. |
 | `note "<body>" [--type] [--requires-consume]` | Shorthand for a working record. Use `--requires-consume` for delivery-bearing threads. |
-| `recall "<query>" [--tier] [--scope] [--all] [--sessions] [--full] [--limit 1..100] [--no-touch]` | Explicit retrieval with FTS5/BM25, CJK trigram, LIKE fallback, and optional raw-session search. Default limit is 20; `--full` replaces snippets with complete bodies. |
+| `recall "<query>" [--tier] [--scope] [--all] [--sessions] [--full] [--limit 1..100] [--no-touch]` | Explicit retrieval with FTS5/BM25, ranked CJK bigram substring matching, LIKE last-resort fallback, and optional raw-session search. Default limit is 20; `--full` replaces snippets with complete bodies. |
 | `show <id> [--all]` | Show one visible record with metadata and full body. The default fence is current project plus global; flagged or invisible IDs return a generic not-found result. |
 | `consume <id>` | Move a pending handoff/thread to consumed. Retrieval and injection never consume records implicitly. |
 | `restore <id>` | Restore one record from the graveyard while preserving action/canonical metadata. |
@@ -54,7 +54,8 @@ python3 <agent-home>/tools/memory/mem.py <command>
 | `log [--limit 20] [--action] [--tier] [--actor] [--json]` | Read the bounded write-event timeline (D-38), complementing the `stats` snapshot. |
 | `doctor` | Run nine read-only checks covering integrity, FTS/schema invariants, working growth, stale pending, durable capacity, graveyard/dump consistency, and worker health. Exit 0 is clean, 1 is WARN, and 2 is FAIL. |
 | `inject [--hook]` | Build bounded SessionStart context from working, durable, and profile records. Defaults to 2,000 characters and 15 bullets; `--hook` emits `additionalContext` JSON. |
-| `sync` | Absorb stray projection writes, rebuild FTS5, and re-export `dump.jsonl` at SessionEnd. |
+| `sync` | Absorb stray projection writes, rebuild FTS5, re-export `dump.jsonl`, and append one PLAIN auto-sync commit at SessionEnd (git failures print a one-line stderr warning; sync stays non-fatal). |
+| `maintenance [--squash-days 14] [--apply]` | Operator-run compaction for the plain-commit dump history: squash first-parent auto-sync commits older than N days into one root, then `git gc`. Dry-run by default; never pushes (a mirror needs an explicit force-push afterwards). |
 | `distill <sid> [--advance]` | Print normalized transcript text after the shared session marker and optionally advance that marker. |
 | `curate-snapshot` | Print a read-only current-project snapshot, mechanical signals, and destructive `IDS:` membership. Pending records appear under `PROTECTED PENDING` but never in destructive IDs. |
 | `curate-artifacts` | Print read-only git, plan, and spec evidence for the curator agent. |
@@ -135,8 +136,8 @@ and confidence thresholds never substitute for that judgment.
 
 ## Operational contract
 
-- Schema v5 stores 16 record columns, including `delivery_state`, plus embedded
-  FTS5 and CJK trigram tables.
+- Schema v6 stores 16 record columns, including `delivery_state`, plus embedded
+  FTS5 and CJK bigram-shadow tables (v6 re-normalized legacy `cwd_origin` keys).
 - `dump.jsonl` is ID-sorted with `sort_keys=True`, one record per line, and
   explicit JSON `null` values. `mem import dump.jsonl` performs exact recovery.
 - SessionStart injection may remain adapter opt-in when start events repeat on

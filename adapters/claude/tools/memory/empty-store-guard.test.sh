@@ -1,0 +1,1 @@
+../../../../tools/memory/empty-store-guard.test.sh

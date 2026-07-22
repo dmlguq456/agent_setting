@@ -2,7 +2,8 @@
 """Unified Memory System — `mem`.
 
 SQLite ``memory.db`` in WAL mode is the source of truth. ``dump.jsonl`` is the
-tracked text mirror. FTS5 includes unicode61 and CJK trigram support.
+tracked text mirror. FTS5 includes unicode61 and a CJK bigram shadow index
+(ranked substring matching without the SQLite ≥3.34 trigram tokenizer).
 spec: <agent-home>/.agent_reports/spec/prd.md (legacy: .claude_reports/spec/prd.md).
 
 Design boundary:
@@ -41,7 +42,9 @@ USER_PROFILE = Path(os.environ.get("MEM_PROFILE", AGENT_HOME / "user_profile"))
 TIERS = ("working", "durable")
 SCOPES = ("project", "global")
 WORKING_TTL_DAYS = 21
-SCHEMA_VERSION = 5  # v2 strength/access, v3 cwd remap, v4 injection, v5 delivery.
+# v2 strength/access, v3 cwd remap, v4 injection, v5 delivery,
+# v6 legacy cwd_origin re-normalization (2026-07-22 memory audit W3).
+SCHEMA_VERSION = 6
 FM_ORDER = ["id", "tier", "scope", "type", "cwd_origin", "created", "updated",
             "expires", "source", "tags", "links", "strength", "last_accessed", "injection_flag",
             "delivery_state"]
@@ -102,9 +105,9 @@ SECRET_PAT = re.compile(
     r"(sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|"
     r"(api[_-]?key|secret|token|password)\s*[:=]\s*[A-Za-z0-9_\-]{12,})", re.I)
 
-# Module-level FTS and trigram availability caches, initialized by get_con().
+# Module-level FTS and CJK-shadow availability caches, initialized by get_con().
 _FTS_OK = None     # FTS5 unicode61 availability.
-_TRIG_OK = None    # Trigram tokenizer availability.
+_CJK_OK = None     # CJK bigram shadow index availability (audit W4).
 
 
 # ---------- pure helpers ----------
@@ -136,40 +139,150 @@ def _git_rc(args, cwd):
         return 1
 
 
-def _head_unpushed(repo):
-    """Return whether HEAD is unpushed and therefore safe to amend."""
-    if _git_rc(["rev-parse", "@{u}"], repo) != 0:
-        return True   # No upstream means a local-only commit is safe to amend.
-    cnt = _git_out(["rev-list", "@{u}..HEAD", "--count"], repo).strip()
-    return cnt not in ("", "0")   # An ahead commit is unpushed and safe to amend.
+def _git_run(args, cwd, env=None, timeout=30):
+    """Run git returning ``(rc, stdout, stderr)``; never raise."""
+    try:
+        e = None
+        if env:
+            e = os.environ.copy()
+            e.update(env)
+        r = subprocess.run(["git"] + args, cwd=str(cwd), capture_output=True,
+                           text=True, timeout=timeout, env=e)
+        return r.returncode, r.stdout.strip(), r.stderr.strip()
+    except Exception as ex:
+        return 1, "", str(ex)
 
 
 def _commit_dump():
-    """Commit the synchronized dump without touching unrelated changes.
+    """Commit the synchronized dump as a PLAIN commit (2026-07-22 audit W1/W2).
 
-    Amend only an unpushed auto-sync commit. Pushing is opt-in through
-    ``MEM_DUMP_PUSH=1``. All failures are non-fatal.
+    The former amend-rolling single commit orphaned ~1MB of loose objects per
+    sync (W2) and swallowed every git failure silently — a stale index.lock
+    killed the mirror for 8 days unnoticed (W1). Now each sync appends one
+    plain commit with the unchanged message pattern, and any git failure
+    prints a ONE-LINE stderr warning while sync itself stays non-fatal.
+    History compaction is an explicit operator action: ``mem maintenance
+    [--squash-days N] [--apply]`` squashes old auto-sync history and gcs (see
+    ``maintenance()``); it is run by the session finalizer or the user, never
+    a daemon. Pushing remains opt-in through ``MEM_DUMP_PUSH=1``.
     """
     if os.environ.get("MEM_DUMP_COMMIT") == "0":
         return  # Explicit escape hatch.
     repo = DUMP.parent  # STORE; dump.jsonl lives in the agent-memory repo working tree
+
+    def _warn(step, rc, err):
+        tail = (err or "").strip().splitlines()
+        sys.stderr.write(f"[mem] dump {step} failed (non-fatal, rc={rc}): "
+                         f"{tail[-1] if tail else '(no stderr)'}\n")
+
     if not _git_out(["rev-parse", "--is-inside-work-tree"], repo):
         return  # Non-git store: no-op.
     # Stage only dump.jsonl; never touch databases, backups, or unrelated files.
-    _git_out(["add", "--", DUMP.name], repo)
+    rc, _, err = _git_run(["add", "--", DUMP.name], repo)
+    if rc != 0:
+        _warn("git-add", rc, err)
+        return
     # Skip the commit when the staged dump is unchanged.
     if _git_rc(["diff", "--cached", "--quiet", "--", DUMP.name], repo) == 0:
         return  # nothing staged → no commit
     msg = f"{AUTO_DUMP_MSG_PREFIX} ({datetime.datetime.now().isoformat(timespec='seconds')})"
-    # Amend only when HEAD is both an auto-sync commit and still unpushed.
-    head_msg = _git_out(["log", "-1", "--format=%s"], repo)   # Empty for a fresh repository.
-    is_auto = head_msg.startswith(AUTO_DUMP_MSG_PREFIX)
-    if is_auto and _head_unpushed(repo):
-        _git_out(["commit", "--amend", "-m", msg, "--", DUMP.name], repo)   # Rolling single commit.
-    else:
-        _git_out(["commit", "-m", msg, "--", DUMP.name], repo)              # New commit.
+    rc, _, err = _git_run(["commit", "-m", msg, "--", DUMP.name], repo)
+    if rc != 0:
+        _warn("git-commit", rc, err)
+        return
     if os.environ.get("MEM_DUMP_PUSH") == "1":
-        _git_out(["push"], repo)
+        rc, _, err = _git_run(["push"], repo)
+        if rc != 0:
+            _warn("git-push", rc, err)
+
+
+def maintenance(squash_days=14, apply=False):
+    """Compact the dump repository: squash old auto-sync history, then gc.
+
+    Companion policy for plain-commit dump mode (audit W1/W2): commits now
+    accumulate one per sync, so an OPERATOR (session finalizer or the user —
+    never a daemon) periodically squashes first-parent history older than
+    ``squash_days`` into a single root commit and garbage-collects loose
+    objects. Retained commits keep their trees, subjects, and dates
+    byte-identically, so HEAD's tree and the worktree never change. Dry-run
+    by default; ``--apply`` executes. A pushed mirror needs an explicit
+    force-push afterwards — this function never pushes.
+    """
+    repo = STORE
+    if not _git_out(["rev-parse", "--is-inside-work-tree"], repo):
+        print(f"[maintenance] store is not a git repository: {repo}")
+        return 0
+    head = _git_out(["rev-parse", "HEAD"], repo)
+    if not head:
+        print("[maintenance] empty repository; nothing to do")
+        return 0
+    cutoff = (datetime.datetime.now() -
+              datetime.timedelta(days=squash_days)).isoformat(timespec="seconds")
+    base = _git_out(["rev-list", "-1", "--first-parent",
+                     f"--before={cutoff}", "HEAD"], repo)
+    older = int(_git_out(["rev-list", "--count", "--first-parent", base], repo)
+                or "0") if base else 0
+    if not base or older <= 1:
+        print(f"[maintenance] no history older than {squash_days}d to squash (cutoff {cutoff})")
+        if apply:
+            rc, _, err = _git_run(["gc", "--quiet"], repo, timeout=600)
+            print("[maintenance] gc done" if rc == 0 else
+                  f"[maintenance] gc failed (rc={rc}): {err.splitlines()[-1] if err else ''}")
+        return 0
+    newer = int(_git_out(["rev-list", "--count", "--first-parent",
+                          f"{base}..HEAD"], repo) or "0")
+    print(f"[maintenance] {'squashing' if apply else 'would squash'} {older} commits "
+          f"(≤ {cutoff}) into one root; keeping {newer} newer commits")
+    if not apply:
+        print("[maintenance] dry-run; use --apply to execute (mirror push stays manual)")
+        return 0
+    branch = _git_out(["symbolic-ref", "--short", "HEAD"], repo)
+    if not branch:
+        print("[maintenance] detached HEAD; refusing to rewrite")
+        return 1
+
+    def _date_env(commit):
+        env = {}
+        a = _git_out(["log", "-1", "--format=%aI", commit], repo)
+        c = _git_out(["log", "-1", "--format=%cI", commit], repo)
+        if a:
+            env["GIT_AUTHOR_DATE"] = a
+        if c:
+            env["GIT_COMMITTER_DATE"] = c   # keeps future --before cutoffs honest
+        return env
+
+    tree = _git_out(["rev-parse", f"{base}^{{tree}}"], repo)
+    base_date = _git_out(["log", "-1", "--format=%cs", base], repo)
+    rc, new_root, err = _git_run(
+        ["commit-tree", tree, "-m",
+         f"chore: dump — squashed {older} auto-sync commits ≤ {base_date}"],
+        repo, env=_date_env(base))
+    if rc != 0 or not new_root:
+        print(f"[maintenance] squash root creation failed: {err}")
+        return 1
+    cur = new_root
+    replay = _git_out(["rev-list", "--reverse", "--first-parent",
+                       f"{base}..HEAD"], repo)
+    for c in [x for x in replay.splitlines() if x.strip()]:
+        t = _git_out(["rev-parse", f"{c}^{{tree}}"], repo)
+        m = _git_out(["log", "-1", "--format=%s", c], repo) or "chore: dump"
+        rc, out, err = _git_run(["commit-tree", t, "-p", cur, "-m", m],
+                                repo, env=_date_env(c))
+        if rc != 0 or not out:
+            print(f"[maintenance] replay failed at {c[:12]}: {err}")
+            return 1
+        cur = out
+    # Atomic ref move guarded by the observed old HEAD; plumbing only, so the
+    # index and worktree are untouched (final tree is identical by construction).
+    rc, _, err = _git_run(["update-ref", f"refs/heads/{branch}", cur, head], repo)
+    if rc != 0:
+        print(f"[maintenance] update-ref failed: {err}")
+        return 1
+    _git_run(["reflog", "expire", "--expire=now", "--all"], repo, timeout=120)
+    rc, _, err = _git_run(["gc", "--prune=now", "--quiet"], repo, timeout=600)
+    print(f"[maintenance] squashed {older}→1 (+{newer} kept) → {cur[:12]} · "
+          f"gc {'done' if rc == 0 else 'FAILED: ' + (err.splitlines()[-1] if err else str(rc))}")
+    return 0
 
 
 def _norm_remote(url):
@@ -291,6 +404,33 @@ def _decode_enc_cwd(enc):
     return walk(Path("/"), enc, 0)
 
 
+def _canonical_cwd_key(raw, cache=None):
+    """Best-effort canonicalization of a legacy cwd key to project_key form.
+
+    Accepts an encoded-cwd name (``-home-...``) or a raw absolute path and
+    returns the canonical project_key when the referenced directory still
+    exists; otherwise the input is returned unchanged (never guessed, never
+    dropped). Shared by the absorb path and migrate v6 so both emit the same
+    keys the recall/inject visibility fence compares against (audit W3).
+    """
+    if not isinstance(raw, str) or not raw:
+        return raw
+    if cache is not None and raw in cache:
+        return cache[raw]
+    out = raw
+    d = None
+    if raw.startswith("-"):
+        d = _decode_enc_cwd(raw)
+    elif raw.startswith("/"):
+        p = Path(raw)
+        d = p if p.is_dir() else None
+    if d is not None and d.is_dir():
+        out = project_key(d, seed=False)
+    if cache is not None:
+        cache[raw] = out
+    return out
+
+
 def slugify(text, n=4):
     words = re.findall(r"[A-Za-z0-9가-힣]+", text.lower())[:n]
     s = "-".join(words) or "note"
@@ -394,8 +534,63 @@ def _fts_available(con):
         return False
 
 
+# ---------- CJK bigram shadow index (audit W4, 2026-07-22) ----------
+# System SQLite < 3.34 lacks the trigram tokenizer, so CJK substring recall
+# used to fall back to an unranked LIKE scan. The shadow index stores each
+# body with CJK runs rewritten as overlapping bigrams; unicode61 (available
+# everywhere) then gives ranked bm25 substring matching for Korean/CJK.
+_CJK_RUN_RE = re.compile(r"[　-鿿가-힯]+")
+
+
+def _cjk_bigrams(run):
+    """Overlapping bigrams of one CJK run; a single char stands alone."""
+    if len(run) < 2:
+        return [run]
+    return [run[i:i + 2] for i in range(len(run) - 1)]
+
+
+def _cjk_shadow_text(text):
+    """Rewrite CJK runs as space-joined overlapping bigrams.
+
+    Latin/digit text passes through unchanged so mixed-script queries can
+    still match inside the shadow row. Snippets always render from the
+    original body, never from this transform.
+    """
+    def repl(m):
+        return " " + " ".join(_cjk_bigrams(m.group(0))) + " "
+    return _CJK_RUN_RE.sub(repl, text)
+
+
+def _cjk_query_expr(q):
+    """Build the shadow-index MATCH expression for a CJK-bearing query.
+
+    Each subtoken becomes a phrase of its own shadow transform, giving exact
+    substring semantics inside CJK runs (consecutive bigrams) with bm25
+    ranking. A trailing single CJK char becomes a prefix phrase so it can
+    meet indexed bigrams. Tokens are OR-combined like bucket 0.
+    """
+    terms, seen = [], set()
+    for tok in q.split():
+        for p in _KO_PARTICLES:      # same particle stemming as bucket 0
+            if tok.endswith(p) and len(tok) - len(p) >= 2:
+                tok = tok[: len(tok) - len(p)]
+                break
+        for part in _SUBTOKEN_RE.findall(tok):
+            toks = _cjk_shadow_text(part).split()
+            if not toks:
+                continue
+            phrase = '"' + " ".join(t.replace('"', '""') for t in toks) + '"'
+            last = toks[-1]
+            if len(last) == 1 and _has_cjk(last):
+                phrase += " *"       # FTS5 prefix phrase: extend the last token
+            if phrase not in seen:
+                seen.add(phrase)
+                terms.append(phrase)
+    return " OR ".join(terms)
+
+
 def _ensure_schema(con):
-    global _FTS_OK, _TRIG_OK
+    global _FTS_OK, _CJK_OK
     con.execute("""CREATE TABLE IF NOT EXISTS records(
         id          TEXT PRIMARY KEY,
         tier        TEXT NOT NULL,
@@ -421,19 +616,28 @@ def _ensure_schema(con):
     if fts:
         con.execute("CREATE VIRTUAL TABLE IF NOT EXISTS records_fts USING fts5("
                     "id UNINDEXED, body, tokenize='unicode61')")
-        # Trigram auxiliary table for CJK substring matching.
-        # MEM_NO_TRIGRAM is a test hook that forces unavailability.
+        # CJK bigram shadow index for ranked substring matching (audit W4).
+        # Replaces the retired 3.34+ trigram table; MEM_NO_TRIGRAM keeps its
+        # historical name as the hook that forces shadow unavailability.
         if os.environ.get("MEM_NO_TRIGRAM"):
-            _TRIG_OK = False
+            _CJK_OK = False
         else:
-            try:
-                con.execute("CREATE VIRTUAL TABLE IF NOT EXISTS records_trig USING fts5("
-                            "id UNINDEXED, body, tokenize='trigram')")
-                _TRIG_OK = True
-            except sqlite3.OperationalError:
-                _TRIG_OK = False
+            had = con.execute(
+                "SELECT name FROM sqlite_master WHERE name='records_cjk'").fetchone()
+            con.execute("CREATE VIRTUAL TABLE IF NOT EXISTS records_cjk USING fts5("
+                        "id UNINDEXED, body, tokenize='unicode61')")
+            _CJK_OK = True
+            if not had:
+                # Self-healing backfill: an existing store gains shadow rows on
+                # first open after upgrade (idempotent — `mem index --rebuild`
+                # produces the identical state).
+                rows = con.execute("SELECT id, body FROM records").fetchall()
+                for rid, body in rows:
+                    con.execute("INSERT INTO records_cjk(id, body) VALUES(?,?)",
+                                (rid, _cjk_shadow_text(body)))
+                con.commit()   # Persist even when no migration follows.
     else:
-        _TRIG_OK = False
+        _CJK_OK = False
 
 
 def _migrate_v2(con):
@@ -523,6 +727,82 @@ def _migrate_v5(con):
     con.execute("UPDATE records SET expires=NULL WHERE delivery_state='pending'")
 
 
+def _v6_rename_targets():
+    """Retired remote keys remapped to the live successor checkout (v6).
+
+    github.com/dmlguq456/claude_setting was renamed to agent_setting
+    (2026-07-22 memory audit W3 follow-up; the records under the old key are
+    2026-06 harness-internal content and this repository's history predates
+    the rename). The target is DERIVED from the live AGENT_HOME checkout via
+    project_key — never hardcoded — and the entry applies only where that
+    checkout is the same-org ``agent_setting`` repository, so machines whose
+    AGENT_HOME resolves elsewhere are unaffected.
+    """
+    old = "git:github.com/dmlguq456/claude_setting"
+    target = project_key(AGENT_HOME, seed=False)
+    if (target.startswith("git:") and target.endswith("/agent_setting")
+            and target.rsplit("/", 1)[0] == old.rsplit("/", 1)[0]):
+        return {old: target}
+    return {}
+
+
+def _migrate_v6_prepare(con):
+    """Precompute the v6 legacy cwd_origin remap plan (read-only, lock-free).
+
+    The v3 remap was one-shot while the auto-memory absorb path kept writing
+    encoded-cwd keys (audit W3), so the recall/inject project fence
+    (project_key) could not see those records. v6 re-normalizes unambiguous
+    keys only: encoded or raw-path keys whose directory still exists and
+    canonicalizes differently, plus the explicit rename map above. Everything
+    else (dead paths, non-git home directories, foreign machines) is preserved
+    untouched and reported.
+    """
+    rows = con.execute(
+        "SELECT DISTINCT cwd_origin FROM records "
+        "WHERE scope='project' AND cwd_origin IS NOT NULL "
+        "AND cwd_origin != 'global'").fetchall()
+    renames = _v6_rename_targets()
+    remap, left, cache = {}, [], {}
+    for (c,) in rows:
+        if not c:
+            continue
+        if c.startswith(("git:", "id:", "root:")):
+            nk = renames.get(c)
+            if nk and nk != c:
+                remap[c] = nk
+            continue  # Already canonical; only explicit renames apply.
+        nk = _canonical_cwd_key(c, cache)
+        if nk != c:
+            remap[c] = nk
+        else:
+            left.append(c)  # Preserve; never guess a dead or non-git origin.
+    left_recs = 0
+    if left:
+        left_recs = con.execute(
+            "SELECT COUNT(*) FROM records WHERE cwd_origin IN (%s)" %
+            ",".join("?" * len(left)), left).fetchone()[0]
+    sys.stderr.write(
+        f"[migrate v6] plan: remap {len(remap)} keys · "
+        f"left {len(left)} legacy keys ({left_recs} records preserved)\n")
+    return {"remap": remap}
+
+
+def _migrate_v6_apply(con, plan):
+    """Apply the v6 cwd_origin remap as pure-SQL UPDATEs inside the lock.
+
+    UPDATE of cwd_origin values only; no row is ever deleted.
+    """
+    if not plan:               # plan may be None when cur>=6 (already applied)
+        return
+    total = 0
+    for old, new in plan["remap"].items():
+        if new != old:
+            total += con.execute(
+                "UPDATE records SET cwd_origin=? WHERE cwd_origin=?",
+                (new, old)).rowcount
+    sys.stderr.write(f"[migrate v6] applied: remapped {total} records\n")
+
+
 def _run_migrations(con):
     """Run schema migrations based on ``PRAGMA user_version``.
 
@@ -545,8 +825,9 @@ def _run_migrations(con):
             dest.close()
         except Exception as e:
             sys.stderr.write(f"[migrate] backup failed (non-fatal): {e}\n")
-    # --- PRECOMPUTE (lock-free, read-only): v3 needs git/filesystem — do it OUTSIDE the lock ---
+    # --- PRECOMPUTE (lock-free, read-only): v3/v6 need git/filesystem — do it OUTSIDE the lock ---
     v3_plan = _migrate_v3_prepare(con) if cur < 3 else None
+    v6_plan = _migrate_v6_prepare(con) if cur < 6 else None
     # --- APPLY (locked, pure SQL only — no subprocess inside) ---
     con.commit()                     # Enter the lock from a clean transaction state.
     con.execute("BEGIN IMMEDIATE")
@@ -562,6 +843,8 @@ def _run_migrations(con):
             _migrate_v4(con)
         if cur2 < 5:
             _migrate_v5(con)
+        if cur2 < 6:
+            _migrate_v6_apply(con, v6_plan)
         con.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         con.execute("COMMIT")
     except Exception:
@@ -755,9 +1038,10 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
             if _FTS_OK:
                 con.execute("DELETE FROM records_fts WHERE id=?", (existing,))
                 con.execute("INSERT INTO records_fts(id, body) VALUES(?,?)", (existing, body))
-            if _TRIG_OK:
-                con.execute("DELETE FROM records_trig WHERE id=?", (existing,))
-                con.execute("INSERT INTO records_trig(id, body) VALUES(?,?)", (existing, body))
+            if _CJK_OK:
+                con.execute("DELETE FROM records_cjk WHERE id=?", (existing,))
+                con.execute("INSERT INTO records_cjk(id, body) VALUES(?,?)",
+                            (existing, _cjk_shadow_text(body)))
             con.commit()
             if not quiet:
                 print(f"[upsert] {tier}/{scope} source={source} → {existing}")
@@ -817,9 +1101,10 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
         if _FTS_OK:
             con.execute("DELETE FROM records_fts WHERE id=?", (sid,))
             con.execute("INSERT INTO records_fts(id, body) VALUES(?,?)", (sid, body))
-        if _TRIG_OK:
-            con.execute("DELETE FROM records_trig WHERE id=?", (sid,))
-            con.execute("INSERT INTO records_trig(id, body) VALUES(?,?)", (sid, body))
+        if _CJK_OK:
+            con.execute("DELETE FROM records_cjk WHERE id=?", (sid,))
+            con.execute("INSERT INTO records_cjk(id, body) VALUES(?,?)",
+                        (sid, _cjk_shadow_text(body)))
         con.commit()
         if not quiet:
             fl = f"  ({'·'.join(flags)})" if flags else ""
@@ -835,36 +1120,38 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
 # ---------- index ----------
 def index_build(rebuild=False):
     """Rebuild embedded FTS virtual tables from records."""
-    global _FTS_OK, _TRIG_OK
+    global _FTS_OK, _CJK_OK
     con = get_con()
     try:
         if rebuild:
             con.execute("DROP TABLE IF EXISTS records_fts")
-            if _TRIG_OK is not False:  # Attempt when trigram support may exist.
-                try:
-                    con.execute("DROP TABLE IF EXISTS records_trig")
-                except Exception:
-                    pass
+            con.execute("DROP TABLE IF EXISTS records_cjk")
+            try:
+                con.execute("DROP TABLE IF EXISTS records_trig")  # retired trigram shadow
+            except Exception:
+                pass
             # Recreate tables.
             _ensure_schema(con)
         # Refill FTS tables from records.
         n = 0
         if _FTS_OK:
             con.execute("DELETE FROM records_fts")
-            if _TRIG_OK:
-                con.execute("DELETE FROM records_trig")
+            if _CJK_OK:
+                con.execute("DELETE FROM records_cjk")
             rows = con.execute("SELECT id, body FROM records").fetchall()
             for rid, body in rows:
                 con.execute("INSERT INTO records_fts(id, body) VALUES(?,?)", (rid, body))
-                if _TRIG_OK:
-                    con.execute("INSERT INTO records_trig(id, body) VALUES(?,?)", (rid, body))
+                if _CJK_OK:
+                    con.execute("INSERT INTO records_cjk(id, body) VALUES(?,?)",
+                                (rid, _cjk_shadow_text(body)))
                 n += 1
         else:
             n = con.execute("SELECT COUNT(*) FROM records").fetchone()[0]
         con.commit()
     finally:
         con.close()
-    print(f"[index] {n} records  (FTS5={'on' if _FTS_OK else 'off, LIKE fallback'})")
+    print(f"[index] {n} records  (FTS5={'on' if _FTS_OK else 'off, LIKE fallback'}"
+          f"{', cjk-bigram' if _CJK_OK else ''})")
     return n
 
 
@@ -1070,27 +1357,30 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20,
                         seen_ids.add(rid8)
                         tagged.append((0, row[7], -(row[6] or 1), row))
 
-                # Bucket 1: raw trigram substring boost for CJK; do not tokenize.
-                if _has_cjk(query) and _TRIG_OK:
-                    has_trig = con.execute(
-                        "SELECT name FROM sqlite_master WHERE name='records_trig'").fetchone()
-                    if has_trig:
+                # Bucket 1: CJK bigram shadow — ranked substring matching (W4).
+                # The query is re-expressed as bigram phrases; snippets come
+                # from the original body, never the shadow transform.
+                if _has_cjk(query) and _CJK_OK:
+                    has_cjk_tbl = con.execute(
+                        "SELECT name FROM sqlite_master WHERE name='records_cjk'").fetchone()
+                    cjk_expr = _cjk_query_expr(query)
+                    if has_cjk_tbl and cjk_expr:
                         try:
-                            where2, params2 = build_where(("records_trig MATCH ?", [_fts_literal(query)]))
+                            where2, params2 = build_where(("records_cjk MATCH ?", [cjk_expr]))
                             sql2 = (f"SELECT r.id, r.tier, r.scope, r.type, r.cwd_origin, "
-                                    f"snippet(records_trig,1,'»','«','…',12), "
-                                    f"r.strength, bm25(records_trig) AS score, r.delivery_state "
-                                    f"FROM records_trig t JOIN records r ON r.id=t.id "
-                                    f"WHERE {where2} ORDER BY bm25(records_trig) LIMIT ?")
-                            trig_rows = con.execute(sql2, params2 + [limit * 3]).fetchall()
-                            for tr in trig_rows:
+                                    f"substr(r.body,1,160), "
+                                    f"r.strength, bm25(records_cjk) AS score, r.delivery_state "
+                                    f"FROM records_cjk t JOIN records r ON r.id=t.id "
+                                    f"WHERE {where2} ORDER BY bm25(records_cjk) LIMIT ?")
+                            cjk_rows = con.execute(sql2, params2 + [limit * 3]).fetchall()
+                            for tr in cjk_rows:
                                 if tr[0] not in seen_ids:
                                     seen_ids.add(tr[0])
                                     tagged.append((1, tr[7], -(tr[6] or 1), tr))
                         except sqlite3.OperationalError:
                             pass
-                elif _has_cjk(query) and not _TRIG_OK:
-                    # Bucket 2: LIKE fallback when trigram is unavailable.
+                elif _has_cjk(query) and not _CJK_OK:
+                    # Bucket 2: unranked LIKE only when the shadow index is unavailable.
                     where_l, params_l = build_where()
                     where_l = (where_l + " AND r.body LIKE ?") if where_l != "1" else "r.body LIKE ?"
                     sql_l = (f"SELECT r.id, r.tier, r.scope, r.type, r.cwd_origin, "
@@ -1554,7 +1844,7 @@ def export_dump(target_path=None):
 
 def import_dump(path):
     """Restore the DB exactly from dump.jsonl, including FTS mirrors."""
-    global _FTS_OK, _TRIG_OK
+    global _FTS_OK, _CJK_OK
     path = Path(path)
     con = get_con()
     n = 0
@@ -1563,9 +1853,9 @@ def import_dump(path):
         con.execute("DELETE FROM records")
         if con.execute("SELECT name FROM sqlite_master WHERE name='records_fts'").fetchone():
             con.execute("DELETE FROM records_fts")
-        if con.execute("SELECT name FROM sqlite_master WHERE name='records_trig'").fetchone():
+        if con.execute("SELECT name FROM sqlite_master WHERE name='records_cjk'").fetchone():
             try:
-                con.execute("DELETE FROM records_trig")
+                con.execute("DELETE FROM records_cjk")
             except Exception:
                 pass
 
@@ -1597,9 +1887,10 @@ def import_dump(path):
                 rid = meta.get("id", "")
                 if _FTS_OK:
                     con.execute("INSERT INTO records_fts(id, body) VALUES(?,?)", (rid, body))
-                if _TRIG_OK:
+                if _CJK_OK:
                     try:
-                        con.execute("INSERT INTO records_trig(id, body) VALUES(?,?)", (rid, body))
+                        con.execute("INSERT INTO records_cjk(id, body) VALUES(?,?)",
+                                    (rid, _cjk_shadow_text(body)))
                     except Exception:
                         pass
                 n += 1
@@ -1807,6 +2098,10 @@ def migrate(apply=False):
         existing_src = set()
 
     # 1) auto-memory: projects/<cwd>/memory/*.md
+    # Audit W3 fix (2026-07-22): absorbed records must carry the same canonical
+    # project_key the recall/inject fence compares against — the encoded
+    # session-store directory name is only the source-key namespace.
+    key_cache = {}
     try:
         for mp in PROJECTS.glob("*/memory/*.md"):
             if mp.name == "MEMORY.md":
@@ -1819,7 +2114,7 @@ def migrate(apply=False):
                 meta, body = parse_record(mp.read_text(encoding="utf-8"))
                 rtype = meta.get("type", "project")
                 scope = "global" if rtype == "user" else "project"
-                cwd_origin = mp.parent.parent.name
+                cwd_origin = _canonical_cwd_key(mp.parent.parent.name, key_cache)
                 if apply:
                     write_record("durable", scope, rtype, body, cwd_origin=cwd_origin,
                                  source=src, quiet=True)
@@ -1849,7 +2144,11 @@ def migrate(apply=False):
         print(f"  found {len(postits)} post-it file(s) from registry and cwd")
         for pi in postits:
             try:
-                cwd_origin = enc_cwd(pi.parent.parent)
+                root_dir = pi.parent.parent
+                # Source keys keep the encoded namespace so historical rows
+                # stay idempotent; cwd_origin is canonical (audit W3 fix).
+                src_ns = enc_cwd(root_dir)
+                cwd_origin = project_key(root_dir, seed=False)
                 cur = "note"
                 for line in pi.read_text(encoding="utf-8", errors="ignore").splitlines():
                     m = re.match(r"##\s+(.*)", line)
@@ -1858,7 +2157,7 @@ def migrate(apply=False):
                         continue
                     b = re.match(r"\s*[-*]\s+(.*)", line)
                     if cur and b and len(b.group(1).strip()) > 14:
-                        src = f"post-it:{cwd_origin}:{hashlib.sha256(b.group(1).encode()).hexdigest()[:8]}"
+                        src = f"post-it:{src_ns}:{hashlib.sha256(b.group(1).encode()).hexdigest()[:8]}"
                         if src in existing_src:
                             skipped += 1
                             continue
@@ -1910,7 +2209,8 @@ def migrate(apply=False):
                     rid_tier = meta.get("tier", "durable")
                     rid_scope = meta.get("scope", "project")
                     rid_type = meta.get("type", "project")
-                    rid_cwd = meta.get("cwd_origin")
+                    # Normalize resolvable legacy keys; dead paths pass through (W3).
+                    rid_cwd = _canonical_cwd_key(meta.get("cwd_origin"), key_cache)
                     if apply:
                         write_record(rid_tier, rid_scope, rid_type, body,
                                      cwd_origin=rid_cwd, source=src, quiet=True)
@@ -2078,18 +2378,18 @@ def lifecycle(apply=False):
 
 # ---------- delete ----------
 def _delete_rows(con, rid):
-    """3-table DELETE (records + records_fts + records_trig) on an OPEN connection.
+    """3-table DELETE (records + records_fts + records_cjk) on an OPEN connection.
     The caller owns the connection and transaction so merge and prune can commit
-    atomically. Preserve FTS/trigram availability guards and fail-open trigram cleanup.
+    atomically. Preserve FTS/shadow availability guards and fail-open shadow cleanup.
     """
     con.execute("DELETE FROM records WHERE id=?", (rid,))
     if _FTS_OK:
         con.execute("DELETE FROM records_fts WHERE id=?", (rid,))
-    if _TRIG_OK:
+    if _CJK_OK:
         try:
-            con.execute("DELETE FROM records_trig WHERE id=?", (rid,))
+            con.execute("DELETE FROM records_cjk WHERE id=?", (rid,))
         except Exception as e:
-            sys.stderr.write(f"[delete] trigram mirror deletion failed; continuing: {rid}: {e}\n")
+            sys.stderr.write(f"[delete] cjk mirror deletion failed; continuing: {rid}: {e}\n")
 
 
 def delete_record(rid, quiet=False, force=False):
@@ -2204,9 +2504,10 @@ def restore(rid):
         if _FTS_OK:
             con.execute("DELETE FROM records_fts WHERE id=?", (rid,))
             con.execute("INSERT INTO records_fts(id, body) VALUES(?,?)", (rid, body))
-        if _TRIG_OK:
-            con.execute("DELETE FROM records_trig WHERE id=?", (rid,))
-            con.execute("INSERT INTO records_trig(id, body) VALUES(?,?)", (rid, body))
+        if _CJK_OK:
+            con.execute("DELETE FROM records_cjk WHERE id=?", (rid,))
+            con.execute("INSERT INTO records_cjk(id, body) VALUES(?,?)",
+                        (rid, _cjk_shadow_text(body)))
         con.commit()
         print(f"[restore] {rid} ({meta['delivery_state']})")
         _append_write_event("restore", rid, tier=meta.get("tier"), scope=meta.get("scope"),
@@ -3326,6 +3627,14 @@ def main():
 
     sub.add_parser("doctor", help="Run comprehensive read-only diagnostics (exit 0/1/2)")
 
+    mt = sub.add_parser(
+        "maintenance",
+        help="Squash auto-sync dump history older than N days and gc (dry-run by default)")
+    mt.add_argument("--squash-days", type=int, default=14,
+                    help="Squash first-parent history older than this many days (default 14)")
+    mt.add_argument("--apply", action="store_true",
+                    help="Execute the squash and gc (default: dry-run report)")
+
     args = ap.parse_args()
 
     if args.cmd == "add":
@@ -3407,6 +3716,8 @@ def main():
             json_output=args.json_output)
     elif args.cmd == "doctor":
         sys.exit(doctor())
+    elif args.cmd == "maintenance":
+        sys.exit(maintenance(squash_days=args.squash_days, apply=args.apply))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,1 @@
+../../../../tools/memory/retrieval-eval.test.sh
