@@ -17,12 +17,11 @@ Domains (mirroring tools/check-adaptation-boundary.sh expectations):
 - ``scaffolds/``  → copy into  adapters/claude/scaffolds/
 - ``tools/memory``→ symlink    adapters/claude/tools/memory/<f>
                     → ../../../../tools/memory/<f> (established projection style)
-- ``utilities/``  → symlink    adapters/claude/utilities/<f>
-                    → ../../../utilities/<f> (Claude mirrors the whole flat
-                    utilities domain as collapsed symlinks; check_claude_utility_projection
-                    requires a counterpart for every file). This only fills the
-                    Claude symlink; a new utility's projected/deferred census
-                    classification stays an explicit decision in the guard.
+
+``utilities/`` needs no counterpart automation: `adapters/claude/utilities` is a
+whole-layer symlink to the shared portable layer (2026-07-22 collapse), so every
+utility — including a newly added one — resolves for Claude with zero per-file
+mirror work. `check_claude_utility_projection` enforces that collapse.
 
 Detection ownership stays with check-adaptation-boundary.sh; this is the
 matching prevention/recovery command.
@@ -105,7 +104,6 @@ def sync(check: bool) -> int:
     counterpart_copy("loops")
     counterpart_copy("scaffolds")
     counterpart_symlink("tools/memory", "../../../../tools/memory")
-    counterpart_symlink("utilities", "../../../utilities")
 
     if check:
         if missing:

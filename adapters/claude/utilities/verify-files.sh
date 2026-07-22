@@ -1,1 +1,0 @@
-../../../utilities/verify-files.sh

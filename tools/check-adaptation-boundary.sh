@@ -278,6 +278,11 @@ check_claude_adapter_concrete_surfaces() {
   links=$(printf '%s\n' "$links" | while IFS= read -r l; do
     [ -n "$l" ] || continue
     git check-ignore -q "$l" 2>/dev/null && continue
+    # Whole-layer collapse: the utilities domain is one dir-level symlink.
+    if [ "$l" = "adapters/claude/utilities" ] \
+      && [ "$(readlink "$l")" = "../../utilities" ]; then
+      continue
+    fi
     rel=${l#adapters/claude/}
     layer=${rel%%/*}
     sub=${rel#*/}
@@ -2774,16 +2779,25 @@ check_claude_utility_projection() {
     fail_msg "claude_setting/utilities points to $target; expected ../adapters/claude/utilities"
   fi
 
-  # Verify each canonical utility against the three-class contract.
-  for f in utilities/*; do
-    [ -f "$f" ] || continue
-    name=${f#utilities/}
-    if [ ! -e "adapters/claude/utilities/$name" ]; then
-      fail_msg "adapters/claude/utilities/$name is missing"
-      continue
+  # Whole-layer collapse (2026-07-22): adapters/claude/utilities is ONE symlink
+  # to the shared portable layer, so every utilities/* file — including a newly
+  # added one — resolves for Claude with zero per-file mirror work. Per-file
+  # mirrors and per-file deltas are retired; the last delta
+  # (agent-worklog-state.sh local paths) moved to runtime settings.json env
+  # (AGENT_NOTES_ROOT / WORKLOG_BOARD_APP / WORKLOG_BOARD_WT). A real directory
+  # here means someone reintroduced the mirror layer — fail loud; a future
+  # Claude-only utility delta requires deliberately reintroducing the per-file
+  # layer plus an exemptions row, never a silent real file.
+  if [ ! -L adapters/claude/utilities ]; then
+    fail_msg "adapters/claude/utilities must be a whole-layer symlink to ../../utilities (per-file mirror retired)"
+  else
+    target=$(readlink adapters/claude/utilities)
+    if [ "$target" != "../../utilities" ]; then
+      fail_msg "adapters/claude/utilities points to $target; expected ../../utilities"
+    elif [ ! -d adapters/claude/utilities/ ]; then
+      fail_msg "adapters/claude/utilities whole-layer symlink target is missing"
     fi
-    assert_shared_adapter_class utilities "$name"
-  done
+  fi
 
   for p in dispatch-liveness.sh dispatch-wait.sh; do
     if ! grep -Fq 'AGENT_DISPATCH_JOBS' "utilities/$p"; then

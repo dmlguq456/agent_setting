@@ -1,1 +1,0 @@
-../../../utilities/worker-route-guard.py

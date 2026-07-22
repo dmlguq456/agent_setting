@@ -1,1 +1,0 @@
-../../../utilities/extract_web_figures.py

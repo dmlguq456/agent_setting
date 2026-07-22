@@ -1,1 +1,0 @@
-../../../utilities/harness-status.sh
