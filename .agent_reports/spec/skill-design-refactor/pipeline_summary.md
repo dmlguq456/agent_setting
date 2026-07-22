@@ -1,5 +1,23 @@
 # Skill-Design Refactor — Pipeline Summary
 
+## 2026-07-22 · v6 spec approved, implementation in progress
+
+entry-router의 positive trigger가 맞고 exclusion 및 read-only orientation에
+해당하지 않으면 해당 entry를 primary로 고르는 preference를 잠갔다. `direct`는
+entry 우회가 아니라 선택된 entry의 intensity다.
+
+기존 code·paper·doc을 분석해 달라는 명시적 요청과 usable persistent analysis
+부재가 함께 있으면 `analyze-project`를 기본 primary로 본다. 단, 사용자가
+conversational/read-only/no-files를 명시한 경우와 empirical/research/
+implementation/audit semantic primary는 기존 경계를 보존한다.
+
+Codex와 Claude Code 공식 문서는 모두 Skill description 기반 implicit matching을
+설명하므로 deterministic activation은 주장하지 않는다. 항상 로드되는 bootstrap,
+manifest trigger, generated sibling projection, static contract, behavioral drill
+fixture로 reliability를 보강한다. 첫 registered owner 시도는 interactive lock
+command에서 무변경 상태로 정지해 exact PID를 종료·harvest했고, 같은 승인 범위의
+route-declared atomic main fallback으로 spec transaction을 완료했다.
+
 ## 2026-07-16 · v5 GREEN
 
 v4의 main-context ownership을 worker 입출력까지 확장한다. portable worker

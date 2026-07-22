@@ -1,9 +1,9 @@
-# Skill-Design Refactor — PRD v6
+# Skill-Design Refactor — PRD v5
 
-> 2026-07-22 · entry-router preference and analyze-project default amendment
-> v1–v5의 완료 계약과 근거는 `_internal/versions/`에 보존한다. v6는 v4의
-> entry-route confirmation을 실제 primary 선택 우선순위까지 확장하고, v5의
-> worker bootstrap 경계는 그대로 보존한다.
+> 2026-07-16 · portable-first worker-bootstrap isolation amendment
+> v1–v4의 완료 계약과 근거는 `_internal/versions/`에 보존한다. v5는 v4의
+> entry-route confirmation과 main-context ownership을 worker 입력·출력 경계까지
+> 확장한다.
 
 ## 0. Outcome
 
@@ -12,11 +12,6 @@ execution`으로 라우팅한다. 승인 뒤 depth-0 main은 route/state/integra
 보유하고, worker는 공통 최소 kernel과 정확히 한 worker-type fragment 및
 배정된 capability/stage contract만 소비한다. worker의 상세 근거는 파일에
 남고 main으로 돌아오는 마지막 출력은 고정 3줄 handoff뿐이다.
-
-read-only orientation 예외와 semantic-primary precedence를 적용한 뒤 compact
-metadata의 positive trigger가 맞고 exclusion이 맞지 않으면 해당 entry-router를
-primary로 선택한다. `direct`는 entry를 생략하는 no-route가 아니라 선택된
-entry 안의 실행 intensity다.
 
 ## 1. Portable bootstrap contract
 
@@ -96,58 +91,7 @@ runtime masking을 별도 상태로 보고한다. 자동 상속이 남는 runtim
 - **SD-31:** static worker-bootstrap bytes are measured; aggregate token/cost savings
   remain unclaimed without paired production evidence under SD-16.
 
-- **SD-32:** read-only orientation 및 `WORKFLOW §0.2` precedence 뒤 하나의
-  entry-router trigger가 명확히 맞으면 그 entry가 primary다.
-- **SD-33:** `direct`는 선택된 entry의 intensity이며 capability-free inline
-  우회가 아니다.
-- **SD-34:** 기존 code·paper·doc을 분석해 달라는 명시적 요청과 usable
-  persistent analysis 부재가 함께 있으면, 사용자가 conversational/read-only/
-  no-files를 명시하지 않는 한 `analyze-project`가 기본 primary다.
-- **SD-35:** runtime의 implicit Skill matching은 description 기반 모델 판단이다.
-  deterministic activation을 주장하지 않고 bootstrap preference, manifest
-  trigger, generated projection, static contract, behavioral drill fixture를 함께
-  검증한다.
-
-## 6. Entry-router preference contract
-
-capability-free 응답은 새 산출물을 요구하지 않는 read-only orientation,
-상태 보고, 단순 사실·설명, 또는 사용자가 명시한 conversational/no-files
-응답으로 한정한다. 그 밖에 compact entry metadata의 `Use when`이 요청과
-artifact state에 맞고 `Not for` 경계에 걸리지 않으면 해당 entry를 primary로
-제안한다. 둘 이상이 겹치면 `core/WORKFLOW.md §0.2`의 semantic precedence와
-work-nature map으로 하나를 고르며, 실제 의미가 불명확할 때만 질문한다.
-
-`analyze-project`의 기본 진입 조건은 다음 conjunction이다.
-
-1. 사용자가 기존 codebase, paper, 또는 document material의 분석을 명시적으로
-   요청한다.
-2. 해당 mode의 usable persistent analysis가 없거나 downstream 작업에 비해
-   demonstrably stale하다.
-3. 사용자가 대화형 설명만, read-only, 또는 파일을 만들지 말라고 제한하지
-   않았다.
-
-산출물 부재 단독으로는 `analyze-project`를 선택하지 않는다. source 구현은
-`autopilot-code`, 새 empirical output은 `autopilot-lab`, 외부 evidence survey는
-`autopilot-research`, 완료 산출물의 read-oriented inspection은 `audit`가 각각
-우선한다. 단순 context recovery는 기존 `context-recovery-figure-qa` 계약대로
-analysis를 새로 만들지 않는다.
-
-## 7. Runtime realization evidence
-
-Codex 공식 [Build skills](https://learn.chatgpt.com/docs/build-skills.md)는
-implicit invocation이 task와 Skill `description`의 match로 선택되며 clear scope와
-boundary가 reliability를 높인다고 설명한다. Claude Code 공식
-[Extend Claude with skills](https://code.claude.com/docs/en/slash-commands)는
-동일하게 description이 automatic loading 판단에 쓰이고, 모호하거나 겹치는
-description은 오선택·미선택을 낳을 수 있다고 명시한다.
-
-따라서 세 adapter의 always-loaded bootstrap에는 entry preference를 짧게
-반복하고, trigger의 정본은 `harness-manifest.json`에만 둔다. 생성기는 sibling
-runtime projection을 갱신한다. 정적 검사는 문구·projection을, 새 routing drill
-fixture는 빈 analysis 상태에서 실제 persistent output 생성을 검증하지만,
-사용자 지침대로 이번 update에서 라이브 drill은 자동 실행하지 않는다.
-
-## 8. Completion
+## 6. Completion
 
 Complete only when core-first source, three sibling dispatchers, Claude masked
 profiles, deterministic tests, clean-worktree boundary, generated projections,
