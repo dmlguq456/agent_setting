@@ -1971,7 +1971,7 @@ def _compact_context_gauge_width(available):
 
 
 def _context_detail_row(entity, depth=0, term_width=None):
-    """One ``context <gauge> <value> [band] · NOW`` row for every live card."""
+    """One ``NOW · context <gauge> <value> [band]`` row for every live card."""
     if getattr(entity, "liveness", None) in ("stale", "dead"):
         return []
     context = getattr(entity, "context", None)
@@ -1986,21 +1986,23 @@ def _context_detail_row(entity, depth=0, term_width=None):
         shown_pct = int(round(pct))
     else:
         shown_pct = None
-    segs = [(indent, None), ("context ", "dim")]
-    segs.extend(_gauge_segs(shown_pct, gauge_width))
+    context_segs = [("context ", "dim")]
+    context_segs.extend(_gauge_segs(shown_pct, gauge_width))
     if shown_pct is None:
-        segs.append((" —", "dim"))
+        context_segs.append((" —", "dim"))
     else:
-        segs.append((" %d%%" % shown_pct, _pct_key(shown_pct)))
+        context_segs.append((" %d%%" % shown_pct, _pct_key(shown_pct)))
         if band and band != "unknown":
-            segs.append((" " + str(band), "dim"))
+            context_segs.append((" " + str(band), "dim"))
+    segs = [(indent, None)]
     if now_text:
-        # Context is reserved first; only NOW may clip at the terminal boundary.
-        fixed = sum(_dw(text) for text, _key in segs) - _dw(indent) + 3
-        now_room = max(0, available - fixed)
+        # The subtitle leads visually, while context keeps a reserved right-side slot.
+        context_width = sum(_dw(text) for text, _key in context_segs)
+        now_room = max(0, available - context_width - 3)
         now_text = _clip_w(str(now_text), now_room) if now_room else ""
         if now_text:
-            segs.extend([(" · ", "dim"), (now_text, "dim")])
+            segs.extend([(now_text, "dim"), (" · ", "dim")])
+    segs.extend(context_segs)
     return [segs]
 
 

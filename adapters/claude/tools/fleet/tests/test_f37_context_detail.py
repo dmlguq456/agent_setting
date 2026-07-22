@@ -30,11 +30,11 @@ class ContextDetailTruthTableTest(unittest.TestCase):
     def test_context_now_truth_table(self):
         cases = [
             (ContextProjection(63, "normal", "claude"), "Doing work",
-             "context ━━━━━─── 63% normal · Doing work"),
+             "Doing work · context ━━━━━─── 63% normal"),
             (ContextProjection(63, "normal", "claude"), None,
              "context ━━━━━─── 63% normal"),
             (ContextProjection(None, "unknown", "claude"), "Doing work",
-             "context ──────── — · Doing work"),
+             "Doing work · context ──────── —"),
             (None, None, "context ──────── —"),
             (ContextProjection(0, "normal", "claude"), None,
              "context ──────── 0% normal"),
@@ -75,6 +75,7 @@ class ContextDetailTruthTableTest(unittest.TestCase):
             track = re.search(r"[━─]+", text(row)).group(0)
             self.assertEqual(len(track), expected_track_width[width])
             self.assertIn("context ", text(row))
+            self.assertLess(text(row).index("한글"), text(row).index("context "))
 
     def test_main_session_projection_stage_and_progress_is_visible_at_all_widths(self):
         rid = route.load(REAL)["route_id"]

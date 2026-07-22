@@ -121,7 +121,7 @@ class SummaryRowRenderTest(unittest.TestCase):
         self.assertEqual(text_seg[1], "dim")
 
     def test_summary_absent_still_renders_one_context_dash_row(self):
-        # v16 (F-37): the context-first detail row is mandatory on every live identity card —
+        # The combined subtitle/context detail row is mandatory on every live identity card —
         # a summary-less/context-less session renders an empty gauge plus `—` rather than
         # omitting the row
         # (plan Step 3.3.2's "neither" case), so row COUNT is unchanged either way; only the
