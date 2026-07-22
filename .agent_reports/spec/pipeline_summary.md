@@ -1,8 +1,8 @@
 # Spec Pipeline Summary: memory-store
 
-- **Date**: 2026-06-15 · last updated 2026-07-14 (v18)
+- **Date**: 2026-06-15 · last updated 2026-07-22 (v22)
 - **Mode**: library + cli
-- **Status**: v18/D-41 implemented and verified; broader memory roadmap remains in progress
+- **Status**: v22/D-37 absorption-event blueprint synchronized with Fleet F-19/F-35f; implementation remains pending
 
 ## Process Log
 | Step | Action | Result |
@@ -156,3 +156,8 @@ Claude Code와 Codex의 동시 진단을 교차검증해 “저장은 되지만 
 - **D-47** dump 미러 plain-commit + 실패 1줄 경고 + `mem maintenance`(squash/gc) — D1 재해복구 계약 복원, .git 406MB→5.1MB.
 - **D-48** pending drain(Cluster I 연장) — doctor 나이순 노출 + `--drain-pending`(dry-run 기본, graveyard 백업, 보고-전용 폐기 후보), D5/D-35 보존. 신규 unit 파이프라인 사이클(rt-04b88e3110f2c2f0)로 구현.
 - 전 변경 main 병합·push 완료 상태의 **사후 spec-sync**(autopilot-spec update, route rt-c602b4c2e1a88c56).
+
+### v21 → v22 (2026-07-22, update mode — sync/migrate 흡수 이벤트 계약, snapshot `_internal/versions/v21/`)
+- D-37/F-19/F-35f를 동기화해 신규 sync/migrate 흡수 레코드만 기존 `action=add`·literal `actor=sync`와 원천 논리 프로젝트 `cwd`로 1회 관측한다.
+- 신규 레코드가 없는 반복·existing-source/upsert/body-dedup 경로는 흡수 이벤트 0건이며, 배포 전 레코드/source와 기존 journal은 historical backfill하지 않는다.
+- Fleet collector와 집계 어휘는 불변이다. 근거·독립 리뷰 PASS: route `rt-4fb68fb6acaefc97`, `shards/spec-research/fleet-memory-sync-events/research.md`, `reviews/spec/fleet-memory-sync-events/verdict.md`.

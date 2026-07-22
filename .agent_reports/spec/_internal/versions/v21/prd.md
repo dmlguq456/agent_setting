@@ -13,7 +13,6 @@
 > · **v19 2026-07-15** (D-42 — main-session-only model lifecycle and explicit worker bootstrap boundary)
 > · **v20 2026-07-20** (D-43 — on-call incident-to-proposal bridge with live corroboration, exact-key recurrence, and human-state ceiling)
 > · **v21 2026-07-22** (Cluster N — 감사-주도 엔진 하드닝: 빈-스토어 생성 가드·cwd_origin v6 remap·CJK bigram 회수·plain-commit 미러+`mem maintenance`·pending drain. 근거=`plans/2026-07-22_memory-system-audit/`)
-> · **v22 2026-07-22** (D-37 보강 — sync/migrate 신규 흡수의 `add`/literal `sync` 이벤트·원천 논리 cwd·무변이 재실행 0건·historical backfill 금지. Fleet F-19/F-35f 동기)
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`).
 > **방향(사용자 확정 2026-06-15)**: "대공사 OK, 보수적 현상유지 X, 제대로·깔끔·근본부터." Hermes 메모리 적극 결합 + 중복 cut + DB-SoT.
 
@@ -284,12 +283,8 @@ markdown 186 SoT → DB 1개 + dump.jsonl · `.index.db` 파생색인 → DB 내
 > 계기: fleet 메모리 가시화(agent-fleet-dashboard **F-19**) 설계 중 실측 — 읽기측 telemetry(D-34 recall-events.jsonl)는 있는데 **쓰기측은 삭제만 graveyard 에 남고 add/note/consume/reinforce/merge/graduate 는 per-event 흔적 0** (간접 이력 = dump.jsonl git diff 뿐). `mem` 에 `log`/`recent` 류 명령 없음, `stats` 는 시간축 부재. "최근 무엇이 기억되고 무엇이 지워졌나"의 1급 경로와 store 전수 건강 진단이 둘 다 부재. §0.5 결정론-first 정합 — 이벤트 기록·진단 전부 코드, LLM 판단 0.
 
 ### 5.12.1 D-37 — 쓰기 이벤트 저널 (write-side event telemetry)
-- mem.py 의 **모든 저널 대상 변이 경로**(add/note/consume/reinforce/merge/prune/graduate/reattribute/delete/restore/lifecycle-expire, 그리고 sync/migrate 흡수의 신규 레코드 생성)가 write-events.jsonl 에 1줄 append — 위치·패턴 = D-34 recall-events 와 대칭(`$XDG_STATE_HOME/agent-memory/`, bounded rotation 256KB/최근 500줄, raw 대화·전문 비저장). 흡수는 신규 action을 만들지 않고 기존 `action=add`를 재사용하며 아래 create-only 경계를 따른다.
-- 레코드: `ts / action / id / tier / scope / type / actor / sid / snippet(≤80자) / cwd`. `actor ∈ {manual, distiller, curator, lifecycle, sync, restore}` — 일반 변이의 apply-distill-actions·hook 경유는 env(`MEM_DISTILL`·mode)로 결정론 판별하고 판별 불가면 `manual`. 일반 변이의 `cwd`(additive 2026-07-16)는 `MEM_CWD` env 우선, 프로세스 cwd 폴백이다. fleet F-19 v11 레포별 카드 행은 `project_of(cwd)`로 소비하며 필드 없는 구행을 정직 생략한다(포맷 양 spec 동기 조항 이행 기록).
-- **sync/migrate 흡수 규범**: 흡수가 DB에 신규 레코드를 INSERT한 때에만 이벤트를 정확히 1건 방출한다. `action`은 `add`, `actor`는 ambient `MEM_ACTOR`/`MEM_DISTILL`과 무관한 literal `sync`다. `cwd`는 실행 프로세스가 아니라 원천의 논리 프로젝트 cwd다 — auto-memory는 인코딩 프로젝트 디렉토리를 decode한 실존 절대경로, post-it은 해당 레포 루트, legacy md-file은 `cwd_origin`을 유효한 절대경로로 decode할 수 있을 때 그 경로를 쓴다. global user-profile과 decode 불가 원천은 `cwd`를 정직 생략하며, 흡수 이벤트에는 `MEM_CWD`·프로세스 cwd 폴백을 적용하지 않는다.
-- **멱등 경계**: existing-source skip, source-key upsert, body-dedup reinforcement를 포함해 신규 레코드를 persist하지 않은 흡수 경로와 그 반복 실행은 흡수 `add`/`sync` 이벤트를 0건 방출한다. 다른 lifecycle 변이가 없는 고정 fixture에서 `migrate`/`sync`를 반복해 신규 레코드가 0건이면 저널 전체 증가도 0건이어야 한다. `sync()`가 독립적인 lifecycle 변이를 실제 수행한 경우 그 기존 action은 별도 계약으로 남으며, 수동 add/note 및 다른 변이의 현행 저널 동작도 불변이다.
-- **prospective-only**: 본 계약은 배포 뒤 새로 persist되는 흡수에만 적용한다. 배포 전 저장된 레코드/source나 기존 journal을 위한 합성 이벤트·historical backfill은 생성하지 않는다.
-- **수용 기준**: (1) 잘못된 프로세스 cwd와 `MEM_CWD=/wrong/repo`, `MEM_DISTILL=1`, `MEM_ACTOR=curator`를 둔 격리 fixture에서도 auto-memory 신규 흡수는 `action=add`·`actor=sync`·decode된 원천 절대경로 `cwd` 이벤트 정확히 1건, (2) 직후 무변이 반복은 흡수 이벤트 0건이며 다른 lifecycle 변이가 없는 fixture의 저널 증가도 0건, (3) 동일 body 신규 source의 dedup reinforcement는 흡수 이벤트 0건, (4) 변경 전부터 동일 source가 DB에 존재하고 journal sentinel이 있는 fixture의 최초 migrate는 신규 이벤트 0건(no backfill)이다.
+- mem.py 의 **모든 변이 경로**(add/note/consume/reinforce/merge/prune/graduate/reattribute/delete/restore/lifecycle-expire)가 write-events.jsonl 에 1줄 append — 위치·패턴 = D-34 recall-events 와 대칭(`$XDG_STATE_HOME/agent-memory/`, bounded rotation 256KB/최근 500줄, raw 대화·전문 비저장).
+- 레코드: `ts / action / id / tier / scope / type / actor / sid / snippet(≤80자) / cwd`. `actor ∈ {manual, distiller, curator, lifecycle, sync, restore}` — apply-distill-actions·hook 경유는 env(`MEM_DISTILL`·mode)로 결정론 판별, 판별 불가면 `manual`. `cwd`(additive 2026-07-16)는 변이 프로세스의 레포 귀속 — `MEM_CWD` env 우선, 프로세스 cwd 폴백; fleet F-19 v11 레포별 카드 행이 `project_of(cwd)`로 소비하며, 필드 없는 구행은 소비자가 정직 생략(포맷 양 spec 동기 조항 이행 기록).
 - **fail-open (graveyard 와 반대 방향, 의도적)**: 저널 append 실패는 쓰기를 막지 않는다 — graveyard(파괴 복구 안전망)=fail-closed 유지, 저널(관측 telemetry)=fail-open. 이중화 아님: 파괴 이벤트는 양쪽에 남되 역할이 다름(복구 vs 관측).
 - dump.jsonl·agent-memory 동기 대상 아님(로컬 관측 데이터).
 
