@@ -144,9 +144,10 @@ case "$family" in
     [ -n "${AGENT_MODEL_LUNA:-}${AGENT_REASONING_LUNA:-}${AGENT_MODEL_FAST:-}${AGENT_REASONING_FAST:-}" ] && status=configured || status=default
     ;;
   implementer)
-    model=${AGENT_MODEL_SOL:-${AGENT_MODEL_DEEP:-$CFG_TIER_DEEP_MODEL}}
-    reasoning=${AGENT_REASONING_SOL:-$CFG_ROLE_FAST_IMPLEMENTER_EFFORT}
-    [ -n "${AGENT_MODEL_SOL:-}${AGENT_REASONING_SOL:-}${AGENT_MODEL_DEEP:-}" ] && status=configured || status=default
+    # 2026-07-22 사용자 원칙: 티어 고정, 특례 없음 — implementer는 light 티어를 탄다.
+    model=${AGENT_MODEL_LUNA:-${AGENT_MODEL_FAST:-$CFG_TIER_LIGHT_MODEL}}
+    reasoning=${AGENT_REASONING_LUNA:-${AGENT_REASONING_FAST:-$CFG_TIER_LIGHT_EFFORT}}
+    [ -n "${AGENT_MODEL_LUNA:-}${AGENT_REASONING_LUNA:-}${AGENT_MODEL_FAST:-}${AGENT_REASONING_FAST:-}" ] && status=configured || status=default
     ;;
   deep)
     model=${AGENT_MODEL_DEEP:-$CFG_TIER_DEEP_MODEL}
