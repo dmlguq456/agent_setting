@@ -1,0 +1,117 @@
+{
+  "schema_version": 2,
+  "capability": "autopilot-spec",
+  "capability_mode": "update",
+  "requested_intensity": "direct",
+  "effective_intensity": "direct",
+  "execution_topology": "inline",
+  "owner_dispatch_depth": 0,
+  "max_dispatch_depth": 0,
+  "tracking": "tracked",
+  "tracked_gate_evidence": {
+    "spec_read": {
+      "satisfied": true,
+      "source": "/home/Uihyeop/agent_setting/.agent_reports/spec/agent-fleet-dashboard/prd.md"
+    },
+    "drift_verdict": "SPEC-SIGNIFICANT: Fleet v13 worker_role/persona identity is stale after portable unit catalog promotion",
+    "workflow_mode": "tracked",
+    "artifact_guard": {
+      "satisfied": true,
+      "source": "adapters/codex/bin/preflight.sh"
+    }
+  },
+  "spec_touch": true,
+  "cwd": "/home/Uihyeop/agent_setting-wt/fleet-post-units",
+  "artifact_root": "/home/Uihyeop/agent_setting/.agent_reports",
+  "source_commit": "fec5350a2f650a8dcd788e8cc103d6e4e85a3186",
+  "registry_digest": "sha256:17ac6ae656c5a9f6054195f290cd9723b1de57a28072347d1fbbbbe34602e6f9",
+  "dispatch_defaults_digest": "sha256:b3e8dd08b3b52872a1ffbc873dec370b5c8ea900a27f6190f8cfcd30032e072b",
+  "selection": {
+    "direct_predicates": [
+      "atomic-outcome",
+      "focused-verification",
+      "known-scope",
+      "no-artifact-handoff",
+      "no-independent-verifier",
+      "no-resource-run",
+      "no-shared-contract"
+    ],
+    "promotion_signals": [],
+    "selection_basis": [
+      {
+        "axis": "direct-predicate",
+        "signal": "atomic-outcome",
+        "source": "caller"
+      },
+      {
+        "axis": "direct-predicate",
+        "signal": "focused-verification",
+        "source": "caller"
+      },
+      {
+        "axis": "direct-predicate",
+        "signal": "known-scope",
+        "source": "caller"
+      },
+      {
+        "axis": "direct-predicate",
+        "signal": "no-artifact-handoff",
+        "source": "caller"
+      },
+      {
+        "axis": "direct-predicate",
+        "signal": "no-independent-verifier",
+        "source": "caller"
+      },
+      {
+        "axis": "direct-predicate",
+        "signal": "no-resource-run",
+        "source": "caller"
+      },
+      {
+        "axis": "direct-predicate",
+        "signal": "no-shared-contract",
+        "source": "caller"
+      }
+    ],
+    "escalation_basis": [],
+    "transport": "interactive",
+    "transport_evidence": "caller-selected",
+    "inline_reason": "atomic-direct"
+  },
+  "nodes": [
+    {
+      "id": "inline",
+      "kind": "capability-owner",
+      "dispatch_depth": 0,
+      "role": "orchestrator",
+      "write_scope": [
+        "spec/prd.md",
+        "spec/pipeline_state.yaml",
+        "spec/pipeline_summary.md"
+      ],
+      "resource_class": "normal",
+      "execution_surface": "inline",
+      "registered_worker": false,
+      "completion_gate": "inline-complete"
+    }
+  ],
+  "completion_gates": [
+    "inline-complete"
+  ],
+  "human_gates": [
+    "intent-confirmation"
+  ],
+  "resume_retry_boundaries": [
+    "research",
+    "review",
+    "prd-transaction"
+  ],
+  "dispatch_evidence": null,
+  "dispatch_contract_version": 3,
+  "registered_headless_candidates": null,
+  "registered_headless_policy": null,
+  "unit_catalog_digest": "sha256:8ebbd53561d27ab02619a19e241d9f7f0dcd2e636d626e09d3222bf0b09a87e2",
+  "route_hash": "sha256:983e8a61ea0d2b47cc343fe4c2ef5fd3137eed792c03b53e48449d1adb93ad48",
+  "route_id": "rt-983e8a61ea0d2b47"
+}
