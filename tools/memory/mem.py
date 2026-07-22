@@ -78,6 +78,9 @@ else:
         / "agent-memory" / "write-events.jsonl"
     )
 WRITE_ACTORS = ("manual", "distiller", "curator", "lifecycle", "sync", "restore")
+# A distinct sentinel lets callers intentionally omit event cwd without
+# changing the ambient fallback retained by existing journal callers.
+_WRITE_EVENT_CWD_UNSET = object()
 # Doctor thresholds mirror the cleanup-candidate defaults.
 DOCTOR_DURABLE_SOFT_CEILING = 80
 DOCTOR_WORKING_BLOAT_CEILING = 150
@@ -402,6 +405,27 @@ def _decode_enc_cwd(enc):
                     return r
         return None
     return walk(Path("/"), enc, 0)
+
+
+def _event_cwd(raw):
+    """Return a resolved existing absolute cwd for a source event, or None."""
+    if isinstance(raw, Path):
+        raw = str(raw)
+    if not isinstance(raw, str) or not raw:
+        return None
+    if raw.startswith("-"):
+        path = _decode_enc_cwd(raw)
+    elif raw.startswith("/"):
+        path = Path(raw)
+    else:
+        return None
+    if path is None or not path.is_dir():
+        return None
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return None
+    return str(resolved) if resolved.is_dir() else None
 
 
 def _canonical_cwd_key(raw, cache=None):
@@ -998,7 +1022,9 @@ def find_dup(tier, scope, body, cwd_origin, con=None):
 
 
 def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=None,
-                 source=None, quiet=False, requires_consume=False, journal_action=None):
+                 source=None, quiet=False, requires_consume=False, journal_action=None,
+                 journal_insert_only=False, journal_actor=None,
+                 journal_cwd=_WRITE_EVENT_CWD_UNSET):
     """DB write primitive: one write, one connection, one transaction."""
     assert tier in TIERS and scope in SCOPES
     ok, why = quality_ok(body)
@@ -1045,9 +1071,10 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
             con.commit()
             if not quiet:
                 print(f"[upsert] {tier}/{scope} source={source} → {existing}")
-            if journal_action:
+            if journal_action and not journal_insert_only:
                 _append_write_event(journal_action, existing, tier=tier, scope=scope,
-                                     rtype=rtype, snippet=_first_line(body))
+                                     rtype=rtype, actor=journal_actor,
+                                     cwd=journal_cwd, snippet=_first_line(body))
             return existing
         dup = find_dup(tier, scope, body, cwd_origin, con=con)
         if dup:
@@ -1071,9 +1098,10 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
             con.commit()
             if not quiet:
                 print(f"[reinforce] existing record recurred; incremented strength: {dup}")
-            if journal_action:
+            if journal_action and not journal_insert_only:
                 _append_write_event(journal_action, dup, tier=tier, scope=scope,
-                                     rtype=rtype, snippet=_first_line(body))
+                                     rtype=rtype, actor=journal_actor,
+                                     cwd=journal_cwd, snippet=_first_line(body))
             return dup
         base = slugify(f"{rtype} {body}")
         # Include tier, scope, and cwd_origin in the hash seed to avoid namespace collisions.
@@ -1111,7 +1139,8 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
             print(f"[write] {tier}/{scope}/{rtype} → {sid}{fl}")
         if journal_action:
             _append_write_event(journal_action, sid, tier=tier, scope=scope,
-                                 rtype=rtype, snippet=_first_line(body))
+                                 rtype=rtype, actor=journal_actor,
+                                 cwd=journal_cwd, snippet=_first_line(body))
         return sid
     finally:
         con.close()
@@ -1258,7 +1287,7 @@ def _write_actor(default="manual"):
 
 
 def _append_write_event(action, rid, tier=None, scope=None, rtype=None, actor=None,
-                         snippet=None):
+                         snippet=None, cwd=_WRITE_EVENT_CWD_UNSET):
     """Append bounded write telemetry without ever blocking a mutation."""
     try:
         snip = (snippet or "")
@@ -1272,13 +1301,14 @@ def _append_write_event(action, rid, tier=None, scope=None, rtype=None, actor=No
             "type": rtype,
             "actor": actor or _write_actor(),
             "sid": os.environ.get("MEM_SID", ""),
-            # Repo attribution for the fleet per-repo mem rows (F-19, 2026-07-16): the
-            # mutating process's cwd, overridable via MEM_CWD when a worker mutates on
-            # behalf of another checkout. Honest value only — consumers group it through
-            # project_of() and silently skip events where it is absent/empty.
-            "cwd": os.environ.get("MEM_CWD") or os.getcwd(),
             "snippet": snip,
         }
+        # Existing callers retain MEM_CWD/process-cwd fallback. Source absorption
+        # callers pass an explicit path or None so no ambient attribution leaks in.
+        if cwd is _WRITE_EVENT_CWD_UNSET:
+            event["cwd"] = os.environ.get("MEM_CWD") or os.getcwd()
+        elif cwd is not None:
+            event["cwd"] = cwd
         WRITE_EVENTS.parent.mkdir(parents=True, exist_ok=True)
         if WRITE_EVENTS.exists() and WRITE_EVENTS.stat().st_size > 256 * 1024:
             lines = WRITE_EVENTS.read_text(
@@ -2117,7 +2147,9 @@ def migrate(apply=False):
                 cwd_origin = _canonical_cwd_key(mp.parent.parent.name, key_cache)
                 if apply:
                     write_record("durable", scope, rtype, body, cwd_origin=cwd_origin,
-                                 source=src, quiet=True)
+                                 source=src, quiet=True, journal_action="add",
+                                 journal_insert_only=True, journal_actor="sync",
+                                 journal_cwd=_event_cwd(mp.parent.parent.name))
                 created += 1
             except Exception as e:
                 sys.stderr.write(f"[migrate] skip {mp}: {e}\n")
@@ -2163,7 +2195,10 @@ def migrate(apply=False):
                             continue
                         if apply:
                             write_record("working", "project", cur, b.group(1).strip(),
-                                         cwd_origin=cwd_origin, source=src, quiet=True)
+                                         cwd_origin=cwd_origin, source=src, quiet=True,
+                                         journal_action="add", journal_insert_only=True,
+                                         journal_actor="sync",
+                                         journal_cwd=_event_cwd(root_dir))
                         created += 1
             except Exception as e:
                 sys.stderr.write(f"[migrate] skip {pi}: {e}\n")
@@ -2185,7 +2220,9 @@ def migrate(apply=False):
                     if apply:
                         write_record("durable", "global", "profile",
                                      up.read_text(encoding="utf-8", errors="ignore"),
-                                     cwd_origin="global", source=src, quiet=True)
+                                     cwd_origin="global", source=src, quiet=True,
+                                     journal_action="add", journal_insert_only=True,
+                                     journal_actor="sync", journal_cwd=None)
                     created += 1
                 except Exception as e:
                     sys.stderr.write(f"[migrate] skip {up}: {e}\n")
@@ -2213,12 +2250,17 @@ def migrate(apply=False):
                     rid_cwd = _canonical_cwd_key(meta.get("cwd_origin"), key_cache)
                     if apply:
                         write_record(rid_tier, rid_scope, rid_type, body,
-                                     cwd_origin=rid_cwd, source=src, quiet=True)
+                                     cwd_origin=rid_cwd, source=src, quiet=True,
+                                     journal_action="add", journal_insert_only=True,
+                                     journal_actor="sync",
+                                     journal_cwd=_event_cwd(meta.get("cwd_origin")))
                 else:
                     # Markdown without frontmatter becomes a durable project note.
                     if apply:
                         write_record("durable", "project", "project", body,
-                                     source=src, quiet=True)
+                                     source=src, quiet=True, journal_action="add",
+                                     journal_insert_only=True, journal_actor="sync",
+                                     journal_cwd=None)
                 created += 1
             except Exception as e:
                 sys.stderr.write(f"[migrate] skip md-file {rel}: {e}\n")
