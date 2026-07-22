@@ -11,5 +11,5 @@ phases:
   spec: done            # PRD v14 (2026-07-22: portable unit/compositional route + legacy worker_role/runtime surface 경계; v13 snapshot 보존)
   scaffolding: deferred # lean — skeleton 은 autopilot-code 로 이월 (module 구조만 §9 확정)
   design: n/a           # 시각 UI 아님 (터미널 TUI 레이아웃은 PRD §4)
-  dev: in_progress      # v14 Fleet projection 구현 중: unit pipe/env·route JSON/render·legacy fallback·memory 문서 정합
+  dev: done             # v14 Fleet projection 완료: unit pipe/env·route JSON/render·legacy fallback·memory 문서 정합 (`a4f7f040`)
 last_updated: 2026-07-22

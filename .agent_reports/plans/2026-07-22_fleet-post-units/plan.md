@@ -25,6 +25,7 @@ Spec drift verdict: **SPEC-SIGNIFICANT**. Fleet PRD v13 treated `worker_role`/st
 ## Implementation boundaries
 
 - Never infer `unit` from native subagent type or legacy `worker_role`.
+- Preserve the current Fleet stage layout and ordering unchanged in this cycle. The user prefers complete stage visibility but rejected a quick wrapping treatment; no stage-layout redesign is authorized here.
 - Keep route schema version 2 and dispatch contract version 3; topology registry alone is schema version 3.
 - Preserve v20 attempt/route/node terminal correlation.
 - Preserve old jobs rows and route records when additive unit fields are absent.
@@ -45,4 +46,5 @@ Spec drift verdict: **SPEC-SIGNIFICANT**. Fleet PRD v13 treated `worker_role`/st
 - Refuted: unit replaces assigned contract or worker type. It is an independent optional execution-unit axis.
 - Refuted: native subagent agent type can supply unit. Runtime identities and portable units are intentionally separate.
 - Refuted: memory commits require a Fleet schema migration. The journal already emits `cwd`; only stale documentation needs correction.
+- Refuted after user UI feedback: treat the long horizontal stage observation as authorization for a quick UI patch. The original Fleet semantic-migration scope remains unchanged.
 - Known baseline red: canonical/Claude mirror differs by one terminology-only render comment. The implementation must regenerate/synchronize the mirror and eliminate it.

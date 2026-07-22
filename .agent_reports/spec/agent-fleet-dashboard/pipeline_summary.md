@@ -2,7 +2,7 @@
 
 - **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8/v9/v10) · 2026-07-17 (v11) · 2026-07-21 (v13) · 2026-07-22 (v14)
 - **Mode**: cli (터미널 TUI 도구)
-- **Status**: spec **v14 done** / dev **in progress** — portable unit/compositional route metadata와 legacy worker_role/runtime surface 경계를 Fleet projection에 동기화
+- **Status**: spec **v14 done** / dev **done** — portable unit/compositional route metadata와 legacy worker_role/runtime surface 경계를 Fleet projection에 동기화 (`a4f7f040`)
 - **Placement**: 별도 컴포넌트 `spec/agent-fleet-dashboard/` — 기존 `spec/prd.md`(Unified Memory System) 무수정.
 
 ## v14 update (2026-07-22) — portable unit/compositional route projection
@@ -11,6 +11,13 @@
 - `assigned_contract`·`unit`·`worker_type`·`model_role`을 분리하고 `worker_role`을 legacy-only fallback으로 고정했다.
 - wrapper pipe/env, Fleet model/collector/route JSON/render, memory journal 문서 정합을 F-35 구현 범위로 확정했다.
 - Codex native subagent와 non-interactive exec, Claude subagent/background/agent-team/non-interactive 표면을 구분했다. `claude agents --json` agent-view 연동은 문서화된 잔여 확장이다.
+
+## v14 implementation closure (2026-07-22)
+
+- 세 하네스 wrapper의 `unit` pipe/env 전달, Fleet model/collector/route JSON/render, legacy row 호환, memory `cwd` 문서 정합을 `a4f7f040`으로 main에 통합했다.
+- focused 225, Fleet full 744, wrapper 39, public JSON smoke, canonical↔Claude mirror, syntax와 adaptation boundary가 통과했다.
+- 사용자 확인에 따라 기존 stage 순서/레이아웃은 이번 사이클에서 변경하지 않았다.
+- Codex 등록형 headless는 사용자 소유 runtime profile activation 실패로 사용하지 못했으며 native-owner fallback과 독립 audit로 보강했다. 최신 main의 model-effort 정책과 portable-guard fixture 기대값 불일치 1건은 Fleet 외부 잔여로 기록했다.
 
 ## Process Log
 | Step | Action | Result | Notes |
