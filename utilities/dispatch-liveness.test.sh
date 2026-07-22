@@ -208,6 +208,127 @@ else
   bad "expected Codex log fallback ALIVE; got rc=$rcJ out=[$outJ]"
 fi
 
+# ===== codex-terminal-v1 exact-attempt matrix =====
+term_wt="$tmp/wt/terminal with spaces"
+term_root="$tmp/canonical/.agent_reports"
+mkdir -p "$term_wt" "$term_root"
+git -C "$term_wt" init -q
+
+write_terminal_log() { # $1=path $2=verdict $3=blocker
+  python3 - "$1" "$2" "$3" <<'PY'
+import json, pathlib, sys
+path, verdict, blocker = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+rows = [
+    {"type":"item.completed","item":{"type":"command_execution","exit_code":0,"aggregated_output":"RAW_COMMAND_SENTINEL"}},
+    {"type":"item.completed","item":{"type":"agent_message","text":f"artifact: -\nverdict: {verdict}\nblocker: {blocker}"}},
+    {"type":"turn.completed"},
+]
+path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
+PY
+}
+
+for verdict in PASS FAIL BLOCKED; do
+  lower=$(printf '%s' "$verdict" | tr '[:upper:]' '[:lower:]')
+  log="$tmp/$lower.codex.jsonl"
+  blocker="private-$lower"
+  [ "$verdict" = "PASS" ] && blocker="none"
+  write_terminal_log "$log" "$verdict" "$blocker"
+  term_jobs="$tmp/$lower.jobs.log"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-22T00:00:00" "open" "repo" "$term_wt" "$lower" \
+    "attempt_schema_version=2,dispatch_depth=1,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless,attempt_id=att-$lower,harness=codex,artifact_root=$term_root,log_file=$log" > "$term_jobs"
+  term_out=$(AGENT_HOME="$agent_home" AGENT_ARTIFACT_ROOT="$term_root" bash "$LIVENESS" "$term_jobs" 2>&1); term_rc=$?
+  expected="EXITED"
+  [ "$verdict" = "PASS" ] && expected="COMPLETED"
+  if [ "$term_rc" -eq 3 ] && printf '%s' "$term_out" | grep -q "$expected.*exact turn.completed $verdict" \
+      && ! printf '%s' "$term_out" | grep -q 'RAW_COMMAND_SENTINEL\|private-fail\|private-blocked'; then
+    ok "Codex $verdict exact terminal → typed $expected/exit3 with no raw leakage"
+  else
+    bad "Codex $verdict terminal expected typed exit3; got rc=$term_rc out=[$term_out]"
+  fi
+done
+
+# Exact wire is one six-field enum record and carries no path or free text.
+wire=$(AGENT_ARTIFACT_ROOT="$term_root" python3 "$SCRIPT_DIR/codex_dispatch_terminal.py" \
+  --worktree "$term_wt" --artifact-root-metadata "$term_root" "$tmp/pass.codex.jsonl" 2>/dev/null); wire_rc=$?
+wire_nf=$(printf '%s\n' "$wire" | awk -F '\t' 'NR==1{print NF}')
+if [ "$wire_rc" -eq 0 ] && [ "$wire_nf" -eq 6 ] && [ "$(printf '%s\n' "$wire" | wc -l)" -eq 1 ] \
+    && ! printf '%s' "$wire" | grep -q "$term_root\|RAW_COMMAND_SENTINEL"; then
+  ok "codex-terminal-v1 emits one six-field path-free enum record"
+else
+  bad "expected exact one-record wire; got rc=$wire_rc wire=[$wire]"
+fi
+
+# Malformed/multiple inspector output is rejected rather than partially parsed.
+bad_inspector="$tmp/bad-inspector.py"
+cat > "$bad_inspector" <<'PY'
+print("codex-terminal-v1\tvalid\texact-turn-completed\tPASS\tnone\tnone")
+print("codex-terminal-v1\tvalid\texact-turn-completed\tFAIL\tnone\tworker-reported")
+PY
+bad_wire_out=$(AGENT_HOME="$agent_home" AGENT_ARTIFACT_ROOT="$term_root" CODEX_TERMINAL_INSPECTOR="$bad_inspector" \
+  bash "$LIVENESS" "$tmp/pass.jobs.log" 2>&1); bad_wire_rc=$?
+if [ "$bad_wire_rc" -eq 3 ] && printf '%s' "$bad_wire_out" | grep -q 'inspector-wire-invalid' \
+    && ! printf '%s' "$bad_wire_out" | grep -q 'RAW_COMMAND_SENTINEL'; then
+  ok "multiple inspector records fail closed as inspector-wire-invalid"
+else
+  bad "multiple wire expected inspector-wire-invalid; got rc=$bad_wire_rc out=[$bad_wire_out]"
+fi
+malformed_inspector="$tmp/malformed-inspector.py"
+printf '%s\n' 'print("codex-terminal-v1|valid|PASS")' > "$malformed_inspector"
+malformed_wire_out=$(AGENT_HOME="$agent_home" AGENT_ARTIFACT_ROOT="$term_root" CODEX_TERMINAL_INSPECTOR="$malformed_inspector" \
+  bash "$LIVENESS" "$tmp/pass.jobs.log" 2>&1); malformed_wire_rc=$?
+if [ "$malformed_wire_rc" -eq 3 ] && printf '%s' "$malformed_wire_out" | grep -q 'inspector-wire-invalid'; then
+  ok "malformed inspector record fails closed as inspector-wire-invalid"
+else
+  bad "malformed wire expected inspector-wire-invalid; got rc=$malformed_wire_rc out=[$malformed_wire_out]"
+fi
+
+# Missing canonical root is a fixed unsafe-root terminal error.
+missing_root="$tmp/missing/.agent_reports"
+sed "s#artifact_root=$term_root#artifact_root=$missing_root#" "$tmp/pass.jobs.log" > "$tmp/missing-root.jobs.log"
+missing_out=$(AGENT_HOME="$agent_home" AGENT_ARTIFACT_ROOT="$missing_root" bash "$LIVENESS" "$tmp/missing-root.jobs.log" 2>&1); missing_rc=$?
+if [ "$missing_rc" -eq 3 ] && printf '%s' "$missing_out" | grep -q 'terminal-inspector-error.*artifact_state=unsafe-root'; then
+  ok "missing canonical root maps to fixed unsafe-root outcome"
+else
+  bad "missing root expected unsafe-root; got rc=$missing_rc out=[$missing_out]"
+fi
+
+# Mixed harness rows bypass the Codex inspector even when their pipe has a log_file.
+mixed_wt="$tmp/wt/mixed"
+mixed_enc=$(printf '%s' "$mixed_wt" | sed 's#[/._]#-#g')
+mkdir -p "$runtime_root/projects/$mixed_enc"
+: > "$runtime_root/projects/$mixed_enc/session.jsonl"
+sed "s#${term_wt}#${mixed_wt}#;s/harness=codex/harness=claude/" "$tmp/fail.jobs.log" > "$tmp/mixed.jobs.log"
+mixed_out=$(AGENT_HOME="$agent_home" AGENT_ARTIFACT_ROOT="$term_root" DISPATCH_RUNTIME_ROOT="$runtime_root" bash "$LIVENESS" "$tmp/mixed.jobs.log" 2>&1); mixed_rc=$?
+if [ "$mixed_rc" -eq 0 ] && printf '%s' "$mixed_out" | grep -q 'ALIVE' \
+    && ! printf '%s' "$mixed_out" | grep -q 'turn.completed\|private-fail'; then
+  ok "mixed-harness row bypasses Codex terminal inspection"
+else
+  bad "mixed harness should use Claude fallback; got rc=$mixed_rc out=[$mixed_out]"
+fi
+
+# Linked-worktree resolution selects the primary canonical artifact root, never
+# the linked worktree's tracked shadow.
+primary="$tmp/primary"
+linked="$tmp/linked worktree"
+git init -q "$primary"
+git -C "$primary" config user.email fixture@example.com
+git -C "$primary" config user.name Fixture
+printf 'x\n' > "$primary/x"
+git -C "$primary" add x
+git -C "$primary" commit -qm init
+mkdir -p "$primary/.agent_reports"
+git -C "$primary" worktree add -q -b linked-fixture "$linked"
+linked_log="$tmp/linked.codex.jsonl"
+write_terminal_log "$linked_log" PASS none
+printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-22T00:00:00" "open" "$primary" "$linked" "linked" \
+  "attempt_schema_version=2,dispatch_depth=1,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless,attempt_id=att-linked,harness=codex,artifact_root=$primary/.agent_reports,log_file=$linked_log" > "$tmp/linked.jobs.log"
+linked_out=$(AGENT_HOME="$agent_home" AGENT_ARTIFACT_ROOT="$primary/.agent_reports" bash "$LIVENESS" "$tmp/linked.jobs.log" 2>&1); linked_rc=$?
+if [ "$linked_rc" -eq 3 ] && printf '%s' "$linked_out" | grep -q 'COMPLETED.*PASS'; then
+  ok "linked worktree resolves the primary canonical artifact root"
+else
+  bad "linked worktree expected typed PASS; got rc=$linked_rc out=[$linked_out]"
+fi
+
 if [ "$fails" -eq 0 ]; then
   echo "dispatch-liveness runtime-root regression: PASS"
   exit 0

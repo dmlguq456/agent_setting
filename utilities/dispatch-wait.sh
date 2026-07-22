@@ -13,7 +13,7 @@
 #
 #   exit 0: all target children are closed; harvest them.
 #   exit 2: children remain alive at --max; call again.
-#   exit 3: a child is SUSPECT/DEAD/EXITED; diagnose, then harvest or redispatch.
+#   exit 3: a child has terminal/SUSPECT/DEAD/EXITED evidence; harvest or diagnose.
 #   Each iteration emits one status line. No background/nohup waits are used.
 #   Reusing liveness also incorporates anchored limit/auth death evidence (SD-15).
 set -u   # POSIX sh/dash has no pipefail; this wrapper does not depend on pipelines.
@@ -83,7 +83,7 @@ while :; do
   rm -f "$tmp"
 
   if [ "$live_rc" -eq 3 ]; then
-    echo "⚠️ SUSPECT/DEAD child detected (open $n) — stop waiting and diagnose (exit 3)"
+    echo "⚠️ terminal/SUSPECT/DEAD child detected (open $n) — stop waiting and harvest or diagnose (exit 3)"
     printf '%s\n' "$live_out"
     exit 3
   fi

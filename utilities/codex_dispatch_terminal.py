@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
-"""Exact Codex dispatch-log terminal handoff inspection.
+"""Safe, exact-attempt inspection of a Codex dispatch JSONL terminal handoff.
 
-This parser is intentionally attempt-log scoped. It never searches by cwd,
-slug, or newest transcript, so another worker cannot supply terminal evidence
-for the registered attempt.
+The compatibility parser returns the historical internal dictionary.  The
+structured inspector and CLI expose only closed decision enums, bounded
+failure-only excerpts, and a validated base64 path reference.
 """
 
 from __future__ import annotations
 
+import argparse
+import base64
 import json
+import os
 from pathlib import Path
 import re
+import subprocess
+import sys
 
 
+ROOT = Path(__file__).resolve().parents[1]
 _HANDOFF_RE = re.compile(
     r"\Aartifact: (?P<artifact>[^\n]+)\n"
     r"verdict: (?P<verdict>PASS|FAIL|BLOCKED)\n"
@@ -24,6 +30,53 @@ _SANDBOX_INIT_RE = re.compile(
     re.I,
 )
 _MAX_TAIL_BYTES = 1024 * 1024
+_DETAIL_LIMIT = 512
+
+ARTIFACT_STATES = frozenset(
+    {"unchecked", "none", "readable", "missing", "outside-root", "unsafe-root"}
+)
+_LEGAL_WIRE = frozenset(
+    {
+        (0, "valid", "exact-turn-completed", "PASS", "none", "none"),
+        (0, "valid", "exact-turn-completed", "PASS", "readable", "none"),
+        *(
+            (0, "valid", "exact-turn-completed", verdict, artifact, blocker)
+            for verdict in ("FAIL", "BLOCKED")
+            for artifact in ("none", "readable")
+            for blocker in ("none", "worker-reported")
+        ),
+        (2, "absent", "none", "-", "unchecked", "-"),
+        (3, "invalid", "exact-turn-completed", "-", "unchecked", "contract-violation"),
+        (3, "invalid", "exact-turn-completed", "-", "missing", "contract-violation"),
+        (3, "invalid", "exact-turn-completed", "-", "outside-root", "contract-violation"),
+        (4, "error", "runtime-error", "-", "unchecked", "contract-violation"),
+        (4, "error", "runtime-error", "-", "unsafe-root", "contract-violation"),
+    }
+)
+
+
+def _result(
+    exit_code: int,
+    state: str,
+    source: str,
+    verdict: str,
+    artifact_state: str,
+    blocker_reason: str,
+    *,
+    reason: str,
+    **extra: object,
+) -> dict[str, object]:
+    row: dict[str, object] = {
+        "exit_code": exit_code,
+        "state": state,
+        "source": source,
+        "verdict": verdict,
+        "artifact_state": artifact_state,
+        "blocker_reason": blocker_reason,
+        "reason": reason,
+    }
+    row.update(extra)
+    return row
 
 
 def _tail_lines(path: Path) -> list[str]:
@@ -35,25 +88,35 @@ def _tail_lines(path: Path) -> list[str]:
     lines = data.splitlines()
     if start and lines:
         lines = lines[1:]
-    return [line.decode("utf-8", "replace") for line in lines]
+    return [line.decode("utf-8", "strict") for line in lines]
 
 
-def inspect_terminal_log(path: str | Path | None) -> dict[str, str] | None:
-    """Return a validated final handoff, or ``None`` when evidence is ambiguous."""
-
+def _read_terminal(path: str | Path | None) -> dict[str, object]:
     if not path:
-        return None
+        return _result(
+            2, "absent", "none", "-", "unchecked", "-", reason="log-file-absent"
+        )
     log_path = Path(path)
     try:
         lines = _tail_lines(log_path)
-    except OSError:
-        return None
+    except (OSError, UnicodeDecodeError):
+        return _result(
+            4,
+            "error",
+            "runtime-error",
+            "-",
+            "unchecked",
+            "contract-violation",
+            reason="log-unreadable",
+        )
 
     rows: list[dict] = []
     for line in lines:
         try:
             value = json.loads(line)
         except (TypeError, ValueError):
+            # Codex stderr is intentionally retained in this same exact attempt
+            # log.  Non-JSON lines are private debugging data, never handoff data.
             continue
         if isinstance(value, dict):
             rows.append(value)
@@ -67,24 +130,53 @@ def inspect_terminal_log(path: str | Path | None) -> dict[str, str] | None:
         None,
     )
     if terminal_index is None:
-        return None
+        return _result(
+            2, "absent", "none", "-", "unchecked", "-", reason="terminal-event-absent"
+        )
 
-    handoff = None
-    for row in reversed(rows[:terminal_index]):
-        if row.get("type") != "item.completed":
-            continue
-        item = row.get("item")
-        if not isinstance(item, dict) or item.get("type") != "agent_message":
-            continue
-        text = item.get("text")
-        match = _HANDOFF_RE.fullmatch(text.strip()) if isinstance(text, str) else None
-        if match:
-            handoff = match.groupdict()
-        break
-    if handoff is None:
-        return None
+    final_message: str | None = None
+    final_row = rows[terminal_index - 1] if terminal_index > 0 else None
+    if isinstance(final_row, dict) and final_row.get("type") == "item.completed":
+        item = final_row.get("item")
+        if isinstance(item, dict) and item.get("type") == "agent_message":
+            text = item.get("text")
+            final_message = text if isinstance(text, str) else None
+    if final_message is None:
+        return _result(
+            3,
+            "invalid",
+            "exact-turn-completed",
+            "-",
+            "unchecked",
+            "contract-violation",
+            reason="missing-final-agent-message",
+        )
+    match = _HANDOFF_RE.fullmatch(final_message.strip())
+    if match is None:
+        return _result(
+            3,
+            "invalid",
+            "exact-turn-completed",
+            "-",
+            "unchecked",
+            "contract-violation",
+            reason="malformed-handoff",
+        )
+
+    handoff = match.groupdict()
+    if handoff["verdict"] == "PASS" and handoff["blocker"] != "none":
+        return _result(
+            3,
+            "invalid",
+            "exact-turn-completed",
+            "-",
+            "unchecked",
+            "contract-violation",
+            reason="pass-blocker-not-none",
+        )
 
     sandbox_init = False
+    diagnostic = None
     for row in rows[:terminal_index]:
         if row.get("type") != "item.completed":
             continue
@@ -92,25 +184,319 @@ def inspect_terminal_log(path: str | Path | None) -> dict[str, str] | None:
         if not isinstance(item, dict) or item.get("type") != "command_execution":
             continue
         output = item.get("aggregated_output")
-        if (
-            item.get("exit_code") not in (None, 0)
-            and isinstance(output, str)
-            and _SANDBOX_INIT_RE.search(output)
-        ):
-            sandbox_init = True
-            break
+        failed = item.get("exit_code") not in (None, 0)
+        if failed and isinstance(output, str):
+            diagnostic = output
+            if _SANDBOX_INIT_RE.search(output):
+                sandbox_init = True
 
     verdict = handoff["verdict"]
-    if verdict == "BLOCKED":
-        note = "dead-sandbox-init" if sandbox_init else "dead-worker-blocked"
-    elif verdict == "FAIL":
-        note = "dead-worker-fail"
-    else:
-        note = ""
-    return {
-        **handoff,
-        "failure_note": note,
-        "failure_class": "sandbox-init" if sandbox_init else verdict.lower(),
-        "terminal_event": "turn.completed",
-        "log_file": str(log_path),
+    failure_note = (
+        "dead-sandbox-init"
+        if verdict == "BLOCKED" and sandbox_init
+        else "dead-worker-blocked"
+        if verdict == "BLOCKED"
+        else "dead-worker-fail"
+        if verdict == "FAIL"
+        else ""
+    )
+    return _result(
+        0,
+        "valid",
+        "exact-turn-completed",
+        verdict,
+        "unchecked",
+        "none" if handoff["blocker"] == "none" else "worker-reported",
+        reason="none",
+        artifact=handoff["artifact"],
+        blocker=handoff["blocker"],
+        diagnostic=diagnostic,
+        failure_note=failure_note,
+        failure_class="sandbox-init" if sandbox_init else verdict.lower(),
+        terminal_event="turn.completed",
+        log_file=str(log_path),
+    )
+
+
+def _has_control(value: str) -> bool:
+    return any(ord(char) < 32 or ord(char) == 127 for char in value)
+
+
+def _primary_worktree(worktree: Path) -> Path | None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(worktree), "worktree", "list", "--porcelain"],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError:
+        return None
+    if result.returncode:
+        return None
+    for line in result.stdout.splitlines():
+        if line.startswith("worktree "):
+            try:
+                return Path(line[9:]).resolve(strict=True)
+            except OSError:
+                return None
+    return None
+
+
+def _resolve_safe_root(
+    worktree: str | Path | None, artifact_root_metadata: str | Path | None
+) -> tuple[Path | None, str]:
+    if worktree is None:
+        return None, "worktree-missing"
+    worktree_path = Path(worktree)
+    if not worktree_path.is_absolute() or _has_control(str(worktree_path)):
+        return None, "worktree-unsafe"
+    try:
+        worktree_resolved = worktree_path.resolve(strict=True)
+    except OSError:
+        return None, "worktree-unavailable"
+    if not worktree_resolved.is_dir():
+        return None, "worktree-unavailable"
+
+    override = os.environ.get("AGENT_ARTIFACT_ROOT")
+    if override:
+        override_path = Path(override)
+        if not override_path.is_absolute() or _has_control(override):
+            return None, "artifact-root-relative"
+        try:
+            override_resolved = override_path.resolve(strict=True)
+        except OSError:
+            override_resolved = None
+        if override_resolved is not None and override_resolved != Path(os.path.abspath(override_path)):
+            return None, "artifact-root-symlink-escaped"
+
+    try:
+        resolved = subprocess.run(
+            [str(ROOT / "utilities" / "artifact-root.sh"), str(worktree_resolved)],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    except OSError:
+        return None, "artifact-root-resolver-failed"
+    raw = resolved.stdout.rstrip("\n")
+    if resolved.returncode or not raw or "\n" in raw or _has_control(raw):
+        return None, "artifact-root-resolver-failed"
+    root_path = Path(raw)
+    if not root_path.is_absolute():
+        return None, "artifact-root-relative"
+    try:
+        root = root_path.resolve(strict=True)
+    except OSError:
+        return None, "artifact-root-missing"
+    if root != Path(os.path.abspath(root_path)):
+        return None, "artifact-root-symlink-escaped"
+    if not root.is_dir():
+        return None, "artifact-root-not-directory"
+    primary = _primary_worktree(worktree_resolved)
+    if (
+        root == Path("/")
+        or root == worktree_resolved
+        or root in worktree_resolved.parents
+        or primary is not None
+        and (root == primary or root in primary.parents)
+    ):
+        return None, "artifact-root-over-broad"
+
+    shadow_candidates = {
+        worktree_resolved / ".agent_reports",
+        worktree_resolved / ".claude_reports",
     }
+    if primary is not None and primary != worktree_resolved and root in {
+        candidate.resolve(strict=False) for candidate in shadow_candidates
+    }:
+        return None, "artifact-root-shadow"
+
+    if artifact_root_metadata is None or str(artifact_root_metadata) in {"", "-"}:
+        return None, "artifact-root-metadata-missing"
+    metadata_path = Path(artifact_root_metadata)
+    if not metadata_path.is_absolute() or _has_control(str(metadata_path)):
+        return None, "artifact-root-metadata-unsafe"
+    try:
+        metadata_root = metadata_path.resolve(strict=True)
+    except OSError:
+        return None, "artifact-root-metadata-missing"
+    if metadata_root != root:
+        return None, "artifact-root-mismatch"
+    return root, "none"
+
+
+def _encode_path(path: Path) -> str:
+    return base64.urlsafe_b64encode(str(path).encode("utf-8")).decode("ascii").rstrip("=")
+
+
+def _escape_and_bound(value: str) -> tuple[str, int]:
+    chunks: list[str] = []
+    size = 0
+    truncated = 0
+    for char in value:
+        code = ord(char)
+        if char == "\\":
+            chunk = "\\\\"
+        elif char == "\n":
+            chunk = "\\n"
+        elif char == "\r":
+            chunk = "\\r"
+        elif char == "\t":
+            chunk = "\\t"
+        elif code < 32 or code == 127:
+            chunk = f"\\x{code:02x}"
+        elif code in (0x2028, 0x2029):
+            chunk = f"\\u{code:04x}"
+        else:
+            chunk = char
+        encoded = chunk.encode("utf-8")
+        if size + len(encoded) > _DETAIL_LIMIT:
+            truncated = 1
+            break
+        chunks.append(chunk)
+        size += len(encoded)
+    return "".join(chunks), truncated
+
+
+def inspect_terminal_attempt(
+    path: str | Path | None,
+    *,
+    worktree: str | Path | None,
+    artifact_root_metadata: str | Path | None,
+    include_failure_detail: bool = False,
+) -> dict[str, object]:
+    """Return the normalized, root-bound result for one exact attempt log."""
+
+    parsed = _read_terminal(path)
+    if parsed["state"] != "valid":
+        return parsed
+
+    root, root_reason = _resolve_safe_root(worktree, artifact_root_metadata)
+    if root is None:
+        return _result(
+            4,
+            "error",
+            "runtime-error",
+            "-",
+            "unsafe-root",
+            "contract-violation",
+            reason=root_reason,
+        )
+
+    artifact = str(parsed["artifact"])
+    if artifact == "-":
+        parsed["artifact_state"] = "none"
+    else:
+        candidate = Path(artifact)
+        if not candidate.is_absolute() or _has_control(artifact):
+            return _result(
+                3,
+                "invalid",
+                "exact-turn-completed",
+                "-",
+                "outside-root",
+                "contract-violation",
+                reason="artifact-outside-root",
+            )
+        try:
+            artifact_path = candidate.resolve(strict=False)
+            artifact_path.relative_to(root)
+        except (OSError, ValueError):
+            return _result(
+                3,
+                "invalid",
+                "exact-turn-completed",
+                "-",
+                "outside-root",
+                "contract-violation",
+                reason="artifact-outside-root",
+            )
+        if not artifact_path.is_file() or not os.access(artifact_path, os.R_OK):
+            return _result(
+                3,
+                "invalid",
+                "exact-turn-completed",
+                "-",
+                "missing",
+                "contract-violation",
+                reason="artifact-missing",
+            )
+        parsed["artifact_state"] = "readable"
+        parsed["artifact_path_b64"] = _encode_path(artifact_path)
+
+    if include_failure_detail and parsed["verdict"] in {"FAIL", "BLOCKED"}:
+        blocker = str(parsed.get("blocker", ""))
+        if blocker != "none":
+            excerpt, truncated = _escape_and_bound(blocker)
+            parsed["blocker_detail_excerpt"] = excerpt
+            parsed["blocker_detail_truncated"] = truncated
+        diagnostic = parsed.get("diagnostic")
+        if isinstance(diagnostic, str) and diagnostic:
+            excerpt, truncated = _escape_and_bound(diagnostic)
+            parsed["failure_diagnostic_excerpt"] = excerpt
+            parsed["failure_diagnostic_truncated"] = truncated
+
+    # Raw values stay internal and are removed from the normalized public view.
+    for key in ("artifact", "blocker", "diagnostic"):
+        parsed.pop(key, None)
+    return parsed
+
+
+def inspect_terminal_log(path: str | Path | None) -> dict[str, str] | None:
+    """Historical compatibility view used by registry failure reconciliation."""
+
+    parsed = _read_terminal(path)
+    if parsed.get("state") != "valid":
+        return None
+    return {
+        "artifact": str(parsed["artifact"]),
+        "verdict": str(parsed["verdict"]),
+        "blocker": str(parsed["blocker"]),
+        "failure_note": str(parsed["failure_note"]),
+        "failure_class": str(parsed["failure_class"]),
+        "terminal_event": str(parsed["terminal_event"]),
+        "log_file": str(parsed["log_file"]),
+    }
+
+
+def wire_record(result: dict[str, object]) -> str:
+    row = (
+        int(result["exit_code"]),
+        str(result["state"]),
+        str(result["source"]),
+        str(result["verdict"]),
+        str(result["artifact_state"]),
+        str(result["blocker_reason"]),
+    )
+    if row not in _LEGAL_WIRE:
+        row = (4, "error", "runtime-error", "-", "unchecked", "contract-violation")
+    return "codex-terminal-v1\t" + "\t".join(row[1:]) + "\n"
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--worktree", required=True)
+    parser.add_argument("--artifact-root-metadata", required=True)
+    parser.add_argument("log_file")
+    return parser
+
+
+def main(argv: list[str]) -> int:
+    try:
+        args = _parser().parse_args(argv[1:])
+    except SystemExit as exc:
+        return 0 if exc.code == 0 else 64
+    result = inspect_terminal_attempt(
+        args.log_file,
+        worktree=args.worktree,
+        artifact_root_metadata=args.artifact_root_metadata,
+    )
+    sys.stdout.write(wire_record(result))
+    return int(result["exit_code"])
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

@@ -38,6 +38,7 @@ LOG_DIR="$AGENT_HOME/.dispatch/logs"
 # dispatch-headless.py DEATH_PATTERNS.
 LIMIT_RE='operation not permitted|network is unreachable|network access denied|hit your (session|usage) limit|session limit reached|usage limit reached|weekly limit|rate limit|[^0-9]429[^0-9]|invalid api key|authentication_error|not logged in|please run /login|unauthorized|[^0-9]401[^0-9]|credit balance is too low|insufficient (credit|quota|funds)'
 CAPACITY_RE='^(error[[:space:]]*[:\-][[:space:]]*)?(selected[[:space:]]+)?model([[:space:]]+[A-Za-z0-9._:/-]+)?[[:space:]]+(is[[:space:]]+)?at[[:space:]]+capacity[.!]?$'
+CODEX_TERMINAL_INSPECTOR="${CODEX_TERMINAL_INSPECTOR:-$SCRIPT_DIR/codex_dispatch_terminal.py}"
 
 # SD-15b: anchor log-pattern death detection to a few short trailing lines.
 # Scanning a large tail caused false DEAD verdicts when a successful report only
@@ -78,7 +79,84 @@ while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
   route_id=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^route_id=//p' | head -1)
   route_node=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^route_node=//p' | head -1)
   harness=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^harness=//p' | head -1)
+  log_file=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^log_file=//p' | head -1)
+  artifact_root=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^artifact_root=//p' | head -1)
   [ -n "$harness" ] || harness="claude"
+  terminal_state=""; terminal_source=""; terminal_verdict=""; terminal_artifact=""; terminal_blocker=""
+  if [ "$harness" = "codex" ] && [ -n "$log_file" ]; then
+    wire_out=$(python3 "$CODEX_TERMINAL_INSPECTOR" \
+      --worktree "$wt" --artifact-root-metadata "${artifact_root:--}" "$log_file" 2>/dev/null)
+    wire_rc=$?
+    wire_shape=$(printf '%s\n' "$wire_out" | awk -F '\t' '
+      NR == 1 && NF == 6 && $1 == "codex-terminal-v1" { good=1 }
+      END { if (NR == 1 && good) print "ok"; else print "bad" }')
+    if [ "$wire_shape" = "ok" ]; then
+      IFS=$'\t' read -r _wire terminal_state terminal_source terminal_verdict terminal_artifact terminal_blocker <<< "$wire_out"
+      wire_key="$wire_rc|$terminal_state|$terminal_source|$terminal_verdict|$terminal_artifact|$terminal_blocker"
+      case "$wire_key" in
+        0\|valid\|exact-turn-completed\|PASS\|none\|none|\
+        0\|valid\|exact-turn-completed\|PASS\|readable\|none|\
+        0\|valid\|exact-turn-completed\|FAIL\|none\|none|\
+        0\|valid\|exact-turn-completed\|FAIL\|none\|worker-reported|\
+        0\|valid\|exact-turn-completed\|FAIL\|readable\|none|\
+        0\|valid\|exact-turn-completed\|FAIL\|readable\|worker-reported|\
+        0\|valid\|exact-turn-completed\|BLOCKED\|none\|none|\
+        0\|valid\|exact-turn-completed\|BLOCKED\|none\|worker-reported|\
+        0\|valid\|exact-turn-completed\|BLOCKED\|readable\|none|\
+        0\|valid\|exact-turn-completed\|BLOCKED\|readable\|worker-reported|\
+        2\|absent\|none\|-\|unchecked\|-|\
+        3\|invalid\|exact-turn-completed\|-\|unchecked\|contract-violation|\
+        3\|invalid\|exact-turn-completed\|-\|missing\|contract-violation|\
+        3\|invalid\|exact-turn-completed\|-\|outside-root\|contract-violation|\
+        4\|error\|runtime-error\|-\|unchecked\|contract-violation|\
+        4\|error\|runtime-error\|-\|unsafe-root\|contract-violation) ;;
+        *) terminal_state="wire-invalid" ;;
+      esac
+    else
+      terminal_state="wire-invalid"
+    fi
+  fi
+
+  # A dead depth-1 owner with unfinished dependents is still an orphan even if
+  # its exact log contains PASS.  Ask the canonical registry classifier before
+  # rendering the terminal observation; this is the SD-64/71 post-exit seam.
+  if [ "$terminal_state" = "valid" ] && [ "$terminal_verdict" = "PASS" ] \
+      && [ -n "$pid" ] && [ -n "$pid_start" ] && [ -n "$attempt_id" ]; then
+    orphan_exact_args=(attempt-state --pid "$pid" --pid-start "$pid_start")
+    [ -n "$pid_scope" ] && orphan_exact_args+=(--pid-scope "$pid_scope")
+    [ -n "$route_id" ] && orphan_exact_args+=(--route "$route_id")
+    [ -n "$route_node" ] && orphan_exact_args+=(--node "$route_node")
+    orphan_exact_args+=(--attempt "$attempt_id")
+    orphan_exact=$(python3 "$SCRIPT_DIR/dispatch-registry.py" "${orphan_exact_args[@]}" --agent-home "$AGENT_HOME" 2>/dev/null || true)
+    if printf '%s\n' "$orphan_exact" | grep -q '^state=dead$'; then
+      orphan_info=$(python3 "$SCRIPT_DIR/dispatch-registry.py" orphan-status --attempt "$attempt_id" --jobs "$SOURCE_JOBS" --agent-home "$AGENT_HOME" 2>/dev/null || true)
+      if printf '%s\n' "$orphan_info" | grep -q '^orphan=1$'; then
+        orphan_route=$(printf '%s\n' "$orphan_info" | sed -n 's/^route_id=//p')
+        orphan_boundary=$(printf '%s\n' "$orphan_info" | sed -n 's/^resume_boundary=//p')
+        echo "⚠️ ORPHANED ${slug:-?}  — pipeline orphaned; route=$orphan_route; resume boundary=$orphan_boundary; dispatch-depth-0 decision  [open: $ts]"
+        suspect=$((suspect + 1)); continue
+      fi
+    fi
+  fi
+
+  case "$terminal_state" in
+    valid)
+      if [ "$terminal_verdict" = "PASS" ]; then
+        echo "⚠️ COMPLETED ${slug:-?}  — exact turn.completed PASS; harvest required (artifact_state=$terminal_artifact; blocker_reason=none)  [open: $ts]"
+      else
+        echo "⚠️ EXITED   ${slug:-?}  — exact turn.completed $terminal_verdict (blocker_reason=$terminal_blocker; artifact_state=$terminal_artifact)  [open: $ts]"
+      fi
+      suspect=$((suspect + 1)); continue ;;
+    invalid)
+      echo "⚠️ EXITED   ${slug:-?}  — invalid-handoff (artifact_state=$terminal_artifact; blocker_reason=contract-violation)  [open: $ts]"
+      suspect=$((suspect + 1)); continue ;;
+    error)
+      echo "⚠️ EXITED   ${slug:-?}  — terminal-inspector-error (artifact_state=$terminal_artifact; blocker_reason=contract-violation)  [open: $ts]"
+      suspect=$((suspect + 1)); continue ;;
+    wire-invalid)
+      echo "⚠️ EXITED   ${slug:-?}  — inspector-wire-invalid (blocker_reason=contract-violation)  [open: $ts]"
+      suspect=$((suspect + 1)); continue ;;
+  esac
   [ -d /proc ] || pid=""   # Fall back to transcript mtime without /proc.
   if [ -n "$pid" ] && [ -n "$pid_start" ]; then
     exact_args=(attempt-state --pid "$pid" --pid-start "$pid_start")
@@ -205,7 +283,7 @@ done < "$JOBS"
 
 echo "— open $open_n · alive $alive · suspect/dead/exited $suspect"
 if [ "$suspect" -gt 0 ]; then
-  echo "→ SUSPECT/DEAD/EXITED: inspect transcript tail and dispatch log, then harvest or redispatch; do not wait indefinitely."
+  echo "→ terminal/SUSPECT/DEAD/EXITED: inspect typed status, then harvest or redispatch; do not wait indefinitely."
   exit 3
 fi
 exit 0

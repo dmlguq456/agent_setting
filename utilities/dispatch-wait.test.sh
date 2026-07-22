@@ -76,6 +76,43 @@ if [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'SUSPECT/DEAD'; then
   ok "dead open child → exit 3 (diagnose)"
 else bad "dead child expected 3 got $rc [$out]"; fi
 
+# --- Case 3b: supplemental controlled current/open Codex terminal rows.
+# Real foreground FAIL/BLOCKED rows close before return; these byte-shaped logs
+# exercise wait/liveness without weakening current-row filtering.
+term_wt="$tmp/wt/terminal"
+term_root="$tmp/canonical/.agent_reports"
+mkdir -p "$term_wt" "$term_root"
+git -C "$term_wt" init -q
+for verdict in PASS FAIL BLOCKED; do
+  lower=$(printf '%s' "$verdict" | tr '[:upper:]' '[:lower:]')
+  blocker="private-$lower"
+  [ "$verdict" = "PASS" ] && blocker="none"
+  log="$tmp/wait-$lower.codex.jsonl"
+  python3 - "$log" "$verdict" "$blocker" <<'PY'
+import json, pathlib, sys
+path, verdict, blocker = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+rows = [
+    {"type":"item.completed","item":{"type":"command_execution","exit_code":0,"aggregated_output":"RAW_WAIT_SENTINEL"}},
+    {"type":"item.completed","item":{"type":"agent_message","text":f"artifact: -\nverdict: {verdict}\nblocker: {blocker}"}},
+    {"type":"turn.completed"},
+]
+path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
+PY
+  : > "$jobs"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-22T00:00:00" "open" "repo" "$term_wt" "wait-$lower" \
+    "attempt_schema_version=2,dispatch_depth=2,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless,attempt_id=att-wait-$lower,parent=conf,harness=codex,artifact_root=$term_root,log_file=$log" >> "$jobs"
+  out=$(AGENT_HOME="$agent_home" AGENT_ARTIFACT_ROOT="$term_root" sh "$WAIT" --jobs "$jobs" --parent conf --interval 1 --max 5 2>&1); rc=$?
+  expected="EXITED"
+  [ "$verdict" = "PASS" ] && expected="COMPLETED"
+  if [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'terminal/SUSPECT/DEAD child detected' \
+      && printf '%s' "$out" | grep -q "$expected.*turn.completed $verdict" \
+      && ! printf '%s' "$out" | grep -q 'RAW_WAIT_SENTINEL\|private-fail\|private-blocked'; then
+    ok "supplemental open Codex $verdict row → typed wait exit 3 without raw leakage"
+  else
+    bad "supplemental Codex $verdict expected typed wait exit3 got $rc [$out]"
+  fi
+done
+
 # --- Case 4: --max 상한 클램프 확인 (600 초과 → 600, 소스 확증) ---
 if grep -Fq 'MAX=600' "$WAIT"; then ok "--max clamped to 600 in source"; else bad "expected MAX clamp to 600"; fi
 

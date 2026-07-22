@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import anchored_capacity_failure  # noqa: E402
-from codex_dispatch_terminal import inspect_terminal_log  # noqa: E402
+from codex_dispatch_terminal import inspect_terminal_attempt  # noqa: E402
 from tools.fleet.model import (  # noqa: E402
     ATTEMPT_CLASSIFIER_SOURCE,
     classify_attempt_evidence,
@@ -321,21 +321,60 @@ def main(argv: list[str]) -> int:
             open_n += 1
             label = slug or "?"
             metadata = parse_metadata(pipe)
-            terminal = inspect_terminal_log(metadata.get("log_file"))
-            if (
-                metadata.get("attempt_id")
-                and metadata.get("route_id")
-                and metadata.get("route_node")
-                and terminal
-                and terminal.get("failure_note")
-            ):
+            harness = metadata.get("harness", "")
+            terminal = None
+            if harness in {"", "codex"} and metadata.get("log_file"):
+                terminal = inspect_terminal_attempt(
+                    metadata.get("log_file"),
+                    worktree=worktree,
+                    artifact_root_metadata=metadata.get("artifact_root"),
+                )
+            exact = recorded_attempt_state(metadata, now, agent_home)
+            # SD-64/71 post-exit owner-orphan reconciliation retains precedence
+            # over a PASS observation.  Failure handoffs keep their existing
+            # registry precedence because dispatch-registry classifies them as
+            # terminal failures before orphan repair.
+            if exact and exact["state"] == "dead":
+                orphan = orphan_status(agent_home, jobs, metadata.get("attempt_id", ""))
+                if orphan is not None:
+                    print(f"ORPHANED {label} - pipeline orphaned; route={orphan['route_id']}; "
+                          f"resume boundary={orphan['resume_boundary']}; dispatch-depth-0 decision [open: {ts}]")
+                    suspect += 1
+                    continue
+            if terminal and terminal.get("state") == "valid":
+                verdict = terminal["verdict"]
+                artifact_state = terminal["artifact_state"]
+                if verdict == "PASS":
+                    print(
+                        f"COMPLETED {label} - exact turn.completed PASS; harvest required "
+                        f"(artifact_state={artifact_state}; blocker_reason=none) [open: {ts}]"
+                    )
+                else:
+                    print(
+                        f"EXITED   {label} - exact turn.completed {verdict} "
+                        f"({terminal['failure_note']}; blocker_reason={terminal['blocker_reason']}; "
+                        f"artifact_state={artifact_state}) [open: {ts}]"
+                    )
+                suspect += 1
+                continue
+            if terminal and terminal.get("state") == "invalid":
                 print(
-                    f"EXITED   {label} - exact {terminal['terminal_event']} "
-                    f"{terminal['verdict']} ({terminal['failure_note']}) [open: {ts}]"
+                    f"EXITED   {label} - invalid-handoff "
+                    f"(artifact_state={terminal['artifact_state']}; "
+                    "blocker_reason=contract-violation) "
+                    f"[open: {ts}]"
                 )
                 suspect += 1
                 continue
-            exact = recorded_attempt_state(metadata, now, agent_home)
+            if terminal and terminal.get("state") == "error":
+                print(
+                    f"EXITED   {label} - terminal-inspector-error "
+                    f"(artifact_state={terminal['artifact_state']}; "
+                    "blocker_reason=contract-violation) "
+                    f"[open: {ts}]"
+                )
+                suspect += 1
+                continue
             if exact and exact["state"] == "working":
                 detail = (
                     "namespace-local exact heartbeat"
@@ -346,12 +385,8 @@ def main(argv: list[str]) -> int:
                 alive += 1
                 continue
             if exact and exact["state"] == "dead":
-                orphan = orphan_status(agent_home, jobs, metadata.get("attempt_id", ""))
-                log_hit = None if orphan else log_shows_limit(agent_home, slug)
-                if orphan is not None:
-                    print(f"ORPHANED {label} - pipeline orphaned; route={orphan['route_id']}; "
-                          f"resume boundary={orphan['resume_boundary']}; dispatch-depth-0 decision [open: {ts}]")
-                elif log_hit is not None:
+                log_hit = log_shows_limit(agent_home, slug)
+                if log_hit is not None:
                     print(f"DEAD     {label} - log limit/auth pattern ({log_hit}) [open: {ts}]")
                 else:
                     print(f"EXITED   {label} - recorded pid {exact['pid']} ended or identity changed; classifier={ATTEMPT_CLASSIFIER_SOURCE} [open: {ts}]")
@@ -408,7 +443,7 @@ def main(argv: list[str]) -> int:
     print(f"open {open_n} ; alive {alive} ; suspect/dead {suspect}")
     print(f"classifier_source={ATTEMPT_CLASSIFIER_SOURCE}")
     if suspect:
-        print("SUSPECT/DEAD: inspect Codex transcript and dispatch log, then harvest or redispatch.")
+        print("terminal/SUSPECT/DEAD: inspect typed status, then harvest or redispatch.")
         return 3
     return 0
 

@@ -233,4 +233,53 @@ class CodexSD71SyncWaitClause(unittest.TestCase):
         self.assertNotIn("No asynchronous Monitor/wakeup/scheduling waits", prompt)
 
 
+class CodexTerminalReceipt(unittest.TestCase):
+    def test_receipt_fields_cover_valid_invalid_and_absent_without_raw_content(self):
+        cases = (
+            ({"state": "valid", "source": "exact-turn-completed", "verdict": "PASS",
+              "artifact_state": "readable", "artifact_path_b64": "L3NhZmU",
+              "blocker_reason": "none", "private": "RAW_COMMAND_SENTINEL"},
+             ("PASS", "readable", "none")),
+            ({"state": "valid", "source": "exact-turn-completed", "verdict": "FAIL",
+              "artifact_state": "none", "blocker_reason": "worker-reported",
+              "blocker_detail_excerpt": "RAW_AGENT_SENTINEL"},
+             ("FAIL", "none", "worker-reported")),
+            ({"state": "valid", "source": "exact-turn-completed", "verdict": "BLOCKED",
+              "artifact_state": "none", "blocker_reason": "worker-reported"},
+             ("BLOCKED", "none", "worker-reported")),
+            ({"state": "invalid", "source": "exact-turn-completed", "verdict": "-",
+              "artifact_state": "outside-root", "blocker_reason": "contract-violation",
+              "reason": "RAW_FINAL_MESSAGE_SENTINEL"},
+             ("-", "outside-root", "contract-violation")),
+            (None, ("-", "unchecked", "-")),
+        )
+        for value, expected in cases:
+            with self.subTest(expected=expected):
+                fields = WH.terminal_receipt_fields(value)
+                self.assertEqual(
+                    (fields["handoff_verdict"], fields["artifact_state"],
+                     fields["blocker_reason"]), expected
+                )
+                rendered = "\n".join(f"{key}={item}" for key, item in fields.items())
+                self.assertNotIn("RAW_COMMAND_SENTINEL", rendered)
+                self.assertNotIn("RAW_AGENT_SENTINEL", rendered)
+                self.assertNotIn("RAW_FINAL_MESSAGE_SENTINEL", rendered)
+                self.assertEqual(
+                    set(fields),
+                    {"handoff_state", "handoff_source", "handoff_verdict",
+                     "artifact_state", "artifact_readable", "artifact_path_b64",
+                     "blocker_reason"},
+                )
+
+    def test_pass_receipt_has_no_failure_detail_fields(self):
+        fields = WH.terminal_receipt_fields({
+            "state": "valid", "source": "exact-turn-completed", "verdict": "PASS",
+            "artifact_state": "none", "blocker_reason": "none",
+            "blocker_detail_excerpt": "must-not-render",
+            "failure_diagnostic_excerpt": "must-not-render",
+        })
+        self.assertNotIn("blocker_detail_excerpt", fields)
+        self.assertNotIn("failure_diagnostic_excerpt", fields)
+
+
 if __name__=="__main__": unittest.main()

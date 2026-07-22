@@ -1,65 +1,334 @@
 #!/usr/bin/env python3
+import base64
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
+from unittest import mock
 
-from codex_dispatch_terminal import inspect_terminal_log
+import codex_dispatch_terminal as terminal
+from codex_dispatch_terminal import inspect_terminal_attempt, inspect_terminal_log
 
 
 class CodexDispatchTerminalTest(unittest.TestCase):
-    def write_log(self, root, verdict="BLOCKED", blocker="blocked", sandbox=True,
-                  completed=True):
-        path = Path(root) / "attempt.codex.jsonl"
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.base = Path(self.temp.name)
+        self.worktree = self.base / "repo with spaces"
+        self.worktree.mkdir()
+        subprocess.run(["git", "init", "-q", str(self.worktree)], check=True)
+        self.root = self.base / ".agent_reports"
+        self.root.mkdir()
+        self.old_root = os.environ.get("AGENT_ARTIFACT_ROOT")
+        os.environ["AGENT_ARTIFACT_ROOT"] = str(self.root)
+
+    def tearDown(self):
+        if self.old_root is None:
+            os.environ.pop("AGENT_ARTIFACT_ROOT", None)
+        else:
+            os.environ["AGENT_ARTIFACT_ROOT"] = self.old_root
+        self.temp.cleanup()
+
+    def write_log(
+        self,
+        *,
+        verdict="BLOCKED",
+        blocker="blocked",
+        artifact="-",
+        sandbox=True,
+        completed=True,
+        final_text=None,
+        suffix=None,
+        diagnostic=None,
+        prefix=None,
+    ):
+        path = self.base / f"attempt-{len(list(self.base.glob('attempt-*.jsonl')))}.jsonl"
         rows = [{"type": "turn.started"}]
-        if sandbox:
+        if prefix:
+            rows.extend(prefix)
+        if sandbox or diagnostic is not None:
+            output = diagnostic if diagnostic is not None else (
+                "bwrap: Can't bind mount /bindfile123 on "
+                "/newroot/work/repo/.codex: Unable to mount source on "
+                "destination: No such file or directory\n"
+            )
             rows.append({
                 "type": "item.completed",
                 "item": {
                     "type": "command_execution",
                     "exit_code": 1,
-                    "aggregated_output": (
-                        "bwrap: Can't bind mount /bindfile123 on "
-                        "/newroot/work/repo/.codex: Unable to mount source on "
-                        "destination: No such file or directory\n"
-                    ),
+                    "aggregated_output": output,
                 },
             })
+        text = final_text
+        if text is None:
+            text = f"artifact: {artifact}\nverdict: {verdict}\nblocker: {blocker}"
         rows.append({
             "type": "item.completed",
-            "item": {
-                "type": "agent_message",
-                "text": f"artifact: -\nverdict: {verdict}\nblocker: {blocker}",
-            },
+            "item": {"type": "agent_message", "text": text},
         })
         if completed:
             rows.append({"type": "turn.completed"})
+        if suffix:
+            rows.extend(suffix)
         path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
         return path
 
-    def test_blocked_bwrap_mount_is_typed_sandbox_init(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            result = inspect_terminal_log(self.write_log(tmp))
-        self.assertEqual(result["verdict"], "BLOCKED")
-        self.assertEqual(result["failure_note"], "dead-sandbox-init")
-        self.assertEqual(result["failure_class"], "sandbox-init")
+    def inspect(self, path, *, metadata=None, detail=False):
+        return inspect_terminal_attempt(
+            path,
+            worktree=self.worktree,
+            artifact_root_metadata=metadata or self.root,
+            include_failure_detail=detail,
+        )
 
-    def test_generic_blocked_is_not_mislabeled_sandbox_init(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            result = inspect_terminal_log(self.write_log(tmp, sandbox=False))
-        self.assertEqual(result["failure_note"], "dead-worker-blocked")
-
-    def test_fail_and_pass_have_distinct_outcomes(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            failed = inspect_terminal_log(self.write_log(tmp, verdict="FAIL", sandbox=False))
-            passed = inspect_terminal_log(self.write_log(tmp, verdict="PASS", sandbox=False))
+    def test_compatibility_failure_notes_remain_stable(self):
+        blocked = inspect_terminal_log(self.write_log())
+        generic = inspect_terminal_log(self.write_log(sandbox=False))
+        failed = inspect_terminal_log(
+            self.write_log(verdict="FAIL", blocker="failed", sandbox=False)
+        )
+        passed = inspect_terminal_log(
+            self.write_log(verdict="PASS", blocker="none", sandbox=False)
+        )
+        self.assertEqual(blocked["failure_note"], "dead-sandbox-init")
+        self.assertEqual(generic["failure_note"], "dead-worker-blocked")
         self.assertEqual(failed["failure_note"], "dead-worker-fail")
         self.assertEqual(passed["failure_note"], "")
 
-    def test_handoff_without_turn_completed_is_not_terminal(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            result = inspect_terminal_log(self.write_log(tmp, completed=False))
-        self.assertIsNone(result)
+    def test_valid_verdict_matrix_and_readable_artifact_reference(self):
+        artifact = self.root / "plans" / "final report.md"
+        artifact.parent.mkdir()
+        artifact.write_text("ARTIFACT_BODY_SENTINEL")
+        for verdict, blocker, reason in (
+            ("PASS", "none", "none"),
+            ("FAIL", "none", "none"),
+            ("FAIL", "private failure", "worker-reported"),
+            ("BLOCKED", "none", "none"),
+            ("BLOCKED", "private blocker", "worker-reported"),
+        ):
+            with self.subTest(verdict=verdict, blocker=blocker):
+                result = self.inspect(
+                    self.write_log(
+                        verdict=verdict,
+                        blocker=blocker,
+                        artifact=artifact,
+                        sandbox=False,
+                    )
+                )
+                self.assertEqual(result["state"], "valid")
+                self.assertEqual(result["artifact_state"], "readable")
+                self.assertEqual(result["blocker_reason"], reason)
+                encoded = result["artifact_path_b64"]
+                decoded = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
+                self.assertEqual(decoded.decode(), str(artifact))
+                self.assertNotIn("ARTIFACT_BODY_SENTINEL", repr(result))
+
+    def test_absent_malformed_decoy_suffix_and_pass_blocker(self):
+        absent = self.inspect(self.write_log(completed=False, sandbox=False))
+        self.assertEqual((absent["exit_code"], absent["state"]), (2, "absent"))
+        malformed = self.inspect(
+            self.write_log(final_text="RAW_AGENT_SENTINEL\nartifact: -\nverdict: FAIL\nblocker: x")
+        )
+        self.assertEqual(malformed["reason"], "malformed-handoff")
+        self.assertNotIn("RAW_AGENT_SENTINEL", repr(malformed))
+        decoy = {
+            "type": "item.completed",
+            "item": {"type": "agent_message", "text": "artifact: -\nverdict: PASS\nblocker: none"},
+        }
+        later = self.inspect(
+            self.write_log(
+                verdict="FAIL", blocker="real", sandbox=False, prefix=[decoy],
+                suffix=[{"type": "item.completed", "item": {"type": "agent_message", "text": "AFTER"}}],
+            )
+        )
+        self.assertEqual(later["verdict"], "FAIL")
+        bad_pass = self.inspect(
+            self.write_log(verdict="PASS", blocker="not-none", sandbox=False)
+        )
+        self.assertEqual(bad_pass["reason"], "pass-blocker-not-none")
+        interposed = self.write_log(verdict="PASS", blocker="none", sandbox=False)
+        rows = [json.loads(line) for line in interposed.read_text().splitlines()]
+        rows.insert(-1, {"type": "item.completed", "item": {
+            "type": "command_execution", "exit_code": 0,
+            "aggregated_output": "INTERPOSED_RAW_SENTINEL"}})
+        interposed.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
+        rejected = self.inspect(interposed)
+        self.assertEqual(rejected["reason"], "missing-final-agent-message")
+        self.assertNotIn("INTERPOSED_RAW_SENTINEL", repr(rejected))
+
+    def test_artifact_missing_and_symlink_escape_fail_closed(self):
+        missing = self.inspect(
+            self.write_log(
+                verdict="FAIL", blocker="x", artifact=self.root / "missing.md", sandbox=False
+            )
+        )
+        self.assertEqual((missing["exit_code"], missing["artifact_state"]), (3, "missing"))
+        outside = self.base / "outside.md"
+        outside.write_text("RAW_OUTSIDE_SENTINEL")
+        link = self.root / "escape.md"
+        link.symlink_to(outside)
+        escaped = self.inspect(
+            self.write_log(verdict="FAIL", blocker="x", artifact=link, sandbox=False)
+        )
+        self.assertEqual(escaped["artifact_state"], "outside-root")
+        self.assertNotIn("RAW_OUTSIDE_SENTINEL", repr(escaped))
+
+    def test_failure_detail_is_opt_in_escaped_independently_bounded_and_never_pass(self):
+        blocker = "B\t" + "한" * 400
+        diagnostic = "D\n\x01" + "界" * 400
+        path = self.write_log(
+            verdict="FAIL", blocker=blocker, sandbox=False, diagnostic=diagnostic
+        )
+        default = self.inspect(path)
+        self.assertNotIn("excerpt", repr(default))
+        detailed = self.inspect(path, detail=True)
+        for key, truncated_key in (
+            ("blocker_detail_excerpt", "blocker_detail_truncated"),
+            ("failure_diagnostic_excerpt", "failure_diagnostic_truncated"),
+        ):
+            self.assertLessEqual(len(detailed[key].encode("utf-8")), 512)
+            self.assertNotIn("\n", detailed[key])
+            self.assertNotIn("\t", detailed[key])
+            self.assertEqual(detailed[truncated_key], 1)
+        passed = self.inspect(
+            self.write_log(verdict="PASS", blocker="none", sandbox=False), detail=True
+        )
+        self.assertNotIn("excerpt", repr(passed))
+
+    def test_agent_messages_never_source_failure_diagnostics(self):
+        result = self.inspect(
+            self.write_log(
+                verdict="FAIL",
+                blocker="RAW_AGENT_DIAGNOSTIC_SENTINEL",
+                sandbox=False,
+            ),
+            detail=True,
+        )
+        self.assertNotIn("failure_diagnostic_excerpt", result)
+
+    def test_every_legal_wire_tuple_and_fallback_record_are_closed(self):
+        for row in terminal._LEGAL_WIRE:
+            with self.subTest(row=row):
+                result = dict(
+                    exit_code=row[0], state=row[1], source=row[2], verdict=row[3],
+                    artifact_state=row[4], blocker_reason=row[5], reason="fixture",
+                )
+                record = terminal.wire_record(result)
+                self.assertEqual(len(record.rstrip("\n").split("\t")), 6)
+                self.assertNotIn(str(self.root), record)
+        illegal = dict(
+            exit_code=0, state="valid", source="none", verdict="PASS",
+            artifact_state="unsafe-root", blocker_reason="worker-reported", reason="bad",
+        )
+        self.assertEqual(
+            terminal.wire_record(illegal),
+            "codex-terminal-v1\terror\truntime-error\t-\tunchecked\tcontract-violation\n",
+        )
+
+    def test_cli_exit_and_single_record_matrix(self):
+        script = Path(terminal.__file__)
+        valid = self.write_log(verdict="PASS", blocker="none", sandbox=False)
+        absent = self.write_log(completed=False, sandbox=False)
+        invalid = self.write_log(final_text="bad", sandbox=False)
+        for expected, path in ((0, valid), (2, absent), (3, invalid)):
+            result = subprocess.run(
+                [sys.executable, str(script), "--worktree", str(self.worktree),
+                 "--artifact-root-metadata", str(self.root), str(path)],
+                text=True, capture_output=True,
+                env={**os.environ, "AGENT_ARTIFACT_ROOT": str(self.root)},
+            )
+            self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+            self.assertEqual(len(result.stdout.splitlines()), 1)
+            self.assertEqual(len(result.stdout.rstrip().split("\t")), 6)
+        error = subprocess.run(
+            [sys.executable, str(script), "--worktree", str(self.worktree),
+             "--artifact-root-metadata", str(self.root), str(valid)],
+            text=True, capture_output=True,
+            env={**os.environ, "AGENT_ARTIFACT_ROOT": "relative-root"},
+        )
+        self.assertEqual(error.returncode, 4)
+        self.assertIn("\tunsafe-root\t", error.stdout)
+        misuse = subprocess.run([sys.executable, str(script)], text=True, capture_output=True)
+        self.assertEqual(misuse.returncode, 64)
+        self.assertEqual(misuse.stdout, "")
+
+    def test_unsafe_root_variants_share_one_public_outcome(self):
+        log = self.write_log(verdict="PASS", blocker="none", sandbox=False)
+        variants = []
+        missing = self.base / "missing-root"
+        non_directory = self.base / "root-file"
+        non_directory.write_text("x")
+        real = self.base / "real-root"
+        real.mkdir()
+        symlink = self.base / "root-link"
+        symlink.symlink_to(real, target_is_directory=True)
+        variants.extend(("relative-root", missing, non_directory, self.base, symlink))
+        for value in variants:
+            with self.subTest(root=value), mock.patch.dict(
+                os.environ, {"AGENT_ARTIFACT_ROOT": str(value)}, clear=False
+            ):
+                result = self.inspect(log, metadata=value)
+                self.assertEqual(
+                    (result["exit_code"], result["state"], result["source"],
+                     result["verdict"], result["artifact_state"], result["blocker_reason"]),
+                    (4, "error", "runtime-error", "-", "unsafe-root", "contract-violation"),
+                )
+        mismatch = self.inspect(log, metadata=self.base / "other-root")
+        self.assertEqual(mismatch["artifact_state"], "unsafe-root")
+
+    def test_control_worktree_and_oversized_tail_fail_without_raw_leakage(self):
+        path = self.write_log(verdict="PASS", blocker="none", sandbox=False)
+        controlled = inspect_terminal_attempt(
+            path,
+            worktree=str(self.worktree) + "\nRAW_PATH_SENTINEL",
+            artifact_root_metadata=self.root,
+        )
+        self.assertEqual(controlled["artifact_state"], "unsafe-root")
+        self.assertNotIn("RAW_PATH_SENTINEL", repr(controlled))
+        with path.open("r+", encoding="utf-8") as handle:
+            original = handle.read()
+            handle.seek(0)
+            handle.write("X" * (terminal._MAX_TAIL_BYTES + 100) + "\n" + original)
+        self.assertEqual(self.inspect(path)["verdict"], "PASS")
+
+    def test_linked_worktree_shadow_root_is_fixed_unsafe_root(self):
+        primary = self.base / "primary"
+        linked = self.base / "linked"
+        primary.mkdir()
+        subprocess.run(["git", "init", "-q", str(primary)], check=True)
+        subprocess.run(["git", "-C", str(primary), "config", "user.email", "fixture@example.com"], check=True)
+        subprocess.run(["git", "-C", str(primary), "config", "user.name", "Fixture"], check=True)
+        (primary / "x").write_text("x")
+        subprocess.run(["git", "-C", str(primary), "add", "x"], check=True)
+        subprocess.run(["git", "-C", str(primary), "commit", "-qm", "init"], check=True)
+        (primary / ".agent_reports").mkdir()
+        subprocess.run(
+            ["git", "-C", str(primary), "worktree", "add", "-q", "-b", "linked-fixture", str(linked)],
+            check=True,
+        )
+        shadow = linked / ".agent_reports"
+        shadow.mkdir()
+        log = self.write_log(verdict="PASS", blocker="none", sandbox=False)
+        with mock.patch.dict(os.environ, {"AGENT_ARTIFACT_ROOT": str(shadow)}, clear=False):
+            result = inspect_terminal_attempt(
+                log, worktree=linked, artifact_root_metadata=shadow
+            )
+        self.assertEqual(
+            (result["exit_code"], result["state"], result["artifact_state"]),
+            (4, "error", "unsafe-root"),
+        )
+        with mock.patch.dict(os.environ, {"AGENT_ARTIFACT_ROOT": str(primary)}, clear=False):
+            over_broad = inspect_terminal_attempt(
+                log, worktree=linked, artifact_root_metadata=primary
+            )
+        self.assertEqual(
+            (over_broad["exit_code"], over_broad["state"], over_broad["artifact_state"]),
+            (4, "error", "unsafe-root"),
+        )
 
 
 if __name__ == "__main__":

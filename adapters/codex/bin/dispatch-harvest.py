@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import (DispatchContractError, close_attempt_row,
                                parse_registry_metadata, reconcile_local_registry,
                                validate_attempt_metadata)  # noqa: E402
+from codex_dispatch_terminal import inspect_terminal_attempt  # noqa: E402
 _route_spec = importlib.util.spec_from_file_location(
     "capability_route", ROOT / "utilities" / "capability-route.py"
 )
@@ -28,11 +29,13 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--jobs")
     p.add_argument("--reconcile-local", help="legacy cycle-local registry to reconcile first")
     p.add_argument("--slug")
+    p.add_argument("--attempt-id")
     p.add_argument("--worktree")
     p.add_argument("--status", choices=("open", "done", "all"), default="open")
     p.add_argument("--mark-done", action="store_true")
     p.add_argument("--completion", help="hash-bound completion marker for routed rows")
     p.add_argument("--keep-home", action="store_true")
+    p.add_argument("--failure-detail", action="store_true")
     return p
 
 
@@ -43,12 +46,14 @@ def emit_header(args: argparse.Namespace, jobs: Path, matched: int, marked_done:
     print(f"job_registry={jobs}")
     print(f"registry_lock={jobs}.lock")
     print(f"selector_slug={args.slug or '*'}")
+    print(f"selector_attempt_id={args.attempt_id or '*'}")
     print(f"selector_worktree={args.worktree or '*'}")
     print(f"status_filter={args.status}")
     print(f"matched={matched}")
     print(f"marked_done={marked_done}")
     print(f"malformed={malformed}")
     print(f"reconciled={getattr(args, 'reconciled', 0)}")
+    print(f"failure_detail={int(args.failure_detail)}")
     print("merge_action=unsupported")
     print("cleanup_action=guarded-separate-step")
     print("cleanup_command=adapters/codex/bin/preflight.sh worktree-cleanup --check --worktree <path>")
@@ -63,6 +68,10 @@ def matches(args: argparse.Namespace, fields: list[str]) -> bool:
         return False
     if args.slug and slug != args.slug:
         return False
+    if args.attempt_id:
+        metadata = parse_registry_metadata(fields[5])
+        if metadata.get("attempt_id") != args.attempt_id:
+            return False
     if args.worktree and worktree != args.worktree:
         return False
     return True
@@ -117,7 +126,7 @@ def _complete_exact_routed_attempt(jobs: Path, metadata: dict[str, str], complet
 
 def main(argv: list[str]) -> int:
     args = parser().parse_args(argv[1:])
-    if args.mark_done and not (args.slug or args.worktree):
+    if args.mark_done and not (args.slug or args.attempt_id or args.worktree):
         print("check=failed")
         print("reason=selector-required")
         print("hint=pass --slug or --worktree before --mark-done")
@@ -147,6 +156,27 @@ def main(argv: list[str]) -> int:
             malformed += 1
         elif matches(args, fields):
             rows.append(fields)
+
+    terminal_results: dict[str, dict[str, object]] = {}
+    for fields in rows:
+        metadata = parse_registry_metadata(fields[5])
+        attempt_id = metadata.get("attempt_id", f"row-{len(terminal_results)}")
+        if metadata.get("harness") not in (None, "", "codex"):
+            continue
+        result = inspect_terminal_attempt(
+            metadata.get("log_file"),
+            worktree=fields[3],
+            artifact_root_metadata=metadata.get("artifact_root"),
+            include_failure_detail=args.failure_detail,
+        )
+        terminal_results[attempt_id] = result
+        if args.failure_detail and not (
+            result.get("state") == "valid"
+            and result.get("verdict") in {"FAIL", "BLOCKED"}
+        ):
+            print("check=failed")
+            print("reason=failure-detail-requires-terminal-failure")
+            return 64
 
     marked_done = 0
     if args.mark_done:
@@ -192,11 +222,29 @@ def main(argv: list[str]) -> int:
     emit_header(args, jobs, len(rows), marked_done, malformed)
     for fields in rows:
         _, state, repo, worktree, slug, pipe = fields
+        metadata = parse_registry_metadata(pipe)
         print(f"job_status={state}")
         print(f"job_repo={repo}")
         print(f"job_worktree={worktree}")
         print(f"job_slug={slug}")
         print(f"job_pipe={pipe}")
+        terminal = terminal_results.get(metadata.get("attempt_id", ""))
+        if terminal is not None:
+            print(f"handoff_state={terminal['state']}")
+            print(f"handoff_source={terminal['source']}")
+            print(f"terminal_verdict={terminal['verdict']}")
+            print(f"artifact_state={terminal['artifact_state']}")
+            print(f"artifact_readable={1 if terminal['artifact_state'] == 'readable' else 0}")
+            print(f"artifact_path_b64={terminal.get('artifact_path_b64', '-')}")
+            print(f"blocker_reason={terminal['blocker_reason']}")
+            for key in (
+                "blocker_detail_excerpt",
+                "blocker_detail_truncated",
+                "failure_diagnostic_excerpt",
+                "failure_diagnostic_truncated",
+            ):
+                if key in terminal:
+                    print(f"{key}={terminal[key]}")
     return 0
 
 

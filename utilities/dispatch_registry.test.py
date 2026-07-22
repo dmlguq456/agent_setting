@@ -51,15 +51,18 @@ class RegistryTest(unittest.TestCase):
    {"type":"turn.completed"},
   ]
   log.write_text("\n".join(json.dumps(event) for event in events)+"\n")
+  artifact_root=self.base/".agent_reports";artifact_root.mkdir(exist_ok=True)
   with self.jobs.open("a") as out:
-   out.write(f"2026-07-16T00:00:03Z\topen\t/r\t/w\tsandbox\t"
+   out.write(f"2026-07-16T00:00:03Z\topen\t/r\t{self.base}\tsandbox\t"
               f"route_id={route},route_node={node},attempt_id={attempt},"
-              f"pid=437,pid_start=1,pid_scope=namespace-local,log_file={log}\n")
+              f"pid=437,pid_start=1,pid_scope=namespace-local,harness=codex,"
+              f"artifact_root={artifact_root},log_file={log}\n")
   currentize_registry(self.jobs)
   liveness=subprocess.run(
    [sys.executable,str(ROOT/"adapters/codex/bin/dispatch-liveness.py"),str(self.jobs)],
    capture_output=True,text=True,
-   env={**os.environ,"AGENT_HOME":str(self.base),"CODEX_SESSIONS":str(self.base/"missing")},
+   env={**os.environ,"AGENT_HOME":str(self.base),"AGENT_ARTIFACT_ROOT":str(artifact_root),
+        "CODEX_SESSIONS":str(self.base/"missing")},
   )
   self.assertEqual(liveness.returncode,3,liveness.stdout+liveness.stderr)
   self.assertIn("EXITED   sandbox",liveness.stdout)
@@ -70,6 +73,29 @@ class RegistryTest(unittest.TestCase):
   self.assertEqual(record["closed"],1)
   self.assertEqual(record["decisions"][0]["category"],"terminal-handoff")
   self.assertIn("note=dead-sandbox-init",self.jobs.read_text())
+ def test_codex_terminal_pass_is_completed_and_stays_open(self):
+  attempt="att-pass-terminal";log=self.base/"pass.jsonl";artifact_root=self.base/".agent_reports";artifact_root.mkdir(exist_ok=True)
+  events=[
+   {"type":"item.completed","item":{"type":"command_execution","exit_code":0,"aggregated_output":"RAW_COMMAND_SENTINEL"}},
+   {"type":"item.completed","item":{"type":"agent_message","text":"artifact: -\nverdict: PASS\nblocker: none"}},
+   {"type":"turn.completed"},
+  ]
+  log.write_text("\n".join(json.dumps(event) for event in events)+"\n")
+  with self.jobs.open("a") as out:
+   out.write(f"2026-07-16T00:00:04Z\topen\t/r\t{self.base}\tpass-terminal\t"
+             f"route_id=rt-pass,route_node=test,attempt_id={attempt},pid=99999996,pid_start=1,"
+             f"harness=codex,artifact_root={artifact_root},log_file={log}\n")
+  currentize_registry(self.jobs)
+  result=subprocess.run(
+   [sys.executable,str(ROOT/"adapters/codex/bin/dispatch-liveness.py"),str(self.jobs)],
+   capture_output=True,text=True,
+   env={**os.environ,"AGENT_HOME":str(self.base),"AGENT_ARTIFACT_ROOT":str(artifact_root),
+        "CODEX_SESSIONS":str(self.base/"missing")},
+  )
+  self.assertEqual(result.returncode,3,result.stdout+result.stderr)
+  self.assertIn("COMPLETED pass-terminal - exact turn.completed PASS; harvest required",result.stdout)
+  self.assertNotIn("RAW_COMMAND_SENTINEL",result.stdout+result.stderr)
+  self.assertIn(f"\topen\t/r\t{self.base}\tpass-terminal\t",self.jobs.read_text())
  def test_codex_preflight_projects_current_and_dry_reconcile(self):
   pre=ROOT/"adapters/codex/bin/preflight.sh"
   current=subprocess.run([str(pre),"dispatch-current","--jobs",str(self.jobs),"--route","r1","--agent-home",str(self.base)],capture_output=True,text=True,env={**os.environ,"AGENT_HOME":str(ROOT)})
@@ -254,6 +280,52 @@ class OrphanReconcileTest(unittest.TestCase):
    self.assertIn("\topen\t/r\t/w\tchild\t",text, "a live child must never be closed by the orphan repair")
   finally:
    live.kill();live.wait()
+ def test_codex_terminal_post_exit_orphan_reconcile(self):
+  self.mark("plan")
+  artifact_root=self.base/".agent_reports";artifact_root.mkdir()
+  log=self.base/"owner.codex.jsonl"
+  raw_sentinel="RAW_TERMINAL_ORPHAN_SENTINEL"
+  events=[
+   {"type":"item.completed","item":{"type":"command_execution","exit_code":0,"aggregated_output":raw_sentinel}},
+   {"type":"item.completed","item":{"type":"agent_message","text":"artifact: -\nverdict: PASS\nblocker: none"}},
+   {"type":"turn.completed"},
+  ]
+  log.write_text("\n".join(json.dumps(event) for event in events)+"\n")
+  owner_attempt="att-owner-terminal-pass"
+  sibling=(f"2026-07-16T00:00:01Z\topen\t/r\t{self.base}\tchild\t"
+           f"route_id={self.route_id},route_file={self.route_file},route_node=execute,"
+           "attempt_id=att-child-terminal-pass,parent=owner,pid=99999989,pid_start=1")
+  owner=(f"2026-07-16T00:00:00Z\topen\t/r\t{self.base}\towner\t"
+         f"route_id={self.route_id},route_file={self.route_file},worker_type=owner,"
+         f"attempt_id={owner_attempt},pid=99999990,pid_start=1,harness=codex,"
+         f"artifact_root={artifact_root},log_file={log}")
+  self.jobs.write_text(owner+"\n"+sibling+"\n")
+  currentize_registry(self.jobs)
+  liveness=subprocess.run(
+   [sys.executable,str(ROOT/"adapters/codex/bin/dispatch-liveness.py"),str(self.jobs)],
+   capture_output=True,text=True,
+   env={**os.environ,"AGENT_HOME":str(self.home),"AGENT_ARTIFACT_ROOT":str(artifact_root),
+        "CODEX_SESSIONS":str(self.base/"missing")},
+  )
+  self.assertEqual(liveness.returncode,3,liveness.stdout+liveness.stderr)
+  self.assertIn("ORPHANED owner",liveness.stdout)
+  self.assertNotIn("COMPLETED owner",liveness.stdout)
+  self.assertNotIn(raw_sentinel,liveness.stdout+liveness.stderr)
+  before_lines=self.jobs.read_text().splitlines()
+  sibling_before=next(line for line in before_lines if "\tchild\t" in line)
+  applied=self.invoke("reconcile","--attempt",owner_attempt,"--apply")
+  record=json.loads(applied.stdout)
+  self.assertEqual(record["closed"],1)
+  self.assertEqual(record["decisions"][0]["category"],"orphan")
+  self.assertEqual(record["decisions"][0]["proposed_note"],"dead-parent-orphaned")
+  self.assertNotIn(raw_sentinel,applied.stdout+applied.stderr)
+  after=self.jobs.read_text()
+  self.assertIn("\tdone\t/r\t"+str(self.base)+"\towner\t",after)
+  self.assertIn("note=dead-parent-orphaned",after)
+  self.assertEqual(next(line for line in after.splitlines() if "\tchild\t" in line),sibling_before)
+  again=self.invoke("reconcile","--attempt",owner_attempt,"--apply")
+  self.assertEqual(json.loads(again.stdout)["closed"],0)
+  self.assertEqual(self.jobs.read_text(),after)
  def test_real_owner_without_route_derives_from_open_child_and_surfaces_boundary(self):
   self.mark("plan")
   rows=[

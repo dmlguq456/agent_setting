@@ -47,7 +47,7 @@ from worker_bootstrap import (  # noqa: E402
     render_worker_bootstrap,
     resolve_worker_type,
 )
-from codex_dispatch_terminal import inspect_terminal_log  # noqa: E402
+from codex_dispatch_terminal import inspect_terminal_attempt  # noqa: E402
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 # Verification rigor is derived from intensity — CONVENTIONS §1.1 mapping table (SoT).
 # `--qa` is no longer a user-facing axis; optional, derived from --intensity when omitted.
@@ -249,6 +249,27 @@ def fail(reason: str, code: int, **fields: str) -> int:
     for key, value in fields.items():
         print(f"{key}={value}")
     return code
+
+
+def terminal_receipt_fields(terminal: dict | None) -> dict[str, str]:
+    """Return only bounded typed terminal metadata for the launch receipt."""
+    value = terminal or {
+        "state": "absent",
+        "source": "none",
+        "verdict": "-",
+        "artifact_state": "unchecked",
+        "blocker_reason": "-",
+    }
+    artifact_state = str(value["artifact_state"])
+    return {
+        "handoff_state": str(value["state"]),
+        "handoff_source": str(value["source"]),
+        "handoff_verdict": str(value["verdict"]),
+        "artifact_state": artifact_state,
+        "artifact_readable": "1" if artifact_state == "readable" else "0",
+        "artifact_path_b64": str(value.get("artifact_path_b64", "-")),
+        "blocker_reason": str(value["blocker_reason"]),
+    }
 
 
 def task_prompt(args: argparse.Namespace) -> tuple[str, str]:
@@ -1298,8 +1319,15 @@ def main(argv: list[str]) -> int:
         except DispatchContractError as e:
             return fail(e.reason, 73, detail=e.detail, child_spawned="0")
     prompt_path = log_dir / f"{args.slug}.codex.prompt.txt"
-    log_name = (f"{args.slug}.{args.attempt_id}.codex.jsonl"
-                if args.route_id and args.attempt_id else f"{args.slug}.codex.jsonl")
+    # Every registered attempt gets a distinct transcript.  Reusing the legacy
+    # slug-only path lets a later retry append another turn to the same JSONL,
+    # so harvesting the earlier row can accidentally select the newer verdict.
+    # PID-less legacy readers still retain their slug-only fallback.
+    log_name = (
+        f"{args.slug}.{args.attempt_id}.codex.jsonl"
+        if args.attempt_id
+        else f"{args.slug}.codex.jsonl"
+    )
     log_path = log_dir / log_name
     args.log_path = log_path
     command = shell_command(args, prompt_path, log_path)
@@ -1437,9 +1465,20 @@ def main(argv: list[str]) -> int:
                     jobs, args.slug, args.worktree, outcome.failure, "", args.attempt_id
                 )
             else:
-                terminal = inspect_terminal_log(log_path)
-                args.terminal_verdict = terminal.get("verdict") if terminal else None
-                terminal_note = terminal.get("failure_note") if terminal else ""
+                terminal = inspect_terminal_attempt(
+                    log_path,
+                    worktree=args.worktree,
+                    artifact_root_metadata=args.artifact_root,
+                )
+                args.terminal_inspection = terminal
+                args.terminal_verdict = (
+                    terminal.get("verdict") if terminal.get("state") == "valid" else None
+                )
+                terminal_note = (
+                    terminal.get("failure_note", "")
+                    if terminal.get("state") == "valid"
+                    else ""
+                )
                 if terminal_note:
                     close_attempt_row(
                         jobs,
@@ -1515,6 +1554,10 @@ def main(argv: list[str]) -> int:
     print(f"worker_exit={getattr(args, 'worker_exit', '-')}")
     print(f"worker_failure={getattr(args, 'worker_failure', None) or '-'}")
     print(f"terminal_verdict={getattr(args, 'terminal_verdict', None) or '-'}")
+    for key, value in terminal_receipt_fields(
+        getattr(args, "terminal_inspection", None)
+    ).items():
+        print(f"{key}={value}")
     print(f"require_hook_trust={1 if args.require_hook_trust else 0}")
     print(f"nested_headless_network={1 if args.nested_headless_network else 0}")
     print(f"nested_codex_home={args.nested_codex_home_path or '-'}")
