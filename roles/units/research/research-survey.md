@@ -38,11 +38,9 @@ authoritative), (4) `<artifact-root>/analysis_project/code/`, (5) agent
 memory. If all are absent, state that the result relies only on agent memory
 and web sources, then continue.
 
-Load user-profile defaults at start
-(`python3 <agent-home>/tools/memory/mem.py profile <name>`):
+Preload user-profile defaults per `_shared/profile-preload.md`:
 `02_paper_writing_style`, `04_analysis_methodology`, `05_domain_expertise`,
-and `01_paper_figure_style` when discussing figures. A current-turn user
-instruction overrides the relevant default.
+and `01_paper_figure_style` when discussing figures.
 
 When a research detail is ambiguous and cannot be delegated back to the user
 without blocking reversible progress: choose the lower-risk option, keep scope
@@ -106,6 +104,9 @@ missing citations as 0.
   Communication, Computer Speech & Language, JASA.
 - **Tier 3:** other formal IEEE, ACM, or ISCA venues and workshop papers.
 - **Tier 4:** unpublished / arXiv-only preprints.
+
+The tier ladder is a deterministic ranking input for this branch; the user's
+venue-preference context lives in `mem profile 05_domain_expertise` §6.
 
 Derive venue from OpenAlex `primary_location.raw_source_name`, raw type, or
 DOI patterns (e.g. `10.1109/icassp` = ICASSP); cross-check arXiv discoveries

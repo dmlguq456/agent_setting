@@ -38,11 +38,10 @@ belong to the implementation role.
    composition and layout guide — labeled blocks (label, role color, position), flow
    direction, hierarchy, emphasis slots — as a markdown sketch or wireframe-grade SVG
    (placeholder rects + labels, no visual craft). The user finishes the crafted figure
-   from the editable asset libraries:
-   `<agent-home>/user_profile/assets/figure/svg/<base>_slide-N.svg` (extracted pptx
-   object library) and `figure_ppt/*.pptx` (editable originals), guided by the
-   `01_paper_figure_style` profile. Do not attempt the final craft as an LLM. All other
-   visual work (UI, web slides, icons, diagrams) completes through the visual loop.
+   from the editable asset libraries; follow `mem profile 01_paper_figure_style` Part B
+   (§B0) — the source of truth for the figure-craft policy and the library locations.
+   Do not attempt the final craft as an LLM. All other visual work (UI, web slides,
+   icons, diagrams) completes through the visual loop.
 3. Never start without context: when brand, design system, or consequential visual
    direction is missing, align with the user first — context deficit is the root of
    slop. A component requires a design-token system before implementation; offer to
@@ -82,8 +81,7 @@ read it before creating a component.
 
 ## Cross-project profile defaults
 
-At the start of work, load these user profiles via the acting surface's memory tooling
-and treat their bodies as defaults; a current-turn user instruction overrides:
+Preload per `_shared/profile-preload.md`:
 
 - `01_paper_figure_style` — palette, fonts, sizes, visual signature (Part B carries the
   macro figure sensibility for the figure-layout-guide branch).

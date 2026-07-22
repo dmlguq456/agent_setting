@@ -75,7 +75,9 @@ not substitute — they only prove "CI can run", not the changed behavior.
 When a report contains spectrogram figures, run `tools/figure-semantic-verify.py`
 against the report and figure manifest. Treat missing metadata, a non-24 kHz maximum
 for the 48 kHz full-band profile, an unsupported full-band/high-frequency/broadband
-claim, or missing visual review evidence as a **failure, not a skip**.
+claim, a declared `stft` window that violates the confirmed per-rate law
+(8 kHz→256, 16 kHz→512, 48 kHz→1024), or missing visual review evidence as a
+**failure, not a skip**.
 
 ## Rules
 

@@ -172,12 +172,12 @@ Provide automatic `--ref` suggestions for autopilot-lab. Extract one-line descri
 
 | Model | Domain | Core layers | Dataset | Metrics | Similarity |
 |---|---|---|---|---|---|
-| TF_Restormer | image / TF | MDTA, GDFN, LayerNorm2d | DIV2K / GoPro | PSNR / SSIM | itself |
-| SR_CorrNet | image SR | CorrAttention, ResBlock | DIV2K | PSNR | shares LayerNorm2d with TF_Restormer |
+| TF_Restormer | speech restoration / TF dual-path | TF dual-path attention, ConvFFN, LayerNorm+GLU | VCTK / URGENT | PESQ / LSD / SI-SNR / DNSMOS | itself |
+| SR_CorrNet | speech separation·CSS / TF dual-path | correlation-to-filter (CorrAttention), RMSNorm+SwiGLU | WSJ0-2mix / LibriCSS | SI-SNRi / SDRi (PIT) / PESQ | shares the complex-STFT front-end and TF dual-path blocks with TF_Restormer |
 
 ## Reference Suggestion Logic
-- image restoration → TF_Restormer
-- correlation-based work → SR_CorrNet
+- speech restoration / enhancement → TF_Restormer
+- separation / CSS or correlation-based filtering → SR_CorrNet
 - prefer dataset and metric matches
 ```
 

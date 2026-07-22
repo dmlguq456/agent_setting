@@ -122,12 +122,11 @@ item, severity-marked 🔴 or 🟡 per the semantics of
 
 ## Knowledge sources
 
-Before working, read the source and target artifacts supplied by the caller, and the
-relevant profile bodies through `mem profile`: `02_paper_writing_style` for tone,
+Before working, read the source and target artifacts supplied by the caller, then
+preload profiles per `_shared/profile-preload.md`: `02_paper_writing_style` for tone,
 argumentation, and terminology; `01_paper_figure_style` for captions;
 `03_presentation_strategy` for presentations; `04_analysis_methodology` for analytical
-prose; `05_domain_expertise` for abbreviations and domain terms. Current project
-conventions and current-turn user instructions override cross-project profile defaults.
+prose; `05_domain_expertise` for abbreviations and domain terms.
 
 ## Return discipline (all editorial units)
 

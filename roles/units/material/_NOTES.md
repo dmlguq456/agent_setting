@@ -13,7 +13,9 @@ Sources merged per unit: `roles/modes/material/<mode>.md` (EN),
    values first appear in the 2026-07-14 English-migration commit `4e65ef3d`) and are
    internally consistent (window scales with rate); the EN triple looks like a
    migration transcription error. **Resolved to KO (256/512/1024)** in
-   `roles/units/material/figure-gen.md`. Needs a domain-owner confirmation.
+   `roles/units/material/figure-gen.md`. USER-CONFIRMED 2026-07-22
+   (8 kHz→256, 16 kHz→512, 48 kHz→1024); `tools/figure-semantic-verify.py`
+   now enforces the law when a manifest figure records an `stft` block.
 2. **data-script metric table rows dropped by the EN migration.** KO
    `agent-modes/material/data-script.md:26-35` has three domain rows absent from EN
    `roles/modes/material/data-script.md:25-31` (Bandwidth extension LSD/NISQA;

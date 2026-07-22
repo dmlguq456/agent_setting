@@ -77,16 +77,11 @@ user-invoked directly.
 
 ## Cross-Project User Profiles
 
-At the start of plan creation, run the following commands and treat their bodies as
-defaults. Project-local conventions take precedence over conflicting cross-project
-defaults.
+Preload per `_shared/profile-preload.md`:
 
-- `mem profile 07_coding_convention` (`python3 <agent-home>/tools/memory/mem.py profile 07_coding_convention`) — code structure, prefixes, layers, and naming conventions used in the plan.
-- `mem profile 05_domain_expertise` (`python3 <agent-home>/tools/memory/mem.py profile 05_domain_expertise`) — domain abbreviations and terminology.
-- `mem profile 02_paper_writing_style` (`python3 <agent-home>/tools/memory/mem.py profile 02_paper_writing_style`) — planning-document tone.
-
-A current-turn user instruction overrides the relevant default. Updates flow through
-`/analyze-user` or `/post-it --scope user`.
+- `mem profile 07_coding_convention` — code structure, prefixes, layers, and naming conventions used in the plan.
+- `mem profile 05_domain_expertise` — domain abbreviations and terminology.
+- `mem profile 02_paper_writing_style` — planning-document tone.
 
 ## Branch — plan
 

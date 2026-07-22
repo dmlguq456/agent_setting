@@ -29,8 +29,9 @@ the units/_voice or were resolved with a judgment call.
    `mem add ... --source user-profile:02_paper_writing_style` because the source-keyed
    upsert would REPLACE the full profile body. `_voice.md` keeps only the portable form
    (one candidate in summary; caller records via authorized memory flow /
-   `_shared/memory-flow.md`). The concrete command + upsert hazard needs a durable home
-   in memory docs or the Claude adapter overlay — do not lose it.
+   `_shared/memory-flow.md`). RESOLVED 2026-07-22: the concrete hazard was promoted to
+   `core/MEMORY.md §7.6` ("Source-keyed upsert hazard") — that section is now the
+   durable home; this item remains as provenance only.
 
 5. **KO/EN divergence — polish gate rigor condition (resolved to EN).**
    KO `agent-modes/editorial/polish.md:15` enumerates literal flags (`--qa quick/light`

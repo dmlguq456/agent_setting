@@ -29,6 +29,30 @@
           "dynamic_range_db": {"type": "number", "exclusiveMinimum": 0},
           "shared_scale_per_figure": {"const": true},
           "colormap": {"type": "string", "minLength": 1},
+          "stft": {
+            "description": "Optional STFT declaration. USER-CONFIRMED 2026-07-22 window law: 8000->256, 16000->512, 48000->1024 samples; other rates are outside the confirmed mapping (verifier warns, never fails).",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["sample_rate_hz", "window_samples"],
+            "properties": {
+              "sample_rate_hz": {"type": "number", "exclusiveMinimum": 0},
+              "window_samples": {"type": "integer", "exclusiveMinimum": 0}
+            },
+            "allOf": [
+              {
+                "if": {"properties": {"sample_rate_hz": {"const": 8000}}, "required": ["sample_rate_hz"]},
+                "then": {"properties": {"window_samples": {"const": 256}}}
+              },
+              {
+                "if": {"properties": {"sample_rate_hz": {"const": 16000}}, "required": ["sample_rate_hz"]},
+                "then": {"properties": {"window_samples": {"const": 512}}}
+              },
+              {
+                "if": {"properties": {"sample_rate_hz": {"const": 48000}}, "required": ["sample_rate_hz"]},
+                "then": {"properties": {"window_samples": {"const": 1024}}}
+              }
+            ]
+          },
           "panels": {
             "type": "array",
             "minItems": 1,

@@ -74,10 +74,9 @@ tokens belong to the design family.
   `<artifact-root>/spec/pipeline_state.yaml`, read `spec/prd.md` and the `mode`
   array; apply the matching concerns and never silently diverge from spec
   decisions — report mismatches to the caller as spec drift.
-- **Cross-project profiles:** load `mem profile 07_coding_convention`,
-  `05_domain_expertise`, and `04_analysis_methodology` via `tools/memory/mem.py`
-  and treat their bodies as defaults; project-local conventions take precedence,
-  and a current-turn user instruction overrides everything.
+- **Cross-project profiles:** per `_shared/profile-preload.md`, load
+  `mem profile 07_coding_convention`, `05_domain_expertise`, and
+  `04_analysis_methodology`.
 
 ## Procedure
 

@@ -106,8 +106,9 @@ high resolution (DPI 600-800).
 
 `{out_dir}/{paper_id}_fig*.png` + `figure_index.md`
 
-**Output rule (user decision, 2026-05-09):** create individual PNGs and, when needed,
-one combined PPTX. Never create per-figure/per-slide PPTX wrappers.
+**Output packaging** follows the standing figure-output rule in
+`material/figure-gen` §Script Convention: individual PNGs plus at most one combined
+PPTX — never per-figure/per-slide PPTX wrappers.
 
 ## Cross-skill Reuse
 

@@ -51,12 +51,13 @@ Sans-serif treatment (Noto Sans / DejaVu Sans), larger figsize sized for 16:9 sl
 Both the per-rate window sizes and the shared color axis are principles, not
 preferences; they guarantee the honesty of the material itself.
 
-- **Window size fixed per native sample rate:**
+- **Window size fixed per native sample rate (USER-CONFIRMED 2026-07-22):**
   - 8 kHz → window = 256
   - 16 kHz → window = 512
   - 48 kHz → window = 1024
   - For other rates (e.g. 24 / 44.1 kHz) use the nearest of these values; never
-    interpolate a novel window rule.
+    interpolate a novel window rule. The verifier treats such rates as
+    warn-not-fail because only the triple above is confirmed law.
 - **No resampling** — STFT each signal at its native sample rate. Do not resample merely
   to make comparison panels uniform; the sample rate is meaningful context and must show
   as-is.
@@ -82,13 +83,18 @@ label terminology follows `mem profile 05_domain_expertise`.
   the report figure band; preserve this with a regression test.
 - Every report spectrogram writes a semantic manifest entry containing
   `sample_rate_hz`, `min_hz`, `max_hz`, `dynamic_range_db`,
-  `shared_scale_per_figure`, and `colormap`.
+  `shared_scale_per_figure`, and `colormap`. Also record the STFT declaration
+  `"stft": {"sample_rate_hz": <native rate>, "window_samples": <window>}` so the
+  verifier enforces the confirmed window law deterministically instead of by
+  reviewer memory.
 - For the `spectrogram-report-48k-full-band` profile, run
   `python3 <agent-home>/tools/figure-semantic-verify.py --manifest <manifest.json>
   --report <report.md>`. It fails closed unless the metadata is exactly 48000 Hz,
   0–24000 Hz, shared scale true, and the required dynamic range/colormap are present,
-  and unless band-sensitive report claims have range-compatible evidence. Do not report
-  completion when it fails.
+  and unless band-sensitive report claims have range-compatible evidence. When a
+  figure records an `stft` block, it also fails closed on a window that violates the
+  confirmed 8 kHz→256 / 16 kHz→512 / 48 kHz→1024 law (other sample rates emit a
+  warning, never a failure). Do not report completion when it fails.
 - Full-band / high-frequency / broadband statements must link to figure or metric
   evidence whose range actually covers the claim — a 20–1000 Hz metric is never
   evidence for a full-band claim. A high-frequency claim attaches its explicit Hz/kHz
@@ -107,8 +113,12 @@ label terminology follows `mem profile 05_domain_expertise`.
 - Comment domain equations (e.g. loss formulas) so the reproduction evidence is
   explicit.
 - Preview PNG at 200 DPI by default; increase only when the requested review needs it.
-- **Output rule (user decision, 2026-05-09):** automatic production creates individual
-  PNGs and, when needed, one combined PPTX; never one PPTX wrapper per figure.
+- Output packaging (individual PNGs; at most one combined PPTX; never one PPTX
+  wrapper per figure) follows the durable figure-production rule
+  `mem show feedback_feedback-figure-자동-제작_6eade0 --all`
+  (`python3 <agent-home>/tools/memory/mem.py show feedback_feedback-figure-자동-제작_6eade0 --all`);
+  run it and treat its body as the default, overridden by explicit current-turn
+  instructions.
 
 ## Return
 

@@ -37,7 +37,7 @@ This rule applies to **every doc-strategy mode** (rebuttal / paper / review / re
 - *Same substance repeated at §-level* (one paragraph states X, another paragraph re-states X via cross-ref) — keep exactly one canonical site; others must use cross-ref or DROP.
 - *Trailing sentence appended after a "design choice" sentence that already names the choice* — the new content overlaps with the design-choice sentence and should be folded in via EDIT, not appended.
 
-**Why** (2026-05-20 incident, ICML 2026 camera-ready M8 / M9): M8 paste-ready ignored the existing *"we share the same projection layer..."* sentence and appended a separate trailing INSERT, breaking the transition to the next equation block. M9 restated a §3.2 conditional-information-flow paragraph inside §3.3 P2 via cross-ref, increasing verbosity rather than compressing it. The user's explicit feedback was *"그걸 삽입할 단락의 전체 cohesive, coherence를 고려해야하는데"* — every paste-ready mutation must be designed against the target paragraph's full cohesion/coherence, not in isolation. This 4-step pre-check operationalizes that judgment so the failure mode does not repeat across modes.
+**Why**: every paste-ready mutation must be designed against the target paragraph's full cohesion/coherence, not in isolation; this 4-step pre-check operationalizes that judgment. Provenance (the dated camera-ready incident and the user's verbatim feedback) is held by the memory refs in the `mem profile 02_paper_writing_style` header (`[[feedback-paragraph-cohesion-pre-check]]`), not restated here.
 
 ## Mode Mapping — Alignment with autopilot-draft's Three Modes
 
@@ -155,7 +155,7 @@ When converting **reviewer concerns / rebuttal materials → paper-body mutation
 2. The paste-ready block contains verbatim **experiment numbers** ($x.xx \to y.yy$ migrations, hyperparameter listings, dataset enumerations) inside what should be an introductory / framing paragraph.
 3. The paste-ready block is **a new `\paragraph{...}` INSERT** that the existing surrounding text does not bridge to — the surrounding paragraphs would still read identically with or without the inserted block, indicating it sits in isolation rather than weaving into the flow.
 
-**Why** (this rule was added 2026-05-19 after the M11 / M15 episode): a previous camera-ready cycle mechanically converted every reviewer concern into a paper-body mutation, producing rebuttal-format tables (e.g., `tab:arch_compare` model comparison) as 🔴 mandatory body inserts. The user explicitly rejected this as "rebuttal자료를 본문에 그대로 가져다 붙이는 게 어색하다 — 자연스럽게 문장으로 녹여 넣을 수 있으면 그렇게 해야지". The natural-integration rule above operationalizes that judgment so future cycles don't repeat the mechanical conversion.
+**Why**: mechanically converting every reviewer concern into a paper-body mutation produces rebuttal-format inserts that read as out-of-flow; the natural-integration rule above operationalizes the user's standing judgment against that. Provenance (the dated camera-ready episode and the user's verbatim rejection) is held by the memory refs in the `mem profile 02_paper_writing_style` header (`[[feedback-paper-body-rewrite-pattern]]`), not restated here.
 
 #### Paste-Ready Cheatsheet Format — Separate User and Tracking Surfaces
 

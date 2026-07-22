@@ -87,7 +87,9 @@ the card itself is wrong.
      bandwidth extension} ↔ {GSR, general restoration, universal SE}
    - {single-task, sub-task} ↔ {universal, multi-task, GSR}
    On conflict, emit 🔴 (e.g. a classical method silently listed under a
-   deep-learning heading).
+   deep-learning heading). The seed pairs are a mechanism default; the user's
+   task-taxonomy and preference context lives in
+   `mem profile 05_domain_expertise`.
 4. **A blank beats a wrong fill.** When a claim cannot be verified from cards,
    recommend an explicit `[?]` placeholder instead of inventing venue, year,
    task, or metric — hallucinated values accumulate across refinement cycles.

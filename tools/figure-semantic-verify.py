@@ -54,6 +54,11 @@ FIGURE_KEYS = {
     "visual_review",
 }
 PANEL_KEYS = {"id", "vmin_db", "vmax_db"}
+STFT_KEYS = {"sample_rate_hz", "window_samples"}
+# USER-CONFIRMED 2026-07-22 window law: STFT window samples per native sample
+# rate. Rates outside this mapping have no confirmed law and warn instead of
+# failing (the unit doctrine picks the nearest of these window values).
+STFT_WINDOW_LAW = {8000.0: 256.0, 16000.0: 512.0, 48000.0: 1024.0}
 REVIEW_KEYS = {
     "reviewed_png", "png_sha256", "reviewer", "reviewed_at", "evidence",
     "y_axis_0_24khz", "ticks_readable", "colorbar_present",
@@ -323,11 +328,15 @@ class Verifier:
         self.report = report
         self.normalized_report = normalize_markdown(report)
         self.errors: list[str] = []
+        self.warnings: list[str] = []
         self.figures: dict[str, tuple[float, float]] = {}
         self.metrics: dict[str, tuple[float, float]] = {}
 
     def error(self, code: str, detail: str) -> None:
         self.errors.append(f"{code}: {detail}")
+
+    def warn(self, code: str, detail: str) -> None:
+        self.warnings.append(f"{code}: {detail}")
 
     def object_keys(
         self, value: Any, required: set[str], allowed: set[str], where: str
@@ -374,9 +383,43 @@ class Verifier:
                     self.error("invalid-path", f"report image path {raw!r}: {exc}")
         return found
 
+    def verify_stft(self, stft: Any, where: str) -> None:
+        """Enforce the USER-CONFIRMED (2026-07-22) per-rate STFT window law.
+
+        The block is optional per figure; absence is never an error. When
+        present, a known sample rate must carry its confirmed window size, and
+        an unknown sample rate produces a warning rather than a failure.
+        """
+        if not self.object_keys(stft, STFT_KEYS, STFT_KEYS, where):
+            return
+        rate, window = stft["sample_rate_hz"], stft["window_samples"]
+        valid = True
+        if not is_number(rate) or rate <= 0:
+            self.error("invalid-stft", f"{where}.sample_rate_hz must be a positive number")
+            valid = False
+        if not is_number(window) or window <= 0 or float(window) != int(window):
+            self.error("invalid-stft", f"{where}.window_samples must be a positive integer")
+            valid = False
+        if not valid:
+            return
+        expected = STFT_WINDOW_LAW.get(float(rate))
+        if expected is None:
+            known = ", ".join(f"{r:g}" for r in sorted(STFT_WINDOW_LAW))
+            self.warn(
+                "stft-window-unverified",
+                f"{where}: no confirmed window law for sample_rate_hz={rate:g} "
+                f"(confirmed rates: {known}); use the nearest confirmed window",
+            )
+        elif float(window) != expected:
+            self.error(
+                "stft-window-mismatch",
+                f"{where}: sample_rate_hz={rate:g} requires window_samples={expected:g}; "
+                f"got {window!r}",
+            )
+
     def verify_figure(self, figure: Any, index: int, report_images: set[Path]) -> None:
         where = f"figure_groups[{index}]"
-        if not self.object_keys(figure, FIGURE_KEYS, FIGURE_KEYS, where):
+        if not self.object_keys(figure, FIGURE_KEYS, FIGURE_KEYS | {"stft"}, where):
             return
         figure_id = figure["id"]
         if not self.nonempty_string(figure_id, f"{where}.id"):
@@ -394,6 +437,8 @@ class Verifier:
         if not is_number(figure["dynamic_range_db"]) or figure["dynamic_range_db"] <= 0:
             self.error("invalid-range", f"{where}.dynamic_range_db must be positive")
         self.nonempty_string(figure["colormap"], f"{where}.colormap")
+        if "stft" in figure:
+            self.verify_stft(figure["stft"], f"{where}.stft")
 
         png_raw = figure["png_path"]
         png_path: Path | None = None
@@ -710,7 +755,10 @@ def main(argv: list[str] | None = None) -> int:
     except (FileNotFoundError, UnicodeError, json.JSONDecodeError, OSError, ValueError, RuntimeError) as exc:
         print(f"status=failed\nreason=input-error\ndetail={exc}", file=sys.stderr)
         return 66
-    errors = Verifier(manifest_path, report_path, manifest, report).run()
+    verifier = Verifier(manifest_path, report_path, manifest, report)
+    errors = verifier.run()
+    for warning in verifier.warnings:
+        print(f"warning={warning}", file=sys.stderr)
     if errors:
         print("status=failed", file=sys.stderr)
         print(f"error_count={len(errors)}", file=sys.stderr)
@@ -719,7 +767,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     print("status=ok")
     print(f"profile={PROFILE}")
-    print("check=metadata,shared-scale,claim-evidence,visual-review,png-link")
+    print("check=metadata,shared-scale,claim-evidence,visual-review,png-link,stft-window")
     return 0
 
 

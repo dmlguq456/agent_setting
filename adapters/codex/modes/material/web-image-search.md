@@ -110,9 +110,10 @@ learning") + max_results (default 3).
 reads it and adds a `**Figures**: ../figures/{paper_id}_fig*.png` line to each paper
 card.
 
-**Output rule (user decision, 2026-05-09):** produce individual PNGs plus
-`figure_index.md` only. Never create per-image PPTX wrappers; a combined PPTX, when
-needed, is built by the caller with a separate batch utility.
+**Output packaging:** this unit writes individual PNGs plus `figure_index.md` only;
+the standing figure-output rule (`material/figure-gen` §Script Convention) forbids
+per-image PPTX wrappers, and a combined PPTX, when needed, is the caller's separate
+batch step.
 
 ## Return
 

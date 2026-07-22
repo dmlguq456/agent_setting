@@ -31,7 +31,7 @@ Reject a paste-ready mutation when any of these signals appears:
 - It inserts experimental values verbatim into an opening or framing paragraph.
 - It adds a separate `\paragraph{...}` without a bridge to the surrounding text.
 
-This rule was introduced after a 2026-05-19 camera-ready incident in which reviewer feedback was mechanically converted into mandatory body mutations. Preserve the user's original constraint as evidence: _“rebuttal 자료를 본문에 그대로 가져다 붙이지 말고 자연스럽게 문장으로 녹여 넣어라.”_
+Provenance (the 2026-05-19 camera-ready incident and the user's verbatim constraint) is held by the memory refs in the `mem profile 02_paper_writing_style` header (`[[feedback-paper-body-rewrite-pattern]]`); the rule above is the distilled operational form.
 
 ## Paste-ready cheatsheet contract
 

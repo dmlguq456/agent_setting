@@ -174,7 +174,8 @@ Dispatch unit material/pdf-extract:
       description="PDF figure/table extraction for document drafting"
       prompt="Inputs: {pdf_paths}.
               Output a figure_index.md mapping paper_id to paths.
-              Use 600–800 DPI, default 800, for paper figures and tables.
+              Apply your unit's standing high-resolution policy for paper
+              figures and tables.
               Crop to figure body plus caption and remove neighboring-column,
               body-text, and footer noise. Preserve page-wide elements."
 ```
@@ -183,7 +184,7 @@ Dispatch unit material/pdf-extract:
 
 | Asset | Policy |
 |---|---|
-| Paper figure or table | 600–800 DPI, default 800 |
+| Paper figure or table | The `material/pdf-extract` unit's standing high-resolution policy (single source for the DPI numbers) |
 | Caption-aware crop | Include figure body and caption; exclude adjacent text and footer noise |
 | Two-column element | Restrict the horizontal box to the owning column |
 | Page-wide element | Preserve the full content width |

@@ -81,13 +81,11 @@ sources, then continue without waiting for confirmation.
 
 ## User Profile Defaults
 
-At the start of work, load these cross-project profiles and treat their bodies
-as defaults (`python3 <agent-home>/tools/memory/mem.py profile <name>`):
+Preload per `_shared/profile-preload.md`:
 `02_paper_writing_style` (tone, argumentation, citation patterns),
 `04_analysis_methodology` (analysis and verification patterns),
 `05_domain_expertise` (domain background, terms, abbreviations), and
-`01_paper_figure_style` when the plan discusses figures. A current-turn user
-instruction overrides the relevant default.
+`01_paper_figure_style` when the plan discusses figures.
 
 ## Procedure
 
