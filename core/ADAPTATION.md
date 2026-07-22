@@ -33,18 +33,30 @@ that adaptation is complete.
 
 ### 2.0. Sibling-Adapter Completion
 
-`core/`, `capabilities/`, and `roles/` are the semantic source. Claude, Codex,
-OpenCode, and future adapters are sibling realizations below that source; no
-adapter is the reference implementation or parent of another adapter.
+**A portable change touches all adapters at once. Never deliver, commit, or
+report a portable change for one adapter and leave the siblings for "later" — a
+single-adapter split is the failure this section exists to prevent, not a normal
+increment.** `core/`, `capabilities/`, and `roles/` are the semantic source.
+Claude, Codex, OpenCode, and future adapters are equal sibling realizations below
+that source; no adapter is the reference implementation or parent of another adapter.
 
 A shared change follows one transaction:
 
 1. update or confirm the portable invariant;
-2. generate or edit every applicable sibling realization;
-3. verify each runtime's active discovery surface and required fallback;
+2. generate or edit every applicable sibling realization in the SAME unit of work
+   (`generate.py` projects all three — never hand-mirror one and skip the rest);
+3. verify each runtime's active discovery surface and required fallback
+   (`check-adaptation-boundary.sh` audits all three adapters, not just Claude);
 4. report the overall result as `PARTIAL` while any applicable row is deferred,
    unsupported without fallback, or unverified; report `GREEN` only after all
    applicable rows pass.
+
+A sibling that reaches the portable source directly — e.g. Codex/OpenCode invoke
+`$AGENT_HOME/utilities/<tool>` through their preflight wrapper instead of holding
+an adapter-owned mirror — is a *covered* row, but only when that reachability is
+measured, never assumed. State per-adapter coverage from evidence: never tell the
+user one adapter is done and the others are "separate work" without having
+checked all three first.
 
 Generated output is not exempt from semantic, discovery, or footprint checks.
 Runtime syntax may differ, but observable behavior, quality floors, and failure
