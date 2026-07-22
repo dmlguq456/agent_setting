@@ -172,7 +172,13 @@
           }
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 2
+        "max_dispatch_depth": 2,
+        "replication": {
+          "node": "verify",
+          "min_intensity": "strong",
+          "ways": 2,
+          "independence_axis": "cross-harness"
+        }
       },
       "completion_gates": [
         "apply-hash",
@@ -410,7 +416,13 @@
           }
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 2
+        "max_dispatch_depth": 2,
+        "replication": {
+          "node": "impl-review",
+          "min_intensity": "strong",
+          "ways": 2,
+          "independence_axis": "cross-harness"
+        }
       },
       "completion_gates": [
         "code-plan",
@@ -610,7 +622,13 @@
           }
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 2
+        "max_dispatch_depth": 2,
+        "replication": {
+          "node": "critic-review",
+          "min_intensity": "strong",
+          "ways": 2,
+          "independence_axis": "cross-harness"
+        }
       },
       "completion_gates": [
         "design-refs",
@@ -837,7 +855,13 @@
           }
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 2
+        "max_dispatch_depth": 2,
+        "replication": {
+          "node": "fact-verify",
+          "min_intensity": "strong",
+          "ways": 2,
+          "independence_axis": "cross-harness"
+        }
       },
       "completion_gates": [
         "draft-strategy",
@@ -980,7 +1004,13 @@
           }
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 2
+        "max_dispatch_depth": 2,
+        "replication": {
+          "node": "smoke",
+          "min_intensity": "strong",
+          "ways": 2,
+          "independence_axis": "cross-harness"
+        }
       },
       "completion_gates": [
         "lab-scaffold",
@@ -1201,7 +1231,13 @@
           }
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 2
+        "max_dispatch_depth": 2,
+        "replication": {
+          "node": "independent-verify",
+          "min_intensity": "strong",
+          "ways": 2,
+          "independence_axis": "cross-harness"
+        }
       },
       "completion_gates": [
         "hash-bound-eval",
@@ -1423,7 +1459,13 @@
           }
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 2
+        "max_dispatch_depth": 2,
+        "replication": {
+          "node": "review",
+          "min_intensity": "strong",
+          "ways": 2,
+          "independence_axis": "cross-harness"
+        }
       },
       "completion_gates": [
         "refine-review",
@@ -1583,7 +1625,13 @@
           }
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 2
+        "max_dispatch_depth": 2,
+        "replication": {
+          "node": "claim-verify",
+          "min_intensity": "strong",
+          "ways": 2,
+          "independence_axis": "cross-harness"
+        }
       },
       "completion_gates": [
         "research-retrieval",
@@ -1718,7 +1766,13 @@
           }
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 2
+        "max_dispatch_depth": 2,
+        "replication": {
+          "node": "release-review",
+          "min_intensity": "strong",
+          "ways": 2,
+          "independence_axis": "cross-harness"
+        }
       },
       "completion_gates": [
         "ship-setup",
@@ -1866,7 +1920,13 @@
           }
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 2
+        "max_dispatch_depth": 2,
+        "replication": {
+          "node": "review",
+          "min_intensity": "strong",
+          "ways": 2,
+          "independence_axis": "cross-harness"
+        }
       },
       "completion_gates": [
         "spec-research",

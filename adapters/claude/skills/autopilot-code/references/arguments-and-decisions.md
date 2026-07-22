@@ -25,8 +25,8 @@ Intensity selects the stage graph; see [CONVENTIONS §1](../../../core/CONVENTIO
 - `direct`: intake → produce → sanity/report; no code-plan, plan-check, or durable plan.
 - `quick`: intake → orient-lite → micro-plan → plan-check-lite → produce → verify-lite → report; no independent QA after every stage.
 - `standard`: durable code-plan → plan-check → optional bounded verifier → synthesis → code-execute → code-test → code-report.
-- `strong`: standard plus one risk-focused independent review.
-- `thorough` and `adversarial`: a dispatch-depth-1 owner expands bounded dispatch-depth-2 planning, verification, and adversarial workers, then synthesizes short reports.
+- `strong`: standard plus a cross-harness 2-way independent replicate-and-merge at the riskiest review point — the compiled route adds `impl-review-replica` and the conductor merges both verdicts (CONVENTIONS §3.12).
+- `thorough` and `adversarial`: the strong replica pair remains, and a dispatch-depth-1 owner expands bounded dispatch-depth-2 planning, verification, and adversarial workers, then synthesizes short reports.
 
 Every non-direct graph has a plan-check, but expensive independent QA does not repeat after every substage.
 

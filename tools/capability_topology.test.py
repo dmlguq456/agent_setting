@@ -92,6 +92,29 @@ class TestTopology(unittest.TestCase):
                     T._validate_unit_ref({"capability":"t"},node,self.r)
             finally:
                 T.UNITS=old; T._UNIT_CACHE.clear()
+    def test_replication_declared_on_review_nodes(self):
+        code=next(x for x in self.r["recipes"] if x["capability"]=="autopilot-code")
+        self.assertEqual(code["standard_plus"]["replication"],
+            {"node":"impl-review","min_intensity":"strong","ways":2,"independence_axis":"cross-harness"})
+        note=next(x for x in self.r["recipes"] if x["capability"]=="autopilot-note")
+        self.assertNotIn("replication",note["standard_plus"])
+    def test_replication_validation_fails_closed(self):
+        def broken(mutate):
+            r=copy.deepcopy(self.r)
+            code=next(x for x in r["recipes"] if x["capability"]=="autopilot-code")
+            mutate(code["standard_plus"]["replication"])
+            return r
+        cases={
+            "not in graph": lambda rep: rep.update(node="missing-node"),
+            "must be a review-worker": lambda rep: rep.update(node="execute"),
+            "standard\\+ tier": lambda rep: rep.update(min_intensity="quick"),
+            "ways must be 2": lambda rep: rep.update(ways=3),
+            "independence_axis must be cross-harness": lambda rep: rep.update(independence_axis="same-harness"),
+            "requires exactly": lambda rep: rep.update(extra=True),
+        }
+        for pattern,mutate in cases.items():
+            with self.subTest(pattern=pattern):
+                self.assertRaisesRegex(T.TopologyError,pattern,T.validate_registry,broken(mutate))
     def test_gate_contract_missing_entry(self):
         r=copy.deepcopy(self.r); del r["completion_gate_contracts"]["apply-hash"]
         self.assertRaisesRegex(T.TopologyError,"completion_gate_contracts entry",T.validate_registry,r)

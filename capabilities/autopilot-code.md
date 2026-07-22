@@ -61,7 +61,7 @@ Minimum role mapping:
 - review: QA/reviewer role for plan, code, and test review;
 - app UI changes: design role as critic or handoff verifier when design artifacts exist.
 
-Pipeline intensity is the primary ceremony selector for this entrypoint. Use `direct` for inline fixes with no plan stage, `quick` for micro-plan plus plan-check-lite, `standard` for the normal closed loop, `strong` for the normal loop plus one risk-focused independent review, and `standard+` for owner-worker orchestration that should open bounded dispatch-depth-2 verifier/planner work when separable, with `thorough|adversarial` expanding to multi-perspective or adversary workers. The same intensity determines `plan-check`, selected independent reviews, and `code-test` rigor without introducing a separate user-facing axis or forcing a monolithic full pipeline. Concrete models remain adapter-specific.
+Pipeline intensity is the primary ceremony selector for this entrypoint. Use `direct` for inline fixes with no plan stage, `quick` for micro-plan plus plan-check-lite, `standard` for the normal closed loop, `strong` for the normal loop plus a cross-harness 2-way independent replicate-and-merge at the riskiest review point (the compiled route adds a replica review leg; the conductor merges verdicts), and `standard+` for owner-worker orchestration that should open bounded dispatch-depth-2 verifier/planner work when separable, with `thorough|adversarial` keeping the replica pair and expanding to multi-perspective or adversary workers. The same intensity determines `plan-check`, selected independent reviews, and `code-test` rigor without introducing a separate user-facing axis or forcing a monolithic full pipeline. Concrete models remain adapter-specific.
 
 ## Stage Mapping
 

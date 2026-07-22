@@ -276,6 +276,41 @@ def _validate_recipe(recipe, registry):
             raise TopologyError(f"{recipe['capability']}:{node['id']}: reviewer may write isolated verdicts only")
         if node["kind"] == "map-worker" and any(not s.startswith("shards/") for s in scopes):
             raise TopologyError(f"{recipe['capability']}:{node['id']}: map worker may write shards only")
+    replication = graph.get("replication")
+    if replication is not None:
+        # strong+ 2-way cross-harness replicate-and-merge (CONVENTIONS §3.12,
+        # strengthened 2026-07-21): the compiler expands this declaration; the
+        # registry only names the riskiest review node and the independence axis.
+        required_rep = {"node", "min_intensity", "ways", "independence_axis"}
+        if not isinstance(replication, dict) or set(replication) != required_rep:
+            raise TopologyError(
+                f"{recipe['capability']}: replication requires exactly {sorted(required_rep)}"
+            )
+        target = by_id.get(replication["node"])
+        if target is None:
+            raise TopologyError(
+                f"{recipe['capability']}: replication node {replication['node']!r} not in graph"
+            )
+        if target.get("kind") != "review-worker":
+            raise TopologyError(
+                f"{recipe['capability']}: replication target {replication['node']} must be a review-worker"
+            )
+        tiers = registry["intensities"]
+        if (replication["min_intensity"] not in tiers
+                or tiers.index(replication["min_intensity"]) < tiers.index("standard")):
+            raise TopologyError(
+                f"{recipe['capability']}: replication min_intensity must be a standard+ tier"
+            )
+        if replication["ways"] != 2:
+            raise TopologyError(f"{recipe['capability']}: replication ways must be 2")
+        if replication["independence_axis"] != "cross-harness":
+            raise TopologyError(
+                f"{recipe['capability']}: replication independence_axis must be cross-harness"
+            )
+        if any("*" in out for out in target.get("outputs", [])):
+            raise TopologyError(
+                f"{recipe['capability']}: replication target outputs must be concrete files"
+            )
     visiting, done = set(), set()
     def visit(node_id):
         if node_id in visiting: raise TopologyError(f"{recipe['capability']}: cycle")

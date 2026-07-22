@@ -37,8 +37,8 @@ Defaults:
 | `direct` | intake → produce → sanity/report | None | No independent QA |
 | `quick` | intake → orient-lite → micro-plan → plan-check-lite → produce → verify-lite → report | None by default | Inline check with 3-4 questions |
 | `standard` | code-plan → plan-check → bounded dispatch-depth-2 verifier/planner when separable → synthesize → code-execute → code-test → code-report | Required | Use bounded dispatch-depth-2 planning or verification for separable work |
-| `strong` | standard + one risk-focused dispatch-depth-2 review | Required | Review the single riskiest point |
-| `thorough`/`adversarial` | standard + multi-axis dispatch-depth-2 planner/verifier/adversary synthesis | Required | Synthesize dispatch-depth-2 reports concisely |
+| `strong` | standard + cross-harness 2-way replicate-and-merge at the riskiest review (route adds `impl-review-replica`) | Required | Dispatch both legs on different harness/model families; merge verdicts, stricter wins |
+| `thorough`/`adversarial` | strong + multi-axis dispatch-depth-2 planner/verifier/adversary synthesis | Required | Synthesize dispatch-depth-2 reports concisely |
 
 **`standard+` dispatch**: Run each durable stage (`code-plan`, `code-execute`, `code-test`, and `code-report`) in its own dispatch-depth-2 headless session. The dispatch-depth-1 conductor passes artifact paths, reads only verdict and status, and uses deterministic one-shot `dispatch-wait` polling for wait and harvest (dev-pipeline Steps 1-7; OPERATIONS §5.10 and SD-14). Keep `direct`, `quick`, and plan-check micro-stages inline.
 

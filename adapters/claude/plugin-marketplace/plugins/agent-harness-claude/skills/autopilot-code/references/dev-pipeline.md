@@ -132,6 +132,16 @@ diff, and dev logs, writes `_internal/dev_reviews/phase_review.md`, and stays re
 Publish its exact completion, read only the memo verdict, and route blocking findings
 through the bounded refine/retry path in Step 4 — never an inline hotfix.
 
+At `strong` and above the compiled route additionally contains `impl-review-replica`
+(`replica_group=impl-review`, `independence_axis=cross-harness`, output
+`_internal/dev_reviews/phase_review.replica.md`): the 2-way independent replicate-and-merge
+that is the default from `strong` (CONVENTIONS §3.12). Dispatch both legs in parallel and
+place the replica on a different harness or model family than the primary leg; when only
+one harness is live, fall back to a same-harness independent session and record the
+reduced independence in the decision record. Merge at verdict level only — the stricter
+verdict wins and blocking findings are unioned — and do not proceed past the
+`code-impl-review` gate until both legs' verdicts are read and the merge is recorded.
+
 ### Step 4: code-test
 
 For standard+, run the route-bound dispatch transaction with `NODE_ID=test`; its route node

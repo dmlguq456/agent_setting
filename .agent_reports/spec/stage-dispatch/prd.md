@@ -7,6 +7,7 @@
 > · **v18 2026-07-19** (conductor 생존·Codex linked-worktree mutation 경계·completion marker↔attempt row 결합 — SD-69~71)
 > · **v19 2026-07-20** (transient PID namespace lifecycle — foreground-scoped wrapper·outer-sandbox 경계·exact parent·unmatched depth-2 visibility, SD-72) · **v19 reliability minor 2026-07-20** (sandbox-init terminal handoff·canonical transport·same-route fallback·exact-attempt liveness)
 > · **v20 2026-07-20** (`quick` registered-headless-only fail-closed·portable `dispatch_depth` namespace·Codex/Claude execution-surface terminology, SD-73~75; SD-19 superseded)
+> · **v21 2026-07-22** (strong+ 2-way cross-harness replica-and-merge route 컴파일 — recipe `replication` 선언·compiler 확장·conductor verdict-merge, SD-76; 2026-07-21 core 강화 9b4e81b2의 실행 배선 사후 spec-sync)
 > 컴포넌트: `agent_setting` repo 의 **autopilot 파이프 디스패치 토폴로지 개정** — 각 sub-skill 스테이지(code-plan / code-execute / code-test / code-report)를 `standard+` 에서 **기본으로 별개 headless 세션**으로 분사하는 계약. 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 와 무관한 독립 청사진. 이 폴더(`spec/stage-dispatch/`)가 자체 SoT.
 > 입력(1순위 근거):
 > - **사용자 승인 결정 (2026-07-20 v20)**: `effective_intensity=quick` 인 모든 route는 registered headless worker session만 사용한다. `native-subagent`, `inline-fallback`, interactive/empty, unknown/arbitrary surface는 compile 단계에서 fail-closed이며 dispatch depth로 이름 붙이지 않는다. `direct` inline과 `standard+` fallback은 유지한다. portable nesting은 `dispatch_depth`/`max_dispatch_depth`로 한정하고 Codex `agents.max_depth`와 분리한다. Claude subagent, Claude agent-team teammate session, registered headless worker session을 구별하며 multi-capability composition은 추가하지 않는다.
@@ -1121,7 +1122,40 @@ subagent만 포함한다. Claude agent-team teammate를 포함하지 않는다. 
 registered wrapper를 호출한 경우에도 team membership과 그 wrapper child attempt의
 registered-headless status는 별도 속성이다.
 
-### 13.12.4 v20 acceptance / implementation handoff
+### 13.12.4 SD-76 — strong+ 2-way cross-harness replica-and-merge의 route 컴파일 (v21)
+
+**근거**: 2026-07-21 사용자 지침(검토 적대화·독립 병렬화 일반화, core 등재
+9b4e81b2 — `CONVENTIONS §3.5/§3.12`, `WORKFLOW.md` intensity 표,
+`DESIGN_PRINCIPLES.md` 독립 QA 규칙)이 실행 표면에 미배선된 갭의 사후 spec-sync.
+실측: strong 요청 route가 standard와 동일 노드 그래프로 컴파일됨
+(`plans/2026-07-22_codex-headless-context-parity/_internal/route.json`).
+
+- registry recipe `standard_plus`는 선택적 `replication` 블록을 가진다 —
+  `{node, min_intensity, ways: 2, independence_axis: "cross-harness"}`. `node`는
+  해당 capability의 가장 위험한 review-worker 노드(예: autopilot-code의
+  `impl-review`)를 가리킨다. review-worker 노드가 없는 recipe(autopilot-note)는
+  선언하지 않는다 — 스테이지 발명 금지(CONVENTIONS §3.2).
+- compiler는 `effective_intensity >= min_intensity`일 때 대상 노드를 복제 확장한다:
+  id `<node>-replica`, 양쪽 leg에 `replica_group=<node>`, replica에
+  `independence_axis`, outputs는 `name.ext -> name.replica.ext`(파일 충돌 방지),
+  하류 노드 depends_on에 replica 추가. replica는 완전한 dispatch-depth-2 노드로
+  기존 fallback 사슬(SD-50/61/72 순서 불변)·seal(SD-68)·attempt/marker 계약을
+  그대로 따른다. standard 이하 그래프와 direct/quick는 결과 불변(§3.2 보존).
+- 독립성 축의 실현은 dispatch 시점 conductor 계약이다: 두 leg를 서로 다른
+  harness/model family에 분사하고, 단일 harness 환경에서는 same-harness 독립
+  세션으로 fallback하며 독립성 저하를 결정 기록에 남긴다(DESIGN_PRINCIPLES 규칙
+  그대로). fallback hop 어휘·순서는 SD-75에서 변경 없다.
+- merge는 conductor의 verdict-수준 병합이다: 두 leg의 memo verdict만 읽고
+  (SD-1 thin conductor 유지), stricter-wins + blocking findings 합집합으로
+  완료 gate를 판정한다. 두 leg의 verdict를 읽고 병합을 기록하기 전에는 해당
+  gate를 통과하지 않는다.
+- 규칙 구간: replication 블록 스키마 검증(review-worker 대상·ways==2·axis 어휘·
+  standard+ tier)·컴파일 확장의 결정론(동일 입력=동일 그래프)·replica 출력 경로
+  변환·composed route 검증의 동일 확장 적용. 의미 판단 구간: 어느 노드가 "가장
+  위험한 지점"인가(registry 선언 시 1회 판단), leg 배치의 harness/family 선택과
+  독립성 저하 사유 서술.
+
+### 13.12.5 v20 acceptance / implementation handoff
 
 1. every-capability quick default compile = one node, qualified depth fields, headless only;
    quick native/inline/interactive/empty/arbitrary negative fixtures는 route/row/spawn 0.

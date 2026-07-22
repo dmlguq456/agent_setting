@@ -121,12 +121,43 @@ class TestRoute(unittest.TestCase):
  def test_promotion_standard(self):
   evidence=self.dispatch(self.nested())
   a=R.compile_route(**self.args(signals=["public-api"],transport="headless",inline_reason=None,dispatch_evidence=evidence)); self.assertEqual([x["id"] for x in a["nodes"]],["plan","plan-check","execute","impl-review","test","report"])
+ def test_strong_expands_replica_pair_and_standard_does_not(self):
+  evidence=self.dispatch(self.nested())
+  standard=R.compile_route(**self.args(signals=["public-api"],transport="headless",inline_reason=None,dispatch_evidence=evidence))
+  self.assertNotIn("impl-review-replica",[x["id"] for x in standard["nodes"]])
+  strong=self.compile_v3(evidence)
+  self.assertEqual([x["id"] for x in strong["nodes"]],
+   ["plan","plan-check","execute","impl-review","impl-review-replica","test","report"])
+  base=next(n for n in strong["nodes"] if n["id"]=="impl-review")
+  replica=next(n for n in strong["nodes"] if n["id"]=="impl-review-replica")
+  self.assertEqual(base["replica_group"],"impl-review")
+  self.assertEqual(replica["replica_group"],"impl-review")
+  self.assertEqual(replica["independence_axis"],"cross-harness")
+  self.assertEqual(replica["dispatch_depth"],2)
+  self.assertEqual(replica["unit"],base["unit"])
+  self.assertEqual(replica["outputs"],["_internal/dev_reviews/phase_review.replica.md"])
+  self.assertNotEqual(replica["outputs"],base["outputs"])
+  test_node=next(n for n in strong["nodes"] if n["id"]=="test")
+  self.assertIn("impl-review",test_node["depends_on"])
+  self.assertIn("impl-review-replica",test_node["depends_on"])
+  R.verify_route(strong,R.ROOT)
+ def test_replica_carries_fallback_chain_and_seal(self):
+  strong=self.compile_v3(self.dispatch(self.nested()))
+  replica=next(n for n in strong["nodes"] if n["id"]=="impl-review-replica")
+  self.assertEqual([h["fallback_hop"] for h in replica["fallback_hops"]],
+   ["same-harness-headless","cross-harness-headless","native-subagent","inline"])
+  self.assertIn(replica.get("harness_affinity"),{"claude","codex","opencode","diverse","unspecified"})
+ def test_thorough_and_adversarial_also_expand_replica(self):
+  for tier in ("thorough","adversarial"):
+   route=R.compile_route(**self.args(requested_intensity=tier,predicates=[],signals=["shared-contract"],transport="headless",inline_reason=None,dispatch_evidence=self.dispatch(self.nested())))
+   self.assertIn("impl-review-replica",[x["id"] for x in route["nodes"]])
  def test_nodes_carry_sealed_unit_refs(self):
   route=self.compile_v3(self.dispatch(self.nested()))
   units={n["id"]:n.get("unit") for n in route["nodes"]}
   self.assertEqual(units,{
    "plan":"plan/plan-author","plan-check":"qa/plan-review","execute":"dev/backend",
-   "impl-review":"qa/code-review","test":"qa/test","report":"editorial/report"})
+   "impl-review":"qa/code-review","impl-review-replica":"qa/code-review",
+   "test":"qa/test","report":"editorial/report"})
   tampered=json.loads(json.dumps(route)); tampered["nodes"][0]["unit"]="dev/backend"
   with self.assertRaisesRegex(ValueError,"stale or modified route hash"):
    R.verify_route(tampered,R.ROOT)
