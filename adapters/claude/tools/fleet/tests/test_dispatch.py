@@ -316,6 +316,29 @@ class OpenCodeContextTest(unittest.TestCase):
 # --- D3: cwd-fallback enrichment (fully hermetic) ---
 class CwdFallbackEnrichmentTest(unittest.TestCase):
 
+    def test_proc_dispatch_unit_env_is_additive_and_legacy_absence_is_none(self):
+        ps_lines = ["123 claude 00:08 claude -p /autopilot-code --mode dev"]
+        base_env = {
+            "AGENT_SESSION_ROLE": "worker",
+            "AGENT_DISPATCH_WORKER_TYPE": "stage",
+            "AGENT_DISPATCH_ASSIGNED_CONTRACT": "code-test",
+        }
+
+        def scan(env):
+            with mock.patch("fleet.collectors.procscan._ps_lines", return_value=ps_lines), \
+                 mock.patch("fleet.collectors.dispatch.os.readlink", return_value="/tmp/unit-wt"), \
+                 mock.patch("fleet.collectors.procscan.read_environ", return_value=env), \
+                 mock.patch("fleet.collectors.procscan.read_proc_start", return_value="11"), \
+                 mock.patch.object(dispatch, "_claude_job_model", return_value="claude-test"):
+                return dispatch._scan_processes()[0]
+
+        current = scan({**base_env, "AGENT_DISPATCH_UNIT": "verify"})
+        legacy = scan(base_env)
+        self.assertEqual(current.assigned_contract, "code-test")
+        self.assertEqual(current.worker_type, "stage")
+        self.assertEqual(current.unit, "verify")
+        self.assertIsNone(legacy.unit)
+
     def test_mem_distiller_prompt_is_not_a_dispatch_job(self):
         ps_lines = [
             "123 claude 00:08 claude -p /autopilot-apply session summary --model opus"

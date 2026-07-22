@@ -246,6 +246,40 @@ class BuildViewsTest(unittest.TestCase):
         self.assertEqual(views[0]["source"], "heuristic")
         self.assertEqual(views[0]["nodes"], [])
 
+    def test_current_unit_metadata_survives_view_and_json_summary(self):
+        record = json.loads(json.dumps(self.record))
+        record["unit_catalog_digest"] = "sha256:" + "a" * 64
+        record["composed"] = True
+        record["nodes"][0]["unit"] = "code-plan"
+        record["nodes"][0]["unit_choices"] = ["code-plan", "spec-plan"]
+        views = route.build_views([], {}, {self.route_id: record}, self.now)
+        view = views[0]
+        node = next(n for n in view["nodes"] if n["id"] == record["nodes"][0]["id"])
+        self.assertEqual(view["unit_catalog_digest"], record["unit_catalog_digest"])
+        self.assertTrue(view["composed"])
+        self.assertEqual(node["unit"], "code-plan")
+        self.assertEqual(node["unit_choices"], ["code-plan", "spec-plan"])
+        projected = route.summary(views)[0]
+        self.assertEqual(projected["unit_catalog_digest"], record["unit_catalog_digest"])
+        self.assertTrue(projected["composed"])
+        self.assertEqual(projected["nodes"][0]["unit"], "code-plan")
+
+    def test_legacy_route_metadata_defaults_are_additive(self):
+        views = route.build_views([], {}, {self.route_id: self.record}, self.now)
+        projected = route.summary(views)[0]
+        self.assertIsNone(projected["unit_catalog_digest"])
+        self.assertFalse(projected["composed"])
+        self.assertTrue(all(node["unit"] is None for node in projected["nodes"]))
+
+    def test_malformed_unit_metadata_degrades_without_string_explosion(self):
+        record = json.loads(json.dumps(self.record))
+        record["nodes"][0]["unit"] = {"not": "a unit id"}
+        record["nodes"][0]["unit_choices"] = "code-plan"
+        view = route.build_views([], {}, {self.route_id: record}, self.now)[0]
+        node = next(n for n in view["nodes"] if n["id"] == record["nodes"][0]["id"])
+        self.assertIsNone(node["unit"])
+        self.assertEqual(node["unit_choices"], [])
+
 
 class JsonAdditiveTest(unittest.TestCase):
     def setUp(self):
@@ -271,6 +305,8 @@ class JsonAdditiveTest(unittest.TestCase):
         self.assertEqual(out["route"], [])
         self.assertIn("route_file", out["jobs"][0])   # additive per-job keys present
         self.assertIsNone(out["jobs"][0]["route_file"])
+        self.assertIn("unit", out["jobs"][0])
+        self.assertIsNone(out["jobs"][0]["unit"])
 
 
 class OrphanConductorAnnotationTest(unittest.TestCase):

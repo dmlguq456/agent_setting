@@ -388,6 +388,8 @@ class AdditiveSchemaTest(unittest.TestCase):
         for f in pre_v8:
             self.assertIn(f, d, "pre-v8 필드 삭제/개명: %s" % f)
         self.assertIn("state_evidence", d)
+        self.assertIn("unit", d)
+        self.assertIsNone(d["unit"])
 
     def test_defaults_are_none_so_absent_harnesses_render_dash(self):
         s = Session(harness="codex", pid=1)

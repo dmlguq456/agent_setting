@@ -101,7 +101,7 @@ and confidence thresholds never substitute for that judgment.
 ## Write telemetry and diagnostics (Cluster J)
 
 - Every mutation appends one bounded `write-events.jsonl` entry with
-  `ts/action/id/tier/scope/type/actor/sid/snippet`. Rotation keeps at most the
+  `ts/action/id/tier/scope/type/actor/sid/cwd/snippet`. Rotation keeps at most the
   recent 500 lines within a 256 KiB bound. This local telemetry is not mirrored.
 - Journal precedence is `MEM_WRITE_EVENTS`, then a path beside an overridden
   `MEM_STORE`, then `$XDG_STATE_HOME/agent-memory/write-events.jsonl`.

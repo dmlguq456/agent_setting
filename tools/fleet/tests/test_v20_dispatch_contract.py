@@ -13,13 +13,14 @@ CURRENT = (
 
 
 def row(stamp, status, slug, attempt, *, dispatch_depth=1,
-        intensity="quick", parent=""):
+        intensity="quick", parent="", unit=""):
     pipe = (
         f"{CURRENT},dispatch_depth={dispatch_depth},"
         "capability=autopilot-code,"
         f"intensity={intensity},harness=codex,route_id=rt-v20,"
         f"route_node=one-shot,attempt_id={attempt}"
         + (f",parent={parent}" if parent else "")
+        + (f",unit={unit}" if unit else "")
     )
     return f"{stamp}\t{status}\t/repo\t/wt\t{slug}\t{pipe}\n"
 
@@ -30,7 +31,7 @@ class FleetV20DispatchContractTest(unittest.TestCase):
             jobs = Path(td) / "jobs.log"
             jobs.write_text(
                 row("2026-07-20T00:00:00+00:00", "open",
-                    "quick-a", "att-quick-a")
+                    "quick-a", "att-quick-a", unit="code-execute")
             )
             values, malformed = dispatch._scan_jobs_log(str(jobs), set())
         self.assertEqual(malformed, 0)
@@ -42,6 +43,7 @@ class FleetV20DispatchContractTest(unittest.TestCase):
         self.assertTrue(job.registered_worker)
         self.assertEqual(job.fallback_hop, "same-harness-headless")
         self.assertEqual(job.attempt_contract_status, "current")
+        self.assertEqual(job.unit, "code-execute")
 
     def test_two_live_quick_attempts_are_contract_violations(self):
         with tempfile.TemporaryDirectory() as td:
@@ -132,6 +134,7 @@ class FleetV20DispatchContractTest(unittest.TestCase):
             by_slug["invalid"].attempt_contract_status,
             "invalid:schema-version",
         )
+        self.assertIsNone(by_slug["legacy"].unit)
 
     def test_teammate_is_visible_but_not_a_dispatch_attempt(self):
         contract = {

@@ -308,10 +308,11 @@ class SummaryJsonTest(GateMarkBase):
         node = route.summary(views)[0]["nodes"][0]
         self.assertIn("gate_passed", node)
         self.assertIs(node["gate_passed"], True)
-        # The v10 `--json` node key set, pinned verbatim — `gate_passed` is the ONLY addition.
+        # The v10 key set plus the additive gate and v14 portable-unit metadata.
         self.assertEqual(sorted(node), sorted([
             "id", "depends_on", "level", "state", "gate", "note",
-            "elapsed_min", "model", "harness", "effort", "gate_passed"]))
+            "elapsed_min", "model", "harness", "effort", "gate_passed",
+            "unit", "unit_choices"]))
 
     def test_unmarked_node_serializes_as_null_not_false(self):
         views = route.build_views([], {}, {self.route_id: self.record}, 1_000_000.0)

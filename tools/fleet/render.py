@@ -1151,9 +1151,10 @@ def _dispatch_role_suffix(j, max_width=None):
     # capability_owner drops, and a '<capability>-<role>' composite ('autopilot-code-owner')
     # keeps only its role tail instead of rendering as 'autopilot_cod…'.
     # Writer-vocabulary normalization (user 2026-07-20: "codex랑 claude가 서로 다르게 뜨는데")
-    # — the codex conductor misfiles PORTABLE MODEL-ROLE phrases ('deep orchestrator',
-    # 'deep maker') and team personas ('plan-team') into worker_role, where claude writes
-    # harness role tokens + a separate model_role. Harness role tokens are always kebab, so
+    # — legacy rows may misfile PORTABLE MODEL-ROLE phrases ('deep orchestrator',
+    # 'deep maker') and retired team metadata ('plan-team') into worker_role. Current writers
+    # leave worker_role unset and use the independent fields above. Legacy harness role tokens
+    # are always kebab, so
     # a space marks the model-role phrase: the orchestrator phrase IS the conductor
     # ('owner'), every other model-role/persona restates an axis the row already shows
     # (model cell / name-zone stage label) and drops. Display-only; the registry row keeps
@@ -1219,7 +1220,7 @@ def _opts_segs(j):
     (mode·intensity) ride in a dim paren group, and the environment tail
     (profile home / role suffix) is set off by ' / '. A dispatch-depth-2 worker names its
     assigned stage skill and keeps only worker-local intensity/profile: inherited
-    owner mode and internal personas (qa/development/maker) are not child identity.
+    owner mode and legacy personas (qa/development/maker) are not child identity.
     qa left this dial with the retired qa axis (user 2026-07-16 — rigor derives
     from intensity, CONVENTIONS §1.1)."""
     depth = max(1, int(getattr(j, "depth", 1) or 1))
@@ -1236,6 +1237,9 @@ def _opts_segs(j):
         knob_items.append(role)
     knobs = "·".join(knob_items)
     tail = _dispatch_profile(j)
+    unit = getattr(j, "unit", None)
+    if unit:
+        tail = " / ".join(value for value in (tail, "unit:" + _compact_dispatch_name(unit, _PROFILE_MAX)) if value)
     contract_status = getattr(j, "attempt_contract_status", None)
     if contract_status == "legacy-read-only":
         tail = " / ".join(value for value in (tail, "legacy") if value)
@@ -1953,6 +1957,9 @@ def _route_node_text(n):
     "not passed" mark to render: absence of evidence draws nothing."""
     st = n["state"]
     nid = n["id"]
+    unit = n.get("unit")
+    if unit:
+        nid = "%s[%s]" % (nid, _compact_dispatch_name(unit, _PROFILE_MAX))
     elapsed = n.get("elapsed_min")
     mark = _GATE_MARK if n.get("gate_passed") else ""
     if st == "done":
@@ -2874,8 +2881,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                              if k.liveness == "working" and getattr(k, "route_node", None)]
             if active_routed:
                 return active_routed[0].route_node
-            # Some checked Codex dispatches carry a portable persona
-            # (`development`) in worker_role while the job key is the actual stage
+            # Some legacy Codex dispatches carry a retired persona (`development`)
+            # in worker_role while the job key is the actual stage
             # capability (`code-execute`). Reuse the row-label resolver so the
             # conductor and its child cannot disagree about the active stage.
             kids = [(k, _dispatch_stage_label(k)) for k in depth2]

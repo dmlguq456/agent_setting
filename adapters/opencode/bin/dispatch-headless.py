@@ -492,6 +492,8 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         pipe += f",worker_role={args.worker_role}"
     pipe += f",worker_type={args.worker_type}"
     pipe += f",assigned_contract={args.assigned_contract}"
+    if args.unit:
+        pipe += f",unit={args.unit}"
     if args.capability_owner:
         pipe += f",owner={args.capability_owner}"
     if args.owner_harness:
@@ -1026,6 +1028,10 @@ def main(argv: list[str]) -> int:
             dispatch_env["AGENT_DISPATCH_WORKER_ROLE"] = args.worker_role
         else:
             dispatch_env.pop("AGENT_DISPATCH_WORKER_ROLE", None)
+        if args.unit:
+            dispatch_env["AGENT_DISPATCH_UNIT"] = args.unit
+        else:
+            dispatch_env.pop("AGENT_DISPATCH_UNIT", None)
         try:
             proc = subprocess.Popen(
                 [sys.executable, str(governor), "--root", str(governor_root),
@@ -1094,6 +1100,7 @@ def main(argv: list[str]) -> int:
     print(f"worker_role={args.worker_role or '-'}")
     print(f"worker_type={args.worker_type}")
     print(f"assigned_contract={args.assigned_contract}")
+    print(f"unit={args.unit or '-'}")
     print(f"owner={args.capability_owner or '-'}")
     print(f"owner_harness={args.owner_harness or '-'}")
     print(f"route_file={args.route_file or '-'}")

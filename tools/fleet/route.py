@@ -492,6 +492,7 @@ def _heuristic_view(route_id, route_jobs):
     existing `_PIPE_STAGES` breadcrumb instead of this view's (empty) node list."""
     return {"route_id": route_id, "route_hash": None, "source": "heuristic",
             "capability": None, "capability_mode": None, "execution_topology": None,
+            "unit_catalog_digest": None, "composed": False,
             "effective_intensity": None, "progress": {"done": 0, "total": 0},
             "nodes": [], "key": route_id}
 
@@ -507,10 +508,19 @@ def _record_view(record, route_id, route_jobs, ev_by_node, now, gate_marks_for_r
         for nid in level:
             rn = node_by_id.get(nid, {})
             st = _node_state(nid, route_jobs, ev_by_node, now)
+            unit = rn.get("unit") if isinstance(rn.get("unit"), str) else None
+            raw_unit_choices = rn.get("unit_choices")
+            unit_choices = (
+                list(raw_unit_choices)
+                if isinstance(raw_unit_choices, list)
+                and all(isinstance(choice, str) for choice in raw_unit_choices)
+                else []
+            )
             if st["state"] == "done":
                 done += 1
             nodes.append({
                 "id": nid, "depends_on": list(rn.get("depends_on") or []), "level": level_i,
+                "unit": unit, "unit_choices": unit_choices,
                 "state": st["state"], "gate": rn.get("completion_gate"),
                 # True | None — a DIMENSION SEPARATE from `state` (prd.md:308). `state` says what
                 # the runner is doing; `gate_passed` says whether the completion gate is proven
@@ -524,6 +534,8 @@ def _record_view(record, route_id, route_jobs, ev_by_node, now, gate_marks_for_r
     return {"route_id": route_id, "route_hash": record.get("route_hash"), "source": "record",
             "capability": record.get("capability"), "capability_mode": record.get("capability_mode"),
             "execution_topology": record.get("execution_topology"),
+            "unit_catalog_digest": record.get("unit_catalog_digest"),
+            "composed": bool(record.get("composed")),
             "effective_intensity": record.get("effective_intensity"),
             "progress": {"done": done, "total": len(nodes)}, "nodes": nodes, "key": route_id}
 
@@ -637,6 +649,7 @@ def summary(views):
         if not v.get("route_id"):
             continue
         nodes = [{"id": n["id"], "depends_on": n.get("depends_on") or [], "level": n.get("level"),
+                  "unit": n.get("unit"), "unit_choices": n.get("unit_choices") or [],
                   "state": n.get("state"), "gate": n.get("gate"),
                   "gate_passed": n.get("gate_passed"), "note": n.get("note"),
                   "elapsed_min": n.get("elapsed_min"), "model": n.get("model"),
@@ -646,6 +659,8 @@ def summary(views):
                     "source": v.get("source"), "capability": v.get("capability"),
                     "capability_mode": v.get("capability_mode"),
                     "execution_topology": v.get("execution_topology"),
+                    "unit_catalog_digest": v.get("unit_catalog_digest"),
+                    "composed": bool(v.get("composed")),
                     "effective_intensity": v.get("effective_intensity"),
                     "progress": v.get("progress") or {"done": 0, "total": 0}, "nodes": nodes})
     return out

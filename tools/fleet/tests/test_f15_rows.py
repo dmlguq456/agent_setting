@@ -404,6 +404,28 @@ class OptsDialHierarchyTest(unittest.TestCase):
         self.assertEqual(self._dial(child), "code-test(strong)")
         self.assertEqual(self._dial(owner), "code(dev/refactor·strong·owner)")
 
+    def test_unit_is_a_distinct_dim_tail_not_a_skill_or_worker_role(self):
+        child = DispatchJob(
+            key="code",
+            slug="s",
+            depth=2,
+            intensity="strong",
+            worker_type="stage",
+            assigned_contract="code-test",
+            unit="verify",
+            worker_role="deep maker",
+            capability_owner="autopilot-code",
+            route_node="test",
+        )
+        self.assertEqual(self._dial(child), "code-test(strong) / unit:verify")
+        self.assertEqual(render._dispatch_stage_label(child), "test")
+
+    def test_route_node_compact_label_includes_unit(self):
+        text, _key, _mark = render._route_node_text({
+            "id": "test", "unit": "verify", "state": "pending",
+        })
+        self.assertEqual(text, "test[verify] ○")
+
     def test_entry_and_environment_tail_without_knobs(self):
         j = DispatchJob(key="code", slug="s", depth=1, profile="layer2")
         self.assertEqual(self._dial(j), "code / layer2")
@@ -433,9 +455,9 @@ class OptsDialHierarchyTest(unittest.TestCase):
         self.assertEqual(self._dial(codex), "code(dev/refactor·strong·owner)")
         self.assertEqual(self._dial(codex), self._dial(claude))
 
-    def test_codex_team_persona_and_maker_phrase_drop_from_knobs(self):
-        # 'plan-team' restates the stage (name-zone label), 'deep maker' restates the model
-        # cell — neither is a worker identity on the dial.
+    def test_legacy_team_metadata_and_maker_phrase_drop_from_knobs(self):
+        # Legacy 'plan-team' restates the stage and 'deep maker' restates the model cell;
+        # neither is a current worker identity on the dial.
         j = DispatchJob(key="code-plan", slug="s", depth=2, harness="codex",
                         mode="dev/refactor", intensity="strong", worker_role="plan-team",
                         capability_owner="autopilot-code")

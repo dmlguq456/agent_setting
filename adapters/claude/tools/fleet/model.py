@@ -242,6 +242,7 @@ class DispatchJob:
     intensity: Optional[str] = None     # direct|quick|standard|strong|thorough|adversarial
     worker_type: Optional[str] = None   # owner | stage | review | support bootstrap overlay
     assigned_contract: Optional[str] = None  # exact portable Skill/contract assigned to worker
+    unit: Optional[str] = None          # selected portable unit-catalog entry; independent of Skill/type
     worker_role: Optional[str] = None   # legacy compatibility metadata; never canonical identity
     capability_owner: Optional[str] = None  # owning capability slug/name for sub-workers
     effort: Optional[str] = None        # dispatch runtime effort (pipe `effort=`; None = parent-inherit)

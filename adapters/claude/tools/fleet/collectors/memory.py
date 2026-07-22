@@ -104,9 +104,9 @@ def _repo_key(event):
     """Grouping key for F-19 per-repo rows (prd.md §4.7 F-19 extension, 사용자 확정
     2026-07-16). Only trusts fields the journal actually carries — `cwd` (mapped through
     the same `project_of` grouping key the board's own cwd-project cards use) or a literal
-    `project` field. Neither exists in the current write-events.jsonl schema (D-37); this
-    is forward-compatible plumbing that degrades to no grouping (honest omission, F-3) until
-    a journal writer starts emitting one of them — never a guess."""
+    `project` field. Current writers emit `cwd`; `project` remains a tolerant compatibility
+    field. Historical rows without either field degrade to no grouping (honest omission, F-3)
+    rather than guessing."""
     cwd = event.get("cwd")
     if isinstance(cwd, str) and cwd:
         try:
