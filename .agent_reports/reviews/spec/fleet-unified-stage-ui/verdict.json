@@ -1,0 +1,182 @@
+{
+  "verdict": "FAIL",
+  "blocker": "The proposed v16 insertion is directionally correct but cannot be adopted unchanged because existing normative clauses would still conflict with it, child subtitle/context attribution is not unified, fallback acceptance is incomplete, and the component's v14/v15 version history is not transaction-ready.",
+  "task_type": "mixed infra/config and product-spec review",
+  "rationale": "The common projection, arbitrary-DAG, orthogonality, additive-JSON, hermetic quota, and no-live-provider directions match the approved requirements. The recommended title allowance of 3 concurrent workers (hard max 4) and 4 starts per rolling 60 seconds (hard max 4) is conservative relative to the current 2 concurrent and 3 starts/60 seconds. Adoption is blocked by unresolved contradictions and missing exact tests/version repairs listed below.",
+  "required_fixes": [
+    {
+      "id": "RF-01",
+      "priority": "P0",
+      "location": "proposed F-37a versus prd.md F-17/F-33 and render layout contracts",
+      "issue": "The proposal adds a common detail row but does not explicitly supersede the current wide-only NOW clause or the existing inline wide/narrow/stack context gauges. Applying it additively permits duplicate context and contradictory wide-only behavior.",
+      "fix": "State that F-37a replaces the affected F-17 and F-33 rendering clauses. Define exactly one subordinate detail row for wide, narrow, and stack, immediately after the complete identity card and before the sub-agent strip, with context immediately before fresh NOW. Pin the truth table: live context+NOW; live context without NOW; live missing context with NOW as `ctx — · NOW`; live missing both as `ctx —`; stale/dead entity omits the whole detail row regardless of cached values. Remove or explicitly retire duplicate inline context rendering.",
+      "evidence": [
+        "prd.md:197 says the subtitle is wide-only and silent when absent",
+        "prd.md:344 keeps the expanded context gauge wide-only and says narrow/stack are unchanged",
+        "tools/fleet/render.py:1001-1004,1433-1438,1455-1478 render context inside existing rows/cards",
+        "tools/fleet/render.py:2955-2958 emits session NOW only on the wide path"
+      ]
+    },
+    {
+      "id": "RF-02",
+      "priority": "P0",
+      "location": "proposed F-37b and existing F-32 child title/summary adoption",
+      "issue": "F-37b strengthens only the context join to `(pid,proc_start)`, while the current title/NOW join uses PID alone. The new combined detail row could therefore pair exact context from one child with a reused-PID subtitle from another child.",
+      "fix": "Define one child-session association that supplies title, NOW, and context together. Use exact `(pid,proc_start)` first; allow `(harness,realpath(cwd))` only when exact identity is unavailable and exactly one child candidate exists. Refuse PID reuse, duplicate PID candidates, cwd ambiguity, and cross-harness matches. Never inherit parent context. Add a PID-reuse fixture proving subtitle and context are both withheld rather than mixed.",
+      "evidence": [
+        "tools/fleet/collectors/__init__.py:63-94 indexes title/summary by PID without proc_start",
+        "Session and DispatchJob already carry proc_start in tools/fleet/model.py",
+        "existing cwd ambiguity tests cover title/summary but not PID reuse or combined context"
+      ]
+    },
+    {
+      "id": "RF-03",
+      "priority": "P0",
+      "location": "proposed F-36b/F-36d versus prd.md F-28a/F-28 lock",
+      "issue": "The new fail-closed rule conflicts with the current normative rule that missing, unparsable, or hash-invalid route records quietly fall back to legacy heuristics. The meanings and field-level authority of `route-exact` and `registry-exact` are also not fully defined.",
+      "fix": "Explicitly supersede F-28's heuristic fallback whenever any explicit route tuple exists. Define that a verified record plus exact entity tuple may populate topology, progress, and node state; exact registry/env evidence without a verified record may preserve observed identity fields but may not fabricate validated topology, progress, gate passage, or node completion. Any explicit conflict or validation failure must remain unknown/ambiguous and must not fall through to artifacts. Preserve artifact inference only when route evidence is completely absent.",
+      "evidence": [
+        "prd.md:320 requires quiet pipe-heuristic fallback on record absence/parse/hash failure",
+        "prd.md:523 locks tolerant fallback regression behavior",
+        "tools/fleet/route.py:489-497 currently emits a heuristic view when a route_id is known but the record is unavailable"
+      ]
+    },
+    {
+      "id": "RF-04",
+      "priority": "P0",
+      "location": "v16 acceptance-test matrix: artifact fallback and ambiguity",
+      "issue": "The matrix checks exact-over-artifact conflicts but does not prove the artifact-only boundary itself: exactly one plan directory, zero candidates, multiple candidates, or the prohibition on synthesizing route/gate/node completion from artifacts.",
+      "fix": "Add fixtures for one exact plan-dir candidate (`source=artifact-inferred`, stage_label only), zero candidates (`source=none`), two or more exact/fuzzy candidates (`source=none` plus ambiguity evidence), and an explicit invalid route tuple coexisting with a plausible plan directory (unknown/ambiguous, never artifact-derived). Assert route_id, route_node, progress, gate, and completion remain absent on all artifact paths.",
+      "evidence": [
+        "tools/fleet/collectors/dispatch.py:675-744 currently chooses exact suffix or a best token-overlap candidate",
+        "tools/fleet/collectors/dispatch.py:1449-1456 currently re-derives stage for working registry rows"
+      ]
+    },
+    {
+      "id": "RF-05",
+      "priority": "P0",
+      "location": "proposed F-39 versus prd.md F-17/F-23 and locked F-23",
+      "issue": "The proposed limits are acceptable, but adding F-39 alone leaves multiple older normative budgets active and leaves the custom-provider no-tools enforcement boundary implicit.",
+      "fix": "Replace or mark superseded every current numeric budget clause: F-17 child/shared limit text, F-23 hard-limit/rolling-window/acceptance text, and the locked F-23 paragraph. Make F-39 the single current source of truth for 3 concurrent (max 4), 4 starts/60 seconds (max 4), 600/150-second debounces, shared cross-process leases, stale-lease recovery, and both kill switches. State that Fleet enforces shell-free argv and the default provider's explicit tool denial; a custom `FLEET_TITLE_COMMAND` wrapper is responsible for enforcing its own no-tools property, which Fleet cannot introspect.",
+      "evidence": [
+        "prd.md:198 still states concurrency 2 and 16 starts in a 600-second budget",
+        "prd.md:228-231 and prd.md:500 still specify older 2/4/16/600-second behavior",
+        "tools/fleet/refresh_title.py currently uses 2 concurrent (max 4), 3 starts/60 seconds (max 3), and 600/150-second debounces",
+        "tools/fleet/refresh_title.py:259-283 explicitly disables tools only for the default provider; custom argv is shell-free but wrapper-owned"
+      ]
+    },
+    {
+      "id": "RF-06",
+      "priority": "P1",
+      "location": "v16 acceptance-test matrix: context orthogonality",
+      "issue": "The matrix says decreasing telemetry becomes unknown, but a lower current context percentage can be legitimate after compaction. This condition is absent from F-38 and unsupported by the current normalization policy.",
+      "fix": "Change the assertion to missing, stale, malformed, or source-sequence-regressed telemetry becoming unknown. Do not treat a numeric decrease alone as invalid; use timestamp/cursor ordering to reject an older sample if that is the intended case.",
+      "evidence": [
+        "tools/fleet/token_budget.py policy_band classifies the current normalized percentage without a monotonicity rule",
+        "proposed F-38 names missing/stale/malformed, not decreasing, as unknown conditions"
+      ]
+    },
+    {
+      "id": "RF-07",
+      "priority": "P0",
+      "location": "component version transaction and pipeline metadata",
+      "issue": "The current PRD header contains v15, but local snapshots stop at v13 and pipeline_state.yaml/pipeline_summary.md still describe v14. The transaction helper therefore computes v14 as the next snapshot, so a direct v16 update would mis-version or lose the current v15 delta. Pipeline state would also falsely retain dev=done for unimplemented v16 work.",
+      "fix": "Under the canonical spec lock, first repair the missing local v14 snapshot from the authoritative v14 copy at `.agent_reports/spec/_internal/versions/v21/agent-fleet-dashboard/prd.md`. Then run the v16 component update as a second locked transaction: snapshot the current component PRD verbatim to `_internal/versions/v15/prd.md`, write v16 from that current v15 base, and update the v16 header, section, locked-decision block, version history, implementation/acceptance next steps, pipeline_state.yaml, and pipeline_summary.md together. Mark v16 spec done but v16 development pending/not done, and record the carried v15 memory-sync delta rather than reverting to v14.",
+      "evidence": [
+        "component `_internal/versions/` contains v1..v13 with no v14 or v15",
+        "utilities/spec-transaction.py computes next_version as max snapshot + 1",
+        "the authoritative nested v21 snapshot is v14 and differs from current component PRD only by the v15 memory-sync edits",
+        "prd.md mtime is later than pipeline_state.yaml and pipeline_summary.md; both metadata files still say v14"
+      ]
+    },
+    {
+      "id": "RF-08",
+      "priority": "P1",
+      "location": "prd.md module structure and component diagram",
+      "issue": "v16 introduces a shared WorkProjection as the only render/JSON input, but the fixed module tree and Mermaid diagram still route Session/DispatchJob directly to render.py and name no projection owner.",
+      "fix": "Update the module ownership and component diagram in the same PRD transaction. Name the single resolver location (for example model.py or a dedicated projection.py) and show Session plus DispatchJob evidence flowing through WorkProjection before group view, process view, plain `--once`, and JSON serialization. Keep the resolver source-agnostic and read-only.",
+      "evidence": [
+        "prd.md:388-410 declares the module structure fixed",
+        "prd.md:415-446 shows collectors -> Session/DispatchJob -> render with no common projection layer"
+      ]
+    }
+  ],
+  "recommendations": [
+    {
+      "id": "REC-01",
+      "recommendation": "Adopt the research limits of default concurrency 3 (hard max 4) and 4 starts per rolling 60 seconds (hard max 4) after RF-05 is applied.",
+      "rationale": "This is a bounded one-step increase over the current defaults, permits a three-slot cold fill plus at most one replacement in the same minute, and preserves cross-process fail-closed leases and the global pool. No live-provider smoke is needed or desirable."
+    },
+    {
+      "id": "REC-02",
+      "recommendation": "Use stable machine-readable ambiguity codes such as `route-record-mismatch`, `multiple-leaf-candidates`, `multiple-child-cwd-candidates`, and `multiple-artifact-plan-dirs` inside `ambiguity[]`.",
+      "rationale": "Stable codes make JSON assertions and operator diagnosis less dependent on prose."
+    },
+    {
+      "id": "REC-03",
+      "recommendation": "Keep all quota tests hermetic with a fake clock and isolated state root, and fail the test if either `subprocess.Popen` or provider `subprocess.run` is reached from snapshot, demo, width, projection, or storm fixtures.",
+      "rationale": "This preserves deterministic lease/window tests and the explicit no-live-provider acceptance boundary."
+    },
+    {
+      "id": "REC-04",
+      "recommendation": "Retain canonical-to-Claude Fleet mirror parity in the implementation verification set in addition to the v16 acceptance matrix.",
+      "rationale": "The existing repository treats the mirror as a compatibility surface; the new model and render contract will touch mirrored files."
+    }
+  ],
+  "qa_policy_evidence": {
+    "command": "/home/Uihyeop/agent_setting/adapters/codex/bin/preflight.sh qa-policy standard general",
+    "runtime_surface": "codex-qa-policy",
+    "qa_level": "standard",
+    "qa_track": "general",
+    "quality_reviewers": "1x-deep-reviewer+2x-fast-reviewers",
+    "fact_checker": "1x-fast-fact-checker",
+    "external_adversary": "skip",
+    "max_round": 1,
+    "assurance_scope": "plan-check:selected-independent-pass:final-verify",
+    "independence": "This dispatched research/plan-review stage is the independent deep-review pass; it did not dispatch another worker.",
+    "final_verification": "179 selected baseline tests passed after correcting an initial unittest module-name invocation; these tests validate current repository behavior and transaction tooling, not unimplemented v16 behavior."
+  },
+  "commands": [
+    {
+      "command": "preflight.sh mode-info research/plan-review",
+      "result": "PASS: portable persona, native mode path resolved"
+    },
+    {
+      "command": "preflight.sh qa-policy standard general",
+      "result": "PASS: plan-check:selected-independent-pass:final-verify"
+    },
+    {
+      "command": "read assigned PRD, pipeline_state.yaml, pipeline_summary.md, research handoff, relevant agent-fleet-dashboard research, and repository source/tests",
+      "result": "PASS: evidence collected; no source or spec files edited"
+    },
+    {
+      "command": "preflight.sh read /home/Uihyeop/agent_setting/.agent_reports/spec/agent-fleet-dashboard/prd.md codex-headless",
+      "result": "UNSUPPORTED: PRD read succeeded, but the marker hook could not write the read-only .spec-grounding side effect"
+    },
+    {
+      "command": "preflight.sh verification-runner --timeout 240 -- python3 -m unittest utilities.compose_route.test utilities.spec_transaction.test <fleet modules>",
+      "result": "INVOCATION ERROR: the two dotted utility test module names are not importable; 167 Fleet tests passed in the same run"
+    },
+    {
+      "command": "preflight.sh verification-runner --timeout 120 -- python3 utilities/compose_route.test.py",
+      "result": "PASS: 9/9"
+    },
+    {
+      "command": "preflight.sh verification-runner --timeout 120 -- python3 utilities/spec_transaction.test.py",
+      "result": "PASS: 3/3"
+    },
+    {
+      "command": "preflight.sh verification-runner --timeout 240 -- python3 -m unittest tools.fleet.tests.test_f28_route tools.fleet.tests.test_f28_breadcrumb tools.fleet.tests.test_f30_process_view tools.fleet.tests.test_f16_f17_subtitle tools.fleet.tests.test_f17_title_refresh tools.fleet.tests.test_f21_cross_harness_titles tools.fleet.tests.test_wide_ctx_gauge tools.fleet.tests.test_dispatch_child_titles",
+      "result": "PASS: 167/167"
+    }
+  ],
+  "changed_files": [
+    "/home/Uihyeop/agent_setting/.agent_reports/reviews/spec/fleet-unified-stage-ui/verdict.json"
+  ],
+  "unsupported_runtime_contracts": [
+    "The spec-read marker side effect could not write under `/home/Uihyeop/agent_setting/.spec-grounding` because that worker-visible location is read-only; the PRD itself was read successfully.",
+    "No live default or custom title provider was invoked. The proposed 3/4 quota behavior was assessed from repository lease logic and hermetic tests, not measured against a live provider or quota service.",
+    "A custom `FLEET_TITLE_COMMAND` provider's no-tools property cannot be enforced or introspected by Fleet beyond the shell-free argv contract; that property remains the wrapper's responsibility.",
+    "The required post-write `file-write` heartbeat was attempted after the baseline `test` heartbeat and the registry rejected the phase transition as `progress-phase-regression` (`test->file-write`). The durable artifact is instead finalized with the allowed terminal artifact phase."
+  ]
+}

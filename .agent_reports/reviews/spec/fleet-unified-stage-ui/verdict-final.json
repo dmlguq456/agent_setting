@@ -1,0 +1,244 @@
+{
+  "verdict": "FAIL",
+  "blocker": "The v16 contract is not yet internally authoritative: the active F-28 fallback clause still permits heuristic recovery after route-record failure, child title scheduling is both required and forbidden, title-length rules conflict, and the current Next section still instructs superseded v6/v10 work.",
+  "task_type": "mixed infra/config and product-spec review",
+  "review_route": {
+    "route_id": "rt-ad63f931daa3d317",
+    "route_hash": "sha256:ad63f931daa3d317e197b81d11e19a744323a0aac60c523b37cc9d4406cbb4ab",
+    "route_node": "review-final",
+    "attempt_id": "att-d2ed37a7e670783b91a3ff5ee5010bb691f4b6bfcf8f854e",
+    "source_commit": "340359eb5a12e175dc2b1f28212763df5f96b791",
+    "stance": "refute-by-default"
+  },
+  "findings": [
+    {
+      "id": "RF-01",
+      "resolved": true,
+      "evidence": [
+        "prd.md:197 explicitly moves the former wide-only NOW row and primary-row context gauge to the F-37 all-layout subordinate line.",
+        "prd.md:344 explicitly removes wide primary-row and narrow/stack inline context telemetry.",
+        "prd.md:371-377 defines exactly one detail row after identity and before the sub-agent strip for wide/narrow/stack, including live/missing/stale/dead truth-table cases and context-first clipping.",
+        "prd.md:389 acceptance pins wide@168, wide@120, narrow@100, stack@60, row order, CJK-safe clipping, and terminal-width bounds."
+      ]
+    },
+    {
+      "id": "RF-02",
+      "resolved": true,
+      "evidence": [
+        "prd.md:343 retires the title-only PID join and assigns title/NOW/context to one association.",
+        "prd.md:379 requires exact (pid,proc_start), allows only one same-harness realpath(cwd) fallback when exact identity is absent, rejects PID reuse, duplicate PID, cwd ambiguity, and cross-harness matching, and forbids parent-context inheritance.",
+        "prd.md:390 requires fixtures for joint value adoption, differing parent/child percentages, PID reuse, duplicate PID, cwd ambiguity, and cross-harness refusal."
+      ]
+    },
+    {
+      "id": "RF-03",
+      "resolved": false,
+      "evidence": [
+        "prd.md:320 and prd.md:362-367 correctly specify that any explicit invalid/conflicting route tuple remains unknown/ambiguous, cannot fall through to artifacts, and that registry-only evidence cannot fabricate topology, progress, gate passage, or node completion.",
+        "prd.md:303 remains active normative text and still says route-record absence or parse failure falls back to the current pipe heuristic without conditioning that fallback on complete route-tuple absence.",
+        "Because prd.md:303 is not marked historical or explicitly superseded, an implementer can conform to it while violating the v16 fail-closed rule; the earlier RF-03 supersession requirement is therefore not fully closed."
+      ]
+    },
+    {
+      "id": "RF-04",
+      "resolved": true,
+      "evidence": [
+        "prd.md:369 defines artifact inference only when the route tuple is wholly absent and exactly one exact plan directory exists; it permits stage_label only and forbids route, node, progress, gate, and completion synthesis.",
+        "prd.md:393 separately pins exactly-one, zero, and multiple artifact candidates, including ambiguity evidence for multiple candidates.",
+        "prd.md:392 pins an invalid explicit route tuple plus plausible artifact as unknown/ambiguous rather than artifact-derived."
+      ]
+    },
+    {
+      "id": "RF-05",
+      "resolved": true,
+      "evidence": [
+        "prd.md:228-231 and prd.md:383 make F-39 the current numeric source of truth: default concurrency 3, hard max 4, default/hard start budget 4 per rolling 60 seconds, and 600/150-second main/child debounces.",
+        "prd.md:383 requires one shared cross-process pool and locks, stale-lease recovery, both kill switches, default-provider tool denial, shell-free custom argv, and wrapper-owned custom no-tools enforcement.",
+        "prd.md:549 revises the historical F-23 lock to the same limits, while prd.md:398-399 pins hermetic quota and zero-provider tests."
+      ]
+    },
+    {
+      "id": "RF-06",
+      "resolved": true,
+      "evidence": [
+        "prd.md:381 makes only missing, stale, malformed, or source-sequence-regressed telemetry unknown and explicitly allows a numeric decrease caused by compaction.",
+        "prd.md:397 repeats the permitted numeric decrease and rejects only source-sequence regression in the acceptance matrix."
+      ]
+    },
+    {
+      "id": "RF-07",
+      "resolved": true,
+      "evidence": [
+        "The component-local v14 snapshot and authoritative aggregate v14 copy are byte-identical with SHA-256 5b4ccb4a9ff7b7442d76179cd5320b1f8b4476c69f7670c36e0e9663ef8dabc4.",
+        "The v15 snapshot SHA-256 is 5b0097064c38f705054797f2af29007baf2251ec1eb66b68296d9f771a7ddf57, matching pipeline_summary.md:23; its v14-to-v15 diff contains the declared sync/migrate add, literal actor=sync, logical-cwd, no-op, and no-backfill delta.",
+        "pipeline_state.yaml:11-16 and pipeline_summary.md:5,17-38 declare v16 spec done, v16 development pending, resume phase dev/F-36~F-39, and the carried v15 memory-sync delta."
+      ]
+    },
+    {
+      "id": "RF-08",
+      "resolved": true,
+      "evidence": [
+        "prd.md:360 assigns source-agnostic resolution to projection.py and prohibits render/plain/JSON from independently calling live_stage().",
+        "prd.md:449-451 places projection.py and WorkProjection in the module tree between evidence models and rendering.",
+        "prd.md:480-485 shows Session/DispatchJob evidence flowing through one WorkProjection resolver to group/process/plain rendering and additive JSON."
+      ]
+    }
+  ],
+  "internal_consistency": {
+    "passed": false,
+    "checks": [
+      {
+        "id": "IC-01",
+        "severity": "P0",
+        "status": "FAIL",
+        "location": "prd.md:303 versus prd.md:320,362-369,578-579",
+        "issue": "The older F-28 consumer clause still allows pipe-heuristic fallback on record absence or parse failure, while current v16 permits fallback only when the entire explicit tuple is absent.",
+        "required_resolution": "Edit the F-28 clause itself to state the v16 route-tuple boundary or label it historical and explicitly superseded by F-28a/F-36."
+      },
+      {
+        "id": "IC-02",
+        "severity": "P0",
+        "status": "FAIL",
+        "location": "prd.md:198,228-231,233,549",
+        "issue": "F-17/F-23/F-39 include normal dispatch children in title/NOW scheduling with a 150-second debounce, but F-24 still excludes every general loop/cron/dispatch worker from the main title scheduler.",
+        "required_resolution": "Define one eligibility predicate: exclude only mem/title/app-server and other explicitly internal workers while allowing the intended normal dispatch child population, or state a narrower child class and test it."
+      },
+      {
+        "id": "IC-03",
+        "severity": "P1",
+        "status": "FAIL",
+        "location": "prd.md:195,197,222,548,595",
+        "issue": "The current provider output is simultaneously 4-8 words/64 characters, 3-6 words/40 characters, and in the historical lock/current Next text up to 12 words/96 characters.",
+        "required_resolution": "Choose one current TITLE validation contract, mark earlier sizes explicitly historical/superseded, and make F-17, F-22, locked decisions, and Next agree."
+      },
+      {
+        "id": "IC-04",
+        "severity": "P0",
+        "status": "FAIL",
+        "location": "prd.md:590-606",
+        "issue": "The current Next section starts with the correct v16 cycle but then keeps a pending v6 F-22/F-23 12-word/96-character task, a pending v10 implementation cycle already described as complete elsewhere, and the obsolete v2 command and sequence.",
+        "required_resolution": "Make Next contain only the current v16 autopilot-code handoff; move completed or superseded sequences to an explicitly historical section."
+      }
+    ],
+    "historical_text_assessment": {
+      "explicitly_historical_and_nonblocking": [
+        "Pipeline-summary v6/v8/v10 implementation narratives are version-labeled history.",
+        "The v14 and v15 snapshot records are immutable history and agree with their recorded hashes/deltas."
+      ],
+      "stale_active_or_ambiguous": [
+        "F-28 at prd.md:303 is still phrased as a live consumer contract.",
+        "F-24 at prd.md:233 is still phrased as a live scheduler exclusion.",
+        "The v6 F-22 locked decision at prd.md:548 has no explicit supersession for title size.",
+        "The single current Next heading at prd.md:590 contains obsolete, non-completed instructions."
+      ]
+    }
+  },
+  "implementation_readiness": {
+    "passed": false,
+    "assessment": "The v16 design is otherwise detailed enough to implement: it names projection.py ownership, additive model/JSON fields, source precedence, ambiguity codes, layout truth tables, DAG behavior, quota constants, and hermetic verification. It is not safe to hand to autopilot-code until the four authority conflicts above are removed, because different compliant implementations would schedule different children, validate different title sizes, and disagree on invalid route fallback.",
+    "ready_elements": [
+      "Common WorkProjection schema and group/process/plain/JSON consumers are named.",
+      "Exact, registry-only, artifact-only, and ambiguity boundaries are testable.",
+      "Arbitrary composed DAG, parallel sibling, fan-in, width/overflow, additive JSON, context orthogonality, quota, and no-provider fixtures are specified.",
+      "The version transaction and dev-pending state are consistent."
+    ],
+    "completion_gate": "Reconcile IC-01 through IC-04 in the canonical PRD and rerun this independent final review before starting autopilot-code."
+  },
+  "acceptance_boundaries": {
+    "contract_coverage_passed": true,
+    "implementation_evidence_available": false,
+    "composed_route_fields": {
+      "covered": true,
+      "evidence": "prd.md:320,354-368 preserves route schema v2/dispatch contract v3, unit_catalog_digest, composed, nodes[].id/unit/unit_choices/depends_on/completion_gate/write_scope, sealed hash authority, and opaque node IDs. The accepted route file independently seals unit_catalog_digest/composed and node inputs/outputs/write_scope/completion gate."
+    },
+    "widths_and_overflow": {
+      "covered": true,
+      "evidence": "prd.md:389 pins wide@168, wide@120, narrow@100, stack@60, CJK-safe clipping, ordering, and width bounds."
+    },
+    "arbitrary_dag_parallel_fan_in": {
+      "covered": true,
+      "evidence": "prd.md:368,394 pins opaque IDs, depends_on topology, record-order levels, parallel active siblings, fan-in, progress, and absence of _PIPE_STAGES."
+    },
+    "ambiguity_refusal": {
+      "covered": true,
+      "evidence": "prd.md:362-369,392-395 covers explicit tuple conflict, multiple leaf/cwd/artifact candidates, gate ambiguity, and distinguishes parallel siblings from identity ambiguity."
+    },
+    "additive_json": {
+      "covered": true,
+      "evidence": "prd.md:360,379,396 preserves old sessions/jobs/summary/route meanings and adds work_projection and child context."
+    },
+    "hermetic_quota_limits": {
+      "covered": true,
+      "evidence": "prd.md:383,398 specifies fake clock, isolated state root, 200-session backlog, 3/4 concurrency, four starts per rolling 60 seconds, fifth-start refusal, window recovery, and direct-runner lease enforcement."
+    },
+    "interactive_registered_projection_parity": {
+      "covered": true,
+      "evidence": "prd.md:360,391 requires equivalent exact Session and DispatchJob evidence to produce identical normalized route/node/state/progress across all surfaces."
+    },
+    "zero_live_provider_invocation": {
+      "covered": true,
+      "evidence": "prd.md:383,399 makes JSON/once/demo/test no-spawn and requires fail-if-reached subprocess guards for both default and custom provider paths. No live provider was invoked during this review."
+    },
+    "note": "These are specification-coverage results only. tools/fleet/projection.py is intentionally absent and pipeline_state marks v16 development pending, so the 179 passing baseline tests do not prove the new v16 behavior."
+  },
+  "qa_policy_evidence": {
+    "command": "/home/Uihyeop/agent_setting/adapters/codex/bin/preflight.sh qa-policy standard general",
+    "runtime_surface": "codex-qa-policy",
+    "qa_level": "standard",
+    "qa_track": "general",
+    "quality_reviewers": "1x-deep-reviewer+2x-fast-reviewers",
+    "fact_checker": "1x-fast-fact-checker",
+    "external_adversary": "skip",
+    "max_round": 1,
+    "assurance_scope": "plan-check:selected-independent-pass:final-verify",
+    "independence": "This fresh sealed review-final route is the independent deep-review pass. The bounded review worker did not dispatch another worker.",
+    "baseline_result": "179/179 selected read-only baseline tests passed: Fleet 167, compose-route 9, spec-transaction 3. They validate current baseline and tooling only, not unimplemented v16 acceptance."
+  },
+  "commands": [
+    {
+      "command": "preflight.sh mode-info research/plan-review",
+      "result": "PASS: portable persona and native Codex mode path resolved"
+    },
+    {
+      "command": "preflight.sh qa-policy standard general",
+      "result": "PASS: plan-check:selected-independent-pass:final-verify"
+    },
+    {
+      "command": "read the complete current v16 PRD, pipeline_state.yaml, pipeline_summary.md, immutable prior verdict, research handoff, relevant agent-fleet-dashboard research, and sealed route",
+      "result": "PASS: all required inputs read; no assigned input edited"
+    },
+    {
+      "command": "preflight.sh read /home/Uihyeop/agent_setting/.agent_reports/spec/agent-fleet-dashboard/prd.md codex-headless",
+      "result": "UNSUPPORTED SIDE EFFECT: PRD read succeeded, but the marker hook could not write the read-only .spec-grounding filesystem"
+    },
+    {
+      "command": "sha256sum and cmp for component v14, authoritative v14, v15 snapshot, current v16, and immutable evidence files",
+      "result": "PASS: v14 copies byte-identical; v15 digest matches transaction summary; prior verdict digest remained 430a8d12314b94bc326e57210cb8ed943b225a438945bb2d080482a6b0fbc4a5 before final artifact write"
+    },
+    {
+      "command": "preflight.sh verification-runner --timeout 120 -- python3 utilities/compose_route.test.py",
+      "result": "PASS: 9/9"
+    },
+    {
+      "command": "preflight.sh verification-runner --timeout 120 -- python3 utilities/spec_transaction.test.py",
+      "result": "PASS: 3/3"
+    },
+    {
+      "command": "preflight.sh verification-runner --timeout 240 -- python3 -m unittest tools.fleet.tests.test_f28_route tools.fleet.tests.test_f28_breadcrumb tools.fleet.tests.test_f30_process_view tools.fleet.tests.test_f16_f17_subtitle tools.fleet.tests.test_f17_title_refresh tools.fleet.tests.test_f21_cross_harness_titles tools.fleet.tests.test_wide_ctx_gauge tools.fleet.tests.test_dispatch_child_titles",
+      "result": "PASS: 167/167"
+    },
+    {
+      "command": "git rev-parse HEAD && git status --short",
+      "result": "PASS: HEAD 340359eb5a12e175dc2b1f28212763df5f96b791; worktree clean before artifact write"
+    }
+  ],
+  "changed_files": [
+    "/home/Uihyeop/agent_setting/.agent_reports/reviews/spec/fleet-unified-stage-ui/verdict-final.json"
+  ],
+  "unsupported_runtime_contracts": [
+    "The spec-read marker side effect could not write under /home/Uihyeop/agent_setting/.spec-grounding because that filesystem is read-only; the PRD itself was read completely.",
+    "No live default or custom title provider was invoked. Provider quotas, costs, and external behavior were not empirically measured; only hermetic repository tests and specification boundaries were reviewed.",
+    "The v15 snapshot digest matches the transaction summary and its delta from authoritative v14 was inspected, but the pre-transaction mutable v15 file no longer exists as a second independent byte source outside the sealed snapshot; no stronger replay claim is made.",
+    "The selected baseline suite predates v16 implementation. It cannot supply runtime proof for WorkProjection, new layout rows, 3/4 quota behavior, or provider zero-call acceptance until the subsequent autopilot-code cycle adds those tests."
+  ]
+}

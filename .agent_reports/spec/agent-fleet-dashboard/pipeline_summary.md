@@ -1,9 +1,61 @@
 # agent-fleet-dashboard — Spec Pipeline Summary
 
-- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8/v9/v10) · 2026-07-17 (v11) · 2026-07-21 (v13) · 2026-07-22 (v14)
+- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8/v9/v10) · 2026-07-17 (v11) · 2026-07-20 (v12) · 2026-07-21 (v13) · 2026-07-22 (v14/v15/v16)
 - **Mode**: cli (터미널 TUI 도구)
-- **Status**: spec **v14 done** / dev **done** — portable unit/compositional route metadata와 legacy worker_role/runtime surface 경계를 Fleet projection에 동기화 (`a4f7f040`)
+- **Status**: spec **v16 done; independent PASS** / dev **done** — common projection·arbitrary composed DAG·ctx/NOW subordinate line·bounded title quota를 `460b248f`로 main에 통합
 - **Placement**: 별도 컴포넌트 `spec/agent-fleet-dashboard/` — 기존 `spec/prd.md`(Unified Memory System) 무수정.
+
+## v16 update (2026-07-22) — common work projection + subordinate context
+
+- Interactive main `Session`과 registered `DispatchJob`이 같은 additive `WorkProjection`을 소비한다. sealed route/node exact evidence가 우선이며, route tuple이 완전히 없는 행만 단일 artifact 후보로 stage label을 유도한다. 명시 tuple 불일치·복수 후보는 임의 최신 route를 고르지 않고 unknown/ambiguity로 남긴다.
+- commit `e8938809`의 compose-on-demand route를 schema 그대로 읽어 arbitrary `nodes[].id/unit/depends_on/completion_gate/write_scope`, parallel sibling, fan-in을 그린다. composed record에 plan/exec/test/report 하드코딩을 적용하지 않는다.
+- wide primary row의 확장 ctx gauge와 narrow/stack inline ctx를 폐기했다. live wide/narrow/stack 모두 identity 바로 아래 하나의 `ctx … [· NOW]` detail row를 사용하고 subtitle 부재는 ctx-only, context 부재는 `ctx —`, dead/stale는 row 생략으로 정직하게 강등한다.
+- child dispatch의 title/NOW/context는 exact `(pid,proc_start)` 후 unique `(harness,realpath(cwd))`인 단일 association만 공유한다. PID reuse·cross-harness·복수 후보는 세 값 모두 거부하며 parent context는 상속하지 않는다.
+- title/NOW worker의 현행 단일 예산은 concurrency 기본 3/최대 4, rolling starts 기본·최대 4/60s, main/child debounce 600/150s다. shared leases·start pool·kill switch·stale recovery·default Haiku no-tools·shell-free pluggable `FLEET_TITLE_COMMAND`/`FLEET_TITLE_MODEL` 경계를 유지하며 tests는 live provider를 호출하지 않는다.
+- context pressure는 표시 신호로만 남고 intensity, route/depth, model/effort, QA, test, retry, gate, guard, definition of done과 직교한다. compaction에 따른 정상 수치 하락은 허용한다.
+
+## v16 implementation closure (2026-07-22)
+
+- canonical `tools/fleet/**`, byte-identical Claude mirror, shared model-worker governor 변경을 `460b248f`로 main에 fast-forward하고 origin/main에 push했다. main `Session`과 registered `DispatchJob`은 동일 `WorkProjection`을 소비하며 single/parallel composed node와 route progress를 같은 규칙으로 표시한다.
+- strong `autopilot-code` continuation의 fresh cross-harness implementation review, `code-test`, `code-report`가 모두 PASS했다. 최종 증거는 `plans/2026-07-22_fleet-unified-stage-ui/{owner_handoff_final.md,test_logs/verification_final.md,pipeline_summary.md}`에 보존한다.
+- 최신 main 재반영 후 Fleet **781/781**, compose-on-demand **9/9**, capability route **30/30**, hostile governor 환경 F-39 **6/6**, generated projections, canonical↔Claude mirror, provider-disabled group/process/JSON smoke를 재실행해 모두 통과했다.
+- adaptation guard의 모든 negative sentinel과 원복 검사를 foreground에서 통과한 뒤 boundary가 exit 0을 반환했고, 재반영 후 standalone boundary도 exit 0과 동일한 전후 status를 확인했다. 문서화된 130-reference warning은 non-failing이다.
+
+## v16 independent review correction (2026-07-22)
+
+- fresh sealed route `rt-ad63f931daa3d317`, distinct node `review-final`, attempt `att-d2ed37a7e670783b91a3ff5ee5010bb691f4b6bfcf8f854e`의 독립 deep review는 RF-01~RF-08 중 RF-03의 오래된 F-28 문구와 추가 내부 모순 IC-01~IC-04 때문에 `FAIL`을 반환했다. 원본 `verdict.json`과 새 `verdict-final.json`은 모두 보존한다.
+- canonical spec transaction은 교정 전 PRD를 `_internal/versions/v16/prd.md`에 byte-exact snapshot하고, active F-28 fallback을 explicit-tuple fail-closed로 통일했다.
+- `AGENT_SESSION_ROLE=worker`를 scheduler 제외가 아닌 귀속 증거로 한정하고, mem/title/app-server/dead/stale 및 transcript 없는 비대화식 내부 행만 제외한다. 일반 registered dispatch child는 내부 태그가 없고 대화 transcript가 있으면 150초 debounce 대상이다.
+- fresh route `rt-044c1a9810207b09`, node `review-final-2`의 후속 독립 review는 본문 eligibility는 정정됐지만 F-24 acceptance 한 줄이 옛 blanket exclusion을 유지한 IC-02 잔여로 `FAIL`했다. 같은 minor transaction에서 acceptance를 동일 predicate로 정합했고 `verdict-final-2.json`은 보존한다.
+- fresh route `rt-c143657c8d95cb73`, node `review-final-3`, attempt `att-ccb1a37608ee193da6405ccba1458f43f3887b02b7f451f2`의 세 번째 독립 review는 RF-01·02·05~08과 IC-03·04를 닫았지만, active F-15/F-28b/F-30 legacy fallback 문구와 OpenCode blanket trigger exclusion 때문에 `FAIL`했다. `verdict-final-3.json`은 앞선 verdict와 함께 불변 보존한다.
+- 후속 canonical minor transaction은 stage authority를 `WorkProjection.stage_label` 하나로 통일하고 `live_stage()`를 완전한 route-tuple 부재+exact-one plan-dir인 legacy adapter로 제한했다. breadcrumb/process-card/고정-stage fallback도 같은 경계로 통일하고, 명시 tuple의 record 부재·무효·불일치는 unknown/ambiguity로 고정했다.
+- OpenCode를 포함한 모든 일반 registered conversational child는 하네스와 무관하게 F-24의 동일 predicate와 150초 debounce를 적용한다. native title은 provider 실패·미호출 fallback일 뿐 scheduler 제외 근거가 아니다.
+- fresh sealed route `rt-9dbc66f49a9ff927`, node `review-final-4`, attempt `att-2457a340994052f76dfcc9be73a98939e11261fcccff6130`의 독립 deep review가 RF-01~RF-08, IC-01~IC-04, 전체 내부 정합성, 구현 준비성, acceptance boundary를 모두 `PASS`했다. durable verdict는 `reviews/spec/fleet-unified-stage-ui/verdict-final-4.json`, exact completion evidence는 `.dispatch/completion/rt-9dbc66f49a9ff927/review-final-4.json`이며 앞선 FAIL verdict는 모두 보존한다.
+- current TITLE 계약을 3~6단어·최대 40자로 단일화하고 v6/v9 길이를 명시적 역사값으로 전환했다. `Next`는 v16 F-36~F-39 구현·§4.12 hermetic 검증만 남겼다.
+- 이 교정은 specification-only이며 source 구현·commit·push는 수행하지 않았다. dev는 독립 final PASS 전후 모두 pending이다.
+
+## v16 transaction and assurance
+
+- v15 current state를 `_internal/versions/v15/prd.md`에 byte-exact snapshot하고, 누락돼 있던 component-local v14 snapshot을 authoritative `_internal/versions/v21/agent-fleet-dashboard/prd.md`에서 복원한 뒤 canonical pipeline lock 안에서 PRD/state/summary를 함께 갱신했다.
+- strong `autopilot-spec` route는 research → independent plan review → PRD transaction으로 materialize했다. research artifact는 `shards/spec-research/fleet-unified-stage-ui/research.md`, review artifact는 `reviews/spec/fleet-unified-stage-ui/verdict.json`이며, 첫 review의 RF01~RF08을 모두 본 v16 계약에 흡수했다.
+- standard/general QA 정책은 selected independent review와 final verify를 요구하며, 정책상 1 deep + 2 fast reviewer 및 1 fast fact-checker가 권고됐다. 첫 등록형 depth-2 review의 FAIL은 불변 보존했고 같은 route/node를 재사용하지 않았다. 각 교정 뒤 distinct sealed route/node/attempt로 재검토했으며 `review-final-4`의 independent PASS가 최종 spec gate를 닫았다.
+- canonical root 밖 primary `.spec-grounding` marker는 worker sandbox에서 쓸 수 없어 worktree-local marker로 capability guard를 확인했다. strict hook-trust check는 설치된 trust가 없어 실패했지만 normal checked headless dispatch는 지원됐고, 이 제약을 parity/support 주장으로 확대하지 않았다.
+- final verification은 current source baseline 167/167, compose-route 9/9, spec-transaction 3/3(총 179/179)을 통과했다. 모든 검증은 fixture/fake-clock 경계였고 default/custom live title provider 호출은 0회다. v15 snapshot SHA-256은 `5b0097064c38f705054797f2af29007baf2251ec1eb66b68296d9f771a7ddf57`이다. 이 baseline은 현행 source 회귀만 증명하며 v16 구현은 dev pending이다.
+
+| Review finding | Resolution in v16 |
+|---|---|
+| RF-01 | F-17/F-33의 wide-only NOW·inline ctx를 명시 폐기하고 F-37a 한 detail row+live/missing/stale/dead truth table로 통일. |
+| RF-02 | F-32를 F-37b 단일 child association에 귀속; `(pid,proc_start)` 우선, unique harness+cwd만 fallback, PID reuse/cross-harness/복수 후보 전체 거부. |
+| RF-03 | F-28a와 locked decision을 개정해 explicit invalid tuple은 unknown/ambiguity로 고정하고 artifact fallthrough 금지; record/registry field authority 분리. |
+| RF-04 | F-36d와 acceptance matrix에 artifact 후보 1/0/복수 및 합성 금지, invalid tuple+plausible artifact 충돌 픽스처 추가. |
+| RF-05 | F-17/F-23/locked F-23을 F-39 단일 수치로 교체하고 custom wrapper no-tools 책임 경계 명시. |
+| RF-06 | F-38과 acceptance에서 numeric decrease를 허용하고 missing/stale/malformed/source-sequence regression만 unknown 처리. |
+| RF-07 | authoritative v14 복원, byte-exact v15 snapshot, v16 header/history/Next/state/summary 동시 갱신, dev pending 전환. |
+| RF-08 | `projection.py` 소유권과 collectors → model → WorkProjection → render/JSON 흐름을 module tree·Mermaid에 반영. |
+
+## v15 carried-forward state (2026-07-22)
+
+- 기존 uncommitted v15 F-19/F-35f 변경(sync/migrate 신규 흡수의 `add`/literal `sync`, logical cwd, no historical backfill)을 그대로 보존했다. v16은 그 상태 위의 명시적 사용자 승인 개정이며 v15 snapshot SHA는 transaction evidence에 고정한다.
 
 ## v14 update (2026-07-22) — portable unit/compositional route projection
 
@@ -81,6 +133,11 @@
 - v7 (2026-07-15): F-24 portable worker attribution(`AGENT_SESSION_ROLE=worker`) + Codex rollout fd 소유권 단일화. snapshot = `_internal/versions/v6/prd.md`. (본 항목은 v8 update 시점 소급 기록 — v7 사이클이 summary 동기를 누락.)
 - v10 (2026-07-15): F-28a~c 구현 확정(route record tolerant 소비·route-aware breadcrumb·조건부 run/governor) + F-30 처리-과정 뷰 설계 확정(`p` 토글·route 카드·DAG 흐름·마우스 접기). 전제 = stage-dispatch v11 구현 착륙(`f5f3949f`), 실측 record 스키마 기반. snapshot = `_internal/versions/v9/prd.md`.
 - v11 (2026-07-17): 두-평면 실험 폐기 후 채택분 소급 등재 — F-29 표시(가로 스트립·인셋 위계)·수집(Task→Agent·비동기 발사≠완료) 개정, F-19 레포별 카드 행(+D-37 저널 `cwd` 동기), F-17 분사 세션 요약 전면 적용, F-32 분사 행 제목 입양, F-33 harness(model·effort) 통합+ctx 게이지 확장, F-34 표시 문법 정리(qa·`~` 표시 폐기, ↳ 사다리). 구현 선행(2026-07-16 사용자 연쇄 확정, main 착륙 완료)·등재 후행. snapshot = `_internal/versions/v10/prd.md`.
+- v12 (2026-07-20): exact dispatch terminal evidence·namespace heartbeat expiry·Codex task lifecycle 우선·unmatched depth-2 canonical parity reliability minor. snapshot = `_internal/versions/v11/prd.md`.
+- v13 (2026-07-21): live session/group stable-order anchor. snapshot = `_internal/versions/v12/prd.md`.
+- v14 (2026-07-22): portable unit catalog·compositional route metadata·legacy worker_role/runtime surface 경계. component-local snapshot = `_internal/versions/v13/prd.md`; 누락 v14 copy는 v16 transaction에서 authoritative aggregate snapshot으로 복원.
+- v15 (2026-07-22): F-19/F-35f sync/migrate 신규 흡수의 `add`/literal `sync`, logical cwd, no historical backfill. snapshot = `_internal/versions/v15/prd.md` (v16 transaction 직전 byte-exact current state).
+- v16 (2026-07-22): F-36~F-39 common `WorkProjection`, arbitrary composed DAG, all-layout `ctx … [· NOW]` subordinate line, conservative title quota increase, context/intensity orthogonality. v14/v15 snapshot repair + PRD/state/summary transaction.
 - v9 (2026-07-15): minor 6건 흡수(취소선 정리·minor-log 리셋) + audit 🟡 2건 해소(F-25 규범 매핑 표 삽입·§10 control.py 노드) + F-27 마우스 1급 재설계(행 클릭·클릭 확정, 키보드 폴백) + F-30 종착 비전 등재(dispatch·서브에이전트 처리 과정 시각화). snapshot = `_internal/versions/v8/prd.md`. audit = `_internal/audit/audit_2026-07-15T1734.md`.
 - v8 (2026-07-15): F-25 상태 판정 단일 모델(소스 우선순위·hysteresis·state_evidence) + F-26 interactive 세션 레지스트리 1급(unused 배지·provenance) + F-27 제한적 세션 제어(kill+정리, Non-goal 부분 반전, 사용자 확인) + F-28 분사 정책 연동 계약 선고정(route record/topology 소비, 구현 후행). §0.5 경계 개정(자동 제어 0·사용자 개시 제어만). snapshot = `_internal/versions/v7/prd.md`.
 

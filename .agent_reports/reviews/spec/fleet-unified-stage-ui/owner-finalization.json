@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "capability": "autopilot-spec",
+  "mode": "plan/plan-author",
+  "intensity": "strong",
+  "qa": "standard",
+  "verdict": "PASS",
+  "blocker": "none",
+  "component": "agent-fleet-dashboard",
+  "spec_version": "v16",
+  "component_state": {
+    "spec": "done",
+    "independent_review": "PASS",
+    "dev": "pending",
+    "resume_scope": "F-36~F-39"
+  },
+  "final_review": {
+    "route_file": "/home/Uihyeop/agent_setting/.dispatch/logs/fleet-unified-stage-ui-review-final-4.route.json",
+    "route_id": "rt-9dbc66f49a9ff927",
+    "route_hash": "sha256:9dbc66f49a9ff927cf865beff608b3571a1595b61c488e6c3df7e1f85017ef1a",
+    "route_node": "review-final-4",
+    "attempt_id": "att-2457a340994052f76dfcc9be73a98939e11261fcccff6130",
+    "verdict_path": "/home/Uihyeop/agent_setting/.agent_reports/reviews/spec/fleet-unified-stage-ui/verdict-final-4.json",
+    "verdict_sha256": "f9322dd0724479e1527c2976267a03c9a9dcebc436d127c520297ef8f02f437b",
+    "completion_marker": "/home/Uihyeop/agent_setting/.dispatch/completion/rt-9dbc66f49a9ff927/review-final-4.json",
+    "completion_marker_sha256": "3e99fe40dee87b67aecb24e234076b7d8ee7ce8ce81c493e26d173c7001b99ee",
+    "completion_evidence_matches_verdict": true,
+    "checks": {
+      "RF-01_through_RF-08": "PASS",
+      "IC-01_through_IC-04": "PASS",
+      "internal_consistency": "PASS",
+      "implementation_readiness": "PASS",
+      "acceptance_boundaries": "PASS"
+    }
+  },
+  "preserved_review_history": [
+    {
+      "path": "/home/Uihyeop/agent_setting/.agent_reports/reviews/spec/fleet-unified-stage-ui/verdict.json",
+      "verdict": "FAIL",
+      "sha256": "430a8d12314b94bc326e57210cb8ed943b225a438945bb2d080482a6b0fbc4a5"
+    },
+    {
+      "path": "/home/Uihyeop/agent_setting/.agent_reports/reviews/spec/fleet-unified-stage-ui/verdict-final.json",
+      "verdict": "FAIL",
+      "route_id": "rt-ad63f931daa3d317",
+      "route_node": "review-final",
+      "attempt_id": "att-d2ed37a7e670783b91a3ff5ee5010bb691f4b6bfcf8f854e",
+      "sha256": "3df681752d260db67d27c8266384fb434c63b16a0caf40170d29765fbc3ea0a4"
+    },
+    {
+      "path": "/home/Uihyeop/agent_setting/.agent_reports/reviews/spec/fleet-unified-stage-ui/verdict-final-2.json",
+      "verdict": "FAIL",
+      "route_id": "rt-044c1a9810207b09",
+      "route_node": "review-final-2",
+      "attempt_id": "att-e5eb39ec34232f1c254241c641a0f109359f3c94499d1005",
+      "sha256": "90b728f791ed3c0e2a8d03caf24d069ede06b6853b5b18be44c4f92350bd660c"
+    },
+    {
+      "path": "/home/Uihyeop/agent_setting/.agent_reports/reviews/spec/fleet-unified-stage-ui/verdict-final-3.json",
+      "verdict": "FAIL",
+      "route_id": "rt-c143657c8d95cb73",
+      "route_node": "review-final-3",
+      "attempt_id": "att-ccb1a37608ee193da6405ccba1458f43f3887b02b7f451f2",
+      "sha256": "34ab966fe5f311ba407e55f5da1a93acc9381dd94dfaad9363b41c9899399f0a"
+    }
+  ],
+  "canonical_spec_artifacts": {
+    "prd": {
+      "path": "/home/Uihyeop/agent_setting/.agent_reports/spec/agent-fleet-dashboard/prd.md",
+      "sha256": "7c36cf27c7f43110c9d55140d164e7b07ce2ffa9a1348e3faf2809459b236ac6"
+    },
+    "pipeline_state": {
+      "path": "/home/Uihyeop/agent_setting/.agent_reports/spec/agent-fleet-dashboard/pipeline_state.yaml",
+      "sha256": "b5c79bff3dc0dbfbf4caba40333c6ce24ebfb3ee633e3dfdabffac62b8b575e9"
+    },
+    "pipeline_summary": {
+      "path": "/home/Uihyeop/agent_setting/.agent_reports/spec/agent-fleet-dashboard/pipeline_summary.md",
+      "sha256": "3f1bbc9d2e18a9cf51512f9c5ee64cbed275fc9e078c73a582e19b149698cb05"
+    },
+    "pre_correction_v16_snapshot": {
+      "path": "/home/Uihyeop/agent_setting/.agent_reports/spec/agent-fleet-dashboard/_internal/versions/v16/prd.md",
+      "sha256": "d7e3ffbdef592ef359066b87d90b8e31740e0412616bb822822e251a59a231ad",
+      "preserved_byte_exact": true
+    }
+  },
+  "transactions": [
+    {
+      "route_id": "rt-c4f4327d5ff48148",
+      "node": "prd-transaction",
+      "result": "PASS",
+      "scope": "first RF/IC correction and byte-exact pre-correction v16 snapshot"
+    },
+    {
+      "route_id": "rt-04ea46cac5340580",
+      "node": "prd-transaction",
+      "result": "PASS",
+      "scope": "F-24 acceptance alignment"
+    },
+    {
+      "route_id": "rt-3b7bc3978e3156b0",
+      "node": "prd-transaction",
+      "result": "PASS after one released patch-context failure",
+      "scope": "legacy fallback authority and cross-harness child eligibility alignment"
+    },
+    {
+      "route_id": "rt-5b632e858d00c167",
+      "node": "prd-transaction",
+      "result": "PASS",
+      "scope": "post-PASS pipeline state and summary finalization"
+    }
+  ],
+  "verification": {
+    "qa_policy": "plan-check:selected-independent-pass:final-verify",
+    "independent_reviewer": "1x deep registered headless reviewer",
+    "focused_fleet_tests": "167/167 PASS",
+    "compose_route_tests": "9/9 PASS",
+    "spec_transaction_tests": "3/3 PASS",
+    "total_selected_tests": "179/179 PASS",
+    "review_route_verify": "PASS",
+    "finalization_route_verify": "PASS",
+    "live_provider_calls": 0,
+    "worktree_status": "clean"
+  },
+  "changed_canonical_files": [
+    "/home/Uihyeop/agent_setting/.agent_reports/spec/agent-fleet-dashboard/prd.md",
+    "/home/Uihyeop/agent_setting/.agent_reports/spec/agent-fleet-dashboard/pipeline_state.yaml",
+    "/home/Uihyeop/agent_setting/.agent_reports/spec/agent-fleet-dashboard/pipeline_summary.md",
+    "/home/Uihyeop/agent_setting/.agent_reports/spec/agent-fleet-dashboard/_internal/versions/v16/prd.md",
+    "/home/Uihyeop/agent_setting/.agent_reports/reviews/spec/fleet-unified-stage-ui/verdict-final.json",
+    "/home/Uihyeop/agent_setting/.agent_reports/reviews/spec/fleet-unified-stage-ui/verdict-final-2.json",
+    "/home/Uihyeop/agent_setting/.agent_reports/reviews/spec/fleet-unified-stage-ui/verdict-final-3.json",
+    "/home/Uihyeop/agent_setting/.agent_reports/reviews/spec/fleet-unified-stage-ui/verdict-final-4.json",
+    "/home/Uihyeop/agent_setting/.agent_reports/reviews/spec/fleet-unified-stage-ui/owner-finalization.json"
+  ],
+  "scope_guards": {
+    "implementation_source_edited": false,
+    "commit_created": false,
+    "push_performed": false,
+    "merge_performed": false,
+    "worktree_cleanup_performed": false,
+    "earlier_fail_verdict_overwritten": false,
+    "asynchronous_monitor_used": false
+  },
+  "warnings": [
+    "The primary /home/Uihyeop/agent_setting/.spec-grounding marker location was read-only to this worker; the worktree-local preflight marker path was used and the specification was read completely.",
+    "Strict hook-trust validation was unavailable, while normal checked headless dispatch was supported; no strict-trust parity claim is made.",
+    "The review-final-4 outer foreground watchdog returned exit 76 after the child reached terminal, but synchronous dispatch-wait reported no open children and harvest found the authoritative registry row done with note=completed-marker. The exact marker binds the sealed route, node, attempt, and PASS verdict hash.",
+    "No live default or custom title provider was invoked; implementation-level v16 behavior remains dev pending."
+  ]
+}
