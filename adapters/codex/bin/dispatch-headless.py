@@ -331,10 +331,11 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
                 "--inherit-model-settings is mutually exclusive with --model-role, --model, and --reasoning",
             )
         return {"source": "inherit", "role": "inherit", "model": "inherit", "reasoning": "inherit"}
-    if args.model_role and (args.model or args.reasoning):
+    if args.model_role and args.model:
         raise ModelSelectionError(
             "invalid-dispatch-model-selection",
-            "--model-role is mutually exclusive with --model and --reasoning",
+            "--model-role is mutually exclusive with --model (tier-hopping); "
+            "situational tuning keeps the role's tier and adjusts --reasoning only",
         )
     if args.model_role:
         try:
@@ -353,6 +354,9 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
                 "invalid-dispatch-model-role",
                 f"model role {args.model_role!r} resolved to non-runnable model={model}",
             )
+        # 역할 티어 고정 + 상황별 reasoning 오버라이드 (2026-07-22 사용자 원칙).
+        if args.reasoning:
+            return {"source": "role+effort", "role": args.model_role, "model": model, "reasoning": args.reasoning}
         return {"source": "role", "role": args.model_role, "model": model, "reasoning": reasoning}
     if not args.model and not args.reasoning:
         raise ModelSelectionError(

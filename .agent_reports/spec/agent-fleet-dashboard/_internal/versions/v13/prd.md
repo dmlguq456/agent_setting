@@ -1,7 +1,7 @@
 # agent-fleet-dashboard — Spec (PRD)
 
 > mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · **v2 2026-07-10** (drift 흡수 + stage-dispatch 관제 parity + UI 가독성 개선) · **v3 2026-07-12** (minor 5건[F-14~F-19] 흡수 승격 — §4.7 분리 신설 + audit 🟡 3건 반영: §3 `--demo` 등재·§9 모듈 트리 현행화. 근거 = `_internal/audit/audit_2026-07-12T0910.md`) · **v4 2026-07-13** (F-20 dynamic Codex rate-window contract) · **v5 2026-07-13** (F-21 Codex native title + cross-harness fleet title provider. Claude-only refresher 계약 폐기) · **v6 2026-07-14** (F-22 responsive titles + F-23 recursive-storm containment) · **v7 2026-07-15** (F-24 portable worker attribution + unique Codex rollout ownership) · **v8 2026-07-15** (F-25~F-28 — 상태 판정 단일 모델·interactive 세션 레지스트리 1급·제한적 세션 제어[Non-goal 반전]·분사 정책 연동 계약. 근거 = 사용자 결정 4건: "fleet 직접 세션 제어"·"반쪽짜리 해소, 전향적 확장"·"버그가 아니라 판정 기준 자체가 불안정"·"분사 정책과 연동되는 가장 중요한 UI") · **v9 2026-07-15** (minor 6건 흡수 + audit 🟡 2건 해소[어휘 매핑 표·§10 다이어그램] + F-27 마우스 1급 재설계 + F-30 종착 비전 등재 "dispatch·서브에이전트 처리 과정 시각화". 근거 = `_internal/audit/audit_2026-07-15T1734.md` + 사용자 방향 2건) · **v10 2026-07-15** (F-28 구현 확정 + F-30 처리-과정 뷰 설계 확정 — 전제였던 stage-dispatch topology registry·route record·broker가 v11 구현으로 main 착륙[`f5f3949f`], 실측 record 스키마 기반) · **v11 2026-07-17** (두-평면 실험 폐기 후 채택분 등재 — F-29 스트립·비동기 판정 개정 + F-19 레포별 카드 행 + F-17 분사 세션 요약 전면 적용 + §4.10 F-32~F-34[분사 제목 입양·harness(model·effort) 통합·표시 문법 정리]. 근거 = 사용자 결정 연쇄 2026-07-16 "전부 다 버리고, 메모리 쪽과 서브 에이전트 쪽만 기존의 fleet에" 외 다수. 구현 선행·등재 후행 — 사용자 명시 이연의 사후 소급, 코드 실측 기준)
-> · **v12 reliability minor 2026-07-20** (exact dispatch terminal evidence·namespace heartbeat expiry·Codex task lifecycle 우선·unmatched depth-2 canonical parity) · **v13 2026-07-21** (live TUI stable session/group order — refresh liveness·mtime 변화가 살아남은 행의 위치를 바꾸지 않음) · **v14 2026-07-22** (portable unit catalog·compositional route metadata·legacy worker_role 경계·runtime surface 구분)
+> · **v12 reliability minor 2026-07-20** (exact dispatch terminal evidence·namespace heartbeat expiry·Codex task lifecycle 우선·unmatched depth-2 canonical parity) · **v13 2026-07-21** (live TUI stable session/group order — refresh liveness·mtime 변화가 살아남은 행의 위치를 바꾸지 않음)
 > 컴포넌트: `agent_setting` repo 의 **별도 내부 도구** — 기존 `spec/prd.md`(Unified Memory System)와 무관, 이 폴더(`spec/agent-fleet-dashboard/`)가 자체 청사진.
 > 입력(1순위 근거): `research/agent-fleet-dashboard/00_prior_art.md`(build-vs-adopt·herdr·렌더스택) · `research/agent-fleet-dashboard/01_tap_mechanics.md`(하네스별 tap·discovery·liveness, file-cited)
 > **v2 추가 입력**: `spec/stage-dispatch/prd.md`(SD-1~9 — 스테이지 단위 depth-2 headless 분사 계약, §9-13 fleet 표시 = Phase 2 잔여) · 현행 `tools/fleet/` 코드 전수 실측(2026-07-10 Explore, file:line-cited) · 사용자 관찰("워크플로우를 못 따라감 + UI 아쉬운 점 다수").
@@ -157,15 +157,15 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 - 키: `q`=종료, `r`=즉시 새로고침, 스크롤/`a`/마우스는 §3 참조.
 - 폭이 아주 좁으면(<~70열) cost/rl → effort → model 순으로 필드를 줄인다(배지·slug·liveness 는 정체성·상태 앵커라 항상 유지). 2열 그리드 승격은 MVP 밖(변경 없음).
 
-## 4.5 [v14 개정] stage-dispatch 관제 parity — unit-aware 스테이지 row 계약 ★
+## 4.5 [v2 신설] stage-dispatch 관제 parity — 스테이지 row 계약 ★ 이번 사이클 핵심
 
-> 근거: dispatch contract v3의 정식 축은 `assigned_contract`(portable capability/stage Skill), `unit`(portable unit catalog entry), `worker_type`(owner/stage/review/support bootstrap kind), `model_role`이다. `worker_role`은 구 jobs.log 판독만을 위한 legacy metadata이며 새 writer의 bootstrap·Skill·persona 정체성이 아니다.
+> 근거: `spec/stage-dispatch/prd.md` SD-3(스테이지 세션 = jobs.log `depth=2,parent=<conductor>,worker_role=<sub-skill>,owner=autopilot-code` 등록 → fleet 스테이지 row)·§9-13(fleet 표시 라벨 = Phase 2 잔여). 운영 실증 ① "fleet 관제 불가시" 해소의 마지막 마일. 사용자 관찰("워크플로우를 못 따라감")과 일치.
 
-- **SD-F1 (스테이지 row 사람 라벨)**: depth-2 row의 1차 단계명은 `assigned_contract`와 route `nodes[].id`에서 결정한다. `unit`은 같은 단계가 어떤 composable 실행 단위를 선택했는지 보여 주는 보조 라벨이며, `worker_type`과 `model_role`은 각각 bootstrap 종류와 모델 프로필로 분리한다. authoritative 필드가 없는 구 행에서만 `worker_role=code-plan/code-execute/code-test/code-report`를 legacy fallback으로 읽고 새 writer는 이를 생성하지 않는다.
-- **SD-F2 (conductor 집계)**: depth-1 owner가 route record를 가지면 breadcrumb는 record의 DAG와 depth-2 `route_node`/`assigned_contract` 실측을 우선한다. 구 route 없는 `owner=autopilot-code` 행에서만 legacy `worker_role=code-*` 자식을 fallback으로 사용한다. 완료 자식과 다음 미분사 사이의 갭은 산출물 유도값으로 표시한다.
-- **SD-F3 (스테이지 자기 model/effort)**: dispatch wrapper가 pipe에 `model_role=/model=/effort=`를 기록하므로 스테이지 row는 자기 모델·effort를 1급 표시한다. pipe 값 부재 시 부모 상속은 fallback으로만 표시한다.
-- **SD-F4 (pipe 파싱 tolerant + additive unit)**: pipe key=value 구분자의 canonical은 콤마지만 공백/콤마 혼용 구 행도 수용한다. `unit=`과 프로세스 env `AGENT_DISPATCH_UNIT`은 additive이며 부재는 정상이다. 미지 key는 무시하고 legacy row의 의미를 합성하지 않는다.
-- **비대상(경계)**: conductor·스테이지의 제어는 여전히 monitor-only이고 depth-3+는 비지원이다. unit은 native subagent 종류나 runtime session persona로 역추론하지 않는다.
+- **SD-F1 (스테이지 row 사람 라벨)**: `worker_role=code-plan/code-execute/code-test/code-report`(+`:phase-A` 류 접미 허용) depth-2 row 는 raw role 문자열 대신 **스테이지 단계명**으로 렌더 — `plan`/`exec`/`test`/`report` (기존 `_PIPE_STAGES` breadcrumb 어휘와 동일 — 새 어휘 발명 금지). 접미는 뒤에 dim 으로 (`exec:phase-A`). 현행 14자 중간잘림(`diagnosis_gro…`)이 스테이지 워커에 적용되지 않게 한다.
+- **SD-F2 (conductor 집계)**: depth-1 job 이 `owner=autopilot-code` 스테이지 자식(depth-2, worker_role=code-*)을 가지면 그 job 은 **conductor** — conductor row 의 stage breadcrumb(`code: plan › exec › test`) 하이라이트는 **활성(=live) 스테이지 자식과 일치**해야 한다(자식 실측 우선, `live_stage()` 산출물 유도는 fallback). 스테이지 자식이 done 이고 다음 스테이지가 미분사인 갭 구간은 conductor 의 산출물 유도값으로 표시.
+- **SD-F3 (스테이지 자기 model/effort)**: dispatch wrapper 는 pipe 에 `model_role=/model=/effort=` 를 이미 실으므로(dispatch-headless.py 실측) 스테이지 row 는 **자기 모델·effort 를 1급 표시** — SD-5(스테이지별 model role 명시) 관제의 핵심. 현행 "parent effort 상속 표시"는 pipe 값 부재 시 fallback 으로 강등(dim + 상속 표기).
+- **SD-F4 (pipe 파싱 tolerant)**: pipe key=value 구분자는 콤마가 canonical(OPERATIONS §5.10 하드 계약)이되, **wild 에 실존하는 공백 구분 행**(2026-07-09 실측 — 현행 파서는 첫 key 의 value 에 나머지 전체가 붙어 오파싱)을 **공백/콤마 혼용 tolerant** 로 수용한다. F-5(jobs.log tolerant) 원칙의 확장 — 미지 key 는 무시, 오파싱은 결손(`—`)보다 나쁘다.
+- **비대상(경계)**: conductor·스테이지의 _제어_(재분사·kill)는 여전히 Non-goal(모니터 only). depth-3+ 는 wrapper 가 막으므로 fleet 은 depth ≤2 만 정식 렌더(3+ 는 방어적 들여쓰기만).
 
 ## 4.6 [v2 신설] UI 가독성 개선 — 정보 위계·스캔 가능성 (사용자 "아쉬운 점" 해소)
 
@@ -185,7 +185,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
   - 하네스 자체 기능과의 경계: Claude Code 는 `/rename`·시작 시 auto-name 만 있고 _진행형_ 자동 재요약·프로그램적 갱신은 미지원(공식 문서 확인) — 그래서 이 자리는 fleet 표시층이 맡는 게 맞다 (zero-injection 관찰, §0.5).
 - **F-15 (분사 row 레이아웃 재설계 — 탈가로화 + 옵션 1급 유지, 사용자 피드백 2026-07-10 저녁)**: F-14 출하 후 사용자 최대 불만 = "분사 세션 명이 다양한 옵션과 함께 가로로 쭉 늘어짐". 단 **옵션(capability·mode·qa·intensity·model/effort)은 사용자가 관찰하는 중요한 요소 — 숨기지 말고 더 잘 설계하라**가 명시 요구.
   - **방향**: 1차 라인은 정체성(단계 라벨·stage breadcrumb·상태·경과)로 다이어트하고, 옵션 메타는 **가로 나열 태그 대신 정렬된 자리**로 이동 — wide 레이아웃 = 고정 컬럼 정렬(세션 row 의 model/ctx 컬럼과 같은 원리), narrow = 2줄 카드의 L2 dim 옵션 라인 (세션 2줄 카드 기존 패턴 미러). F-9(c)의 "폭 부족 시 성분 드롭" 접근은 이 재배치로 대체.
-  - **depth별 실행 정체성(v14, 2026-07-22)**: depth-1 options cell은 entry capability와 orchestration knobs를 표시한다(`code(dev/refactor·strong·owner)`). depth-2는 부모의 mode/entry를 반복하지 않고 **자신에게 배정된 `assigned_contract`와 `unit`**을 표시한다. contract는 portable Skill/단계 정체성, unit은 catalog가 선택한 composable 실행 단위이고 `worker_type`은 bootstrap 종류, `model_role`은 모델 프로필이다. route record의 `nodes[].unit`/`unit_choices`가 canonical이고 jobs.log `unit=`은 실행 실측이다. `worker_role`은 legacy metadata로만 보존하며 새 writer가 생성하거나 Fleet이 authoritative field보다 우선하지 않는다. QA level은 `--json` evidence에만 보존한다.
+  - **depth별 skill 정체성(v13, 2026-07-20)**: depth-1 options cell은 entry capability와 orchestration knobs를 표시한다(`code(dev/refactor·strong·owner)`). depth-2는 부모의 mode/entry를 반복하지 않고 **자신에게 배정된 stage skill**을 표시한다 — `assigned_contract`가 entry owner와 다르면 이를 우선하고, 그 외 route는 `route_node`, route 없는 row는 registry capability key를 사용한다 (`design-refs(strong)`, `research(strong)`, `code-test(strong)`). `worker_type`은 owner/stage/review/support bootstrap 종류일 뿐 skill 이름이 아니며, `model_role`은 모델 프로필이다. `worker_role=qa|development|deep maker` 같은 legacy/internal persona는 관제 정체성이 아니므로 새 writer가 생성하지 않고 Fleet도 authoritative field보다 우선하지 않는다. QA level은 `--json` evidence에는 보존하되 사용자 화면에서는 intensity가 assurance를 대표한다.
   - **workflow-first 정렬**: 관제의 1차 질문 = "어느 파이프가 어느 스테이지에 있고 어디가 막혔나". conductor row 의 파이프 진행(breadcrumb, SD-F2)이 1급이고, **done 스테이지 자식 row 는 기본 접어 breadcrumb 하이라이트로 흡수**(완료 잡 나열이 세로·가로 노이즈) — 활성(working/미기동)·실패(stale/dead/killed) 스테이지만 자식 row 로 남긴다.
   - **queued 오라벨 해소 (사용자 관찰: "queued 가 계속 뜨는데 작업 중인 건지?")**: 현행 `open`→queued 매핑은 registry-only row 전부에 적용돼, 실제 작업 중인데 proc 매칭이 안 된 row(proc-job 과 registry row 의 slug 불일치, cross-harness 등)도 queued 로 뜬다. 해소: registry-only row 에 **worktree transcript/rollout mtime 기반 liveness 유도**를 적용해 실작업 중이면 working 으로, queued 는 _진짜 미기동_(등록 후 transcript 무활동)만. proc-job ↔ registry row 의 slug 정합(dedup 키) 개선 포함.
   - 디자인팀 critic 을 plan 단계 텍스트 목업 비평에 필수 투입 (UI plan-review 계약) — 잡 다수일 때 세로 폭증·레이아웃별(wide/narrow/stack) 분기까지 비평 범위.
@@ -315,9 +315,9 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 
 ## 4.9 [v10 신설] 처리-과정 시각화 — F-28 구현 확정 + F-30 뷰 설계
 
-> 현행 계약(v14, 2026-07-22): topology registry `capabilities/topologies.json`은 schema v3이며 portable unit catalog를 참조한다. immutable route record는 route schema v2·dispatch contract v3을 유지하고 top-level `unit_catalog_digest`, optional `composed`, `nodes[].unit`/`unit_choices`를 sealed hash에 포함한다. jobs.log pipe는 `route_file=/route_id=/route_hash=/unit=`로 링크하며, topology schema와 route schema를 같은 버전으로 오인하지 않는다.
+> 전제 충족(2026-07-15): stage-dispatch topology registry(`capabilities/topologies.json`) + immutable route record + dispatch broker가 main에 착륙(`f5f3949f`, PRD v11). 실측 record 스키마(schema_version 1): `capability/execution_topology/tracked_gate_evidence/nodes[]{id,kind,depth,depends_on,role,inputs,outputs,write_scope,resource_class,completion_gate,dispatch_fallback}/completion_gates/human_gates/route_hash/route_id` — jobs.log pipe에 `route_file=/route_id=/route_hash=`로 링크됨.
 
-- **F-28a (route record 소비 — 구현 확정, v14 additive metadata)**: dispatch collector가 pipe의 `route_file`을 read-only 로드해 `route_hash` 검증 후 잡에 부착한다. **tolerant 필수**: 파일 부재·파싱 실패·hash 불일치는 조용히 기존 pipe 휴리스틱 fallback한다. record에는 절대 쓰지 않는다. `--json route`는 capability/topology/nodes 진행/route_id에 더해 `unit_catalog_digest`, `composed`, 각 node의 `unit`/`unit_choices`를 보존하고 dispatch row는 optional `unit`을 노출한다. 구 record/row에는 이 필드가 없어도 정상이다.
+- **F-28a (route record 소비 — 구현 확정)**: dispatch collector가 pipe의 `route_file`을 read-only 로드해 `route_hash` 검증 후 잡에 부착한다. **tolerant 필수**: record는 `/tmp` 등 휘발 위치에 있을 수 있다 — 파일 부재·파싱 실패·hash 불일치는 조용히 기존 pipe 휴리스틱 fallback(회귀 없음, F-28 v8 계약 그대로). record에는 절대 쓰지 않고, mtime 키 캐시로 tick당 재파싱을 막는다. `--json`에 `route` 키 additive(요약: capability/topology/nodes 진행/route_id).
 - **F-28b (route-aware breadcrumb)**: conductor·stage 행의 stage breadcrumb을 고정 `_PIPE_STAGES` 하드코딩 대신 **record의 `nodes[].id` + `depends_on` DAG**에서 생성 — 임의 capability 파이프(lab eval, research 등)가 code 4단 강제 없이 자기 모양대로 표시된다. 노드 점등 = 해당 depth-2 자식 행 실측 우선(SD-F2 원칙 불변), record 없는 잡은 기존 breadcrumb 유지.
 - **F-30 (처리-과정 뷰 — 전용 모드, 설계 확정)**:
   - **진입**: 전용 키 `p`(process) 토글 — 기존 `w` 레이아웃 cycle과 직교(그룹 뷰 ↔ 과정 뷰 전환). footer 키 바에 표기. 비대화식 투영 = `--view {group,process}` CLI 플래그 + `FLEET_VIEW` env — `p` 토글과 같은 전역 상태 하나를 공유하며 별도 코드 경로를 만들지 않는다(v10 구현이 3폭 캡처·디자인 비평 등 비대화식 검증용으로 추가, 2026-07-16 사용자 확정 minor).
@@ -343,15 +343,6 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 - **F-32 (분사 세션 요약·정체 1급화 — 제목 입양, 사용자 확정 2026-07-16 "지금은 메인 세션만 요약 에이전트가 붙는데 모든 분사 세션에 다 해당되게")**: 스케줄 절반은 F-17 v11 개정(분사 자식 포함) — 표시 절반이 본 항목. dispatch 행 이름 = **title→slug→key 체인**(세션 행의 title→name→slug와 동형): enrich가 이미 해석한 자식 세션의 fresh sidecar 제목을 그 자식을 대표하는 잡 행으로 입양한다. 조인 = pid 동등(강, claude/codex proc 잡의 pid가 곧 runtime leaf pid) → harness+realpath(cwd) 폴백(jobs.log 행용)이되 같은 키에 titled 자식이 2+면 **거부**(F-26 — 오귀속이 부재보다 나쁘다). `DispatchJob.title` additive(None=기존 slug 정체성 그대로), 추가 IO 0(세션 enrich 결과 재사용), cross-harness. 이름 존 예산·클립·stage 라벨 합성 불변.
 - **F-33 (harness 필드 model·effort 통합 + ctx 게이지 확장, 사용자 확정 2026-07-16 "model을 하네스 옆에 괄호로 … 위에도 harness (model · effort)" + "context window의 길이를 더 늘려서")**: WIDE 레이아웃 전용. 별도 model 컬럼(`_MW`) 폐지 — harness 필드가 `claude code (Fable 5·xhigh)`: harness 텍스트는 기존 배지색, model은 기존 패밀리색, effort는 히트램프색, 구분자는 **플러시 `·`** dim(최초 ` · ` 안이 "너무 넓다"로 개정 — 해방 2칸은 model 이름이 흡수해 클립 완화). 컬럼 헤더 `harness (model·effort)`. model 없으면 괄호 생략(F-3 정직 결손), dead/stale = bare harness(F-13 동형), effort 부재 시 부모 effort **평문** 폴백(SD-F3 유지 — `~` 마커는 F-34로 폐기). 병합 폭은 단일 상수(`_HMW`), 전 행 이름 컬럼 시작 일치 불변, dispatch prefix가 harness 셀을 깎는 기존 정렬 규칙 유지. **해방 폭+잔여 slack은 ctx 게이지가 흡수** — 이름 컬럼 40 상한(F-22 v8 minor #2) 충족 후 잔여를 게이지 폭에 배분해 time 컬럼 직전까지 전 행 우측 정렬. narrow/stack 불변. (코드 주석의 임시 명칭 "F-4 (v11)"는 본 항목으로 정정 — F-4는 per-session tap이 기점유.)
 - **F-34 (표시 문법 정리 — qa·`~` 표시 폐기 + 분사 ↳ 사다리, 사용자 연쇄 확정 2026-07-16)**: ① **qa 표시 폐기** — qa 축 폐기(CONVENTIONS §1.1)를 표시층에 반영: options 다이얼 = mode·intensity/role만, `qa:` 토큰과 rigor 색 사용처 제거(F-9(c) 드롭 우선순위는 intensity→role로 개정, F-15 R3의 qa 표시 계약 폐기). `--json`의 qa 데이터 필드는 불변(표시만 폐기). ② **`~` 파생값 마커 폐기** — "물결로 예측 표시하는 건 안 하면 안 되나": 상속 effort 등 유도값은 평문 표시, legend의 `~ derived/inherited value` 항목 제거(F-9(d) 폐기). ③ **분사 ↳ 사다리** — 모든 depth가 같은 ↳ 분사 화살표를 depth당 2칸씩 깊게(indent-only depth-2 표시 폐기, "depth=2 화살표는 없네"), 사다리 전체가 한 레벨 안에서 시작(prefix 폭 (depth+1)*2 — "분사 세션의 화살표를 좀 더 들여쓰자", depth-1 화살표가 부모 세션의 글리프 열이 아니라 텍스트 아래에 앉는다). 정렬은 harness 셀이 흡수(F-33 규칙).
-
-## 4.11 [v14 신설] portable unit·compositional route 관측 — F-35
-
-- **F-35a (축 분리)**: `assigned_contract`, `unit`, `worker_type`, `model_role`을 서로 대체 불가능한 축으로 보존한다. `worker_role`은 legacy-only이며 표시와 JSON에서 authoritative 축보다 우선하지 않는다.
-- **F-35b (dispatch 전달)**: Claude/Codex/OpenCode wrapper는 선택된 unit을 jobs.log `unit=`과 `AGENT_DISPATCH_UNIT`에 additive로 전달한다. unit이 없는 owner/direct/legacy 행은 필드를 생략한다.
-- **F-35c (Fleet 소비·표시)**: collector/model/route projection은 unit을 손실 없이 운반한다. group options와 process route node는 contract/단계 라벨을 1차로 유지하면서 unit을 compact 보조 라벨로 표시한다. route summary/JSON은 `unit_catalog_digest`, `composed`, node unit metadata를 보존한다.
-- **F-35d (composed route)**: topology registry schema v3에서 unit catalog를 조합해 만든 route도 route schema v2·dispatch contract v3·sealed hash 검증을 그대로 따른다. Fleet은 catalog를 재컴파일하거나 digest를 추론하지 않고 record를 read-only projection한다.
-- **F-35e (runtime surface 경계)**: Codex native subagent thread, stable `codex exec` non-interactive worker, Claude subagent/background session/agent-team teammate/non-interactive `-p`는 서로 다른 표면이다. Fleet의 `/proc`+jobs.log 백본과 passive enrichment는 이를 합성 identity로 섞지 않는다. `claude agents --json` agent-view 통합은 문서화된 잔여 확장으로 두며 이번 변경은 unit을 native agent type에서 추론하지 않는다.
-- **F-35f (memory 호환)**: memory write-event journal의 `cwd`/action/path 계약은 unit migration과 독립이며 기존 collector가 그대로 소비한다. 현행 journal에 `cwd`가 없다는 오래된 주석만 정정한다.
 
 ## 5. 능동 변경 — fleet-owned local state write
 
@@ -522,13 +513,6 @@ flowchart TD
 
 - **F-28a~c lock**: route record read-only·tolerant 소비(`route_file`+`route_hash`, /tmp 휘발 대비 fallback 회귀 없음), route-aware breadcrumb(DAG 기반 — code 4단 하드코딩 탈피, 자식 실측 우선 불변), detached run·governor는 소스 probe 후 조건부.
 - **F-30 lock (과정 뷰)**: `p` 토글 전용 모드, 카드=route 1개, DAG 가로 흐름 + 병렬 세로 분기, 노드 상태 글리프(✓/●/○/✕), 활성 노드 아래 세션·서브에이전트 중첩, 마우스 접기/펼치기(F-27 문법), 완료 접힘·실패 자동 펼침, record 부재 degrade 카드. 실측 스키마(schema_version 1) 기준 — 스키마 변경 시 stage-dispatch spec과 동기 의무(F-19 선례).
-
-## 확정 결정 (v14 승격, 2026-07-22 — portable unit·compositional route)
-
-- topology registry schema v3와 immutable route schema v2/dispatch contract v3은 별도 버전 축이다.
-- unit은 portable catalog 실행 단위이고 Skill/contract, bootstrap worker type, model role, native agent type을 대체하지 않는다.
-- `worker_role`은 legacy read-only metadata다. 새 writer는 생성하지 않고 Fleet은 authoritative fields 부재 때만 fallback한다.
-- runtime-native surface는 공식 문서가 보장하는 경계까지만 주장한다. private transcript/state DB projection은 tolerant enrichment이고 정식 parity 근거가 아니다.
 
 ## Next (구현 순서 — autopilot-code, 본 v2 입력 · v1 순서 1~7 은 완료)
 

@@ -108,6 +108,14 @@ The default role for a standard+ conductor is `deep orchestrator`. Do not alias 
 
 Every adapter maps portable roles to concrete runtime models, tools, and prompt profiles as a quality-reproduction contract. Main or the parent orchestrator explicitly chooses a role or concrete model/effort for every dispatched job; wrappers do not silently choose a default. Update and read core before changing adapter maps or generated agents.
 
+Tier discipline (user principle, 2026-07-22): a role's tier — and therefore its model — is
+fixed; the adapter config values are *defaults*, and **situational tuning adjusts effort
+only, within that tier** (an easier orchestration still runs the deep model at lowered
+effort; a simple repetitive task still runs light at medium). Per-job dispatch realizes
+this as `--model-role <role> [--effort|--reasoning|--variant <level>]`; combining
+`--model-role` with `--model` is rejected as tier-hopping. Cross-tier per-role special
+cases in config are equally forbidden.
+
 ### §2.3. Unit Catalog and Role Binding
 
 The former runtime team agents are re-homed (2026-07-22, user decision: 승격+재홈) into the

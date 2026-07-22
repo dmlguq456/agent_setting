@@ -1,9 +1,16 @@
 # agent-fleet-dashboard — Spec Pipeline Summary
 
-- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8/v9/v10) · 2026-07-17 (v11) · 2026-07-21 (v13)
+- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8/v9/v10) · 2026-07-17 (v11) · 2026-07-21 (v13) · 2026-07-22 (v14)
 - **Mode**: cli (터미널 TUI 도구)
-- **Status**: spec **v13 done** — live TUI의 survivor 위치 보존 계약 추가; 구현은 후속 autopilot-code 단계에서 수행
+- **Status**: spec **v14 done** / dev **in progress** — portable unit/compositional route metadata와 legacy worker_role/runtime surface 경계를 Fleet projection에 동기화
 - **Placement**: 별도 컴포넌트 `spec/agent-fleet-dashboard/` — 기존 `spec/prd.md`(Unified Memory System) 무수정.
+
+## v14 update (2026-07-22) — portable unit/compositional route projection
+
+- topology registry schema v3, immutable route schema v2, dispatch contract v3의 서로 다른 버전 축과 sealed `unit_catalog_digest`/`composed`/node unit metadata를 명시했다.
+- `assigned_contract`·`unit`·`worker_type`·`model_role`을 분리하고 `worker_role`을 legacy-only fallback으로 고정했다.
+- wrapper pipe/env, Fleet model/collector/route JSON/render, memory journal 문서 정합을 F-35 구현 범위로 확정했다.
+- Codex native subagent와 non-interactive exec, Claude subagent/background/agent-team/non-interactive 표면을 구분했다. `claude agents --json` agent-view 연동은 문서화된 잔여 확장이다.
 
 ## Process Log
 | Step | Action | Result | Notes |

@@ -250,10 +250,11 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
                 "--inherit-model-settings is mutually exclusive with --model-role, --model, and --variant",
             )
         return {"source": "inherit", "role": "inherit", "model": "inherit", "variant": "inherit"}
-    if args.model_role and (args.model or args.variant):
+    if args.model_role and args.model:
         raise ModelSelectionError(
             "invalid-dispatch-model-selection",
-            "--model-role is mutually exclusive with --model and --variant",
+            "--model-role is mutually exclusive with --model (tier-hopping); "
+            "situational tuning keeps the role's tier and adjusts --variant only",
         )
     if args.model_role:
         fields = role_map(args.model_role)
@@ -266,6 +267,9 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
                 "invalid-dispatch-model-role",
                 f"model role {args.model_role!r} resolved to runtime defaults; configure AGENT_MODEL_* and AGENT_VARIANT_* or pass --model/--variant",
             )
+        # 역할 티어 고정 + 상황별 variant 오버라이드 (2026-07-22 사용자 원칙).
+        if args.variant:
+            return {"source": "role+effort", "role": args.model_role, "model": model, "variant": args.variant}
         return {"source": "role", "role": args.model_role, "model": model, "variant": variant}
     if not args.model and not args.variant:
         raise ModelSelectionError(

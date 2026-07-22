@@ -235,14 +235,19 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
                 "--inherit-model-settings is mutually exclusive with --model-role, --model, and --effort",
             )
         return {"source": "inherit", "role": "inherit", "model": "inherit", "effort": "inherit"}
-    if args.model_role and (args.model or args.effort):
+    if args.model_role and args.model:
         raise ModelSelectionError(
             "invalid-dispatch-model-selection",
-            "--model-role is mutually exclusive with --model and --effort",
+            "--model-role is mutually exclusive with --model (tier-hopping); "
+            "situational tuning keeps the role's tier and adjusts --effort only",
         )
     if args.model_role:
+        # 2026-07-22 사용자 원칙: 역할의 티어(모델)는 고정, 상황별 조절은 effort만.
+        # --model-role + --effort = the sanctioned situational-tuning surface.
         fields = role_map(args.model_role)
-        return {"source": "role", "role": args.model_role, "model": fields["model"], "effort": fields["effort"]}
+        effort = args.effort or fields["effort"]
+        source = "role+effort" if args.effort else "role"
+        return {"source": source, "role": args.model_role, "model": fields["model"], "effort": effort}
     if not args.model and not args.effort:
         raise ModelSelectionError(
             "missing-dispatch-model-selection",
