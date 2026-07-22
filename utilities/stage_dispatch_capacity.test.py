@@ -29,9 +29,14 @@ class CapacityTest(unittest.TestCase):
   self.assertNotEqual(original,retry);self.assertEqual(retry,F.capacity_attempt_identity(self.args,self.route,self.node,self.row,1,"gpt-5.6-luna"))
   self.assertNotEqual(retry,F.capacity_attempt_identity(self.args,self.route,self.node,self.row,1,"gpt-5.6-sol"))
  def test_allowed_pair_and_same_model_zero_contract(self):
-  self.assertTrue(F.allowed_capacity_settings("codex","gpt-5.6-luna","medium"))
-  self.assertFalse(F.allowed_capacity_settings("codex","gpt-5.6-luna","high"))
-  failed="gpt-5.6-sol";alternative="gpt-5.6-luna"
+  # Derive expectations from the config cascade — efforts are user-tunable
+  # defaults, so literal (model,effort) pins here would break on every tune.
+  cascade=F.capacity_cascade("codex")
+  self.assertGreaterEqual(len(cascade),2)
+  for model,paired in cascade:
+   self.assertTrue(F.allowed_capacity_settings("codex",model,paired))
+  self.assertFalse(F.allowed_capacity_settings("codex",cascade[1][0],"not-a-real-effort"))
+  failed,alternative=cascade[0][0],cascade[1][0]
   self.assertEqual(int(alternative==failed),0)
  def fake_retry(self,early="-"):
   def run(*_args,**_kwargs):
@@ -100,13 +105,18 @@ class CapacityTest(unittest.TestCase):
   self.assertEqual(state,"fail-closed")
   self.assertEqual(fields["reason"],"heartbeat-phase-regression")
  def test_capacity_cascade_from_config_and_failover_model_proved(self):
-  # config cascade is model-granularity: deep exhausted -> next model.
-  self.assertEqual(F.capacity_cascade_next("codex","gpt-5.6-sol"),("gpt-5.6-luna","medium"))
-  self.assertEqual(F.capacity_cascade_next("claude","fable"),("opus","high"))
-  self.assertIsNone(F.capacity_cascade_next("claude","sonnet"))  # end of cascade
+  # config cascade is model-granularity: deep exhausted -> next declared model.
+  # Expectations derive from the cascade itself (efforts are user-tunable defaults).
+  codex=F.capacity_cascade("codex")
+  self.assertEqual(F.capacity_cascade_next("codex",codex[0][0]),codex[1])
+  claude=F.capacity_cascade("claude")
+  self.assertEqual(F.capacity_cascade_next("claude",claude[0][0]),claude[1])
+  self.assertIsNone(F.capacity_cascade_next("claude",claude[-1][0]))  # end of cascade
   # failover-only model (opus) is proved by cascade declaration, not model-map.
-  self.assertTrue(F.allowed_capacity_settings("claude","opus","high"))
-  self.assertFalse(F.allowed_capacity_settings("claude","opus","low"))  # not a declared pair
+  models=[m for m,_ in claude]
+  self.assertIn("opus",models)
+  self.assertTrue(F.allowed_capacity_settings("claude",*claude[models.index("opus")]))
+  self.assertFalse(F.allowed_capacity_settings("claude","opus","not-a-real-effort"))
  def test_unset_capacity_model_derives_alternative_from_cascade(self):
   self.args.capacity_model=None  # no explicit alternative -> derive from config cascade
   with mock.patch.object(F,"wrapper_command",return_value=["fake"]),\
