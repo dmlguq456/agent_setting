@@ -10,7 +10,7 @@ This is the portable capability contract for `analyze-project`. It defines runti
 | Identifier | `analyze-project` |
 | Group | `pre` |
 | Supported modes | `code, paper, doc` |
-| Portable meaning | Creates or refreshes persistent analysis from primary code, paper, or document materials when analysis is absent, stale, or explicitly requested; not for read-only context recovery. |
+| Portable meaning | Creates persistent analysis of existing code, papers, or documents; initial analysis defaults here unless read-only/no-file or another primary applies. |
 | Argument shape | `[--mode code\|paper\|doc] [<scope/target/input-folder>] [--skip-qa]` |
 | Entry load phase | `post-approval`; owner contract `capabilities/analyze-project.md` |
 
@@ -18,10 +18,13 @@ This is the portable capability contract for `analyze-project`. It defines runti
 
 Pre-work analysis capability — analyzes the project's primary materials and
 writes structured artifacts to `<artifact-root>/analysis_project/`. Invoke it
-only when no usable project analysis exists, existing analysis is demonstrably
-stale for the requested downstream work, or the user explicitly requests a
-persistent analysis document or refresh. A request to understand the current
-project, recover prior context, resume work, or report status is read-only
+when the user explicitly asks to analyze existing code, a paper, or document
+materials and no usable persistent analysis exists, when existing analysis is
+demonstrably stale for the requested downstream work, or when the user asks to
+refresh it. An explicit analysis request defaults to persistent output unless
+the user asks for conversational/read-only analysis or no files. A request only
+to understand the current project, recover prior context, resume work, or report
+status remains read-only
 orientation and is not an `analyze-project` trigger by itself. When analysis
 already exists, read it before deciding that reanalysis is needed.
 
@@ -73,6 +76,11 @@ update `analysis_project/`. Follow relevant memory paths and resolve drift with
 this precedence: latest specification or user-confirmed decision, durable
 project fact, latest experiment contract, then legacy document. Report a
 conflict instead of silently combining or selecting the older value.
+
+Artifact absence alone is not a trigger. New empirical evaluation belongs to
+`autopilot-lab`, new external evidence surveys to `autopilot-research`, source
+implementation to `autopilot-code`, and inspection of completed work to
+`audit`. Apply those semantic primaries before this initial-analysis default.
 
 ## Adapter Realization
 

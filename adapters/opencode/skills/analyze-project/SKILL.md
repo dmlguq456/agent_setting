@@ -1,6 +1,6 @@
 ---
 name: analyze-project
-description: "Use when persistent analysis of code, a paper, or a document must be created or refreshed because it is absent, stale, or explicitly requested. Not for read-only project orientation, context recovery, or status reporting."
+description: "Use when the user asks to analyze existing code, a paper, or a document and no usable persistent analysis exists, or to refresh stale analysis; default initial analysis to persistent output. Not for conversational, read-only, or no-file analysis; orientation, context recovery, status, experiments, external research, source changes, or completed-work audits."
 metadata:
   portable_source: capabilities/analyze-project.md
   adapter: opencode
@@ -34,7 +34,7 @@ capability contract. It is adapter-owned output, not a legacy compatibility Skil
 - Invocation class: `entry-router`
 - Supported modes: `code, paper, doc`
 - Argument shape: `[--mode code|paper|doc] [<scope/target/input-folder>] [--skip-qa]`
-- Portable meaning: Creates or refreshes persistent analysis from primary code, paper, or document materials when analysis is absent, stale, or explicitly requested; not for read-only context recovery.
+- Portable meaning: Creates persistent analysis of existing code, papers, or documents; initial analysis defaults here unless read-only/no-file or another primary applies.
 
 
 ## Required Guards

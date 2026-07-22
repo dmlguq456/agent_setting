@@ -12,6 +12,17 @@ This is the single routing contract for spec-backed projects that contain `.agen
 
 Every task first passes through the work-nature map in §2. Direct work, runtime plugins, and built-in Skills are used only where this router places them. Adapter and runtime projection work also remains core-first: establish the portable invariant in `core/`, read its governing document, then change adapter or generated output. A read marker enforces order but is not a substitute for review.
 
+After the §0.1 read-only exemption and §0.2 semantic precedence, a request that
+clearly matches one manifest `entry-router` positive trigger and none of that
+entry's exclusion boundary uses that entry as the primary route. If multiple
+entries match, resolve them through §0.2 and the work-nature map instead of
+silently dropping to capability-free work.
+
+Capability-free inline work is limited to read-only orientation, status, a
+simple factual or explanatory answer that requests no new durable artifact, or
+an explicit conversational/no-files constraint.
+`direct` is an intensity inside the selected entry route, not a bypass around entry routing.
+
 ### 0.1. Read-Only Orientation Before Capability Routing
 
 Before selecting a capability or Skill, distinguish read-only orientation from
@@ -55,11 +66,16 @@ rewrite an explicit current contract. When a lower-priority source differs,
 report the drift and identify both sources; do not merge their meanings or
 quietly choose the legacy value.
 
-`analyze-project` becomes eligible only when no usable analysis exists,
-existing analysis is demonstrably stale for the requested downstream work, or
-the user explicitly asks to create or refresh persistent project analysis.
-When analysis already exists, read it before deciding that reanalysis is
-needed.
+An explicit request to analyze existing primary code, paper, or document
+materials selects `analyze-project` as the default primary when no usable
+persistent analysis exists. Treat the analysis request as artifact-producing
+unless the user explicitly asks for conversational/read-only analysis or no
+files. Existing analysis that is demonstrably stale for downstream work, or an
+explicit refresh request, also makes `analyze-project` eligible. Artifact
+absence by itself never selects the capability, and empirical evaluation,
+external research, implementation, and completed-artifact inspection retain
+their §0.2/work-nature primaries. When analysis already exists, read it before
+deciding that reanalysis is needed.
 
 This boundary was strengthened after a 2026-07-14 incident where a context
 recovery request in a spec-backed project was routed to `analyze-project` before

@@ -162,7 +162,11 @@ for projected in \
   "$ROOT/adapters/claude/skills/analyze-project/SKILL.md" \
   "$ROOT/adapters/codex/skills/analyze-project/SKILL.md" \
   "$ROOT/adapters/opencode/skills/analyze-project/SKILL.md"; do
-  grep -Fq 'not for read-only context recovery' "$projected" || {
+  grep -Fq 'user asks to analyze existing code' "$projected" || {
+    echo "not ok - initial-analysis positive trigger missing from $projected" >&2
+    exit 1
+  }
+  grep -Fq 'Not for conversational, read-only, or no-file analysis' "$projected" || {
     echo "not ok - orientation exclusion missing from $projected" >&2
     exit 1
   }

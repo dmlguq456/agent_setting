@@ -31,6 +31,21 @@ for document, phrases in {
     text = " ".join((ROOT / document).read_text(encoding="utf-8").split())
     assert all(phrase in text for phrase in phrases), f"{document} lost entry-layer contract"
 
+workflow = (ROOT / "core/WORKFLOW.md").read_text(encoding="utf-8")
+assert "uses that entry as the primary route" in workflow
+assert "`direct` is an intensity inside the selected entry route" in workflow
+analysis_invocation = manifest["capabilities"]["analyze-project"]["invocation"]
+assert "user asks to analyze existing code" in analysis_invocation["use_when"]
+assert "default initial analysis to persistent output" in analysis_invocation["use_when"]
+assert "conversational, read-only, or no-file analysis" in analysis_invocation["not_for"]
+for bootstrap in (
+    "adapters/claude/CLAUDE.md",
+    "adapters/codex/AGENTS.md",
+    "adapters/opencode/AGENTS.md",
+):
+    text = (ROOT / bootstrap).read_text(encoding="utf-8")
+    assert "is the primary route" in text and "`direct` sets intensity, not routing" in text
+
 
 def anchor(value: str) -> str:
     value = re.sub(r"`([^`]*)`", r"\1", value).lower()

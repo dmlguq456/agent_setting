@@ -4,11 +4,14 @@ Upfront analysis entrypoint. Structure primary code, paper, and document materia
 
 ## Routing Boundary
 
-Invoke this Skill only to create or refresh persistent project analysis when
-analysis is absent, demonstrably stale for the requested downstream work, or
-explicitly requested by the user. A request to understand the project, recover
-prior context, resume work, or report current status is read-only orientation,
-not an `analyze-project` trigger.
+Invoke this Skill when the user explicitly asks to analyze existing code, a
+paper, or document materials and no usable persistent analysis exists, when
+existing analysis is demonstrably stale for the requested downstream work, or
+when the user requests a refresh. Treat an explicit analysis request as
+persistent output unless the user asks for conversational/read-only analysis
+or no files. Artifact absence alone is not a trigger. A request only to
+understand the project, recover prior context, resume work, or report current
+status remains read-only orientation, not an `analyze-project` trigger.
 
 Before invocation, run one targeted, agent-chosen memory recall and read a
 shortened relevant hit in full by record ID. Then resolve `.agent_reports/`,

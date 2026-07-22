@@ -1,7 +1,7 @@
 # GENERATED — edit harness-manifest.json, then run tools/generate.py.
 # Columns: skill<TAB>class<TAB>caller/intent
 # Classes: user-only | parent-invoked | entry-router | model-support
-analyze-project	entry-router	Use when persistent analysis of code, a paper, or a document must be created or refreshed because it is absent, stale, or explicitly requested. Not for read-only project orientation, context recovery, or status reporting.
+analyze-project	entry-router	Use when the user asks to analyze existing code, a paper, or a document and no usable persistent analysis exists, or to refresh stale analysis; default initial analysis to persistent output. Not for conversational, read-only, or no-file analysis; orientation, context recovery, status, experiments, external research, source changes, or completed-work audits.
 analyze-user	entry-router	Use when durable cross-project user preferences must be inferred from coding, writing, or analysis evidence and stored as a profile. Not for one-project context recovery, casual preference acknowledgment, or ordinary task execution.
 audit	entry-router	Use when completed work or artifacts need a read-oriented inspection for drift, inconsistency, omissions, or unsupported claims. Not for implementing fixes, producing the primary artifact, or replacing execution-stage verification.
 autopilot-apply	entry-router	Use when an approved cheatsheet or patching guide must be applied to the real source artifact and the applied result verified. Not for drafting or refining the cheatsheet, or for unrelated source implementation.

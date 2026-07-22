@@ -65,8 +65,9 @@ partial. OpenCode native UI/config owns model and context fields.
 
 ## Dispatch
 
-Select the primary capability semantically per `core/WORKFLOW.md §0.2` and use
-its §0.3 pre-execution gate when applicable. Before material work, propose the
+Per `core/WORKFLOW.md §0.2`, after §0.1, a matching manifest `entry-router`
+is the primary route; `direct` sets intensity, not routing. Apply §0.3 when
+needed. Before material work, propose the
 route with the completed five-field card in §0.4 and wait for approval unless
 the same route and scope are already approved. Route from compact generated
 metadata before approval; load full capability detail in the acting owner or
