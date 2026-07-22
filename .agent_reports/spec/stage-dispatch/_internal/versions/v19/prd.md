@@ -6,11 +6,8 @@
 > · **v17 2026-07-19** (재시도 계보·config 봉인 — mutation 노드 재시도의 first-parent 계보 검증(SD-67), dispatch-defaults의 route record 봉인 배선(SD-68 — SD-66 2단계 유보 해제))
 > · **v18 2026-07-19** (conductor 생존·Codex linked-worktree mutation 경계·completion marker↔attempt row 결합 — SD-69~71)
 > · **v19 2026-07-20** (transient PID namespace lifecycle — foreground-scoped wrapper·outer-sandbox 경계·exact parent·unmatched depth-2 visibility, SD-72) · **v19 reliability minor 2026-07-20** (sandbox-init terminal handoff·canonical transport·same-route fallback·exact-attempt liveness)
-> · **v20 2026-07-20** (`quick` registered-headless-only fail-closed·portable `dispatch_depth` namespace·Codex/Claude execution-surface terminology, SD-73~75; SD-19 superseded)
 > 컴포넌트: `agent_setting` repo 의 **autopilot 파이프 디스패치 토폴로지 개정** — 각 sub-skill 스테이지(code-plan / code-execute / code-test / code-report)를 `standard+` 에서 **기본으로 별개 headless 세션**으로 분사하는 계약. 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 와 무관한 독립 청사진. 이 폴더(`spec/stage-dispatch/`)가 자체 SoT.
 > 입력(1순위 근거):
-> - **사용자 승인 결정 (2026-07-20 v20)**: `effective_intensity=quick` 인 모든 route는 registered headless worker session만 사용한다. `native-subagent`, `inline-fallback`, interactive/empty, unknown/arbitrary surface는 compile 단계에서 fail-closed이며 dispatch depth로 이름 붙이지 않는다. `direct` inline과 `standard+` fallback은 유지한다. portable nesting은 `dispatch_depth`/`max_dispatch_depth`로 한정하고 Codex `agents.max_depth`와 분리한다. Claude subagent, Claude agent-team teammate session, registered headless worker session을 구별하며 multi-capability composition은 추가하지 않는다.
-> - **v20 근거**: `documents/2026-07-20_depth1-surface-terminology-audit.md` + registered depth-2 research `shards/spec-research/depth1-surface-terminology.md` + independent review `reviews/spec/spec-verdict.json`. Review의 V20-R1~R6을 본 transaction에서 모두 해소한다.
 > - **사용자 결정 (2026-07-10 확정)**: "스킬 단위의 처리가 분사해서 할 것을 기본 지침으로 했으면 한다. 어차피 산출물 기반 소통인데." — 입도 = sub-skill 스테이지 단위, 적용 = `standard+`, 이는 2026-07-06 depth 재설계 기본값의 명시적 반전.
 > - **사용자 결정 (2026-07-13 확정)**: `direct` 는 depth-0 inline 유지, `quick` 은 depth-0 실행에서 **단일 depth-1 one-shot capability worker** 로 이동한다. quick worker 는 micro-plan·plan-check-lite·implementation·focused verification·concise report 를 한 세션에서 끝내며, **depth-2 를 열지 않는다**. `standard+` 는 기존 depth-0 main → depth-1 conductor → 순차 depth-2 stage-worker topology 유지.
 > - **사용자 결정 (2026-07-13 v7 확정)**: depth-1 `standard+` conductor 는 high-reasoning/deep orchestration 을 기본으로 하고 fast orchestration 은 mechanical-only 로 한정한다. planning/architecture/decomposition 은 Codex의 GPT family + `deep maker` affinity 를 우선하되 hard pin 하지 않으며, plan review 는 maker 와 다른 family 를 선호한다. 라우팅 우선순위·read-only helper 계약과 Fleet 오탐 hotfix 수용 기준을 본 v7에 고정한다.
@@ -42,9 +39,7 @@
 
 ## 0. 한 줄
 
-**autopilot 파이프의 각 sub-skill 스테이지(code-plan·code-execute·code-test·code-report)를 `standard+` 에서 기본으로 별개 registered headless session에 분사하고, 세션 간 소통은 오직 산출물 파일로 한다.** `dispatch_depth=1` owner는 스테이지 산출물 경로를 계약으로 넘기고 게이트 판단만 자기 컨텍스트에서 쥔 **얇지만 deep-orchestration conductor**다. `direct`는 main-inline(`dispatch_depth=0`)이고, `quick`은 registered headless capability-owner node 하나(`owner_dispatch_depth=1`, `max_dispatch_depth=1`)가 micro-plan부터 concise report까지 한 세션에서 끝내며 child node를 열지 않는다. `quick`은 native-subagent·inline fallback을 갖지 않고 checked headless가 없으면 fail-closed한다. 이는 2026-07-06 "owner 단일 세션 + in-session 팀" 재설계의 **기본값을 반전**하고, 2026-07-13 quick topology를 Fleet-visible one-shot worker로 승격하며 standard+ 라우팅 판단 품질을 high-reasoning 기본으로 고정하는 결정이다.
-
-> **v20 현재 규범 우선순위**: 이 문서의 v1~v19 구간에 남은 bare `depth`/`max_depth`/`owner_depth`와 SD-19 fallback 문언은 당시 schema·결정의 **명시적 historical/legacy 기록**이다. 신규 route, schema, generated projection과 현재 규범은 오직 SD-73~75의 qualified vocabulary를 사용한다. legacy record는 version-tagged read-only로만 읽고 v20 recompilation 전 resume/re-emit하지 않는다.
+**autopilot 파이프의 각 sub-skill 스테이지(code-plan·code-execute·code-test·code-report)를 `standard+` 에서 기본으로 별개 headless 세션에 분사하고, 세션 간 소통은 오직 산출물 파일로 한다.** depth-1 owner 는 스테이지 산출물 경로를 계약으로 넘기고 게이트 판단만 자기 컨텍스트에서 쥔 **얇지만 deep-orchestration conductor** 가 된다. `direct` 는 depth-0 inline 이고, `quick` 은 단일 depth-1 one-shot capability worker 가 micro-plan부터 concise report까지 한 세션에서 끝낸다(depth-2 금지). 이는 2026-07-06 "owner 단일 세션 + in-session 팀" 재설계의 **기본값을 반전**하고, 2026-07-13 quick topology 를 Fleet-visible one-shot worker 로 승격하며 standard+ 라우팅 판단 품질을 high-reasoning 기본으로 고정하는 결정이다.
 
 ## 0.5 설계 원칙 — 산출물 기반 소통 (file-only handoff) ★ cross-cutting
 
@@ -328,7 +323,7 @@ pilot 부수발견 ②: 스테이지 세션도 SessionEnd 에 mem curator(distil
 
 **mutation quick 격리**: source mutation 이 가능한 quick job 은 isolated worktree 를 사용한다. mutation 없는 문서/검토 quick 은 main worktree 에서 depth-1 worker 를 열 수 있으나, file overlap·dirty state·merge state 가 있으면 기존 §5.9/§5.10 safety gate 를 우선한다.
 
-### 8.8.2 SD-19 — Codex quick dispatch preference and fallback (historical; superseded by SD-73)
+### 8.8.2 SD-19 — Codex quick dispatch preference and fallback
 
 **선호 경로**: Codex quick job 은 `adapters/codex/bin/preflight.sh headless --check` 가 통과하면 headless dispatch 를 우선한다. 이유는 `.dispatch/jobs.log` row 로 Fleet 이 볼 수 있고, parent 가 liveness/harvest 계약을 공유하기 때문이다.
 
@@ -1032,117 +1027,6 @@ liveness/Fleet/projection/boundary suite가 회귀 없이 통과한다.
 exact `dead-sandbox-init`, 최종 open row 0, liveness ALIVE 0이며 same-route fallback과
 Fleet current view가 stale refs attempt를 현재 단계로 채택하지 않는다.
 
-## 13.12 v20 — quick registered-headless invariant와 surface terminology (2026-07-20)
-
-> 근거: 승인된 v20 결정, `documents/2026-07-20_depth1-surface-terminology-audit.md`,
-> registered research shard와 independent review verdict. 이 절은 SD-19의 quick
-> fallback을 명시적으로 뒤집되 `direct`와 `standard+`의 의미는 바꾸지 않는다.
-
-### 13.12.1 SD-73 — quick는 registered-headless-only (SD-19 superseded)
-
-- `effective_intensity=quick` route는 capability-owner route node를 **정확히 하나**
-  가진다. node는 `dispatch_depth=1`, route는 `owner_dispatch_depth=1`,
-  `max_dispatch_depth=1`이며 child node와 `dispatch_depth=2` fan-out이 없다.
-- omitted transport는 compiler가 registered wrapper transport `headless`로 유도한다.
-  explicit empty, `interactive`, `native-subagent`, `inline-fallback`, unknown/arbitrary
-  값은 route emission·registry claim·child spawn 전에 실패한다. quick recipe의
-  허용 execution surface는 `registered-headless` 하나뿐이며 machine wrapper
-  transport 값은 기존 `headless`를 유지한다.
-- checked registered-headless eligibility가 compile 시점에 없으면 정확한 error enum
-  `quick-headless-unavailable`로 끝난다. route file, registry row, child process는 모두
-  생성하지 않는다. compiler는 intensity, transport, execution location을 제자리에서
-  바꾸거나 direct/native/inline으로 하강하지 않는다.
-- quick cardinality는 **one route node + at most one live attempt/session**이다. SD-59의
-  직렬 capacity/retry 규칙은 폐기하지 않는다. 허용된 재시도도 전부 registered
-  headless이고 각자 canonical terminal attempt row를 가지며 동시에 둘 이상 live일
-  수 없다. eligible registered-headless attempts가 소진되면
-  `quick-registered-headless-exhausted`로 terminal failure한다. quick의 native-subagent와
-  inline attempt count는 항상 0이다.
-- 회복은 owner가 새 route를 다른 intensity로 **명시 재승인·재컴파일**하는 경계다.
-  compile/runtime이 기존 quick route를 자동 변형하지 않는다.
-- Fleet는 quick node당 current/open attempt row를 정확히 하나 이하로 표시하고 과거
-  terminal retry rows는 보존한다. quick child row, native/inline degradation row는
-  계약 위반이다.
-
-**보존 경계**: `direct`는 main-inline(`dispatch_depth=0`)이고 registry worker row가
-없다. `standard+`는 기존 capability recipe와 checked same-harness headless →
-cross-harness headless → native-subagent → inline fallback 순서(SD-50/61/72)를
-그대로 보존한다. 이 fallback은 quick에 적용되지 않는다.
-
-### 13.12.2 SD-74 — portable dispatch topology와 attempt surface의 별도 namespace
-
-- `dispatch_depth`는 portable route ownership/topology의 논리 수준이다. runtime
-  transport, process ancestry, runtime-native nesting, registry 가입 여부와 독립이다.
-  신규 schema/prose/projection은 bare `depth`, `max_depth`, `owner_depth` 대신
-  `dispatch_depth`, `max_dispatch_depth`, `owner_dispatch_depth`를 사용한다.
-- `dispatch_depth=0`은 user-facing main ownership, `dispatch_depth=1`은 capability-owner
-  node, `dispatch_depth=2`는 bounded stage/support node다. 이 값은 route node의
-  논리 위치이지 실제 attempt가 registered worker라는 주장이 아니다.
-- attempt는 별도 `execution_surface`와 `registered_worker` evidence를 가진다. repo-owned
-  registration contract로 launch된 `registered-headless` attempt만
-  `registered_worker=true`다. direct inline과 standard+ native/inline fallback attempt는
-  자기 route node의 `dispatch_depth` metadata를 유지하되 registered-worker status를
-  얻지 않는다.
-- route record, registry row, completion marker, liveness와 Fleet는 node
-  `dispatch_depth`와 attempt `execution_surface`/registration evidence를 분리해 기록한다.
-  fallback attempt가 logical depth를 지우거나 registered dispatch라고 오표기하면
-  fail-closed한다.
-- Codex `agents.max_depth`는 Codex native-subagent nesting 설정일 뿐이다. registered
-  headless `max_dispatch_depth`를 검증·제한·광고하지 않으며 native-subagent probe는
-  headless eligibility evidence가 될 수 없다.
-- current normative prose, 신규 schema와 generated portable/adapter projection에는
-  ambiguous bare depth field가 0개여야 한다. v1~v19 역사 구간과 version-tagged legacy
-  record만 예외이며 legacy reader는 source schema version을 표시하고 v20 qualified
-  recompilation 전 resume/re-emit을 거부한다.
-
-### 13.12.3 SD-75 — transport, execution surface, fallback hop, runtime agent 용어
-
-세 namespace는 서로 대입하지 않는다.
-
-| Namespace | Closed vocabulary / meaning |
-|---|---|
-| registered wrapper `transport` | `headless`(non-interactive registered wrapper), `interactive`(명시적으로 허용한 non-quick wrapper 자리). `detached-process`는 execution surface가 아니라 route가 명시한 resource-job lifecycle에서만 유효한 historical/별도 값이다. |
-| attempt `execution_surface` | `registered-headless`, `codex-native-subagent`, `claude-subagent`, `claude-agent-team-teammate`, `inline`. |
-| `fallback_hop` | `same-harness-headless`, `cross-harness-headless`, `native-subagent`, `inline`; recipe가 허용한 intensity에서만 평가한다. |
-
-compiler는 먼저 각 namespace의 global closed vocabulary를 검증하고 그 다음 recipe
-allowlist를 적용한다. unknown string은 모든 intensity에서 실패한다. quick는
-`execution_surface=registered-headless`와 wrapper `transport=headless`만 허용한다.
-
-| Runtime surface | Normative meaning |
-|---|---|
-| **Codex native subagent** | Codex native agent child thread/session. `agents.max_depth` 같은 Codex-native 설정을 따르며 registered headless worker가 아니고 headless eligibility evidence를 충족하지 않는다. |
-| **Claude subagent** | 한 Claude session 안에서 caller에게 결과를 돌려주는 Claude runtime-native child. registered headless worker가 아니다. |
-| **Claude agent-team teammate session** | agent team의 peer communication에 참여하는 별도 full Claude Code session. Claude subagent가 아니며 team membership만으로 registered headless가 되지 않는다. |
-| **registered headless worker session** | repo-owned wrapper를 통해 immutable route/node/attempt, canonical registry, liveness와 completion gate에 결합된 harness-neutral worker session. |
-
-`runtime-native subagent`라는 cross-runtime 범주는 Codex native subagent와 Claude
-subagent만 포함한다. Claude agent-team teammate를 포함하지 않는다. teammate가
-registered wrapper를 호출한 경우에도 team membership과 그 wrapper child attempt의
-registered-headless status는 별도 속성이다.
-
-### 13.12.4 v20 acceptance / implementation handoff
-
-1. every-capability quick default compile = one node, qualified depth fields, headless only;
-   quick native/inline/interactive/empty/arbitrary negative fixtures는 route/row/spawn 0.
-2. checked headless ineligibility는 `quick-headless-unavailable`; serial registered-headless
-   exhaustion은 `quick-registered-headless-exhausted`; 자동 intensity mutation 0.
-3. direct inline fixtures와 standard+ full fallback-order fixtures는 결과 불변이다.
-4. quick는 one current/open attempt 이하, retry terminal history 보존, native/inline
-   attempts 0, child node/row 0이다.
-5. 신규 route/topology/registry/completion/Fleet schema와 generated projections에
-   qualified depth + 분리된 execution-surface evidence가 있고 ambiguous bare fields 0.
-6. Codex `agents.max_depth` probe 변화가 headless `max_dispatch_depth` 또는 eligibility를
-   바꾸지 않는다.
-7. terminology conformance는 Codex native subagent, Claude subagent, Claude agent-team
-   teammate session, registered headless worker session을 서로 바꾸어 부르는 문구를
-   거부한다.
-8. legacy records는 version-tagged read-only이며 v20 recompilation 전 resume/re-emit 0.
-9. Claude/Codex/OpenCode sibling compiler/projection이 동일 portable invariant를 독립
-   검증한다. unsupported headless는 다른 surface로 대체하지 않고 정직하게 실패한다.
-10. multi-capability composition, co-primary route, cross-capability DAG/envelope, source
-    implementation, concrete model choice, user runtime config 변경은 본 v20 범위 밖이다.
-
 ## 14. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
 
 - **규칙 구간(코드로 강제)**: depth ≤ 2(wrapper 게이트)·jobs.log row 형식·스테이지-워커 write 클래스·lock 범위·model role 명시 — 전부 결정론 가드/wrapper(§2.4). "산출물 기반 소통"의 완결성은 파일 존재로 결정론적 감사. **v2 추가**: SD-14(b) Stop hook(open 자식 row = 결정론적 차단 조건)·SD-14(c) dispatch-wait(대기 판단을 코드로)·SD-14(a) depth_note(계약 전달의 결정론화). **v6 추가**: quick depth-2 금지, quick jobs.log child-row 부재, mutation quick isolated worktree 는 결정론 gate 대상. **v7 추가**: hard eligibility 기반 후보 제거·adapter exact-ID probe·reason trace 필드·helper read-only·Fleet env child-hidden/metadata-exact 분류는 결정론 테스트 대상. **v8 추가**: canonical path 해석·worker-local artifact write 차단·cleanup eligibility·registry 직렬화는 모두 deterministic fail-closed 규칙이다. **v10 추가**: route record hash/scope 검증·tracked gate 증거 4종 필드 존재 검사·guard↔write_scope validator 항목·spec-transaction lock 시퀀스와 버전 경합 대기 규칙은 전부 결정론 검사 대상이다. **v11 추가**: nested eligibility tuple/status, immutable global registry path, attempt-first row identity, no-change retry 금지, fallback hop 순서·broker parent linkage는 결정론 validator/fixture 대상이다. **v12 추가**: broker endpoint/identity·request schema/idempotency·atomic state transition·fencing/lease·spawn 전 registry·4조합 logical parent 보존은 결정론 protocol/fixture 대상이다. **v13 추가**: per-request lease 직렬화·전역 락 비보유 실행·record v2 필드 규칙(stable identity만)·hop 시점 ensure 해석·completion marker 존재/필드/경로 검사·후속 노드 launch의 선행 marker gate는 전부 결정론 검사 대상이다. **v14 추가**: 생존증거 위계(exact-proc/flock 프로브/fenced ping+heartbeat) 판정 순서·spool publish/consume 원자성과 idempotency·발화-비인정 liveness 신호 집합·capacity failure class 감지와 모델 cooldown·registry reconcile 안전 게이트와 현재-작업 필터는 전부 결정론 검사 대상이다.
@@ -1150,6 +1034,5 @@ registered-headless status는 별도 속성이다.
 - **v16 추가**: dispatch-defaults 스키마 검증(어휘·capability/stage 키 유효성·모델 금지)·selector의 config 로딩·우선순위 적용 순서(explicit > eligibility > config affinity)는 결정론 검사 대상이다. 어느 칸에 어떤 기본값을 적을지, 미지정 칸에서 오케스트레이터가 어느 하네스를 고를지, soft default 이탈 사유의 타당성은 의미 판단 구간으로 남긴다.
 - **v17 추가**: mutation 노드 재시도 계보 판정의 세 입력(route record `resume_retry_boundaries` 선언·바인딩된 전역 registry의 선행 attempt row·first-parent 계보)과 registry 부재 시 정확 일치 회귀, 그리고 `harness_affinity` 어휘 검증·`dispatch_defaults_digest` 봉인·registry row 기록은 결정론 검사 대상이다. 재시도를 할지·언제 할지의 판단과 record affinity 이탈 사유의 타당성은 conductor 의미 구간으로 남는다.
 - **v18 추가**: exact attempt marker↔row 마감·marker 기반 reconcile, Codex linked-worktree no-commit 분류와 좁은 `.spec-grounding` writable root, verified Claude async-tool deny 목록, `dead-parent-orphaned` 사후 분류·표면화는 결정론 검사 대상이다. marker가 나타내는 stage 통과의 타당성, 고아 route를 실제 재개할지, no-commit diff를 최종 commit할지는 각각 conductor/depth-0 의미 판단으로 남는다.
-- **v20 추가**: quick `registered-headless` 단일 surface allowlist, namespace별 closed vocabulary, exact compile/runtime failure enum, one-node/at-most-one-live-attempt cardinality, qualified dispatch-depth fields, node topology↔attempt surface 분리, four-surface terminology, legacy read-only migration은 전부 compiler/schema/conformance fixture로 강제한다. SD-19 quick fallback과 bare current terminology는 superseded다. direct/standard+ 보존과 multi-capability composition 비추가는 회귀 fixture 대상이다.
 - **의미 판단 구간(사람/LLM)**: (1) 마이크로-스테이지 inline 경계 임계 — 계측 후 판정(SD-OPEN-1). (2) 스테이지 실패 시 재분사 vs 이어쓰기 판단 — conductor 의 부분 산출물 해석. (3) 산출물 계약이 "완전한가"의 판정 — 스테이지가 대화 없이 완주 가능한지. **v2 추가**: (4) SD-11 을 deny 가 아니라 reminder 로 시작 — hook 이 intensity(direct/quick 정당 fallback)를 결정론적으로 알 수 없어, 규칙화 불가 구간을 deny 로 억지 규칙화하지 않음(경계 존중). deny 상향은 계측 후. (5) SD-14(b) 피드백도 "대기 강제"가 아니라 liveness 진단→행동 분기 지시 — 죽은 스테이지 해석은 의미 판단으로 남김. **v6 추가**: headless 실패 시 native subagent 로 충분한지, 또는 inline fallback 으로 낮출지의 fallback reason 작성은 runtime 상태 해석이므로 의미 판단으로 남긴다. **v7 추가**: stage affinity와 family diversity의 품질 판단은 의미 구간이지만, 그 적용 순서와 후보 탈락 사유는 helper가 구조화한다. **v10 추가**: "산출물을 추적할 가치가 있는가"(tracking)와 "분사할 실익이 있는가"(promotion/separability)는 각각 의미 판단으로 남되, 두 판단을 하나로 동일시하지 않는 것이 SD-44의 축 분리다 — record는 판단 결과와 근거 신호만 구조화한다. **v11 추가**: eligible 후보가 여러 개일 때 role affinity·family diversity로 어느 cross-harness를 고를지와 새로운 failure class의 의미 해석은 판단 구간이지만, 지원 여부·hop 순서·row 기록은 규칙 구간이다. **v13 추가**: "스테이지 산출물이 계약상 완전한가"의 통과 판정은 conductor의 의미 판단으로 남긴다 — SD-56은 그 판단을 대체하지 않고 판단 결과를 marker로 결정론화하며, marker 부재를 실패로 해석하지 않는 것도 의미 구간의 존중이다. **v14 추가**: 무진행 worker에 대한 최종 interrupt vs 계속 대기, 그리고 재분사 시 이어쓰기/재시작 선택은 conductor 의미 판단으로 남긴다 — SD-58은 경고·차단의 발동 조건과 인정 가능한 liveness 신호 집합만 결정론화한다. capacity failover에서 "어느 대체 모델인가"의 품질 판단도 SD-22 affinity 의미 구간이며, SD-59는 재시도 횟수·cooldown·증거 기록만 규칙화한다.
 - **충돌**: 없음 — 반전의 핵심 우려(현행 "상태 재발굴·연속성 상실")를 §0.5 계약 완결성 의무 + §8 inline 경계로 규칙화해 흡수했다. 우려를 사람 vigilance 로 남기지 않고 "산출물이 상태를 완전히 담는가"라는 검증 가능한 규칙으로 전환한 것이 이 경계 존중. per-stage cost 는 추측으로 규칙화하지 않고 계측(SD-OPEN-1)으로 미룬 것도 동일.
