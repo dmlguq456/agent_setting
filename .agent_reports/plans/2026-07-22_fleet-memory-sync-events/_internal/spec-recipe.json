@@ -1,0 +1,116 @@
+{
+  "capability": "autopilot-spec",
+  "modes": ["update"],
+  "topology_class": "transactional-owner",
+  "direct_predicates": [
+    "atomic-outcome",
+    "known-scope",
+    "no-shared-contract",
+    "no-resource-run",
+    "no-artifact-handoff",
+    "no-independent-verifier",
+    "focused-verification"
+  ],
+  "promotion_signals": [
+    "shared-contract",
+    "public-api",
+    "schema-change",
+    "research-needed",
+    "independent-verifier",
+    "multi-runtime-parity"
+  ],
+  "quick": {
+    "topology": "one-shot-owner",
+    "worker_kind": "capability-owner",
+    "write_scope": [
+      "spec/prd.md",
+      "spec/agent-fleet-dashboard/prd.md",
+      "spec/pipeline_state.yaml",
+      "spec/pipeline_summary.md"
+    ],
+    "owner_dispatch_depth": 1,
+    "max_dispatch_depth": 1
+  },
+  "standard_plus": {
+    "topology": "transactional-owner",
+    "nodes": [
+      {
+        "id": "research",
+        "kind": "map-worker",
+        "depends_on": [],
+        "role": "deep maker",
+        "unit": "research/research-survey",
+        "inputs": ["intent", "prior-evidence"],
+        "outputs": ["shards/spec-research/**"],
+        "write_scope": ["shards/spec-research/**"],
+        "resource_class": "normal",
+        "completion_gate": "spec-research",
+        "dispatch_depth": 2,
+        "fallback_hops": [
+          "same-harness-headless",
+          "cross-harness-headless",
+          "native-subagent",
+          "inline"
+        ]
+      },
+      {
+        "id": "review",
+        "kind": "review-worker",
+        "depends_on": ["research"],
+        "role": "deep reviewer",
+        "unit": "research/plan-review",
+        "inputs": ["intent", "shards/spec-research/**"],
+        "outputs": ["reviews/spec-verdict.json"],
+        "write_scope": ["reviews/spec/**"],
+        "resource_class": "normal",
+        "completion_gate": "spec-review",
+        "dispatch_depth": 2,
+        "fallback_hops": [
+          "same-harness-headless",
+          "cross-harness-headless",
+          "native-subagent",
+          "inline"
+        ]
+      },
+      {
+        "id": "prd-transaction",
+        "kind": "capability-owner",
+        "depends_on": ["review"],
+        "role": "deep maker",
+        "unit": "_kernel/owner",
+        "inputs": ["intent", "shards/spec-research/**", "reviews/spec-verdict.json"],
+        "outputs": [
+          "spec/prd.md",
+          "spec/agent-fleet-dashboard/prd.md",
+          "spec/pipeline_state.yaml",
+          "spec/pipeline_summary.md",
+          "spec/_internal/versions/**"
+        ],
+        "write_scope": [
+          "spec/prd.md",
+          "spec/agent-fleet-dashboard/prd.md",
+          "spec/pipeline_state.yaml",
+          "spec/pipeline_summary.md",
+          "spec/_internal/versions/**"
+        ],
+        "resource_class": "normal",
+        "completion_gate": "spec-atomic-transaction",
+        "dispatch_depth": 1,
+        "fallback_hops": [
+          "same-harness-headless",
+          "cross-harness-headless",
+          "inline"
+        ]
+      }
+    ],
+    "owner_dispatch_depth": 1,
+    "max_dispatch_depth": 2
+  },
+  "completion_gates": [
+    "spec-research",
+    "spec-review",
+    "spec-atomic-transaction"
+  ],
+  "human_gates": ["intent-confirmation"],
+  "resume_retry_boundaries": ["research", "review", "prd-transaction"]
+}

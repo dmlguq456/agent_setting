@@ -1,0 +1,37 @@
+## 📋 Plan Review Results
+
+**Target:** `/home/Uihyeop/agent_setting/.agent_reports/plans/2026-07-22_fleet-memory-sync-events/plan.md` and `checklist.md` (round 2, post round-1 revision)
+
+**Plan summary:** Unchanged core design from round 1 — additive `_append_write_event`/`write_record` plumbing (unset-cwd sentinel, insert-only gate, literal actor) opted into by the four `migrate()` sources with source-derived logical cwd, Fleet collector left untouched pending a real producer-to-`collect()` acceptance proof. This round's diff is entirely a reconciliation of the round-1 review: corrected spec citations/authority, full ten-suite verification net, explicit `sync()` dump-commit/push fencing, a post-it producer→Fleet card proof, and an explicit `mem log --actor sync` assertion.
+
+### Round-1 finding disposition (all three 🔴 and both 🟡 verified against current state)
+
+1. **Spec grounding (was 🔴 major)** — **RESOLVED.** Plan/checklist now cite the correct canonical absolute paths (`/home/Uihyeop/agent_setting/.agent_reports/spec/prd.md`, `.../agent-fleet-dashboard/prd.md`), and — unlike round 1, where the v22/v15 text was unstaged WIP in the primary checkout — I independently confirmed both files are now **committed** at `340359eb` ("docs(memory): define sync absorption events") in `/home/Uihyeop/agent_setting`: `git log --oneline -- .agent_reports/spec/prd.md` and `-- .agent_reports/spec/agent-fleet-dashboard/prd.md` both show `340359eb` as the tip commit, and `git status --porcelain` for `spec/prd.md` is clean. All six exact-text needles the plan's Phase 0.1 gate checks (v22 D-37 create-only/literal-sync/prospective-only wording; v15 F-19/F-35f wording) are present in the committed content — I ran the plan's own gate script verbatim and it passed. `spec/agent-fleet-dashboard/prd.md` does carry an *unrelated* uncommitted diff in the primary checkout (a different in-flight task, `fleet-unified-stage-ui`/F-36–F-39, layered on top of the same committed v15 base) — this does not touch or revert the v15 F-19/F-35f section the plan depends on, so it does not reopen the finding. Phase 0.1's fail-closed exact-text gate plus the sealed route's `spec_read`/spec-owner-report prerequisite together are now sufficient and no longer describe a false "settled, committed" state.
+
+2. **Verification suite coverage (was 🔴 major)** — **RESOLVED.** Phase 4.1 and the checklist's "Verification commands" section now enumerate all ten `tools/memory/*.test.sh` suites; `ls tools/memory/*.test.sh` in the sealed worktree returns exactly those ten files (`distill`, `empty-store-guard`, `inject`, `mem_cluster_e`, `mem_cluster_e_gamma`, `mem_cluster_j`, `mem_repairs_v15`, `mem_retrieval_v14`, `pending_drain`, `retrieval-eval`) with no extra or missing suite.
+
+3. **`sync()` dump-commit/push fencing (was 🔴 major)** — **RESOLVED.** Phase 3.5 now explicitly requires every fenced `sync()` acceptance call to pass `MEM_DUMP_COMMIT=0 MEM_DUMP_PUSH=0`, forbids any raw/unwrapped `mem.py sync` invocation, and requires proving the freshly allocated store is non-Git before seeding. I re-read `_commit_dump()` (`mem.py:156-193`): it already no-ops on `MEM_DUMP_COMMIT=0` and on a non-Git store, and only pushes when `MEM_DUMP_PUSH=1` is explicitly set — the plan's belt-and-suspenders fencing plus the before/after real-runtime-path snapshot comparison (Phase 3.5, checklist lines 60-61) is a correct closure of the round-1 concern.
+
+4. **Fleet repo-card proof breadth (was 🟡)** — **RESOLVED.** Phase 3.3 now runs a deterministic registered-post-it producer fixture through `fleet.collectors.memory.collect()` and asserts `by_repo["agent-note"]`, independent of the auto-memory fixture (checklist lines 56-58).
+
+5. **`mem log --actor sync` assertion (was 🟡)** — **RESOLVED.** Phase 3.7 / checklist line 68 now name this explicitly.
+
+### Independent re-verification against current sealed code (`e8938809`, clean)
+
+- All cited line ranges/definitions resolve exactly: `write_record` at `mem.py:1000`, `_write_actor` at `1250`, `_append_write_event` at `1260`, `migrate` at `2084`, `sync` at `3555`, CLI `add`/`note` callsites at `3732`/`3742`. `_append_write_event`'s current unconditional `"cwd": os.environ.get("MEM_CWD") or os.getcwd()` (`mem.py:1279`) confirms the sentinel-based extension is purely additive with no existing caller passing `cwd`.
+- Grepped every `write_record(`/`_append_write_event(` call site: 6 `write_record` calls (4 migrate-source loops + CLI add/note) and 10 direct `_append_write_event` callers (`consume`, `lifecycle-expire`, `delete`, `restore`, `reinforce`, `prune`, `merge`, `graduate`, `reattribute`, `drain-consumed`) — matches the plan's signature-safety table exactly, all keyword-argument call sites, so trailing additive kwargs are safe.
+- `WRITE_ACTORS` (`mem.py:80`) includes both `"sync"` and `"curator"` — confirms the hostile-env fixture's `MEM_ACTOR=curator` is a *valid* override attempt for `_write_actor()`, making it a real (not vacuous) test of the literal-actor bypass; `_append_write_event`'s `actor or _write_actor()` (`mem.py:1264`) confirms a truthy explicit `actor="sync"` argument never reaches `_write_actor()`, so `MEM_ACTOR`/`MEM_DISTILL` genuinely cannot override it.
+- Runtime paths the fenced-sync snapshot targets are correct: `STORE = MEM_STORE or AGENT_HOME/memory` (`mem.py:32`), `USER_PROFILE = MEM_PROFILE or AGENT_HOME/user_profile` (`mem.py:40`) — the plan's cited real paths (`/home/Uihyeop/agent_setting/memory`, `/home/Uihyeop/agent_setting/user_profile`, `.../memory/dump.jsonl`) match these defaults exactly.
+- Re-traced the duplicate-post-it-bullet edge case independently: `existing_src` is a single DB snapshot taken before the loop starts and is never refreshed mid-run, so a second identical bullet in the same run does **not** get skipped by the `existing_src` check — instead it reaches `write_record()`, `find_by_source()` queries the DB live and finds the just-committed first INSERT, and the second call lands in the source-upsert branch, which `journal_insert_only=True` correctly suppresses. This matches the plan's expected one-event outcome for step 3.6's first fixture.
+- `tools/memory/mem_cluster_j.test.sh`'s existing structure (`mktemp -d` `BASE_STORE`/`BASE_PROJ`/`WORKDIR` with a `trap ... EXIT`, exported `MEM_STORE`/`MEM_PROJECTS`/`MEM_WRITE_EVENTS`) is compatible with the plan's fixture additions, including Phase 3.5's requirement that each fenced-sync scenario allocate and prove a *separate* fresh non-Git store rather than reusing the suite-wide `BASE_STORE` — this is a straightforward local env override per scenario, not a structural conflict.
+
+No new 🔴 or 🟡 issues surfaced. I found nothing in the round-2 diff, the current code, or the current committed specs that contradicts the plan's claims.
+
+### 🟢 well-constructed portions (reaffirmed)
+
+- Phase 0.1's exact-text spec gate is now a real, executable, fail-closed check against genuinely committed ground truth rather than an assumption.
+- The create-only/literal-actor/explicit-cwd-omission design (Phase 1) remains correct and is now cross-checked against actual `WRITE_ACTORS` contents and `_append_write_event` behavior.
+- The four migration-source cwd mappings (Phase 2) match the current `migrate()` body's `src`/`cwd_origin` derivations line-for-line.
+- The verification, isolation-fencing, and diff-boundary gates (Phase 4) are complete and internally consistent with the checklist.
+
+## Verdict: `✅ No issues`

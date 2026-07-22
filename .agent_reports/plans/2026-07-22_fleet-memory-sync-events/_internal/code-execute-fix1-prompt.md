@@ -1,0 +1,12 @@
+This is the bounded in-place retry of route node `execute` (`code-execute`) for `rt-d7392fcfbc9ce241`. Do not dispatch another worker, commit, push, merge, rebase, or clean the worktree.
+
+Repair every must-fix finding in `_internal/dev_reviews/phase_review.md` while preserving the sound create-only literal-`sync` producer implementation and keeping `tools/fleet/collectors/memory.py` unchanged:
+
+1. In `tools/memory/mem_cluster_j.test.sh`, add checked command execution for every new `migrate --apply` and `sync` invocation so a nonzero exit fails the suite before assertions can mask it. Preserve intentional legacy nonzero probes.
+2. Add a truly fresh fenced-sync fixture: new empty non-Git `MEM_STORE`, explicit isolated `MEM_PROJECTS`, `MEM_PROFILE`, `MEM_WRITE_EVENTS`, `MEM_DUMP_COMMIT=0`, and `MEM_DUMP_PUSH=0`; snapshot/compare the real runtime memory store, profile, journal/dump targets, and worktree staged/unstaged/status state before and after. Verify the isolated dump plus index/FTS consistency. Keep the separate repeat `migrate --apply` create-only/idempotency proof.
+3. Add the public `mem log --json --actor sync` assertion against a mixed manual/sync journal: exact expected absorption ID set, all `action=add` and `actor=sync`, manual ID absent.
+4. Strengthen the no-backfill fixture to assert its pre-seeded row/source still exists after a checked migrate, not only that the journal sentinel is unchanged.
+5. Rerun `tools/memory/distill.test.sh` under its required isolated environment and run full Fleet unittest discovery with the correct repository import root. Fix only diff-caused failures; record exact passing commands/counts. If a truly pre-existing failure remains, capture reproducible baseline evidence and an explicit disposition in the retry artifact rather than calling the gate complete.
+6. Update `checklist.md` only for evidence actually closed. Preserve the original `dev_logs/execute.md`; write retry evidence to `dev_logs/execute-fix1.md`.
+
+Before each source or artifact edit run the Codex write preflight with session `codex-headless`. The approved source diff remains limited to `tools/memory/mem.py` and `tools/memory/mem_cluster_j.test.sh`. Run the focused suite, all ten canonical memory suites, full Fleet discovery, projections/parity/adaptation checks, syntax/help, approved-path enforcement, `git diff --check`, and collector-unchanged verification. Complete the exact retry `execute` marker/attempt only on PASS and return the kernel's exact three-line handoff.

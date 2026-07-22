@@ -1,0 +1,7 @@
+This is the bounded retry of the read-only `plan-check` node (`qa/plan-review`) for route `rt-d7392fcfbc9ce241`. Do not edit the plan, source, tests, specs, or dispatch.
+
+Review the revised `/home/Uihyeop/agent_setting/.agent_reports/plans/2026-07-22_fleet-memory-sync-events/plan.md` and `checklist.md` against D-37 v22, Fleet F-19/F-35f v15, the research artifact, review W1-W4, current `tools/memory/mem.py` call sites, and the previous findings in `_internal/plan_reviews/round_1.md`. Require precise ownership, create-only branch behavior, explicit-None-vs-default cwd semantics, literal sync actor, no-backfill, idempotency, deterministic Fleet `agent-note` repo-card proof, explicit sync commit/push isolation, and focused/full verification across all relevant canonical memory and Fleet suites.
+
+The sealed route's satisfied `tracked_gate_evidence.spec_read` and `/home/Uihyeop/agent_setting/.agent_reports/plans/2026-07-22_fleet-memory-sync-events/_internal/spec-owner-report.md` are authoritative prerequisites. Verify the canonical absolute spec artifacts under `/home/Uihyeop/agent_setting/.agent_reports/spec/`; do not require this linked code worktree to commit the canonical artifact-root spec transaction.
+
+Write only `/home/Uihyeop/agent_setting/.agent_reports/plans/2026-07-22_fleet-memory-sync-events/_internal/plan_reviews/round_2.md` with PASS/FAIL and actionable findings. Complete the exact route marker/attempt, then return the kernel's exact three-line handoff.
