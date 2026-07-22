@@ -1,3 +1,8 @@
+> **SUPERSEDED (2026-07-22) → `architecture-spec-v3.md`가 실행 정본.**
+> 이 v2의 핵심 모델 중 "team = native 집계(1모델)" 축은 사용자 결정(재홈: team 해체,
+> unit은 dispatch로, native는 helper 전용)으로 대체되었다. v2의 나머지 검증된 결정
+> (unit별 floor·write_scope=node 소유·hot-path 무생성·guard 쌍)은 v3에 승계됨.
+
 # Bootstrap-Unit Architecture — Spec & Migration Plan (v2)
 
 > Blueprint for consolidating bespoke sub-agent personas into composable **units**

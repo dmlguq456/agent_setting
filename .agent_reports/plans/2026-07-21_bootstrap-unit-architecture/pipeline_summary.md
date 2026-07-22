@@ -9,8 +9,10 @@ the `models.conf` SoT+guard pattern for behavior. Persona minimization is domain
 the capability layer is restructured last. Origin: user direction (harness-wide, "꽤나 중요한 방향").
 
 ## Artifacts
-- `architecture-spec.md` — target model, 11 decisions, domain floor, guards, 5-phase plan, risk register. **PRIMARY.**
+- `architecture-spec-v3.md` — **PRIMARY (EXECUTION)**: 승격+재홈 확정 모델(entry-라우팅·unit-dispatch·team=라벨·native=helper), 커밋 C1–C6로 구현 완료.
+- `architecture-spec.md` — v2, **superseded**: team-집계 모델은 v3에서 사용자 결정(재홈)으로 대체됨. 이력 참고용.
 - `_internal/investigation/current-state-map.md` — 7-stream parallel audit synthesis (file:line grounded).
+- `_internal/skill-review/` — 스킬 세팅 6-stream 조사 + Codex 검증 (v3 방향의 근거).
 - `_internal/investigation/raw-findings.md` — per-stream raw findings.
 
 ## Status
@@ -49,3 +51,7 @@ the capability layer is restructured last. Origin: user direction (harness-wide,
 ## History
 - 2026-07-21: investigation workflow run; architecture-spec drafted (11 decisions); adversarial verification launched.
 - 2026-07-21: 2-way cross-harness verification (Claude-side + Codex) — both FIX-NEEDED; **both independently converged on a granularity flaw** (unit=mode-persona vs node-worker). Spec revised to **v2**: three-entity model (unit/team/node), floor per-unit, native=team aggregation, write_scope node-owned, dispatch reads authored .md (no hot-path overlay), pilot=mechanical units, Phase 0 = drift-resolving. Log: `_internal/verification/verification-log.md`.
+- 2026-07-22: **v2→v3 전환** — 사용자 문답으로 team 축 재결정("팀이 이제 필요할까" → routing-at-entry, depth-2 team 호출 배제, entry가 unit을 조합): 스킬 세팅 6-stream 조사 + Codex 검증(SOUND-BUT-HARD)이 방향 실증(compositional compiler가 report-only로 잠재, unit 카탈로그 부재가 실작업). 사용자 확정: **승격**(compiler enforced) + **재홈**(3-harness team 해체→카탈로그). `architecture-spec-v3.md` 작성, v2의 검증된 substrate는 보존하고 native/team 축만 교체. C1–C6로 구현, 실전 완주 증명까지 완료.
+
+## 실전 완주 증명 (2026-07-22, 마지막 미증명 항목 마감)
+- rt-04b88e3110f2c2f0: autopilot-code standard 정식 경로 완주 — entry→봉인 route→depth-1 conductor(fable·high)→**unit 바인딩 워커 6개 전부**(hoist된 plan-check·impl-review 포함)→marker 6/6→handoff PASS, 재시도 0. 산출물 merge(47f8e80d) + registry reconcile 마감. 신규 아키텍처의 "실작업 완주" 주장이 실증으로 전환됨.

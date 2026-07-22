@@ -29,3 +29,6 @@
 7. 한국어 회수: SQLite 3.34+ 번들 vs CJK bigram 자체 구현
 8. legacy cwd 키 118+ v6 remap 승인 (라이브 DB 일회성 마이그레이션, 고가치 24건 가시화)
 9. upsert footgun 문서 거처: core/MEMORY.md vs tools/memory
+
+## 개선 #12 인도 (2026-07-22)
+- pending drain 정책이 **신규 unit 파이프라인 정식 사이클로** 구현·병합됨(eae36aad→merge 47f8e80d): doctor 나이순 노출 + maintenance --drain-pending(dry-run 기본, D5 사람-게이트 보존, graveyard 백업) + 23케이스 회귀. dogfood 겸 인도 — 감사 개선과 아키텍처 실증을 한 사이클로 동시 마감.
