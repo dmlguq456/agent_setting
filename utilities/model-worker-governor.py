@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 
-CLASS_LIMITS = {"dispatch": 3, "distill": 1, "title": 1, "loop": 2}
+CLASS_LIMITS = {"dispatch": 3, "distill": 1, "title": 4, "loop": 2}
 START_WINDOW_SECONDS = 600
 DEFAULT_TOTAL_LIMIT = 5
 DEFAULT_START_BUDGET = 20

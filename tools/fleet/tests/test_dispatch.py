@@ -1243,7 +1243,7 @@ class QuickDispatchRenderTest(unittest.TestCase):
 
 
 class ConductorBreadcrumbTest(unittest.TestCase):
-    """SD-F2 — a depth-1 conductor's breadcrumb tracks its active depth-2 code-* child stage."""
+    """A conductor breadcrumb is projection-backed and never selects a first child."""
 
     def _stage_keys(self, lines, anchor_text):
         # anchor on the role tag ("owner"), not the slug — the dispatch name column
@@ -1274,7 +1274,7 @@ class ConductorBreadcrumbTest(unittest.TestCase):
         on, off = stage_keys(True), stage_keys(False)
         self.assertIsNotNone(on)
         self.assertIsNotNone(off)
-        self.assertEqual(on.get("search"), "stg0_on")
+        self.assertEqual(on.get("search"), "stg0_off")
         self.assertEqual(off.get("search"), "stg0_off")
         self.assertEqual(on.get("analyze"), "stg1_off")
 
@@ -1288,11 +1288,16 @@ class ConductorBreadcrumbTest(unittest.TestCase):
                                     malformed=0, layout="wide")
         stage_keys = self._stage_keys(lines, "owner")
         self.assertIsNotNone(stage_keys)
-        self.assertEqual(stage_keys.get("exec"), "stg1_on")
+        self.assertEqual(stage_keys.get("exec"), "stg1_off")
         self.assertEqual(stage_keys.get("plan"), "stg0_off")
         self.assertEqual(stage_keys.get("test"), "stg2_off")
 
     def test_conductor_breadcrumb_falls_back_to_own_stage_when_child_not_working(self):
+        # v16: a direct-construction job with no route/registry/artifact evidence at all
+        # resolves to WorkProjection source="none", so the legacy compatibility `stage`
+        # field is no longer fabricated from a static argv value — the breadcrumb instead
+        # renders the honest record-less/pre-boot track (nothing lit) rather than lighting
+        # a stage the projection authority never actually observed.
         conductor = DispatchJob(key="code", slug="fleet-ui-v2", depth=1, liveness="idle",
                                 stage="test", worker_role="capability-owner")
         child = DispatchJob(key="code", slug="fleet-ui-v2-exec", depth=2,
@@ -1302,7 +1307,7 @@ class ConductorBreadcrumbTest(unittest.TestCase):
                                     malformed=0, layout="wide")
         stage_keys = self._stage_keys(lines, "owner")
         self.assertIsNotNone(stage_keys)
-        self.assertEqual(stage_keys.get("test"), "stg2_on")
+        self.assertEqual(stage_keys.get("test"), "stg2_off")
 
     def test_conductor_breadcrumb_report_child_renders_lone_bright_token(self):
         # N5 — "report" sits outside the code track (plan/exec/test); the accepted minimal
@@ -1316,8 +1321,8 @@ class ConductorBreadcrumbTest(unittest.TestCase):
                                     malformed=0, layout="wide")
         stage_keys = self._stage_keys(lines, "owner")
         self.assertIsNotNone(stage_keys)
-        self.assertIn("report", stage_keys)
-        self.assertTrue(stage_keys["report"].startswith("stg0_"))
+        self.assertNotIn("report", stage_keys)
+        self.assertEqual(stage_keys.get("test"), "stg2_off")
 
 
 class AlertHumanizeTest(unittest.TestCase):

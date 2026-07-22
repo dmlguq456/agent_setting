@@ -16,13 +16,40 @@ import os
 import sqlite3
 import time
 
-from ..model import SubAgent
+from ..model import ContextEvidence, SubAgent
+from .. import titles
 
 _COLS = ("id, slug, agent, model, cost, tokens_input, tokens_output, tokens_reasoning, "
          "time_updated, parent_id")
 
 _REG = {"ts": 0.0, "map": None}          # model-id/leaf → context window (from models.json)
 _REG_TTL = 300.0
+_MESSAGE_TABLES = ("message", "session_message", "part")
+
+
+def _message_table(con):
+    """Choose one compatible table in fixed order; no schema guessing by recency."""
+    for table in _MESSAGE_TABLES:
+        try:
+            row = con.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
+            ).fetchone()
+            if row:
+                con.execute("SELECT rowid FROM %s LIMIT 1" % table).fetchone()
+                return table
+        except Exception:
+            continue
+    return None
+
+
+def _observed_cursor(con, table, sid):
+    if not table:
+        return None
+    try:
+        row = con.execute("SELECT MAX(rowid) FROM %s WHERE session_id=?" % table, (sid,)).fetchone()
+        return int(row[0]) if row and isinstance(row[0], int) else 0
+    except Exception:
+        return None
 
 
 def _model_ctx_limit(model_id):
@@ -144,6 +171,14 @@ def enrich(sess):
         con = sqlite3.connect("file:%s?mode=ro" % db, uri=True, timeout=1.0)
         row = _query(con.cursor(), sess.cwd)
         if row and row[0]:
+            table = _message_table(con)
+            cursor = _observed_cursor(con, table, row[0])
+            sess._refresh_source = {
+                "kind": "opencode-db", "harness": "opencode", "db_path": db,
+                "session_id": row[0], "table": table,
+                "cursor_kind": "opencode-rowid-v1:%s" % table if table else None,
+                "observed_cursor": cursor,
+            }
             last_ctx = _last_request_context(con, row[0])
             try:
                 tr = con.execute(
@@ -165,6 +200,12 @@ def enrich(sess):
     if not row:
         return
     sid, slug, agent, model_j, cost, ti, to, tr, tupd, _parent = row
+    sidecar_title = titles.fresh_title(sid, harness="opencode")
+    sidecar_summary = titles.fresh_summary(sid, harness="opencode")
+    if sidecar_title:
+        sess.title = sidecar_title
+    if sidecar_summary:
+        sess.summary = sidecar_summary
     sess.subagents = subagents
     if sid:
         sess.session_id = sid
@@ -201,6 +242,12 @@ def enrich(sess):
         if lim:
             sess.context_window_tokens = int(lim)
             sess.ctx_pct = min(99, round(100 * ctx_for_pct / lim))
+            sess._context_evidence = ContextEvidence(
+                used_pct=sess.ctx_pct, source="opencode-db", sequence=(tupd or 0, sess._refresh_source.get("observed_cursor", 0) if sess._refresh_source else 0),
+                source_head_sequence=(tupd or 0, sess._refresh_source.get("observed_cursor", 0) if sess._refresh_source else 0),
+                observed_at=(tupd / 1000.0 if isinstance(tupd, (int, float)) else None),
+                fresh_until=(tupd / 1000.0 + 86400 if isinstance(tupd, (int, float)) else None),
+            )
     if isinstance(tupd, (int, float)):
         sess.mtime = tupd / 1000.0                  # ms → s
     # rl_5h / rl_7d: opencode has no rate-limit column → left None ('—').

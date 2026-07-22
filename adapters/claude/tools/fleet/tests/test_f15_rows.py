@@ -104,6 +104,10 @@ class QueuedLivenessTest(unittest.TestCase):
 class WorkingRegistryStageInductionTest(unittest.TestCase):
 
     def test_working_registry_row_stage_is_live_derived_not_raw_status(self):
+        # v16: dispatch.collect() no longer calls live_stage() as an independent stage
+        # authority (plan Step 2.2.1) — a working registry-only row's stage is cleared to
+        # None here rather than showing the raw jobs.log status word ("open"), and its real
+        # derivation happens later, once, in projection.py's WorkProjection resolver.
         with tempfile.TemporaryDirectory() as tmp:
             jobs_log = os.path.join(tmp, "jobs.log")
             wt = os.path.join(tmp, "wt")
@@ -121,8 +125,9 @@ class WorkingRegistryStageInductionTest(unittest.TestCase):
                 jobs = dispatch.collect(jobs_path=jobs_log)
             self.assertEqual(len(jobs), 1)
             self.assertEqual(jobs[0].liveness, "working")
-            self.assertEqual(jobs[0].stage, "analyze")
-            m_live.assert_called()
+            self.assertIsNone(jobs[0].stage)
+            self.assertNotEqual(jobs[0].stage, "open")
+            m_live.assert_not_called()
 
     def test_non_code_plans_path_never_derives_stage(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -234,7 +239,7 @@ class FoldingTest(unittest.TestCase):
             render.set_show_all(False)
         text = "\n".join("".join(t for t, _key in line) for line in lines if line)
         exec_keys = [key for line in lines if line for t, key in line if t == "exec"]
-        plan_keys = [key for line in lines if line for t, key in line if t == "plan✓"]
+        plan_keys = [key for line in lines if line for t, key in line if t == "plan"]
         self.assertIn("exec agent-first-home-c", text)
         self.assertIn("code-execute(strong)", text)
         self.assertNotIn("dev/refactor·strong·development", text)

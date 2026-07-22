@@ -20,10 +20,10 @@ from fleet import render                          # noqa: E402
 from fleet.model import DispatchJob, Session      # noqa: E402
 
 
-def _child(pid, cwd, title, harness="claude", sid=None):
+def _child(pid, cwd, title, harness="claude", sid=None, proc_start=None):
     return Session(harness=harness, pid=pid, cwd=cwd, session_id=sid or "sid-%d" % pid,
                    slug=os.path.basename(cwd), liveness="working", is_child=True,
-                   title=title)
+                   title=title, proc_start=proc_start)
 
 
 def _row_text(j, **kw):
@@ -33,11 +33,25 @@ def _row_text(j, **kw):
 
 class AdoptChildTitlesTest(unittest.TestCase):
     def test_pid_join_adopts_the_child_title(self):
+        # v16: pid alone is never the strong identity — exact (pid, proc_start) is
+        # required on both sides (plan Step 2.4.2), so a real match sets proc_start too.
+        child = _child(42, "/work/agent_setting-wt/fix-x", "Fix flaky title refresher tests",
+                       proc_start="123456")
+        job = DispatchJob(key="autopilot-code", slug="fix-x", cwd="/tmp/elsewhere",
+                          harness="claude", pid=42, proc_start="123456",
+                          is_child=True, liveness="working")
+        fleet_collectors._adopt_child_titles([child], [job])
+        self.assertEqual(job.title, "Fix flaky title refresher tests")
+
+    def test_pid_alone_without_proc_start_does_not_join(self):
+        # A pid match with no comparable proc_start on either side must not fall through
+        # to a pid-only join (PID reuse guard) — it also fails the cwd fallback here
+        # because the job's cwd differs from the child's.
         child = _child(42, "/work/agent_setting-wt/fix-x", "Fix flaky title refresher tests")
         job = DispatchJob(key="autopilot-code", slug="fix-x", cwd="/tmp/elsewhere",
                           harness="claude", pid=42, is_child=True, liveness="working")
         fleet_collectors._adopt_child_titles([child], [job])
-        self.assertEqual(job.title, "Fix flaky title refresher tests")
+        self.assertIsNone(job.title)
 
     def test_cwd_join_adopts_when_pid_is_unknown(self):
         child = _child(42, "/work/agent_setting-wt/fix-x", "Port memory rows to board")

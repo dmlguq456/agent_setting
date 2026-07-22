@@ -17,7 +17,7 @@ _TOOLS_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__f
 if _TOOLS_DIR not in sys.path:
     sys.path.insert(0, _TOOLS_DIR)
 
-from fleet import render                    # noqa: E402
+from fleet import projection, render         # noqa: E402
 from fleet import route                     # noqa: E402
 from fleet import demo                      # noqa: E402
 from fleet.collectors import dispatch       # noqa: E402
@@ -28,6 +28,7 @@ _REAL_CLAUDE = os.path.join(_FIXDIR, "real_claude_staged.json")
 _REAL_RID = "rt-27f7bc9ff152ba13"
 _LAB = os.path.join(_FIXDIR, "synth_parallel_lab.json")
 _LAB_RID = "rt-6f5423d05eaf3189"
+_COMPOSED = os.path.join(_FIXDIR, "synth_composed_survey.json")
 
 
 def _joined(lines):
@@ -138,6 +139,32 @@ class RenderContentTest(ProcessViewEnv):
         self.assertIn("├", text)
         self.assertIn("└", text)
 
+    def test_t3_3b_composed_survey_process_card_preserves_fanin_metadata(self):
+        record = route.load(_COMPOSED)
+        rid = record["route_id"]
+        owner = DispatchJob(key="survey", slug="composed-owner", cwd="/composed",
+                            depth=1, liveness="working")
+        child_a = DispatchJob(
+            key="claim", slug="claim-a", parent_slug="composed-owner", depth=2,
+            cwd="/composed/a", liveness="working", route_id=rid,
+            route_file=_COMPOSED, route_node="claim-a", assigned_contract="autopilot-code")
+        child_b = DispatchJob(
+            key="claim", slug="claim-b", parent_slug="composed-owner", depth=2,
+            cwd="/composed/b", liveness="working", route_id=rid,
+            route_file=_COMPOSED, route_node="claim-b", assigned_contract="autopilot-code")
+        # Feed the process renderer a projection-attached reversed collector order.
+        projection.attach_projections([], [owner, child_b, child_a], now=100.0)
+        render.set_process_view(True)
+        text = _joined(render._build_lines([], [owner, child_b, child_a], section="both",
+                                            narrow=False, malformed=0, layout="wide",
+                                            term_width=168))
+        self.assertIn("survey[research/research-survey]", text)
+        self.assertIn("claim-a[research/claim-verify]", text)
+        self.assertIn("claim-b[research/claim-verify]", text)
+        self.assertIn("synth[research/research-survey]", text)
+        self.assertIn("rt-63788ad6", text)
+        self.assertNotIn("plan › exec › test › report", text)
+
     def test_t3_4_failed_node_auto_expands_with_red_key(self):
         jobs = self._lab_route_jobs(sep_liveness="stale")
         render.set_process_view(True)
@@ -218,9 +245,9 @@ class RenderContentTest(ProcessViewEnv):
         child = DispatchJob(key="code-execute", slug="v10-sub-conductor-execute", cwd="/x",
                             parent_slug="v10-sub-conductor", depth=2, liveness="working",
                             route_id=_REAL_RID, route_file=_REAL_CLAUDE, route_node="execute",
-                            pid=77001)
+                            pid=77001, proc_start="77001-start")
         sess = Session(harness="claude", pid=77001, cwd="/x", slug="v10-sub-conductor-execute",
-                       is_child=True, liveness="working",
+                       proc_start="77001-start", is_child=True, liveness="working",
                        subagents=[SubAgent(agent_type="explore", active=True)])
         render.set_process_view(True)
         lines = render._build_lines([sess], [conductor, child], section="both", narrow=False,

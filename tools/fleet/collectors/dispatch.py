@@ -16,6 +16,7 @@ live_stage() derives the real pipeline stage from plans/*_<slug>/ artifacts (por
 statusline.sh:131-171) so the label reflects live progress, not the static argv.
 """
 import json
+import glob
 import os
 import re
 import sqlite3
@@ -744,12 +745,35 @@ def live_stage(jcwd, slug, fallback, capability=None, worker_role=None, artifact
     return "plan"
 
 
-def _plan_qa(jcwd, slug, key=None, capability=None, worker_role=None):
-    """Read qa_level: from the resolved plan dir's pipeline_state.yaml (or plan/plan.md
-    frontmatter) via a small line scan. None on any miss."""
-    pd = _find_plan_dir(jcwd, slug, key, capability, worker_role)
-    if not pd:
+def resolve_plan_qa_artifact(job):
+    """Read QA from one exact plan directory for QA only.
+
+    Stage authority lives in WorkProjection. This resolver is intentionally
+    exact-cardinality and never uses the old token-overlap/mtime selection.
+    """
+    def value(name, default=None):
+        if isinstance(job, dict):
+            return job.get(name, default)
+        return getattr(job, name, default)
+
+    slug = value("slug") or value("key")
+    if not slug:
         return None
+    roots = []
+    for root in (value("artifact_root"), value("cwd")):
+        if not root:
+            continue
+        root = os.path.realpath(os.path.expanduser(str(root)))
+        roots.extend((root, os.path.join(root, ".agent_reports"),
+                      os.path.join(root, ".claude_reports")))
+    candidates = set()
+    for root in roots:
+        for path in glob.glob(os.path.join(root, "plans", "*_%s" % slug)):
+            if os.path.isdir(path):
+                candidates.add(os.path.realpath(path))
+    if len(candidates) != 1:
+        return None
+    pd = next(iter(candidates))
     for relpath in ("pipeline_state.yaml", os.path.join("plan", "plan.md")):
         try:
             with open(os.path.join(pd, relpath), encoding="utf-8", errors="replace") as f:
@@ -760,6 +784,11 @@ def _plan_qa(jcwd, slug, key=None, capability=None, worker_role=None):
         except OSError:
             continue
     return None
+
+
+def _plan_qa(jcwd, slug, key=None, capability=None, worker_role=None):
+    """Compatibility wrapper; QA resolution is now exact and separately named."""
+    return resolve_plan_qa_artifact({"cwd": jcwd, "slug": slug, "key": key})
 
 
 _QA_DEFAULT = {
@@ -773,14 +802,17 @@ _QA_DEFAULT = {
 }
 
 
-def effective_qa(argv_qa, pipe_qa, jcwd, slug, key, capability=None, worker_role=None):
+def effective_qa(argv_qa, pipe_qa, jcwd, slug, key, capability=None, worker_role=None,
+                 artifact_root=None):
     """Layered qa resolver, first-hit precedence: argv > jobslog(pipe) > plan artifact >
     CONVENTIONS default. Returns (qa, source) — source in argv|jobslog|plan|default|None."""
     if argv_qa:
         return argv_qa, "argv"
     if pipe_qa:
         return pipe_qa, "jobslog"
-    v = _plan_qa(jcwd, slug, key, capability, worker_role)
+    v = resolve_plan_qa_artifact({"cwd": jcwd, "slug": slug, "key": key,
+                                  "artifact_root": artifact_root,
+                                  "capability": capability, "worker_role": worker_role})
     if v:
         return v, "plan"
     v = _QA_DEFAULT.get(key)
@@ -945,6 +977,18 @@ def _scan_route_nodes(paths):
                 "fallback_hop": attempt_contract["fallback_hop"],
                 "contract_status": attempt_contract["attempt_contract_status"],
             })
+            # route_file/route_hash/parent name WHERE the sealed record lives and who the
+            # conductor is — raw registry fields, independent of whether this particular
+            # attempt row's OWN dispatch-contract metadata validates as "current". Gating
+            # them behind attempt-contract validity silently defeated the code-test
+            # verification.md §10 fix for any legacy-schema terminal row: route.
+            # resolve_records() found no route_file at all, so a fully-finished route with a
+            # perfectly valid sealed record still degraded to an unresolved view.
+            node_evidence.update({
+                "route_file": meta.get("route_file"),
+                "route_hash": meta.get("route_hash"),
+                "parent": meta.get("parent") or meta.get("parent_slug"),
+            })
             if attempt_contract["attempt_contract_status"] != "current":
                 continue
             node_evidence.update({
@@ -955,22 +999,6 @@ def _scan_route_nodes(paths):
                 "effort": meta.get("effort") or meta.get("reasoning"),
                 "completion_gate": meta.get("completion_gate"),
                 "note": meta.get("note"),
-                # code-test verification.md §10 — a route whose only surviving field trace is
-                # a TERMINAL row (every carrying job already finished) still names its record's
-                # path; without it here, route.resolve_records() has no way to find that record
-                # once no LIVE job carries route_file anymore, and a fully-finished (or
-                # stage-gap) route silently degrades despite its record being perfectly valid.
-                "route_file": meta.get("route_file"),
-                "route_hash": meta.get("route_hash"),
-                # code-test verification_round_2.md §10 — same bug class, second location:
-                # render.py's degrade-pool `covered_slugs` excludes a route's own dispatch-depth-1
-                # conductor from the degrade pool by matching a LIVE child's `parent_slug`. Once
-                # that child goes terminal it vanishes from live `jobs` (same mechanism as
-                # route_file above) and the conductor stops being excluded — its bare slug then
-                # re-appears as a contradicting "no route record" card next to its own real
-                # record card. `parent` (== `_scan_jobs_log`'s `parent_slug`, same pipe field,
-                # already parsed) is the terminal-surviving half of that same fact.
-                "parent": meta.get("parent") or meta.get("parent_slug"),
             })
         # Candidate paths are precedence-ordered (canonical first). Preserve
         # last-occurrence-wins inside each file, but never let a later legacy
@@ -1036,10 +1064,10 @@ def _scan_processes():
                 "fallback_hop": env.get("AGENT_DISPATCH_FALLBACK_HOP"),
             })
             is_child = env.get("AGENT_SESSION_ROLE", "").lower() == "worker" or env.get("CLAUDE_CODE_CHILD_SESSION") == "1" or bool(parent_slug or parent_sid)
-            q, qsrc = effective_qa(qa, None, jcwd, slug, key)
+            q, qsrc = effective_qa(qa, None, jcwd, slug, key,
+                                   artifact_root=env.get("AGENT_ARTIFACT_ROOT"))
             jobs.append(DispatchJob(
-                key=key, stage=live_stage(jcwd, slug, key,
-                                          artifact_root=env.get("AGENT_ARTIFACT_ROOT")), mode=mode, qa=q,
+                key=key, stage=None, mode=mode, qa=q,
                 elapsed_min=etime_to_min(etime), slug=slug, cwd=jcwd,
                 parent_sid=parent_sid, parent_slug=parent_slug, is_child=is_child,
                 qa_source=qsrc, source="proc", harness="claude",
@@ -1161,7 +1189,8 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None, registry_priority=0):
             pname = pname[len("autopilot-"):]   # normalize to proc key form (code/spec/…)
         capability = meta.get("capability")
         worker_role = meta.get("worker_role")
-        q, qsrc = effective_qa(None, meta.get("qa"), cwd, slug, pname, capability, worker_role)
+        q, qsrc = effective_qa(None, meta.get("qa"), cwd, slug, pname, capability, worker_role,
+                               artifact_root=meta.get("artifact_root"))
         parent_slug = meta.get("parent") or meta.get("parent_slug") or None
         parent_sid = meta.get("parent_sid") or meta.get("parent_session_id") or None
         parent_cwd = meta.get("parent_cwd") or meta.get("parent_worktree") or None
@@ -1437,8 +1466,7 @@ def collect(jobs_path=None, harness_filter=None):
                 j.proc_start = procscan.read_proc_start(pid)   # identity, not just a number
                 consumed.add(pid)
                 j.model = _claude_job_model(str(pid), j.cwd)
-                j.stage = live_stage(j.cwd, j.slug, j.key, j.capability_owner, j.worker_role,
-                                     artifact_root=j.artifact_root)
+                j.stage = None
     now = time.time()
     # F-18a correlation merges proc evidence onto canonical registry rows BEFORE
     # classification, so every row is decided exactly once, by the single classifier.
@@ -1452,8 +1480,7 @@ def collect(jobs_path=None, harness_filter=None):
     # Avoid leaving a static queued/running placeholder forever.
     for j in jobs:
         if j.source == "jobs" and j.cwd and j.liveness == "working":
-            j.stage = live_stage(j.cwd, j.slug, j.key, j.capability_owner, j.worker_role,
-                                     artifact_root=j.artifact_root)
+            j.stage = None
     # stash malformed count on the module for the render header (optional signal)
     collect.last_malformed = malformed
     # F-28a (§3.3) — terminal route-node evidence, stashed the same way `last_malformed` is

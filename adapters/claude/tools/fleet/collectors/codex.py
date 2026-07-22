@@ -29,7 +29,7 @@ import sqlite3
 import time
 import urllib.request
 
-from fleet.model import SESSION_WORK_SEC, SubAgent
+from fleet.model import ContextEvidence, SESSION_WORK_SEC, SubAgent
 from fleet.token_budget import parse_codex_token_count
 
 # rollout filename tail: rollout-<ISO-ts>-<uuid>.jsonl
@@ -715,6 +715,9 @@ def enrich(sess):
     # cwd rollout must never be stamped on every live TUI sharing the repository.
     sess.session_id = _sid(path)
     sess._transcript_path = path                 # ephemeral: live title scheduler, not --json
+    sess._refresh_source = {"kind": "transcript", "harness": "codex",
+                            "session_id": sess.session_id, "path": path,
+                            "cursor_kind": "byte-offset-v1"}
     if sess.session_id:
         from fleet import titles
         native_title = _thread_titles(home).get(sess.session_id)
@@ -728,6 +731,16 @@ def enrich(sess):
         sess.mtime = os.path.getmtime(path)
     except OSError:
         sess.mtime = None
+    if sess.ctx_pct is not None:
+        try:
+            st = os.stat(path)
+            sequence = (st.st_mtime_ns, st.st_size)
+            sess._context_evidence = ContextEvidence(
+                used_pct=sess.ctx_pct, source="codex-rollout",
+                sequence=sequence, source_head_sequence=sequence,
+                observed_at=st.st_mtime, fresh_until=st.st_mtime + 900)
+        except OSError:
+            pass
     lifecycle = _latest_task_lifecycle(path)
     sess.task_lifecycle = lifecycle[0] if lifecycle else None
     tc = _tail_token_count(path)

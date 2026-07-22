@@ -329,6 +329,14 @@ def scan(harness_filter=None):
             slug=os.path.basename(cwd.rstrip("/")) if cwd else None,
             mem_worker=mem_worker,
             proc_start=read_proc_start(pid),      # tier-2 identity half — see read_proc_start
+            route_file=env.get("AGENT_ROUTE_FILE") or None,
+            route_id=env.get("AGENT_ROUTE_ID") or None,
+            route_node=env.get("AGENT_ROUTE_NODE") or None,
+            assigned_contract=env.get("AGENT_DISPATCH_ASSIGNED_CONTRACT") or None,
+            unit=env.get("AGENT_DISPATCH_UNIT") or None,
+            worker_type=env.get("AGENT_DISPATCH_WORKER_TYPE") or None,
+            owner=env.get("AGENT_DISPATCH_OWNER") or None,
+            model_role=env.get("AGENT_DISPATCH_MODEL_ROLE") or None,
         )
         sessions.append(sess)
         orca_sock = env.get("ORCA_RELAY_SOCKET_PATH")

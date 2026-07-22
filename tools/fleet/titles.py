@@ -2,7 +2,7 @@
 
 Canonical state:
   <state-root>/<harness>/<sid>.json
-  {"title": str, "ts": float, "source": str, "offset": int, "summary": str}
+  {"title": str, "ts": float, "source": str, "offset": int, "cursor_kind": str, "summary": str}
 
 ``summary`` is additive (F-16/F-17 merge): the same haiku call that produces the
 title also returns a live one-sentence status, written alongside it. Absent on
@@ -114,7 +114,8 @@ def fresh_summary(sid, harness="claude", now=None, max_age=_FRESH_SUMMARY_SEC):
     return summary if isinstance(summary, str) and summary.strip() else None
 
 
-def write(sid, title, source="refresher", offset=0, now=None, harness="claude", summary=None):
+def write(sid, title, source="refresher", offset=0, now=None, harness="claude", summary=None,
+          cursor_kind=None):
     """Atomically write neutral fleet-owned state. ``title=''`` is allowed.
 
     ``summary`` is additive and omitted from the written dict when falsy — old
@@ -126,6 +127,8 @@ def write(sid, title, source="refresher", offset=0, now=None, harness="claude", 
         "source": source,
         "offset": int(offset),
     }
+    if cursor_kind:
+        data["cursor_kind"] = str(cursor_kind)
     if summary:
         data["summary"] = summary
     directory = titles_dir(harness)

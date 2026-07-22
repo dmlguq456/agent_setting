@@ -296,8 +296,9 @@ class BuildViewsGatePassedTest(GateMarkBase):
         self.assertEqual([n["gate_passed"] for n in views[0]["nodes"]], [True] * 4)
 
     def test_heuristic_view_has_no_nodes_to_mark(self):
+        # v16: renamed "heuristic" -> "unknown" for an unresolved explicit route (Step 1.2.3).
         views = route.build_views([], {"rt-deadbeefdeadbeef": {}}, {}, 1_000_000.0)
-        self.assertEqual(views[0]["source"], "heuristic")
+        self.assertEqual(views[0]["source"], "unknown")
         self.assertEqual(views[0]["nodes"], [])
 
 
@@ -308,11 +309,12 @@ class SummaryJsonTest(GateMarkBase):
         node = route.summary(views)[0]["nodes"][0]
         self.assertIn("gate_passed", node)
         self.assertIs(node["gate_passed"], True)
-        # The v10 key set plus the additive gate and v14 portable-unit metadata.
+        # The v10 key set plus the additive gate, v14 portable-unit metadata, and v16's
+        # additive `write_scope` (plan Step 1.2.2 — carried in node views/public route JSON).
         self.assertEqual(sorted(node), sorted([
             "id", "depends_on", "level", "state", "gate", "note",
             "elapsed_min", "model", "harness", "effort", "gate_passed",
-            "unit", "unit_choices"]))
+            "unit", "unit_choices", "write_scope"]))
 
     def test_unmarked_node_serializes_as_null_not_false(self):
         views = route.build_views([], {}, {self.route_id: self.record}, 1_000_000.0)

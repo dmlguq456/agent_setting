@@ -61,37 +61,44 @@ def _mark_dispatch_child_sessions(sessions, jobs):
 
 
 def _adopt_child_titles(sessions, jobs):
-    """Copy an enriched child session's title AND live summary onto the dispatch row
-    representing it, via the same join.
-
-    Dispatch rows are the only surface where a child session is visible (is_child rows
-    are hidden), so without this join the haiku sidecar title/summary a child earns (the
-    title refresher schedules children like main sessions) would never render. pid
-    equality is the strong join (a claude/codex proc job's pid IS the runtime leaf pid
-    procscan saw); harness+cwd is the fallback for jobs.log rows that never learned the
-    pid, and it refuses ambiguous matches (F-26: misattribution is worse than absence).
-    """
-    titled = [s for s in sessions
-              if getattr(s, 'is_child', False)
-              and (getattr(s, 'title', None) or getattr(s, 'summary', None))]
-    if not titled:
-        return
-    by_pid = {s.pid: s for s in titled if getattr(s, 'pid', None)}
+    """Atomically associate title, NOW and context from one exact child."""
+    children = [s for s in sessions if getattr(s, 'is_child', False)]
+    by_identity = {}
     by_cwd = {}
-    for s in titled:
-        if s.cwd:
-            key = (s.harness, os.path.realpath(s.cwd))
-            by_cwd[key] = None if key in by_cwd else s   # two children, one cwd → refuse
-    for j in jobs:
-        source = by_pid.get(getattr(j, 'pid', None))
-        if source is None and getattr(j, 'cwd', None) and getattr(j, 'harness', None):
-            source = by_cwd.get((j.harness, os.path.realpath(j.cwd)))
+    for child in children:
+        identity = (getattr(child, 'harness', None), getattr(child, 'pid', None),
+                    getattr(child, 'proc_start', None))
+        if all(item is not None for item in identity):
+            by_identity.setdefault(identity, []).append(child)
+        if child.cwd and child.harness:
+            by_cwd.setdefault((child.harness, os.path.realpath(child.cwd)), []).append(child)
+    for job in jobs:
+        source = None
+        ambiguity = None
+        identity = (getattr(job, 'harness', None), getattr(job, 'pid', None),
+                    getattr(job, 'proc_start', None))
+        if all(item is not None for item in identity):
+            candidates = by_identity.get(identity, [])
+            if len(candidates) == 1:
+                source = candidates[0]
+            elif len(candidates) > 1:
+                ambiguity = "multiple-child-identity-candidates"
+        elif getattr(job, 'cwd', None) and getattr(job, 'harness', None):
+            candidates = by_cwd.get((job.harness, os.path.realpath(job.cwd)), [])
+            if len(candidates) == 1:
+                source = candidates[0]
+            elif len(candidates) > 1:
+                ambiguity = "multiple-child-cwd-candidates"
         if source is None:
+            if ambiguity:
+                job.association_ambiguity = ambiguity
             continue
-        if not getattr(j, 'title', None) and getattr(source, 'title', None):
-            j.title = source.title
-        if getattr(source, 'summary', None):
-            j.summary = source.summary
+        # Values cross the boundary as one association decision; no parent context.
+        if not getattr(job, 'title', None):
+            job.title = getattr(source, 'title', None)
+        job.summary = getattr(source, 'summary', None)
+        job.context = getattr(source, 'context', None)
+        job._context_evidence = getattr(source, '_context_evidence', None)
 
 
 def collect_all(harness_filter=None, jobs_path=None):
@@ -198,9 +205,34 @@ def collect_all(harness_filter=None, jobs_path=None):
         pass
 
     try:
+        from ..projection import normalize_context, _evidence
+        for session in sessions:
+            session.context, session._context_evidence = normalize_context(
+                _evidence(session), now=_time.time())
+    except Exception:
+        pass
+
+    try:
         _adopt_child_titles(sessions, jobs)
     except Exception:
         pass
+
+    # v16: all surfaces receive one projection after evidence collection and association.
+    try:
+        from ..projection import attach_projections
+        # F-28a's terminal-row node evidence (dispatch.py's _scan_route_nodes) is the only
+        # place a route node's `done`/`failed` state survives once its live job has already
+        # gone terminal — thread it through so the projection never regresses to "pending"
+        # for a node the registry already resolved.
+        attach_projections(sessions, jobs, artifact_root=os.environ.get("AGENT_ARTIFACT_ROOT"),
+                           now=_time.time(),
+                           node_evidence=getattr(dispatch.collect, "last_route_nodes", None))
+    except Exception:
+        # Projection failure is fail-closed at the row boundary, never a reason to drop data.
+        from ..model import WorkProjection
+        for entity in sessions + jobs:
+            if getattr(entity, "work_projection", None) is None:
+                entity.work_projection = WorkProjection(source="none", ambiguity="projection-error")
 
     # F-25: drop cross-tick hysteresis entries for rows that no longer exist. Runs after
     # BOTH sessions and jobs are classified — sweeping earlier would evict live job keys.

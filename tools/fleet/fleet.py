@@ -95,7 +95,7 @@ def _snapshot_json(sessions, jobs):
     mem = _collect_memory()
     if mem is not None:
         out["memory"] = mem
-    out["route"] = _collect_route(jobs)
+    out["route"] = _collect_route(list(sessions) + list(jobs))
     gov = _collect_governor()
     if gov is not None:
         out["governor"] = gov
@@ -115,20 +115,16 @@ def _collect_governor():
         return None
 
 
-def _collect_route(jobs):
+def _collect_route(entities):
     """F-28a (prd.md:302) — best-effort, additive `route` key. `route.py` itself never raises,
     but this stays wrapped (the `mem` precedent just above) so a future regression there can
     never break `--json` (§3.4)."""
     try:
         if __package__ in (None, ""):
-            from fleet import route as routemod
-            from fleet.collectors import dispatch as _dispatch
+            from fleet.projection import route_summary_from_projections
         else:
-            from . import route as routemod
-            from .collectors import dispatch as _dispatch
-        node_evidence = getattr(_dispatch.collect, "last_route_nodes", {})
-        views = routemod.collect_views(jobs, node_evidence)
-        return routemod.summary(views)
+            from .projection import route_summary_from_projections
+        return route_summary_from_projections(entities)
     except Exception:
         return []
 
@@ -149,8 +145,26 @@ def main(argv=None):
             ds, dj = demo.collect(harness_filter=harness_filter)
             return rs + ds, rj + dj
 
+    def projected_collector(harness_filter=None):
+        sessions, jobs = collector(harness_filter=harness_filter)
+        try:
+            if __package__ in (None, ""):
+                from fleet.projection import attach_projections
+                from fleet.collectors import dispatch as _dispatch
+            else:
+                from .projection import attach_projections
+                from .collectors import dispatch as _dispatch
+            # F-28a terminal node evidence (dispatch.py's _scan_route_nodes) must survive
+            # into the projection or a node whose live job already went terminal silently
+            # regresses to "pending" (see projection.py's resolve_work_projection).
+            node_evidence = getattr(_dispatch.collect, "last_route_nodes", None)
+            return attach_projections(sessions, jobs, artifact_root=os.environ.get("AGENT_ARTIFACT_ROOT"),
+                                      node_evidence=node_evidence)
+        except Exception:
+            return sessions, jobs
+
     if args.json:
-        sessions, jobs = collector(harness_filter=hfilter)
+        sessions, jobs = projected_collector(harness_filter=hfilter)
         print(_snapshot_json(sessions, jobs))
         return 0
 
@@ -173,10 +187,10 @@ def main(argv=None):
     if view:
         render.set_process_view(view == "process")
     if args.once:
-        return render.render_once(collector, hfilter, args.section)
+        return render.render_once(projected_collector, hfilter, args.section)
     render.reset_scroll()   # fresh launch starts scrolled to top (belt-and-suspenders)
 
-    base_collector = collector
+    base_collector = projected_collector
 
     def live_collector(harness_filter=None):
         sessions, jobs = base_collector(harness_filter=harness_filter)

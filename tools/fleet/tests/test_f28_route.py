@@ -16,11 +16,12 @@ _TOOLS_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__f
 if _TOOLS_DIR not in sys.path:
     sys.path.insert(0, _TOOLS_DIR)
 
-from fleet import route                     # noqa: E402
+from fleet import projection, route          # noqa: E402
 from fleet.collectors import dispatch       # noqa: E402
-from fleet.model import DispatchJob         # noqa: E402
+from fleet.model import DispatchJob, Session # noqa: E402
 
 _FIXDIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "route")
+_COMPOSED = os.path.join(_FIXDIR, "synth_composed_survey.json")
 
 
 def _fx(name):
@@ -132,6 +133,15 @@ class NodeOrderTest(unittest.TestCase):
         seen = [nid for level in levels for nid in level]
         self.assertEqual(sorted(seen), ["a", "b", "c"])
 
+    def test_t1_10b_composed_survey_route_preserves_record_order_fanin_and_metadata(self):
+        record = route.load(_COMPOSED)
+        self.assertEqual(route.node_order(record), [["survey"], ["claim-a", "claim-b"], ["synth"]])
+        claim_b = next(node for node in record["nodes"] if node["id"] == "claim-b")
+        self.assertEqual(claim_b["depends_on"], ["survey"])
+        self.assertEqual(claim_b["write_scope"], ["reviews/claim-b/**"])
+        synth = next(node for node in record["nodes"] if node["id"] == "synth")
+        self.assertEqual(synth["depends_on"], ["claim-a", "claim-b"])
+
 
 def _write_jobs_route_log(tmpdir):
     with open(_fx("jobs_route.log"), encoding="utf-8") as f:
@@ -196,7 +206,22 @@ class CollectRouteFieldsTest(unittest.TestCase):
         way to find `real_codex_staged.json` at all in that situation and produced a
         `source="heuristic", nodes=[]` degrade view for a perfectly valid, hash-verified
         record — this pins the fix (`_scan_route_nodes` now carries `route_file` in its
-        evidence, and `resolve_records` consults it when no live job does)."""
+        evidence, and `resolve_records` consults it when no live job does).
+
+        v16: the explicit-invalid degrade view's `source` was renamed `heuristic` ->
+        `unknown` (plan Step 1.2.3); the substance of this pin — a hash-verified record for
+        a route with no live job must still resolve to the real record, not a degrade view
+        at all — is unchanged.
+
+        Found during this route's execution: `_scan_route_nodes` was gating `route_file`/
+        `route_hash`/`parent` behind this row's OWN attempt-contract-v3 validity, so any
+        legacy-schema terminal row (like this fixture's, which predates
+        `attempt_schema_version=2`) never surfaced its route_file at all and this pin's
+        route silently degraded — the same bug the docstring describes, reintroduced by an
+        unrelated later attempt-contract gate. Fixed in `tools/fleet/collectors/dispatch.py`
+        by moving those three registry-identity fields out of the contract-gated update
+        (they name WHERE the record lives, not whether this attempt's own dispatch metadata
+        validates)."""
         route.clear_cache()
         with tempfile.TemporaryDirectory() as td:
             jobs_path = _write_jobs_route_log(td)
@@ -206,8 +231,8 @@ class CollectRouteFieldsTest(unittest.TestCase):
                              "fixture precondition: this route has no LIVE job at all")
             views = route.collect_views(jobs, dispatch.collect.last_route_nodes)
         view = next(v for v in views if v["route_id"] == "rt-1120bb39a13c4191")
-        self.assertEqual(view["source"], "heuristic")
-        self.assertEqual(view["nodes"], [])
+        self.assertNotEqual(view["source"], "unknown")
+        self.assertTrue(view["nodes"], "the sealed record must resolve with real nodes")
 
 
 class BuildViewsTest(unittest.TestCase):
@@ -241,9 +266,11 @@ class BuildViewsTest(unittest.TestCase):
         self.assertEqual(node["state"], "pending")
 
     def test_heuristic_view_when_record_unresolved(self):
+        # v16: an explicit route_id with no loadable record is a stable "unknown" degrade
+        # view (plan Step 1.2.3), not the retired "heuristic" label.
         job = DispatchJob(key="x", slug="x", route_id="rt-unknown0000000")
         views = route.build_views([job], {}, {}, self.now)
-        self.assertEqual(views[0]["source"], "heuristic")
+        self.assertEqual(views[0]["source"], "unknown")
         self.assertEqual(views[0]["nodes"], [])
 
     def test_current_unit_metadata_survives_view_and_json_summary(self):
@@ -307,6 +334,42 @@ class JsonAdditiveTest(unittest.TestCase):
         self.assertIsNone(out["jobs"][0]["route_file"])
         self.assertIn("unit", out["jobs"][0])
         self.assertIsNone(out["jobs"][0]["unit"])
+
+    def test_t1_18_populated_snapshot_old_key_only_consumer_is_unchanged(self):
+        from fleet import fleet as fleetmod
+        record = route.load(_COMPOSED)
+        job = DispatchJob(
+            key="claim", slug="claim-a", harness="claude", model="opus",
+            effort="high", elapsed_min=7, note="legacy-note", liveness="stale",
+            route_id=record["route_id"], route_file=_COMPOSED, route_node="claim-a",
+        )
+        session = Session(harness="claude", pid=401, cwd="/proj", session_id="sid",
+                          liveness="working", ctx_pct=42)
+        evidence = {record["route_id"]: {"claim-a": {
+            "status": "killed", "note": "legacy-note", "route_file": _COMPOSED,
+        }}}
+        projection.attach_projections([session], [job], node_evidence=evidence, now=100.0)
+        out = json.loads(fleetmod._snapshot_json([session], [job]))
+
+        # This intentionally models a pre-v16 reader: it touches only the old
+        # top-level fields and legacy route-node fields, ignoring all additions.
+        legacy = {
+            "sessions": out["sessions"],
+            "jobs": out["jobs"],
+            "summary": out["summary"],
+            "route": out["route"],
+        }
+        self.assertEqual(legacy["summary"]["dispatch_count"], 1)
+        node = next(item for item in legacy["route"][0]["nodes"] if item["id"] == "claim-a")
+        self.assertEqual(
+            {key: node[key] for key in ("model", "harness", "effort", "elapsed_min", "note")},
+            {"model": "opus", "harness": "claude", "effort": "high",
+             "elapsed_min": 7, "note": "legacy-note"},
+        )
+        self.assertIn("work_projection", legacy["jobs"][0])
+        self.assertIn("context", legacy["sessions"][0])
+        self.assertNotIn("_context_evidence", json.dumps(out))
+        self.assertNotIn("_route_view", json.dumps(out))
 
 
 class OrphanConductorAnnotationTest(unittest.TestCase):

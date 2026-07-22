@@ -23,6 +23,8 @@ _DEMO_CARD_ROUTE = os.path.join(_ROUTE_FIXDIR, "demo_card.json")
 _DEMO_CARD_RID = "rt-2f5c79f591479409"   # fabricated content -> hash cannot collide with a real record
 _LAB_ROUTE = os.path.join(_ROUTE_FIXDIR, "synth_parallel_lab.json")
 _LAB_RID = "rt-6f5423d05eaf3189"
+_COMPOSED_ROUTE = os.path.join(_ROUTE_FIXDIR, "synth_composed_survey.json")
+_COMPOSED_RID = "rt-63788ad671654b75"
 
 
 def _seed_route_evidence():
@@ -52,6 +54,12 @@ def _seed_route_evidence():
             "completion_gate": "lab-setup", "note": None,
             "route_file": _LAB_ROUTE, "route_hash": None,
         })
+        existing.setdefault(_COMPOSED_RID, {}).setdefault("survey", {
+            "status": "done", "slug": "demo-composed-survey", "ts": time.time() - 480,
+            "pid": None, "harness": "claude", "model": "opus", "effort": "high",
+            "completion_gate": "research-retrieval", "note": None,
+            "route_file": _COMPOSED_ROUTE, "route_hash": None,
+        })
         dispatch.collect.last_route_nodes = existing
     except Exception:
         pass
@@ -68,6 +76,11 @@ def collect(harness_filter=None):
           status="busy", branch="main", liveness="working",
           # F-16/F-17 merge demo — the live subtitle row under a session row.
           summary="지금 render.py 그룹 루프의 틴트 적용 경로를 분석 중"),
+        # Deterministic composed-DAG owner: the group row must show both active
+        # claim siblings and the route's 1/4 progress with providers disabled.
+        S(harness="claude", pid=90008, cwd="/home/demo/demo-app", session_id="demo-composed-owner",
+          slug="demo-composed-owner", model="Opus 4.8", effort="high", ctx_pct=54,
+          elapsed_min=18, branch="feat/composed", liveness="working"),
         S(harness="codex", pid=90002, cwd="/home/demo/demo-app", session_id="demo-codex-1",
           slug="demo-app", model="gpt-5.5", effort="high",
           ctx_pct=72, rl_5h=94, rl_7d=53, elapsed_min=41,
@@ -167,12 +180,23 @@ def collect(harness_filter=None):
         # active — pid=95001 joins the session above), 1 fan-out/fan-in parallel record with a
         # FAILED branch (eval-sep), 1 record-less "degrade" pipeline (§5.3's honest-gap card).
         J(key="code", slug="demo-route-conductor", cwd="/home/demo/route-app",
-          liveness="working", depth=1, capability_owner="autopilot-code"),
+          parent_sid="demo-claude-1", liveness="working", depth=1,
+          capability_owner="autopilot-code"),
         J(key="code-execute", mode="dev", harness="claude", model="Opus 4.8", effort="high",
           elapsed_min=8, slug="demo-route-conductor-execute",
           cwd="/home/demo/route-app-wt/execute", parent_slug="demo-route-conductor",
           is_child=True, depth=2, liveness="working", pid=95001,
           route_id=_DEMO_CARD_RID, route_file=_DEMO_CARD_ROUTE, route_node="execute"),
+        J(key="claim", slug="demo-composed-claim-b", cwd="/home/demo/demo-app-wt/claim-b",
+          parent_sid="demo-composed-owner", parent_cwd="/home/demo/demo-app",
+          harness="claude", model="Sonnet 5", effort="medium", elapsed_min=6,
+          liveness="working", depth=2, is_child=True, assigned_contract="autopilot-code",
+          route_id=_COMPOSED_RID, route_file=_COMPOSED_ROUTE, route_node="claim-b"),
+        J(key="claim", slug="demo-composed-claim-a", cwd="/home/demo/demo-app-wt/claim-a",
+          parent_sid="demo-composed-owner", parent_cwd="/home/demo/demo-app",
+          harness="claude", model="Sonnet 5", effort="medium", elapsed_min=6,
+          liveness="working", depth=2, is_child=True, assigned_contract="autopilot-code",
+          route_id=_COMPOSED_RID, route_file=_COMPOSED_ROUTE, route_node="claim-a"),
         J(key="lab", slug="demo-lab-conductor", cwd="/home/demo/lab-project",
           liveness="working", depth=1, capability_owner="autopilot-lab"),
         J(key="lab-eval", mode="eval", harness="claude", model="Sonnet 5", effort="medium",

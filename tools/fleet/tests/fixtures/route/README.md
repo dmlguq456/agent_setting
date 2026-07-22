@@ -33,3 +33,26 @@ digest = routemod.route_hash(payload)
 payload["route_hash"] = digest
 payload["route_id"] = "rt-" + digest.split(":", 1)[1][:16]
 ```
+# v16 composed DAG fixture
+
+`synth_composed_survey.json` is a sealed schema-v2 fixture generated through the
+repository compose path. It intentionally exercises `survey -> {claim-a, claim-b}
+-> synth`, opaque node IDs, fan-out/fan-in, and per-node `write_scope`.
+
+Fixture generation (uses the checked dispatch-evidence JSON supplied by the
+compose test; the output path must not already exist):
+
+```bash
+python3 utilities/compose-route.py --capability analyze-project --capability-mode code \
+  --units-json '[{"id":"survey","unit":"research/research-survey","write_scope":["analysis_project/code/**"],"gate":"research-retrieval"},{"id":"claim-a","unit":"research/claim-verify","depends_on":["survey"],"write_scope":["reviews/claim-a/**"],"gate":"research-claims"},{"id":"claim-b","unit":"research/claim-verify","depends_on":["survey"],"write_scope":["reviews/claim-b/**"],"gate":"research-claims"},{"id":"synth","unit":"research/research-survey","depends_on":["claim-a","claim-b"],"write_scope":["analysis_project/synthesis/**"],"gate":"research-synthesis"}]' \
+  --cwd "$PWD" --artifact-root /tmp --tracking tracked --spec-read canonical-sha \
+  --drift-verdict within-spec --workflow-mode tracked \
+  --artifact-guard conductor-prechecked --dispatch-evidence /path/to/fixture-evidence.json \
+  --output /tmp/synth_composed_survey.json
+```
+
+Capability-route verification of the generated sealed record:
+
+```bash
+python3 utilities/capability-route.py verify --route /tmp/synth_composed_survey.json --cwd "$PWD"
+```

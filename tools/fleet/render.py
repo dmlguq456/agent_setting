@@ -533,7 +533,7 @@ _PIPE_STAGES = {
 
 # dispatch-depth-2 stage worker role → human stage label (SD-F1). Code workers use their sub-skill
 # names; other pipelines use the portable `stage-<name>` role emitted by dispatch. The label
-# also drives the parent conductor's active breadcrumb via _conductor_stage_override().
+# route-backed rows consume their attached projection directly.
 _STAGE_ROLE = {
     "code-plan": "plan",
     "code-execute": "exec",
@@ -839,6 +839,9 @@ def _stage_segs(key, stage, working=False, max_width=None, route_seq=None):
 def _dispatch_stage_segs(j, key, stage, slug_name, working=False, route_seq=None):
     depth = max(1, int(getattr(j, "depth", 1) or 1))
     intensity = getattr(j, "intensity", None) or ""
+    projection = getattr(j, "work_projection", None)
+    if projection is not None and getattr(projection, "ambiguity", None):
+        return []
     if depth == 1 and intensity == "quick":
         return [("quick/exec", "stg0_on" if working and _BLINK_ON else "stg0_off")]
     if depth >= 2:
@@ -899,6 +902,45 @@ def _session_name(s):
     as an anonymous cwd basename — which is exactly how the ghost session hid."""
     slug = s.slug or (s.cwd.rsplit("/", 1)[-1] if s.cwd else "?")
     return s.title or getattr(s, "registry_name", None) or slug
+
+
+def _projection_stage_text(entity, max_width=24):
+    """Render only the entity's attached projection, never a guessed child route."""
+    projection = getattr(entity, "work_projection", None)
+    if projection is None:
+        return ""
+    if getattr(projection, "ambiguity", None):
+        return ""
+    label = getattr(projection, "stage_label", None)
+    if not label:
+        return ""
+    progress = getattr(projection, "progress", None)
+    suffix = ""
+    if progress is not None:
+        suffix = " %d/%d" % (progress.done, progress.total)
+    return _clip_w("stage %s%s" % (label, suffix), max_width)
+
+
+def _projection_route_seq(entity):
+    """Return the attached route's record-order node sequence, if validated."""
+    projection = getattr(entity, "work_projection", None)
+    if not projection or getattr(projection, "source", None) != "route-exact":
+        return None
+    backing = getattr(projection, "_route_view", None) or {}
+    view = backing.get("view") or {}
+    return [(node.get("id"), node.get("state")) for node in view.get("nodes") or ()]
+
+
+def _projection_stage_for_dispatch(entity):
+    """Select a row stage from its projection with a bounded legacy fallback."""
+    projection = getattr(entity, "work_projection", None)
+    if projection is None:
+        return getattr(entity, "stage", None) or ""
+    if getattr(projection, "ambiguity", None) or getattr(projection, "source", None) == "registry-exact":
+        return ""
+    return getattr(projection, "stage_label", None) or (
+        getattr(entity, "stage", None) if not getattr(projection, "route_id", None) else ""
+    ) or ""
 
 
 def _unused_badge(s, compact=False):
@@ -986,6 +1028,9 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx
         segs.append((" " * (avail - used), None))
 
     segs.append(_branch_seg(s.cwd, s.branch, dim=dim_tel))     # main row = bright branch/model
+    projection_stage = _projection_stage_text(s)
+    if projection_stage:
+        segs += [("  ", None), (projection_stage, "g_work" if live == "working" else "dim")]
     if dead_stale:
         # F-13: a stale/dead row has no live model/effort/ctx to show — a wall of "—" placeholders
         # read as broken telemetry rather than "this session stopped". One `last seen <age>` cell
@@ -993,15 +1038,8 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx
         age_min = int((time.time() - s.mtime) / 60) if s.mtime else (s.elapsed_min or 0)
         segs += [("    ", None), ("last seen %s" % fmt_min(age_min), "dim")]
     else:
-        # STATUS-ZONE — ctx gauge (mid-line ━/─, level color). model/effort now live in the
-        # harness field (F-4); `ctx_width` (F-22-adjacent, user 2026-07-16) lets wide-layout
-        # callers widen the gauge into the slack the column merge freed up; legacy/hermetic
-        # callers keep _CTX_W.
-        cw = ctx_width or _CTX_W
-        if s.ctx_pct is not None and not dim_tel:
-            segs += [("    ", None)] + _gauge_segs(s.ctx_pct, cw) + [(" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct))]
-        else:
-            segs += [("    ", None), ("─" * cw, "dim"), (" %4s" % dash(s.ctx_pct, lambda v: "%d%%" % v), "dim")]
+        # v16: context is a subordinate detail row, never an inline primary-row gauge.
+        segs += [("    ", None)]
     if s.app_server:
         segs.append(("  app-server", "dim"))
     if s.orphan:
@@ -1430,12 +1468,10 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False, term_wid
     # indent / no far-right flush).
     l2 = [("    ", None), (_pad(fmt_min(s.elapsed_min), _HW), "dim")]
     l2 += _model_cell(s.model, s.effort, _MW, dim=dim_tel)
-    if s.ctx_pct is not None and not dim_tel:
-        l2 += [("[", "dim")] + _gauge_segs(s.ctx_pct, 18) + \
-              [(" %3d%%" % s.ctx_pct, _pct_key(s.ctx_pct)), ("]", "dim")]
-    else:
-        l2 += [("[", "dim"), ("·" * 18, "dim"),
-               (" %3s" % dash(s.ctx_pct, lambda v: "%d%%" % v), "dim"), ("]", "dim")]
+    projection_stage = _projection_stage_text(s, max_width=28)
+    if projection_stage:
+        l2 += [("  ", None), (projection_stage, "g_work" if live == "working" else "dim")]
+    # v16: context is emitted by _context_detail_row beneath the complete card.
     if _split:
         return l1, l2, br_seg
     return l1, l2
@@ -1452,11 +1488,9 @@ def _stack_split(l2):
 
 
 def _session_row_stack(s, is_parent=False, child_count=0, term_width=None):
-    """Ultra-narrow card = the 2-line card with ONLY the context gauge pushed to its own line
-    (user 2026-07-03): L1 identity / L2 time+model / L3 gauge (aligned under the model)."""
+    """v16 ultra-narrow card: identity and telemetry, with detail row emitted separately."""
     l1, l2 = _session_row_2line(s, is_parent, child_count, term_width=term_width)
-    gi = _stack_split(l2)
-    return [l1, l2[:gi], [(" " * (4 + _HW), None)] + l2[gi:]]
+    return [l1, l2]
 
 
 def _dispatch_row_stack(j, orphan=False, parent_model=None, parent_effort=None, stage_override=None,
@@ -1921,6 +1955,27 @@ def _summary_row(summary, depth=0, term_width=None):
     return [[(indent, None), (_clip_w(summary, maxw), "dim")]]
 
 
+def _context_detail_row(entity, depth=0, term_width=None):
+    """One context-first ``ctx … · NOW`` row for every live identity card."""
+    if getattr(entity, "liveness", None) in ("stale", "dead"):
+        return []
+    context = getattr(entity, "context", None)
+    pct = getattr(context, "used_pct", None) if context is not None else getattr(entity, "ctx_pct", None)
+    band = getattr(context, "band", "unknown") if context is not None else "unknown"
+    now_text = getattr(entity, "summary", None)
+    ctx_text = "ctx —" if pct is None else "ctx %d%% %s" % (int(pct), band)
+    indent = _SUBAGENT_IND + "  " * max(0, depth)
+    available = max(0, (term_width or _SUMMARY_FALLBACK_W) - _dw(indent))
+    if now_text:
+        # Context is reserved first; only NOW may clip at the terminal boundary.
+        fixed = _dw(ctx_text) + 3
+        now_text = _clip_w(str(now_text), max(0, available - fixed))
+        text = ctx_text + " · " + now_text if now_text else ctx_text
+    else:
+        text = ctx_text
+    return [[(indent, None), (text, "dim")]]
+
+
 def set_show_all(v):
     global _SHOW_ALL
     _SHOW_ALL = bool(v)
@@ -2091,7 +2146,14 @@ def _route_card_l1(tag_bits, rid, done, total, route_elapsed, any_failed, arrow,
     return build(ladder[-1], False, False)
 
 
-def _route_card(view, session_by_pid, term_width, now):
+def _session_for_job(session_by_identity, job):
+    if not job or getattr(job, "pid", None) is None:
+        return None
+    key = (job.pid, getattr(job, "proc_start", None))
+    return session_by_identity.get(key)
+
+
+def _route_card(view, session_by_identity, term_width, now):
     """One F-30 card. Returns (out_lines, meta) — meta = {"card_key", "fold_line" (index into
     out_lines of the header row), "job_rows": [(index_into_out_lines, DispatchJob), ...]}. The
     caller (`_build_process_lines`) owns translating these to ABSOLUTE line indices for
@@ -2144,13 +2206,17 @@ def _route_card(view, session_by_pid, term_width, now):
         out.append([("    ", None)] + l2_line)
 
     job_rows = []
-    active_nodes = sorted((n for n in nodes if n["state"] == "active" and n.get("job") is not None),
-                          key=lambda n: (n["level"], n["id"]))
+    # route._record_view already preserves sealed record order within each
+    # topological level; never sort opaque node ids here.
+    active_nodes = [n for n in nodes if n["state"] == "active" and n.get("job") is not None]
     for n in active_nodes:
         job = n["job"]
         out.append(_route_job_row(job, max_width=term_width))
         job_rows.append((len(out) - 1, job))
-        sess = session_by_pid.get(job.pid) if job.pid else None
+        detail = _context_detail_row(job, depth=1, term_width=term_width)
+        if detail:
+            out.extend(detail)
+        sess = _session_for_job(session_by_identity, job)
         subs = ([sa for sa in (getattr(sess, "subagents", None) or []) if sa.active or _SHOW_ALL]
                 if sess is not None else [])
         if subs:
@@ -2205,7 +2271,7 @@ def _degrade_candidates(jobs, covered_slugs=()):
     return out
 
 
-def _degrade_card(job, session_by_pid, term_width):
+def _degrade_card(job, session_by_identity, term_width):
     """§5.3's degrade card — `source: heuristic`, existing `_PIPE_STAGES` breadcrumb, no DAG
     (there is no record to derive one from). No job-row entry (the card key IS the job)."""
     cap = job.key or "?"
@@ -2225,12 +2291,16 @@ def _degrade_card(job, session_by_pid, term_width):
     out = [l1]
     if folded:
         return out, {"card_key": card_key, "fold_line": 0, "job_rows": [], "folded": folded}
-    breadcrumb = _stage_segs(job.key, job.stage or "", working=(job.liveness == "working"),
+    breadcrumb = _stage_segs(job.key, _projection_stage_for_dispatch(job), working=(job.liveness == "working"),
                              max_width=_STAGE_ZONE_MAX)
     out.append([("    ", None)] + breadcrumb)
+    detail = _context_detail_row(job, depth=max(1, int(getattr(job, "depth", 1) or 1)),
+                                 term_width=term_width)
+    if detail:
+        out.extend(detail)
     # F-29 — the degraded job's session's own active sub-agents, the same strip the route card
     # draws (2060-2064); silent when the pid resolves to no session or no active sub-agent.
-    sess = session_by_pid.get(job.pid) if job.pid else None
+    sess = _session_for_job(session_by_identity, job)
     subs = ([sa for sa in (getattr(sess, "subagents", None) or []) if sa.active or _SHOW_ALL]
             if sess is not None else [])
     if subs:
@@ -2267,7 +2337,8 @@ def _build_process_lines(sessions, jobs, route_views_by_id, malformed, memory, t
     lines.append([("  PROCESS VIEW", "head"), (_RFLUSH, None), ("p group view  ", "head")])
     lines.append(None)
 
-    session_by_pid = {s.pid: s for s in sessions if s.pid}
+    session_by_identity = {(s.pid, getattr(s, "proc_start", None)): s
+                           for s in sessions if s.pid is not None and s.proc_start is not None}
     now = time.time()
 
     real_views = sorted((v for v in route_views_by_id.values() if v.get("nodes")),
@@ -2321,7 +2392,7 @@ def _build_process_lines(sessions, jobs, route_views_by_id, malformed, memory, t
             lines.append(None)
         first = False
         base = len(lines)
-        card_lines, meta = _route_card(view, session_by_pid, term_width, now)
+        card_lines, meta = _route_card(view, session_by_identity, term_width, now)
         lines.extend(card_lines)
         _FOLDABLE.append({"line": base + meta["fold_line"], "card_key": meta["card_key"],
                           "folded": meta["folded"]})
@@ -2342,7 +2413,7 @@ def _build_process_lines(sessions, jobs, route_views_by_id, malformed, memory, t
             lines.append(None)
         first = False
         base = len(lines)
-        card_lines, meta = _degrade_card(job, session_by_pid, term_width)
+        card_lines, meta = _degrade_card(job, session_by_identity, term_width)
         lines.extend(card_lines)
         _FOLDABLE.append({"line": base + meta["fold_line"], "card_key": meta["card_key"],
                           "folded": meta["folded"]})
@@ -2413,21 +2484,71 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     """
     global _SELECTABLE
     _SELECTABLE = []     # reset before any early return — a stale target map must never survive
-    # F-28b/F-30 (v10) — resolve every route referenced by `jobs` ONCE per build (not per row).
-    # Best-effort: any failure here must never break the group view — record-less/failed-load
-    # jobs simply keep their pre-v10 breadcrumb (prd.md:303). `route.load()` is itself
-    # mtime-cached, so repeated ticks re-parse only a route file whose inode actually changed.
-    _route_views_by_id = {}
+    # Direct hermetic callers from pre-v16 tests may construct rows without running the
+    # collector boundary.  Use the same shared resolver as the snapshot path; never call
+    # live_stage() or a renderer-specific route resolver. Terminal node evidence is the
+    # collector's read-only input for routes whose live child has already disappeared.
     _node_evidence = {}
     try:
-        from .collectors import dispatch as _dispatch_mod
-        from . import route as _route_mod
-        _node_evidence = getattr(_dispatch_mod.collect, "last_route_nodes", {}) or {}
-        for _v in _route_mod.collect_views(jobs, _node_evidence):
-            _route_views_by_id[_v["route_id"]] = _v
+        from .collectors import dispatch as _dispatch
+        _node_evidence = getattr(_dispatch.collect, "last_route_nodes", None) or {}
     except Exception:
-        _route_views_by_id = {}
         _node_evidence = {}
+    if jobs and all(getattr(entity, "work_projection", None) is None
+                    for entity in list(sessions) + list(jobs)):
+        try:
+            from .projection import attach_projections
+            attach_projections(sessions, jobs, node_evidence=_node_evidence, now=time.time())
+        except Exception:
+            pass
+    # A completed route can have no live entity at all.  Keep an ephemeral projection
+    # carrier so process rendering still consumes the common attached route view; it is
+    # never added to display_jobs and therefore cannot create a phantom job row.
+    _projection_entities = list(sessions) + list(jobs)
+    if not _projection_entities and _node_evidence:
+        try:
+            from .model import DispatchJob
+            from .projection import attach_projections
+            for _rid, _nodes in _node_evidence.items():
+                _ev = next(iter((_nodes or {}).values()), {})
+                _rf = _ev.get("route_file") if isinstance(_ev, dict) else None
+                _rn = next(iter((_nodes or {}).keys()), None)
+                if not _rf or not _rn:
+                    continue
+                _carrier = DispatchJob(key="", slug="", route_id=_rid, route_file=_rf,
+                                       route_hash=_ev.get("route_hash"), route_node=_rn,
+                                       liveness="done")
+                attach_projections([], [_carrier], node_evidence=_node_evidence, now=time.time())
+                _projection_entities.append(_carrier)
+        except Exception:
+            pass
+    # v16: route authority is attached by collectors/projection.py before this surface.
+    # Rendering never reopens a route file or calls dispatch-only stage discovery.
+    _route_views_by_id = {}
+    for _entity in _projection_entities:
+        _projection = getattr(_entity, "work_projection", None)
+        _backing = getattr(_projection, "_route_view", None) if _projection else None
+        if not _projection or not _projection.route_id or not _backing:
+            continue
+        _record = _backing.get("record") or {}
+        _nodes = []
+        for _node in _backing.get("nodes") or ():
+            if hasattr(_node, "to_dict"):
+                _node = _node.to_dict()
+            _node = dict(_node)
+            _node.setdefault("job", _entity if getattr(_entity, "route_node", None) == _node.get("id") else None)
+            _nodes.append(_node)
+        _route_views_by_id.setdefault(_projection.route_id, {
+            "route_id": _projection.route_id, "route_hash": _projection.route_hash,
+            "source": _projection.source, "capability": _record.get("capability"),
+            "capability_mode": _record.get("capability_mode"),
+            "execution_topology": _record.get("execution_topology"),
+            "unit_catalog_digest": _record.get("unit_catalog_digest"),
+            "composed": bool(_record.get("composed")),
+            "effective_intensity": _record.get("effective_intensity"),
+            "progress": _projection.progress.to_dict() if _projection.progress else None,
+            "nodes": _nodes, "key": _projection.route_id,
+        })
     display_jobs = _current_attempt_jobs(jobs)
     if _PROCESS_VIEW:
         # F-30 (§5.2) — the ONE branch point, right after the _SELECTABLE reset and the route
@@ -2815,14 +2936,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
 
         def _emit_dispatch_tree(job, parent_model=None, parent_harness=None, parent_effort=None,
                                 orphan=False, is_last=True):
-            # SD-F2 — a dispatch-depth-1 conductor's OWN breadcrumb tracks its active dispatch-depth-2 stage
-            # worker, not its static argv/plan-derived `stage`. `job_children` is the
-            # enclosing closure dict, so this is readable before the row renders.
-            stage_override = _conductor_stage_override(job)
-            # F-28b (v10) — a resolved route (found via a dispatch-depth-2 CHILD's route_id, since the
-            # env/pipe route link is attached to the stage worker, not the dispatch-depth-1 conductor
-            # row itself — dispatch.py §3.2) replaces the hardcoded `_PIPE_STAGES` breadcrumb.
-            route_seq = _conductor_route_seq(job)
+            # Row authority is the attached WorkProjection.  No first-child or
+            # first-route selection is allowed in this render-local tree walk.
+            stage_override = _projection_stage_for_dispatch(job)
+            route_seq = _projection_route_seq(job)
             if job.liveness == "stale":
                 _seen_glyphs.add("stale")
             elif job.liveness == "dead":
@@ -2845,13 +2962,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                                            parent_effort=row_parent_effort, is_last=is_last,
                                            stage_override=stage_override,
                                            name_width=wide_name_width, route_seq=route_seq))
-                # F-16/F-17 merge — the job's own adopted live subtitle, directly under
-                # its row and before its sub-agent strip; silent when absent/dead/stale.
-                job_summary = getattr(job, "summary", None)
-                if job_summary and job.liveness not in ("stale", "dead"):
-                    lines.extend(_summary_row(
-                        job_summary, depth=max(1, int(getattr(job, "depth", 1) or 1)),
-                        term_width=term_width))
+            detail = _context_detail_row(
+                job, depth=max(1, int(getattr(job, "depth", 1) or 1)), term_width=term_width)
+            if detail:
+                lines.extend(detail)
             # F-29 — the child session's own sub-agents, one strip directly under the
             # dispatch row that represents it (depth-indented; active always, completed
             # only with `a` — the same convention as session-owned strips above).
@@ -2871,43 +2985,6 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 _emit_dispatch_tree(sub, parent_model=job.model or parent_model,
                                     parent_harness=job.harness or parent_harness,
                                     parent_effort=parent_effort, orphan=False)
-
-        def _conductor_stage_override(job):
-            # F-28b (§4.2): a route-carrying active child names its OWN node id (the real
-            # pipeline node, e.g. "eval-asr") — that outranks the `_STAGE_ROLE` role-label
-            # lookup, which only knows the fixed code-plan/-execute/-test/-report vocabulary.
-            depth2 = [k for k in job_children.get(job.slug, []) if getattr(k, "depth", 1) == 2]
-            active_routed = [k for k in depth2
-                             if k.liveness == "working" and getattr(k, "route_node", None)]
-            if active_routed:
-                return active_routed[0].route_node
-            # Some legacy Codex dispatches carry a retired persona (`development`)
-            # in worker_role while the job key is the actual stage
-            # capability (`code-execute`). Reuse the row-label resolver so the
-            # conductor and its child cannot disagree about the active stage.
-            kids = [(k, _dispatch_stage_label(k)) for k in depth2]
-            kids = [(k, label) for k, label in kids if label is not None]
-            if not kids:
-                return None
-            active = [label for k, label in kids if k.liveness == "working"]
-            if active:
-                return active[0]
-            return job.stage
-
-        def _conductor_route_seq(job):
-            """[(node_id, state), ...] | None — resolved via a dispatch-depth-2 CHILD's route_id (the
-            dispatch-depth-1 conductor row itself rarely carries route_id — dispatch.py attaches the
-            env/pipe route link to the stage WORKER, §3.2). `None` means "no resolved route",
-            the pre-v10 breadcrumb path (record-less or a load failure — tolerant, prd.md:303)."""
-            depth2 = [k for k in job_children.get(job.slug, []) if getattr(k, "depth", 1) == 2]
-            rid = next((getattr(k, "route_id", None) for k in depth2
-                       if getattr(k, "route_id", None)), None) or getattr(job, "route_id", None)
-            if not rid:
-                return None
-            view = _route_views_by_id.get(rid)
-            if not view or not view.get("nodes"):
-                return None
-            return [(n["id"], n["state"]) for n in view["nodes"]]
 
         shown = _sort_group_sessions(shown)
         if live_order is not None:
@@ -2950,12 +3027,9 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                                           ctx_width=wide_ctx_width))
             if not (s.liveness in ("stale", "dead") or s.app_server or s.detached):
                 _sess_bold_ids.update(range(_n0, len(lines)))
-            if _srow is None:
-                # F-16/F-17 merge — the session's own live subtitle, directly under its
-                # row and before its sub-agent strip; silent when absent/dead/stale.
-                sess_summary = getattr(s, "summary", None)
-                if sess_summary and s.liveness not in ("stale", "dead"):
-                    lines.extend(_summary_row(sess_summary, term_width=term_width))
+            detail = _context_detail_row(s, term_width=term_width)
+            if detail:
+                lines.extend(detail)
             # F-29 (v9) — sub-agent rows, directly under the parent session's own row(s).
             # Active always shown; completed only surface with `a` (F-18b dim-row convention).
             shown_subs = [sa for sa in (getattr(s, "subagents", None) or [])

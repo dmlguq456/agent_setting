@@ -45,7 +45,7 @@ class WideCtxWidthTest(unittest.TestCase):
 
 
 class SessionRowCtxWidthTest(unittest.TestCase):
-    """`_session_row(ctx_width=...)` — legacy callers (no ctx_width) are unaffected."""
+    """The v16 context contract keeps telemetry in the subordinate detail row."""
 
     def _row_text(self, term_width, ctx_width=None):
         s = Session(harness="claude", pid=1, cwd="/home/u/proj", slug="proj",
@@ -62,15 +62,13 @@ class SessionRowCtxWidthTest(unittest.TestCase):
         base_text = self._row_text(168, ctx_width=render._CTX_W)
         self.assertEqual(text, base_text)
 
-    def test_dash_fallback_path_also_honors_ctx_width(self):
+    def test_primary_row_no_longer_renders_an_inline_context_gauge(self):
         s = Session(harness="claude", pid=1, cwd="/home/u/proj", slug="proj",
                     title="x", liveness="idle", ctx_pct=None, elapsed_min=1)
-        wide_segs = render._session_row(s, narrow=False, ctx_width=40)
-        narrow_segs = render._session_row(s, narrow=False, ctx_width=24)
-        wide_dashes = max((t for t, k in wide_segs if k == "dim" and set(t) <= {"─"}), default="")
-        narrow_dashes = max((t for t, k in narrow_segs if k == "dim" and set(t) <= {"─"}),
-                            default="")
-        self.assertGreater(len(wide_dashes), len(narrow_dashes))
+        segs = render._session_row(s, narrow=False, ctx_width=40)
+        text = "".join(t for t, _k in segs)
+        self.assertNotIn("42%", text)
+        self.assertNotIn("ctx ", text)
 
     def test_no_overflow_at_wide_layout_widths(self):
         """168/200/400 are where the board actually picks the wide layout (`_layout_mode`

@@ -20,10 +20,14 @@ import os
 import re
 import shlex
 import shutil
+import sqlite3
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 try:
     import fcntl
@@ -44,10 +48,10 @@ MAX_SCAN = 1 << 20
 WORKER_TIMEOUT = 60
 DEBOUNCE_SEC = 600
 CHILD_DEBOUNCE_SEC = 150   # dispatched children move faster than main sessions (user 2026-07-19)
-DEFAULT_CONCURRENCY = 2
+DEFAULT_CONCURRENCY = 3
 MAX_CONCURRENCY = 4
-DEFAULT_START_LIMIT = 3    # per START_WINDOW_SEC; 4 → 10 → 16 → 3 (user 2026-07-21: 10분당 16개 → 1분당 3개)
-MAX_START_LIMIT = 3
+DEFAULT_START_LIMIT = 4
+MAX_START_LIMIT = 4
 START_WINDOW_SEC = 60      # 1-minute rolling window (was 600s; paired with the 16→3 limit above)
 DISABLE_MARKER = ".refresh-disabled"
 MODEL = os.environ.get("FLEET_TITLE_MODEL", "haiku")
@@ -205,6 +209,158 @@ def read_delta(transcript, last_offset, harness="claude"):
     return text, size
 
 
+OPENCODE_MESSAGE_TABLES = ("message", "session_message", "part")
+
+
+def _opencode_signature(path):
+    """Return immutable source metadata used to detect a moving SQLite source."""
+    try:
+        info = os.stat(path, follow_symlinks=True)
+    except OSError:
+        return None
+    return (info.st_dev, info.st_ino, info.st_size, info.st_mode,
+            info.st_mtime_ns, info.st_ctime_ns)
+
+
+def _opencode_source_signatures(db_path):
+    return {
+        suffix: _opencode_signature(os.path.abspath(db_path) + suffix)
+        for suffix in ("", "-wal", "-shm", "-journal")
+    }
+
+
+def _copy_opencode_file(source, target):
+    """Copy privately, preferring Linux FICLONE and falling back to streaming."""
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    source_info = os.stat(source)
+    cloned = False
+    if fcntl is not None and sys.platform.startswith("linux"):
+        try:
+            with open(source, "rb") as source_stream, open(target, "wb") as target_stream:
+                fcntl.ioctl(target_stream.fileno(), 0x40049409, source_stream.fileno())
+            cloned = True
+        except (OSError, IOError):
+            try:
+                os.unlink(target)
+            except OSError:
+                pass
+    if not cloned:
+        with open(source, "rb") as source_stream, open(target, "wb") as target_stream:
+            while True:
+                block = source_stream.read(1024 * 1024)
+                if not block:
+                    break
+                target_stream.write(block)
+            target_stream.flush()
+            os.fsync(target_stream.fileno())
+    os.chmod(target, stat.S_IMODE(source_info.st_mode))
+
+
+@contextlib.contextmanager
+def _opencode_snapshot(db_path):
+    """Yield a private, WAL-aware SQLite connection or fail closed.
+
+    Only the database and an already-present WAL are copied.  The source SHM and
+    rollback journal are observed for consistency but are never opened or copied.
+    """
+    source = os.path.abspath(db_path)
+    before = _opencode_source_signatures(source)
+    if before[""] is None or before["-journal"] is not None:
+        raise OSError("OpenCode source is unavailable or has an active journal")
+    with tempfile.TemporaryDirectory(prefix="fleet-opencode-") as tmp:
+        snapshot = os.path.join(tmp, os.path.basename(source))
+        _copy_opencode_file(source, snapshot)
+        if before["-wal"] is not None:
+            _copy_opencode_file(source + "-wal", snapshot + "-wal")
+        after = _opencode_source_signatures(source)
+        if before != after:
+            raise OSError("OpenCode source changed during private snapshot")
+        # The URI points at the private snapshot, not the live source.
+        uri = "file:%s?mode=ro&cache=private" % quote(snapshot, safe="/")
+        connection = sqlite3.connect(uri, uri=True, timeout=1.0)
+        try:
+            yield connection
+        finally:
+            connection.close()
+
+
+def _opencode_message_table_for_connection(connection):
+    for table in OPENCODE_MESSAGE_TABLES:
+        try:
+            row = connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
+            ).fetchone()
+            if row:
+                connection.execute("SELECT rowid FROM %s LIMIT 1" % table).fetchone()
+                return table
+        except Exception:
+            continue
+    return None
+
+
+def opencode_message_table(db_path):
+    """Return the first compatible table from one private, consistency-checked snapshot."""
+    if isinstance(db_path, sqlite3.Connection):
+        return _opencode_message_table_for_connection(db_path)
+    try:
+        with _opencode_snapshot(db_path) as con:
+            return _opencode_message_table_for_connection(con)
+    except Exception:
+        return None
+
+
+def _opencode_text(value):
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        role = str(value.get("role") or value.get("type") or "").lower()
+        if role in {"tool", "system", "internal", "patch", "step-start", "step-finish"}:
+            return ""
+        for key in ("text", "content", "message", "parts", "output"):
+            if key in value:
+                text = _opencode_text(value[key])
+                if text:
+                    return text
+        return ""
+    if isinstance(value, list):
+        return "\n".join(filter(None, (_opencode_text(item) for item in value)))
+    return ""
+
+
+def read_opencode_delta(db_path, session_id, last_cursor=0, table=None, connection=None):
+    """Read exact-session OpenCode rows in rowid order, advancing over rejected rows."""
+    table = table or opencode_message_table(db_path)
+    if not table or not session_id:
+        return "", int(last_cursor or 0), table
+    try:
+        context = contextlib.nullcontext(connection) if connection is not None else _opencode_snapshot(db_path)
+        with context as con:
+            columns = [row[1] for row in con.execute("PRAGMA table_info(%s)" % table)]
+            if "session_id" not in columns:
+                return "", int(last_cursor or 0), table
+            data_col = next((c for c in ("data", "content", "message", "text") if c in columns), None)
+            if not data_col:
+                return "", int(last_cursor or 0), table
+            rows = con.execute(
+                "SELECT rowid, %s FROM %s WHERE session_id=? AND rowid>? ORDER BY rowid ASC"
+                % (data_col, table), (session_id, int(last_cursor or 0))).fetchall()
+            cursor = int(last_cursor or 0)
+            chunks = []
+            for rowid, raw in rows:
+                cursor = max(cursor, int(rowid))
+                try:
+                    payload = json.loads(raw) if isinstance(raw, str) else raw
+                except Exception:
+                    continue
+                text = _opencode_text(payload).strip()
+                if text:
+                    chunks.append(text)
+            normalized = "\n".join(chunks)
+            return normalized[-TEXT_CAP:], cursor, table
+    except Exception:
+        return "", int(last_cursor or 0), table
+
+
 def validate_title(raw):
     """Validate provider stdout as one short, mostly-ASCII title.
 
@@ -226,7 +382,8 @@ def validate_title(raw):
     if not line:
         return None
     ascii_ratio = sum(1 for ch in line if ord(ch) < 128) / len(line)
-    if ascii_ratio < 0.8 or len(line.split()) > TITLE_MAX_WORDS or _META_RE.match(line):
+    if (ascii_ratio < 0.8 or len(line.split()) < 3
+            or len(line.split()) > TITLE_MAX_WORDS or _META_RE.match(line)):
         return None
     return line
 
@@ -504,15 +661,22 @@ def _provider_source():
     return "refresher:custom" if os.environ.get("FLEET_TITLE_COMMAND") else "refresher:claude"
 
 
-def maybe_spawn(harness, sid, transcript, now=None, debounce=DEBOUNCE_SEC):
+def maybe_spawn(harness, sid, transcript=None, now=None, debounce=DEBOUNCE_SEC,
+                refresh_source=None):
     """Start one detached refresh when state is stale and the transcript grew."""
     if (
         refresh_disabled()
         or os.environ.get("FLEET_TITLE_REFRESH") == "1"
-        or harness not in ("claude", "codex")
+        or harness not in ("claude", "codex", "opencode")
     ):
         return False
-    if not sid or not transcript or not os.path.isfile(transcript):
+    if not sid:
+        return False
+    source_kind = (refresh_source or {}).get("kind") if isinstance(refresh_source, dict) else None
+    if source_kind == "opencode-db":
+        if not refresh_source.get("db_path") or not os.path.isfile(refresh_source["db_path"]):
+            return False
+    elif not transcript or not os.path.isfile(transcript):
         return False
     probe_argv = worker_argv("probe")
     if not _executable_available(probe_argv):
@@ -523,7 +687,7 @@ def maybe_spawn(harness, sid, transcript, now=None, debounce=DEBOUNCE_SEC):
     if ts and now - ts <= debounce:
         return False
     try:
-        transcript_mtime = os.path.getmtime(transcript)
+        transcript_mtime = os.path.getmtime(transcript) if transcript else now
     except OSError:
         return False
     if ts and transcript_mtime <= ts:
@@ -565,8 +729,12 @@ def maybe_spawn(harness, sid, transcript, now=None, debounce=DEBOUNCE_SEC):
         harness,
         "--sid",
         sid,
-        "--transcript",
-        transcript,
+    ]
+    if source_kind == "opencode-db":
+        argv += ["--opencode-db", refresh_source["db_path"], "--opencode-session", sid]
+    else:
+        argv += ["--transcript", transcript]
+    argv += [
         "--lockdir",
         lockdir,
         "--slotdir",
@@ -606,21 +774,28 @@ def schedule_sessions(sessions):
         ):
             continue
         is_child = getattr(session, "is_child", False)
-        if maybe_spawn(
-            getattr(session, "harness", ""),
-            getattr(session, "session_id", None),
-            getattr(session, "_transcript_path", None),
-            debounce=CHILD_DEBOUNCE_SEC if is_child else DEBOUNCE_SEC,
-        ):
+        spawn_args = {
+            "harness": getattr(session, "harness", ""),
+            "sid": getattr(session, "session_id", None),
+            "transcript": getattr(session, "_transcript_path", None),
+            "debounce": CHILD_DEBOUNCE_SEC if is_child else DEBOUNCE_SEC,
+        }
+        refresh_source = getattr(session, "_refresh_source", None)
+        if refresh_source is not None:
+            spawn_args["refresh_source"] = refresh_source
+        if maybe_spawn(**spawn_args):
             started += 1
     return started
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("--harness", choices=("claude", "codex"), default="claude")
+    parser.add_argument("--harness", choices=("claude", "codex", "opencode"), default="claude")
     parser.add_argument("--sid", required=True)
-    parser.add_argument("--transcript", required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--transcript")
+    source.add_argument("--opencode-db")
+    parser.add_argument("--opencode-session")
     parser.add_argument("--lockdir")
     parser.add_argument("--slotdir")
     args = parser.parse_args(argv)
@@ -637,11 +812,31 @@ def main(argv=None):
                 return 0
             if not _acquire_start_budget():
                 return 0
+        if args.harness == "opencode" and (not args.opencode_db or not args.opencode_session):
+            return 0
+        if args.harness != "opencode" and (args.opencode_db or args.opencode_session):
+            return 0
         previous = titles.read(args.sid, harness=args.harness) or {}
         offset = previous.get("offset", 0) if isinstance(previous.get("offset"), int) else 0
         previous_title = previous.get("title", "") if isinstance(previous.get("title"), str) else ""
         previous_summary = previous.get("summary") if isinstance(previous.get("summary"), str) else None
-        delta, new_offset = read_delta(args.transcript, offset, harness=args.harness)
+        cursor_kind = None
+        if args.opencode_db:
+            # One private snapshot/connection supplies table selection and delta
+            # reading.  The live DB is never opened by this worker.
+            try:
+                with _opencode_snapshot(args.opencode_db) as opencode_connection:
+                    table = opencode_message_table(opencode_connection)
+                    cursor_kind = "opencode-rowid-v1:%s" % table if table else None
+                    if previous.get("cursor_kind") != cursor_kind:
+                        offset = 0
+                    delta, new_offset, _ = read_opencode_delta(
+                        args.opencode_db, args.opencode_session, offset, table=table,
+                        connection=opencode_connection)
+            except Exception:
+                return 0
+        else:
+            delta, new_offset = read_delta(args.transcript, offset, harness=args.harness)
         source = previous.get("source") or _provider_source()
         if not delta.strip():
             titles.write(
@@ -651,6 +846,7 @@ def main(argv=None):
                 offset=new_offset,
                 harness=args.harness,
                 summary=previous_summary,
+                cursor_kind=cursor_kind,
             )
             titles.sweep()
             return 0
@@ -671,6 +867,7 @@ def main(argv=None):
             offset=new_offset,
             harness=args.harness,
             summary=summary,
+            cursor_kind=cursor_kind,
         )
         titles.sweep()
         return 0

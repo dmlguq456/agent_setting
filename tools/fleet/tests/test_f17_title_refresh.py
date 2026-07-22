@@ -202,7 +202,7 @@ class PriorityTest(_ConfigHomeMixin, unittest.TestCase):
 class ValidateTitleTest(unittest.TestCase):
 
     def test_validate_len_cap(self):
-        out = rt.validate_title("x" * 120)
+        out = rt.validate_title("alpha bravo " + "x" * 120)
         self.assertEqual(len(out), rt.TITLE_MAXLEN)
 
     def test_validate_newline_strip_takes_first_line(self):
@@ -214,15 +214,15 @@ class ValidateTitleTest(unittest.TestCase):
         self.assertIsNone(rt.validate_title("   \n  \n"))
 
     def test_validate_non_printable_reject(self):
-        out = rt.validate_title("Fix\x00\x01 login")
-        self.assertEqual(out, "Fix login")
+        out = rt.validate_title("Fix\x00\x01 login flow")
+        self.assertEqual(out, "Fix login flow")
         self.assertIsNone(rt.validate_title("\x00\x01\x02"))
 
     def test_validate_strips_quotes_and_period(self):
         self.assertEqual(rt.validate_title('"Fix login bug."'), "Fix login bug")
 
     def test_validate_clips_at_new_40_char_cap(self):
-        out = rt.validate_title("x" * 41)
+        out = rt.validate_title("alpha bravo " + "x" * 41)
         self.assertEqual(len(out), 40)
         self.assertEqual(rt.TITLE_MAXLEN, 40)
 

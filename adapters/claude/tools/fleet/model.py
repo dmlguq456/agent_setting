@@ -8,7 +8,7 @@ never blank, per the PRD missing-cell rule).
 import hashlib
 import json
 import re
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, fields, is_dataclass
 from typing import Optional
 
 
@@ -69,6 +69,112 @@ LIVENESS_STATES = ("working", "idle", "unused", "blocked", "done", "stale", "dea
 # each surface from growing a subtly different PID/start-time classifier.
 ATTEMPT_CLASSIFIER_SOURCE = "tools.fleet.model.classify_attempt_evidence"
 PROGRESS_PHASES = ("launch", "analysis", "tool", "file-write", "test", "artifact", "terminal")
+
+
+def _public_value(value):
+    """Serialize additive Fleet values without exposing private evidence caches."""
+    if is_dataclass(value):
+        payload = {
+            f.name: _public_value(getattr(value, f.name))
+            for f in fields(value)
+            if not f.name.startswith("_")
+        }
+        if value.__class__.__name__ == "WorkProjection":
+            ambiguity = payload.get("ambiguity")
+            payload["ambiguity"] = [] if ambiguity is None else (
+                ambiguity if isinstance(ambiguity, list) else [ambiguity]
+            )
+        return payload
+    if isinstance(value, dict):
+        return {key: _public_value(item) for key, item in value.items()
+                if not str(key).startswith("_")}
+    if isinstance(value, (list, tuple)):
+        return [_public_value(item) for item in value]
+    return value
+
+
+@dataclass(frozen=True)
+class ContextProjection:
+    """Public, display-only context telemetry.
+
+    Shape is intentionally fixed to ``used_pct``, ``band`` and ``source``.  The
+    private evidence used to validate freshness and ordering never crosses this
+    boundary.
+    """
+    used_pct: Optional[int] = None
+    band: str = "unknown"
+    source: str = "unknown"
+
+    def to_dict(self):
+        return _public_value(self)
+
+
+@dataclass(frozen=True)
+class ContextEvidence:
+    """Private context sample used by the source-agnostic resolver."""
+    used_pct: Optional[int] = None
+    source: str = "unknown"
+    sequence: Optional[tuple] = None
+    source_head_sequence: Optional[tuple] = None
+    observed_at: Optional[float] = None
+    fresh_until: Optional[float] = None
+    invalid_reason: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class ProgressProjection:
+    """Stable public progress shape: completed and total node counts."""
+    done: int = 0
+    total: int = 0
+
+    def to_dict(self):
+        return _public_value(self)
+
+
+@dataclass(frozen=True)
+class ActiveNodeProjection:
+    """Stable public shape for one active route node."""
+    id: str
+    depends_on: tuple = ()
+    level: Optional[int] = None
+    unit: Optional[str] = None
+    unit_choices: tuple = ()
+    gate: Optional[str] = None
+    write_scope: Optional[str] = None
+    state: Optional[str] = None
+    progress: Optional[dict] = None
+
+    def to_dict(self):
+        return _public_value(self)
+
+
+@dataclass(frozen=True)
+class WorkProjection:
+    """One fail-closed orchestration projection shared by every Fleet surface."""
+    source: str = "none"
+    route_id: Optional[str] = None
+    route_hash: Optional[str] = None
+    route_node: Optional[str] = None
+    attempt_id: Optional[str] = None
+    assigned_contract: Optional[str] = None
+    unit: Optional[str] = None
+    stage_label: Optional[str] = None
+    node_state: Optional[str] = None
+    active_nodes: tuple = ()
+    progress: Optional[ProgressProjection] = None
+    ambiguity: Optional[str] = None
+    _route_view: Optional[dict] = field(default=None, repr=False, compare=False)
+
+    def to_dict(self):
+        payload = _public_value(self)
+        # Public v16 shape is an array so future resolver diagnostics can be
+        # additive without changing the JSON type.  Keep the scalar internal
+        # storage compatible with existing constructors and comparisons.
+        value = payload.get("ambiguity")
+        payload["ambiguity"] = [] if value is None else (
+            value if isinstance(value, list) else [value]
+        )
+        return payload
 
 
 def project_of(cwd):
@@ -179,9 +285,25 @@ class Session:
     # F-16/F-17 merge (사용자 2026-07-19): live one-sentence status from the same haiku call
     # that produces the title — None = no fresh sidecar summary (render stays silent, F-13).
     summary: Optional[str] = None
+    # v16 additive evidence and projections.  Underscored values are private caches.
+    route_file: Optional[str] = None
+    route_id: Optional[str] = None
+    route_hash: Optional[str] = None
+    route_node: Optional[str] = None
+    attempt_id: Optional[str] = None
+    assigned_contract: Optional[str] = None
+    unit: Optional[str] = None
+    worker_type: Optional[str] = None
+    owner: Optional[str] = None
+    model_role: Optional[str] = None
+    context: Optional[ContextProjection] = None
+    work_projection: Optional[WorkProjection] = None
+    association_ambiguity: Optional[str] = None
+    _context_evidence: Optional[ContextEvidence] = field(default=None, repr=False, compare=False)
+    _refresh_source: Optional[dict] = field(default=None, repr=False, compare=False)
 
     def to_dict(self):
-        return asdict(self)
+        return _public_value(self)
 
 
 @dataclass
@@ -269,9 +391,14 @@ class DispatchJob:
                                         # attempt (e.g. "dead-parent-orphaned"); None = no note
     resume_boundary: Optional[str] = None  # SD-64/71: first incomplete route node, set only
                                         # alongside note == "dead-parent-orphaned"
+    context: Optional[ContextProjection] = None
+    work_projection: Optional[WorkProjection] = None
+    association_ambiguity: Optional[str] = None
+    _context_evidence: Optional[ContextEvidence] = field(default=None, repr=False, compare=False)
+    _refresh_source: Optional[dict] = field(default=None, repr=False, compare=False)
 
     def to_dict(self):
-        return asdict(self)
+        return _public_value(self)
 
 
 # =============================================================================

@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """Hermetic unit tests — F-28b route-aware breadcrumb (render.py `_stage_segs`/
-`_dispatch_stage_segs`/`_conductor_route_seq`/`_conductor_stage_override`).
+`_dispatch_stage_segs` and attached projection route sequences).
 
 T2-1 is the regression pin: a record-less job's breadcrumb must be BYTE-IDENTICAL to the
 pre-v10 `_PIPE_STAGES` path — route_seq is purely additive.
 """
 import os
 import sys
+import tempfile
 import unittest
 
 _TOOLS_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _TOOLS_DIR not in sys.path:
     sys.path.insert(0, _TOOLS_DIR)
 
-from fleet import render                    # noqa: E402
+from fleet import projection, render         # noqa: E402
 from fleet import route                     # noqa: E402
 from fleet.collectors import dispatch       # noqa: E402
 from fleet.model import DispatchJob         # noqa: E402
@@ -22,6 +23,7 @@ _FIXDIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "
 _REAL_CLAUDE = os.path.join(_FIXDIR, "real_claude_staged.json")
 _REAL_RID = "rt-27f7bc9ff152ba13"
 _LAB = os.path.join(_FIXDIR, "synth_parallel_lab.json")
+_COMPOSED = os.path.join(_FIXDIR, "synth_composed_survey.json")
 
 
 def _joined(lines):
@@ -39,17 +41,39 @@ class RouteBreadcrumbTest(unittest.TestCase):
         route.clear_cache()
 
     def test_t2_1_record_less_job_matches_pre_v10_breadcrumb_exactly(self):
-        job = DispatchJob(key="code", stage="exec", slug="no-route-job", cwd="/x",
-                          liveness="working", depth=1)
-        via_build_lines = _joined(
-            render._build_lines([], [job], section="dispatch", narrow=False,
-                                malformed=0, layout="wide"))
+        # v16: "record-less" (no sealed route file) is not the same as "evidence-less" — the
+        # WorkProjection resolver (projection.py) only recreates the pre-v10 fixed `_PIPE_STAGES`
+        # breadcrumb from a real exact-cardinality artifact match (plan Step 1.3.7), never from
+        # a bare/manually-set `stage` string with zero backing evidence. Give the job a real
+        # exact plan-directory artifact so its compat `stage` is legitimately artifact-inferred,
+        # and assert THAT breadcrumb is byte-identical to the pre-v10 `_PIPE_STAGES` path.
+        with tempfile.TemporaryDirectory() as tmp:
+            plan_dir = os.path.join(tmp, ".agent_reports", "plans", "2026-01-01_no-route-job",
+                                    "execute")
+            os.makedirs(plan_dir)
+            job = DispatchJob(key="code", stage="exec", slug="no-route-job", cwd=tmp,
+                              liveness="working", depth=1)
+            via_build_lines = _joined(
+                render._build_lines([], [job], section="dispatch", narrow=False,
+                                    malformed=0, layout="wide"))
         direct = render._dispatch_stage_segs(job, "code", "exec", "no-route-job", working=True)
         expected_text = "".join(t for t, _k in direct)
         self.assertIn(expected_text, via_build_lines)
         # explicit sanity: the OLD 3-stage `_PIPE_STAGES` vocabulary is what rendered — not a
-        # record node id (there is no record here at all).
+        # record node id (there is no sealed route record here at all).
         self.assertIn("exec", expected_text)
+
+    def test_t2_1b_zero_evidence_job_shows_honest_preboot_not_a_fabricated_stage(self):
+        # Companion case: a job with NEITHER a route record NOR any resolvable artifact/registry
+        # evidence must not have its manually-set `stage` echoed back — WorkProjection resolves
+        # source="none" and the compat `stage` field clears, so the breadcrumb shows the honest
+        # unlit pre-boot track instead of fabricating a lit "exec".
+        job = DispatchJob(key="code", stage="exec", slug="no-route-job", cwd="/nonexistent/x",
+                          liveness="working", depth=1)
+        via_build_lines = _joined(
+            render._build_lines([], [job], section="dispatch", narrow=False,
+                                malformed=0, layout="wide"))
+        self.assertIn("pre › plan › exec › test", via_build_lines)
 
     def test_t2_2_real_record_lights_active_child_node(self):
         dispatch.collect.last_route_nodes = {
@@ -115,6 +139,28 @@ class RouteBreadcrumbTest(unittest.TestCase):
             route_seq=[("research", "active")])
         text = "".join(t for t, _k in segs)
         self.assertEqual(text, "research")
+
+    def test_t2_7_composed_survey_breadcrumb_keeps_parallel_siblings(self):
+        record = route.load(_COMPOSED)
+        rid = record["route_id"]
+        owner = DispatchJob(key="survey", slug="composed-owner", depth=1,
+                            cwd="/composed", liveness="working")
+        child_b = DispatchJob(key="claim", slug="claim-b", parent_slug="composed-owner",
+                              depth=2, cwd="/composed/b", liveness="working",
+                              route_id=rid, route_file=_COMPOSED, route_node="claim-b",
+                              assigned_contract="autopilot-code")
+        child_a = DispatchJob(key="claim", slug="claim-a", parent_slug="composed-owner",
+                              depth=2, cwd="/composed/a", liveness="working",
+                              route_id=rid, route_file=_COMPOSED, route_node="claim-a",
+                              assigned_contract="autopilot-code")
+        projection.attach_projections([], [owner, child_b, child_a], now=100.0)
+        text = _joined(render._build_lines([], [owner, child_b, child_a], section="dispatch",
+                                           narrow=False, malformed=0, layout="wide",
+                                           term_width=168))
+        self.assertIn("claim-a", text)
+        self.assertIn("claim-b", text)
+        self.assertIn("survey › claim-a › claim-b › synth", text)
+        self.assertNotIn("pre › plan › exec › test", text)
 
 
 if __name__ == "__main__":

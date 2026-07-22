@@ -33,18 +33,20 @@ class ModelAdditiveTest(unittest.TestCase):
         self.assertIsNone(d["summary"])
 
 
-def _child(pid, cwd, title=None, summary=None, harness="claude", sid=None):
+def _child(pid, cwd, title=None, summary=None, harness="claude", sid=None, proc_start=None):
     return Session(harness=harness, pid=pid, cwd=cwd, session_id=sid or "sid-%d" % pid,
                    slug=os.path.basename(cwd), liveness="working", is_child=True,
-                   title=title, summary=summary)
+                   title=title, summary=summary, proc_start=proc_start)
 
 
 class AdoptSummaryTest(unittest.TestCase):
     def test_pid_join_adopts_summary_alongside_title(self):
+        # v16: exact identity requires (pid, proc_start) on both sides (plan Step 2.4.2).
         child = _child(42, "/work/agent_setting-wt/fix-x", title="Fix flaky tests",
-                       summary="지금 실패하는 테스트를 재현하는 중")
+                       summary="지금 실패하는 테스트를 재현하는 중", proc_start="777")
         job = DispatchJob(key="autopilot-code", slug="fix-x", cwd="/tmp/elsewhere",
-                          harness="claude", pid=42, is_child=True, liveness="working")
+                          harness="claude", pid=42, proc_start="777",
+                          is_child=True, liveness="working")
         fleet_collectors._adopt_child_titles([child], [job])
         self.assertEqual(job.title, "Fix flaky tests")
         self.assertEqual(job.summary, "지금 실패하는 테스트를 재현하는 중")
@@ -53,8 +55,9 @@ class AdoptSummaryTest(unittest.TestCase):
         # A child can have a fresh live summary while its title sidecar is still stale/absent
         # (the two fields have independent freshness windows) — the join must not require both.
         child = _child(42, "/work/agent_setting-wt/fix-x", title=None,
-                       summary="지금 빌드 로그를 읽는 중")
-        job = DispatchJob(key="autopilot-code", slug="fix-x", pid=42, cwd="/tmp/elsewhere",
+                       summary="지금 빌드 로그를 읽는 중", proc_start="777")
+        job = DispatchJob(key="autopilot-code", slug="fix-x", pid=42, proc_start="777",
+                          cwd="/tmp/elsewhere",
                           harness="claude", is_child=True, liveness="working")
         fleet_collectors._adopt_child_titles([child], [job])
         self.assertIsNone(job.title)
@@ -117,16 +120,19 @@ class SummaryRowRenderTest(unittest.TestCase):
         text_seg = next((t, k) for t, k in hits[0] if summary in t)
         self.assertEqual(text_seg[1], "dim")
 
-    def test_summary_absent_is_completely_silent(self):
+    def test_summary_absent_still_renders_one_ctx_dash_row(self):
+        # v16 (F-37): the context-first detail row is mandatory on every live identity card —
+        # a summary-less/context-less session renders `ctx —` rather than omitting the row
+        # (plan Step 3.3.2's "neither" case), so row COUNT is unchanged either way; only the
+        # row's own TEXT differs.
         with_summary = self._session(pid=1, summary="지금 무언가 하는 중")
         without_summary = self._session(pid=2, summary=None)
         lines_with = self._lines_for([with_summary])
         lines_without = self._lines_for([without_summary])
-        # F-13 healthy-silent: no summary means no extra row at all, not an empty one —
-        # the row count must shrink by exactly the one subtitle line, nothing else shifts.
-        self.assertEqual(len(lines_with), len(lines_without) + 1)
+        self.assertEqual(len(lines_with), len(lines_without))
         joined_without = "\n".join("".join(t for t, _k in ln) for ln in lines_without if ln)
         self.assertNotIn("지금 무언가 하는 중", joined_without)
+        self.assertIn("ctx —", joined_without)
 
     def test_dead_row_omits_summary(self):
         s = self._session(liveness="dead", mtime=None, summary="지금 뭔가 하는 중")

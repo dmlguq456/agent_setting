@@ -15,7 +15,7 @@ import json
 import os
 import re
 
-from ..model import SubAgent
+from ..model import ContextEvidence, SubAgent
 
 
 def _home():
@@ -426,6 +426,9 @@ def enrich(sess):
     path = _newest_transcript_path(home, sess.cwd, sid)
     if path:
         sess._transcript_path = path              # ephemeral: live title scheduler, not --json
+        sess._refresh_source = {"kind": "transcript", "harness": "claude",
+                                "session_id": sid, "path": path,
+                                "cursor_kind": "byte-offset-v1"}
     # Transcript presence is the §2.2 `unused` refinement input: a session that has NEVER
     # been prompted has no transcript at all. Ephemeral (leading underscore) — evidence for
     # the classifier, not a --json field.
@@ -442,6 +445,16 @@ def enrich(sess):
             # This mtime is the registry's own clock, not real activity — a tier-3 stand-in.
             sess._mtime_from_registry = True
     sess.mtime = m
+    if path and sess.ctx_pct is not None:
+        try:
+            st = os.stat(path)
+            sequence = (st.st_mtime_ns, st.st_size)
+            sess._context_evidence = ContextEvidence(
+                used_pct=sess.ctx_pct, source="claude-transcript",
+                sequence=sequence, source_head_sequence=sequence,
+                observed_at=st.st_mtime, fresh_until=st.st_mtime + 900)
+        except OSError:
+            pass
     # 3a) A fresh neutral sidecar overrides the AI title; failures pass through safely.
     from fleet import titles                      # Deferred import; no cycle, standard library only.
     st = titles.fresh_title(sid, harness="claude") if sid else None

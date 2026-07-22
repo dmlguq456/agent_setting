@@ -43,9 +43,33 @@ import hashlib
 import json
 import os
 import time
+from dataclasses import dataclass
 
 _CACHE = {}          # {abspath: (mtime, size, record|None)}
 _MARKER_CACHE = {}   # {abspath: (mtime, size, marker|None)} — same shape, separate namespace
+
+
+@dataclass(frozen=True)
+class RouteDiagnostic:
+    """Stable result for explicit route evidence; parser details stay private."""
+    record: object = None
+    valid: bool = False
+    ambiguity: str = "route-record-mismatch"
+
+
+def load_diagnostic(path, expect_hash=None, expect_id=None):
+    """Load a route while distinguishing absence from explicit invalid evidence."""
+    record = load(path, expect_hash=expect_hash, expect_id=expect_id)
+    if record is not None:
+        return RouteDiagnostic(record=record, valid=True, ambiguity=None)
+    if not path:
+        return RouteDiagnostic(ambiguity="route-record-mismatch")
+    try:
+        if not os.path.exists(os.path.abspath(path)):
+            return RouteDiagnostic(ambiguity="route-record-missing")
+    except (OSError, TypeError, ValueError):
+        pass
+    return RouteDiagnostic(ambiguity="route-record-mismatch")
 
 
 # --- hashing (P1 — utilities/capability-route.py:21-26, reproduced exactly) ---
@@ -487,13 +511,11 @@ def _ev_elapsed(ev, now):
 
 
 def _heuristic_view(route_id, route_jobs):
-    """A route_id is known (from the pipe) but the record itself never loaded (hash mismatch /
-    file gone / future schema). No DAG is available — the degrade card (§5.3) falls back to the
-    existing `_PIPE_STAGES` breadcrumb instead of this view's (empty) node list."""
-    return {"route_id": route_id, "route_hash": None, "source": "heuristic",
+    """Represent explicit-invalid evidence without fabricating a fixed pipeline."""
+    return {"route_id": route_id, "route_hash": None, "source": "unknown",
             "capability": None, "capability_mode": None, "execution_topology": None,
             "unit_catalog_digest": None, "composed": False,
-            "effective_intensity": None, "progress": {"done": 0, "total": 0},
+            "effective_intensity": None, "progress": None, "ambiguity": "route-record-mismatch",
             "nodes": [], "key": route_id}
 
 
@@ -521,6 +543,7 @@ def _record_view(record, route_id, route_jobs, ev_by_node, now, gate_marks_for_r
             nodes.append({
                 "id": nid, "depends_on": list(rn.get("depends_on") or []), "level": level_i,
                 "unit": unit, "unit_choices": unit_choices,
+                "write_scope": rn.get("write_scope"),
                 "state": st["state"], "gate": rn.get("completion_gate"),
                 # True | None — a DIMENSION SEPARATE from `state` (prd.md:308). `state` says what
                 # the runner is doing; `gate_passed` says whether the completion gate is proven
@@ -650,6 +673,7 @@ def summary(views):
             continue
         nodes = [{"id": n["id"], "depends_on": n.get("depends_on") or [], "level": n.get("level"),
                   "unit": n.get("unit"), "unit_choices": n.get("unit_choices") or [],
+                  "write_scope": n.get("write_scope"),
                   "state": n.get("state"), "gate": n.get("gate"),
                   "gate_passed": n.get("gate_passed"), "note": n.get("note"),
                   "elapsed_min": n.get("elapsed_min"), "model": n.get("model"),
@@ -662,5 +686,5 @@ def summary(views):
                     "unit_catalog_digest": v.get("unit_catalog_digest"),
                     "composed": bool(v.get("composed")),
                     "effective_intensity": v.get("effective_intensity"),
-                    "progress": v.get("progress") or {"done": 0, "total": 0}, "nodes": nodes})
+                    "progress": v.get("progress"), "ambiguity": v.get("ambiguity"), "nodes": nodes})
     return out
