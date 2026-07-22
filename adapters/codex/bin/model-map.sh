@@ -9,11 +9,9 @@ family=gpt
 case "$role" in
   'deep maker'|'deep reviewer'|'deep editor'|'deep orchestrator'|'external adversary')
     model=${CODEX_MODEL_SOL:-$CFG_TIER_DEEP_MODEL}; reasoning=${CODEX_REASONING_SOL:-$CFG_TIER_DEEP_EFFORT};;
-  'fast implementer')
-    model=${CODEX_MODEL_SOL:-$CFG_TIER_DEEP_MODEL}; reasoning=${CODEX_REASONING_SOL:-$CFG_ROLE_FAST_IMPLEMENTER_EFFORT};;
   orchestrator|'external adversary orchestrator')
     model=${CODEX_MODEL_BALANCED:-${CODEX_MODEL_LUNA:-$CFG_TIER_LIGHT_MODEL}}; reasoning=${CODEX_REASONING_BALANCED:-${CODEX_REASONING_LUNA:-$CFG_TIER_LIGHT_EFFORT}};;
-  'fast reviewer'|'fast fact checker'|'fast writer'|'fast tool worker')
+  'fast implementer'|'fast reviewer'|'fast fact checker'|'fast writer'|'fast tool worker')
     model=${CODEX_MODEL_LUNA:-$CFG_TIER_LIGHT_MODEL}; reasoning=${CODEX_REASONING_LUNA:-$CFG_TIER_LIGHT_EFFORT};;
   *) echo "codex model-map: unknown role: ${1:-}" >&2; exit 64;;
 esac
