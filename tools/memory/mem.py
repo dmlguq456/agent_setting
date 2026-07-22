@@ -2975,6 +2975,77 @@ def log(limit=20, action=None, tier=None, actor=None, json_output=False):
               f"actor={e.get('actor','?')}{snip}")
 
 
+# ---------- pending drain (maintenance --drain-pending) ----------
+def drain_pending(stale_days=WORKING_TTL_DAYS, apply=False):
+    """Delete consumed delivery records and report stale pending discard candidates.
+
+    Pending records are report-only (D5/D-35 human gate): drain never deletes,
+    consumes, or otherwise mutates a pending row, apply or not. Only consumed
+    rows are ever deleted, following the graveyard-then-delete-then-journal
+    order used by lifecycle()/delete_record().
+    """
+    print(f"# maintenance --drain-pending  ({'APPLY' if apply else 'dry-run'}, "
+          f"stale-days={stale_days})")
+    if not DB.exists():
+        print(f"[maintenance] store not found: {DB}")
+        return 0
+    con = get_con()
+    try:
+        if apply:
+            con.execute("BEGIN IMMEDIATE")
+        consumed_rows = con.execute(
+            "SELECT id, tier, scope, type, updated FROM records WHERE delivery_state='consumed' "
+            "ORDER BY updated ASC, id ASC").fetchall()
+
+        n_deleted = 0
+        deleted_ok = []
+        for rid, tier, scope, rtype, updated in consumed_rows:
+            print(f"  [consumed] {rid} (tier={tier}, updated {updated}) — "
+                  f"{'deleting' if apply else 'would delete'}")
+            if apply:
+                try:
+                    if not _graveyard_append(con, rid, action="drain-consumed"):
+                        sys.stderr.write(
+                            f"[maintenance] graveyard failed; deletion stopped: {rid}\n")
+                        continue
+                    _delete_rows(con, rid)
+                    n_deleted += 1
+                    deleted_ok.append((rid, tier, scope, rtype))
+                except Exception as e:
+                    sys.stderr.write(f"[maintenance] deletion failed; continuing: {rid}: {e}\n")
+        if apply:
+            con.commit()
+            actor = _write_actor(default="manual")
+            for rid, tier, scope, rtype in deleted_ok:
+                _append_write_event("drain-consumed", rid, tier=tier, scope=scope,
+                                     rtype=rtype, actor=actor)
+
+        stale_deadline = (datetime.date.today() -
+                          datetime.timedelta(days=stale_days)).isoformat()
+        stale_pending = con.execute(
+            "SELECT id, created, type FROM records WHERE delivery_state='pending' "
+            "AND created<=? ORDER BY created ASC, id ASC",
+            (stale_deadline,)).fetchall()
+        for rid, created, rtype in stale_pending:
+            try:
+                age = (datetime.date.today() - datetime.date.fromisoformat(created[:10])).days
+            except ValueError:
+                age = "?"
+            print(f"  [stale-pending] {rid} (created {created}, {age}d, type={rtype}) — "
+                  f"discard candidate; consume then delete, or delete --force (human gate)")
+
+        suffix = f" (deleted {n_deleted})" if apply else ""
+        print(f"  → consumed {len(consumed_rows)}{suffix} · "
+              f"stale-pending {len(stale_pending)} (report-only, never auto-deleted)")
+        if not apply:
+            print("  dry-run; use --apply to drain consumed records")
+        elif n_deleted:
+            print("  run 'mem sync' to refresh dump.jsonl")
+    finally:
+        con.close()
+    return 0
+
+
 # ---------- D-39: comprehensive read-only doctor ----------
 def _doctor_check(results, name, status, message):
     results.append((name, status, message))
@@ -3044,18 +3115,30 @@ def doctor():
             _doctor_check(results, "working-bloat", "WARN",
                           "; ".join(f"{c}={n}" for c, n in bloated))
 
-        # Stale pending records older than WORKING_TTL_DAYS.
+        # Stale pending records older than WORKING_TTL_DAYS, oldest first.
         stale_deadline = (datetime.date.today() -
                           datetime.timedelta(days=WORKING_TTL_DAYS)).isoformat()
         stale_pending = con.execute(
-            "SELECT id FROM records WHERE delivery_state='pending' AND created<=?",
+            "SELECT id, created FROM records WHERE delivery_state='pending' AND created<=? "
+            "ORDER BY created ASC, id ASC",
             (stale_deadline,)).fetchall()
         if not stale_pending:
             _doctor_check(results, "stale-pending", "OK", "0 records")
         else:
+            def _age_days(created):
+                try:
+                    return (datetime.date.today() -
+                            datetime.date.fromisoformat(created[:10])).days
+                except ValueError:
+                    return None
+            oldest_created = stale_pending[0][1]
+            entries = ",".join(
+                f"{rid}({_age_days(created)}d)" if _age_days(created) is not None else f"{rid}(?d)"
+                for rid, created in stale_pending[:10])
+            more = f" +{len(stale_pending) - 10} more" if len(stale_pending) > 10 else ""
             _doctor_check(results, "stale-pending", "WARN",
-                          f"{len(stale_pending)} records: " +
-                          ",".join(r[0] for r in stale_pending[:10]))
+                          f"{len(stale_pending)} records (oldest {oldest_created}, "
+                          f"no auto-expiry): {entries}{more}")
 
         # Durable soft-ceiling excess by project.
         over = con.execute(
@@ -3629,11 +3712,19 @@ def main():
 
     mt = sub.add_parser(
         "maintenance",
-        help="Squash auto-sync dump history older than N days and gc (dry-run by default)")
+        help="Squash auto-sync dump history (default) or drain delivery-state records "
+             "(--drain-pending); dry-run by default")
     mt.add_argument("--squash-days", type=int, default=14,
                     help="Squash first-parent history older than this many days (default 14)")
+    mt.add_argument("--drain-pending", action="store_true",
+                    help="Drain consumed delivery records and report stale pending discard "
+                         "candidates (dry-run by default)")
+    mt.add_argument("--pending-stale-days", type=int, default=WORKING_TTL_DAYS,
+                    help="Report pending records older than this many days as discard "
+                         "candidates (default 21)")
     mt.add_argument("--apply", action="store_true",
-                    help="Execute the squash and gc (default: dry-run report)")
+                    help="Execute the squash and gc, or the consumed-record drain "
+                         "(default: dry-run report)")
 
     args = ap.parse_args()
 
@@ -3717,6 +3808,8 @@ def main():
     elif args.cmd == "doctor":
         sys.exit(doctor())
     elif args.cmd == "maintenance":
+        if args.drain_pending:
+            sys.exit(drain_pending(stale_days=args.pending_stale_days, apply=args.apply))
         sys.exit(maintenance(squash_days=args.squash_days, apply=args.apply))
 
 
