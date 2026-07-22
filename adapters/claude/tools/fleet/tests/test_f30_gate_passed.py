@@ -369,38 +369,30 @@ class GateMarkRenderTest(unittest.TestCase):
         self.assertIn(render._GATE_MARK, [t for t, _k in lines[0]])
         self.assertNotIn(render._GATE_MARK, [t for t, _k in lines[1]])
 
-    def test_mark_width_is_accounted_when_cropping(self):
-        """The mark must ride inside `_drop_past_stages`'s width math. Pinned at the exact width
-        that separates the two behaviours: unmarked, this flow is 33 columns and `plan` (the only
-        droppable past node) is kept; marked it is 37, so at 36 columns `plan` MUST fold. If the
-        marks were excluded from the width math the folder would keep `plan` and then draw 37
-        columns into a 36-column card — a silent one-column overflow per mark.
-
-        Widths below the irreducible floor (the active node + everything after it, which
-        `_drop_past_stages` never folds by design — SD-F2) are not asserted here: that is the
-        breadcrumb's pre-existing contract, not this feature's."""
+    def test_width_wraps_without_dropping_nodes_or_gate_marks(self):
+        """Narrow cards wrap the sealed route; they never fold completed nodes away."""
         nodes = [self._node(id="plan", level=0, gate_passed=True),
                  self._node(id="execute", level=1, state="active", elapsed_min=8,
-                            gate_passed=True),
-                 self._node(id="test", level=2, state="pending", elapsed_min=None)]
-        bare = [dict(n, gate_passed=None) for n in nodes]
+                            gate_passed=True, depends_on=["plan"]),
+                 self._node(id="test", level=2, state="pending", elapsed_min=None,
+                            depends_on=["execute"])]
 
         def drawn(ns, width):
             lines = render._route_card_l2({"nodes": ns}, max_width=width)
-            self.assertEqual(len(lines), 1)
-            return "".join(t for t, _k in lines[0]), sum(render._dw(t) for t, _k in lines[0])
+            self.assertTrue(lines)
+            self.assertTrue(all(sum(render._dw(t) for t, _k in line) <= width
+                                for line in lines))
+            return lines, "\n".join("".join(t for t, _k in line) for line in lines)
 
-        text, w = drawn(bare, 36)
-        self.assertEqual((w, "plan" in text), (33, True))   # baseline keeps `plan` at 36
-        text, w = drawn(nodes, 36)
-        self.assertNotIn("plan", text)                      # marked must fold it instead
-        self.assertLessEqual(w, 36)
-
-        for width in (30, 37, 60, 200):
+        for width in (30, 36, 37, 60, 200):
             with self.subTest(width=width):
-                _t, w = drawn(nodes, width)
-                self.assertLessEqual(w, width, "L2 flow overflowed max_width")
-        self.assertEqual(drawn(nodes, 37)[1], 37)           # fits exactly, nothing folded
+                lines, text = drawn(nodes, width)
+                for primary in ("plan ✓", "execute ●", "test ○"):
+                    self.assertEqual(text.count(primary), 1)
+                self.assertEqual([key for line in lines for value, key in line
+                                  if value == render._GATE_MARK], ["gate_t", "gate_t"])
+        self.assertGreater(len(drawn(nodes, 30)[0]), 1)
+        self.assertEqual(len(drawn(nodes, 200)[0]), 1)
 
 
 class GateDetailRowTest(GateMarkBase):

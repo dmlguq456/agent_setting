@@ -531,6 +531,12 @@ _PIPE_STAGES = {
     "draft": ["draft", "refine", "apply"],
 }
 
+# A main interactive session has no dispatch ``key``.  When its only exact
+# evidence is one artifact plan directory, retain the historical generic code
+# track instead of collapsing the session to ``stage <current>``.  A sealed
+# route always outranks this route-absent fallback.
+_INLINE_ARTIFACT_STAGES = ["plan", "exec", "test", "report"]
+
 # dispatch-depth-2 stage worker role → human stage label (SD-F1). Code workers use their sub-skill
 # names; other pipelines use the portable `stage-<name>` role emitted by dispatch. The label
 # route-backed rows consume their attached projection directly.
@@ -1955,25 +1961,169 @@ def _summary_row(summary, depth=0, term_width=None):
     return [[(indent, None), (_clip_w(summary, maxw), "dim")]]
 
 
+def _compact_context_gauge_width(available):
+    """Responsive v17 gauge width: always visible, never the retired wide meter."""
+    if available >= 108:
+        return 8
+    if available >= 72:
+        return 6
+    return 4
+
+
 def _context_detail_row(entity, depth=0, term_width=None):
-    """One context-first ``ctx … · NOW`` row for every live identity card."""
+    """One ``context <gauge> <value> [band] · NOW`` row for every live card."""
     if getattr(entity, "liveness", None) in ("stale", "dead"):
         return []
     context = getattr(entity, "context", None)
     pct = getattr(context, "used_pct", None) if context is not None else getattr(entity, "ctx_pct", None)
     band = getattr(context, "band", "unknown") if context is not None else "unknown"
     now_text = getattr(entity, "summary", None)
-    ctx_text = "ctx —" if pct is None else "ctx %d%% %s" % (int(pct), band)
     indent = _SUBAGENT_IND + "  " * max(0, depth)
     available = max(0, (term_width or _SUMMARY_FALLBACK_W) - _dw(indent))
+    gauge_width = _compact_context_gauge_width(available)
+    if (isinstance(pct, (int, float)) and not isinstance(pct, bool)
+            and 0 <= pct <= 100):
+        shown_pct = int(round(pct))
+    else:
+        shown_pct = None
+    segs = [(indent, None), ("context ", "dim")]
+    segs.extend(_gauge_segs(shown_pct, gauge_width))
+    if shown_pct is None:
+        segs.append((" —", "dim"))
+    else:
+        segs.append((" %d%%" % shown_pct, _pct_key(shown_pct)))
+        if band and band != "unknown":
+            segs.append((" " + str(band), "dim"))
     if now_text:
         # Context is reserved first; only NOW may clip at the terminal boundary.
-        fixed = _dw(ctx_text) + 3
-        now_text = _clip_w(str(now_text), max(0, available - fixed))
-        text = ctx_text + " · " + now_text if now_text else ctx_text
-    else:
-        text = ctx_text
-    return [[(indent, None), (text, "dim")]]
+        fixed = sum(_dw(text) for text, _key in segs) - _dw(indent) + 3
+        now_room = max(0, available - fixed)
+        now_text = _clip_w(str(now_text), now_room) if now_room else ""
+        if now_text:
+            segs.extend([(" · ", "dim"), (now_text, "dim")])
+    return [segs]
+
+
+def _split_w_exact(text, max_width):
+    """Split without ellipsis or character loss at display-cell boundaries."""
+    if not text:
+        return [""]
+    max_width = max(1, int(max_width))
+    chunks, current, used = [], [], 0
+    for char in text:
+        width = _cw(char)
+        if current and used + width > max_width:
+            chunks.append("".join(current))
+            current, used = [], 0
+        current.append(char)
+        used += width
+    if current:
+        chunks.append("".join(current))
+    return chunks
+
+
+def _stage_detail_rows(nodes, depth=0, term_width=None, indent=None):
+    """Render every sealed node once, wrapping instead of dropping route history.
+
+    ``|`` joins parallel same-level siblings; ``›`` advances a topological level.
+    Explicit parent sets keep asymmetric/partial joins dependency-exact.
+    """
+    nodes = list(nodes or ())
+    if not nodes:
+        return []
+    indent = (_SUBAGENT_IND + "  " * max(0, depth)) if indent is None else indent
+    label = "stage "
+    available = max(1, (term_width or _SUMMARY_FALLBACK_W) - _dw(indent) - _dw(label))
+    units = []
+    previous_level = None
+    for index, node in enumerate(nodes):
+        state = node.get("state") or "pending"
+        mark, key = {
+            "done": ("✓", "dim"),
+            "active": ("●", "g_work" if _BLINK_ON else "g_work_off"),
+            "failed": ("✕", "lvl_r"),
+            "pending": ("○", "dim"),
+        }.get(state, ("○", "dim"))
+        token = "%s %s" % (node.get("id") or "?", mark)
+        parents = [str(parent) for parent in (node.get("depends_on") or ())]
+        if parents:
+            token += " ←{%s}" % ",".join(parents)
+        progress = node.get("progress")
+        if isinstance(progress, dict) and progress.get("total") is not None:
+            token += " %s/%s" % (progress.get("done", 0), progress.get("total"))
+        if node.get("gate_passed"):
+            token += _GATE_MARK
+        level = node.get("level")
+        separator = "" if index == 0 else (" | " if level == previous_level else " › ")
+        units.append((separator, token, key))
+        previous_level = level
+
+    rows, current, used = [], [], 0
+
+    def flush():
+        nonlocal current, used
+        if not current:
+            return
+        prefix = label if not rows else " " * _dw(label)
+        rows.append([(indent, None), (prefix, "dim")] + current)
+        current, used = [], 0
+
+    for separator, token, key in units:
+        unit_width = _dw(separator) + _dw(token)
+        if current and used + unit_width > available:
+            flush()
+            separator = (separator.strip() + " ") if separator else ""
+            unit_width = _dw(separator) + _dw(token)
+        if unit_width <= available:
+            if separator:
+                current.append((separator, "dim"))
+            current.append((token, key))
+            used += unit_width
+            continue
+        # An opaque node/dependency token may itself be wider than the row. Keep
+        # every character by continuing it over as many rows as necessary.
+        flush()
+        combined = separator + token
+        for chunk in _split_w_exact(combined, available):
+            current = [(chunk, key)]
+            used = _dw(chunk)
+            flush()
+    flush()
+    return rows
+
+
+def _projection_stage_detail_rows(entity, depth=0, term_width=None):
+    """Dedicated full-route rows for one validated projection owner."""
+    if getattr(entity, "liveness", None) in ("stale", "dead"):
+        return []
+    if hasattr(entity, "depth") and max(1, int(getattr(entity, "depth", 1) or 1)) >= 2:
+        return []
+    projection = getattr(entity, "work_projection", None)
+    if not projection or getattr(projection, "ambiguity", None):
+        return []
+    source = getattr(projection, "source", None)
+    if source == "artifact-inferred" and not hasattr(entity, "depth"):
+        current = getattr(projection, "stage_label", None)
+        try:
+            current_index = _INLINE_ARTIFACT_STAGES.index(current)
+        except ValueError:
+            current_index = None
+        nodes = []
+        for index, node_id in enumerate(_INLINE_ARTIFACT_STAGES):
+            state = ("done" if current_index is not None and index < current_index else
+                     "active" if index == current_index else "pending")
+            nodes.append({
+                "id": node_id,
+                "state": state,
+                "level": index,
+                "depends_on": [] if index == 0 else [_INLINE_ARTIFACT_STAGES[index - 1]],
+            })
+        return _stage_detail_rows(nodes, depth=depth, term_width=term_width)
+    if source != "route-exact":
+        return []
+    backing = getattr(projection, "_route_view", None) or {}
+    view = backing.get("view") or {}
+    return _stage_detail_rows(view.get("nodes") or (), depth=depth, term_width=term_width)
 
 
 def set_show_all(v):
@@ -2017,76 +2167,167 @@ def _route_node_text(n):
         nid = "%s[%s]" % (nid, _compact_dispatch_name(unit, _PROFILE_MAX))
     elapsed = n.get("elapsed_min")
     mark = _GATE_MARK if n.get("gate_passed") else ""
+    parents = [str(parent) for parent in (n.get("depends_on") or ())]
+    deps = " ←{%s}" % ",".join(parents) if parents else ""
     if st == "done":
         tail = fmt_min(elapsed) if elapsed is not None else ""
-        return "%s ✓%s" % (nid, tail), "dim", mark
+        return "%s ✓%s%s" % (nid, tail, deps), "dim", mark
     if st == "active":
         tail = (" " + fmt_min(elapsed)) if elapsed is not None else ""
         extra = ""
         model = _clean_model(dash(n.get("model"))) if n.get("model") else None
         if model and model != "—":
             extra = " (%s%s)" % (model, ("·" + n["effort"]) if n.get("effort") else "")
-        return "%s ●%s%s" % (nid, tail, extra), ("g_work" if _BLINK_ON else "g_work_off"), mark
+        return "%s ●%s%s%s" % (nid, tail, extra, deps), ("g_work" if _BLINK_ON else "g_work_off"), mark
     if st == "failed":
         tail = (" " + fmt_min(elapsed)) if elapsed is not None else ""
-        return "%s ✕%s" % (nid, tail), "lvl_r", mark
-    return "%s ○" % nid, "dim", mark
+        return "%s ✕%s%s" % (nid, tail, deps), "lvl_r", mark
+    return "%s ○%s" % (nid, deps), "dim", mark
+
+
+def _append_segment(segs, text, key):
+    """Append one styled fragment while keeping deliberate color boundaries intact."""
+    if not text:
+        return
+    if segs and segs[-1][1] == key:
+        segs[-1] = (segs[-1][0] + text, key)
+    else:
+        segs.append((text, key))
+
+
+def _wrap_route_node(prefix, text, key, mark, max_width, continuation="  "):
+    """Cell-safe, lossless wrapping for one opaque route node label.
+
+    The gate marker remains an independent ``gate_t`` segment even when the node
+    itself needs more than one line.
+    """
+    if max_width is None:
+        row = []
+        _append_segment(row, prefix, "dim")
+        _append_segment(row, text, key)
+        _append_segment(row, mark, "gate_t")
+        return [row]
+
+    width = max(1, int(max_width))
+    rows = []
+    row = []
+    used = 0
+    payload_chars = 0
+
+    def start(line_prefix):
+        nonlocal row, used, payload_chars
+        row = []
+        used = 0
+        payload_chars = 0
+        _append_segment(row, line_prefix, "dim")
+        used += _dw(line_prefix)
+
+    def flush():
+        nonlocal row, used, payload_chars
+        if row:
+            rows.append(row)
+        row = []
+        used = 0
+        payload_chars = 0
+
+    start(prefix)
+    for char in text:
+        char_width = _cw(char)
+        if payload_chars and used + char_width > width:
+            flush()
+            start(continuation)
+        _append_segment(row, char, key)
+        used += char_width
+        payload_chars += 1
+
+    if mark and used + _dw(mark) > width and payload_chars:
+        # Keep the independent marker attached to at least one character of its
+        # node instead of marooning it on a marker-only continuation line.
+        node_text, node_key = row[-1]
+        moved = node_text[-1]
+        remaining = node_text[:-1]
+        used -= _cw(moved)
+        payload_chars -= 1
+        if remaining:
+            row[-1] = (remaining, node_key)
+        else:
+            row.pop()
+        if payload_chars:
+            flush()
+        else:
+            row = []
+            used = 0
+        start(continuation)
+        _append_segment(row, moved, key)
+        used += _cw(moved)
+        payload_chars = 1
+    _append_segment(row, mark, "gate_t")
+    flush()
+    return rows
 
 
 def _route_card_l2(view, max_width=None):
-    """DAG lines for a card's body (§5.3/§5.5). A level with ONE node joins the horizontal
-    flow (`plan ✓12m › execute ● 8m ...`); a level with 2+ nodes (fan-out) breaks into indented
-    `├`/`└` tree rows (prd.md:307's "세로 분기"), and the flow resumes with a leading `›` after.
-    `max_width`, when given, folds PAST (already-flowed) nodes first via the SAME
-    `_drop_past_stages` the breadcrumb uses (§5.5 — no new cropping logic), independently per
-    contiguous flow run (a run never spans a fan-out break)."""
-    levels = {}
-    for n in view.get("nodes") or []:
-        levels.setdefault(n["level"], []).append(n)
-    ordered = [levels[k] for k in sorted(levels)]
-    out_lines = []
-    flow_nodes = []   # [(text, key)] accumulated for the current contiguous flow run
+    """Full DAG rows: keep the established tree shape and wrap without omission.
 
-    def _flush(prefix_needed):
+    Singleton levels form the horizontal ``›`` flow. Parallel same-level nodes
+    retain the established ``├``/``└`` branch rows. Every node includes its
+    explicit parent set, so composed and asymmetric DAG joins stay unambiguous.
+    """
+    levels = {}
+    for node in view.get("nodes") or []:
+        levels.setdefault(node["level"], []).append(node)
+    ordered = [levels[level] for level in sorted(levels)]
+    out_lines = []
+    flow_nodes = []
+
+    def flush_flow(prefix_needed):
         if not flow_nodes:
             return
-        # The gate mark rides INSIDE the width-accounting text (`t + m`) so `_drop_past_stages`
-        # folds against the node's real drawn width, then is peeled back off at emit time to get
-        # its own color — the mark must never be the thing that overflows a 60-column card.
-        items = [(i, t + m, k) for i, (t, k, m) in enumerate(flow_nodes)]
-        if max_width is not None:
-            cur_i = next((i for i, (_t, k, _m) in enumerate(flow_nodes) if k != "dim"), 0)
-            items = _drop_past_stages(items, cur_i, max_width)
-        segs = []
-        for pos, (i, _combined, key) in enumerate(items):
-            text, _key, mark = flow_nodes[i]
-            if pos == 0:
-                if prefix_needed:
-                    segs.append(("› ", "dim"))
+        current = []
+        used = 0
+        relation_before = bool(prefix_needed)
+
+        def flush_current():
+            nonlocal current, used
+            if current:
+                out_lines.append(current)
+            current = []
+            used = 0
+
+        for text, key, mark in flow_nodes:
+            separator = ("› " if relation_before else "") if not current else " › "
+            node_width = _dw(separator) + _dw(text) + _dw(mark)
+            if current and max_width is not None and used + node_width > max_width:
+                flush_current()
+                separator = "› "
+                node_width = _dw(separator) + _dw(text) + _dw(mark)
+            if max_width is not None and node_width > max_width:
+                flush_current()
+                out_lines.extend(_wrap_route_node(
+                    separator, text, key, mark, max_width, continuation="  "))
             else:
-                segs.append((" › ", "dim"))
-            segs.append((text, key))
-            if mark:
-                segs.append((mark, "gate_t"))
-        out_lines.append(segs)
+                _append_segment(current, separator, "dim")
+                _append_segment(current, text, key)
+                _append_segment(current, mark, "gate_t")
+                used += node_width
+            relation_before = True
+        flush_current()
         flow_nodes.clear()
 
     need_prefix = False
     for level in ordered:
         if len(level) == 1:
             flow_nodes.append(_route_node_text(level[0]))
-        else:
-            _flush(need_prefix)
-            need_prefix = False
-            for bi, n in enumerate(level):
-                branch = "└" if bi == len(level) - 1 else "├"
-                text, key, mark = _route_node_text(n)
-                row = [("  " + branch + " ", "dim"), (text, key)]
-                if mark:
-                    row.append((mark, "gate_t"))
-                out_lines.append(row)
-            need_prefix = True
-    _flush(need_prefix)
+            continue
+        flush_flow(need_prefix)
+        need_prefix = False
+        for index, node in enumerate(level):
+            branch = "└" if index == len(level) - 1 else "├"
+            text, key, mark = _route_node_text(node)
+            out_lines.extend(_wrap_route_node(
+                "  " + branch + " ", text, key, mark, max_width, continuation="    "))
+        need_prefix = True
+    flush_flow(need_prefix)
     return out_lines
 
 
@@ -2747,8 +2988,9 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
         buckets.append((stale_text, "lvl_y"))
     if ctx_items:
         worst = max(pct for _n, pct in ctx_items)
-        ctx_text = _bucket_text("ctx-high", [_alert_name(n) for n, _p in ctx_items]) \
-            if len(ctx_items) > 1 else "ctx %d%% %s" % (ctx_items[0][1], _alert_name(ctx_items[0][0]))
+        ctx_text = _bucket_text("context-high", [_alert_name(n) for n, _p in ctx_items]) \
+            if len(ctx_items) > 1 else "context %d%% %s" % (
+                ctx_items[0][1], _alert_name(ctx_items[0][0]))
         buckets.append((ctx_text, "lvl_r" if worst >= 90 else "lvl_y"))
     mem_bucket = _mem_alert_bucket(memory)   # F-19 — last in priority (dead > stale > ctx > mem)
     if mem_bucket:
@@ -2966,6 +3208,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 job, depth=max(1, int(getattr(job, "depth", 1) or 1)), term_width=term_width)
             if detail:
                 lines.extend(detail)
+            stage_rows = _projection_stage_detail_rows(
+                job, depth=max(1, int(getattr(job, "depth", 1) or 1)), term_width=term_width)
+            if stage_rows:
+                lines.extend(stage_rows)
             # F-29 — the child session's own sub-agents, one strip directly under the
             # dispatch row that represents it (depth-indented; active always, completed
             # only with `a` — the same convention as session-owned strips above).
@@ -3030,6 +3276,16 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             detail = _context_detail_row(s, term_width=term_width)
             if detail:
                 lines.extend(detail)
+            session_route = getattr(getattr(s, "work_projection", None), "route_id", None)
+            dispatch_owner_routes = {
+                getattr(getattr(child, "work_projection", None), "route_id", None)
+                for child in display_jobs
+                if max(1, int(getattr(child, "depth", 1) or 1)) == 1
+            }
+            stage_rows = ([] if session_route and session_route in dispatch_owner_routes else
+                          _projection_stage_detail_rows(s, term_width=term_width))
+            if stage_rows:
+                lines.extend(stage_rows)
             # F-29 (v9) — sub-agent rows, directly under the parent session's own row(s).
             # Active always shown; completed only surface with `a` (F-18b dim-row convention).
             shown_subs = [sa for sa in (getattr(s, "subagents", None) or [])

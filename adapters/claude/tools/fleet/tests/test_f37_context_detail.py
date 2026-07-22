@@ -1,6 +1,8 @@
 """Focused F-37 context/NOW subordinate-row and child-association checks."""
 import os
+import re
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -12,6 +14,7 @@ from fleet.model import ContextEvidence, ContextProjection, Session, DispatchJob
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures", "route")
 REAL = os.path.join(FIXTURES, "real_claude_staged.json")
+COMPOSED = os.path.join(FIXTURES, "synth_composed_survey.json")
 
 
 def text(lines):
@@ -26,10 +29,15 @@ class ContextDetailTruthTableTest(unittest.TestCase):
 
     def test_context_now_truth_table(self):
         cases = [
-            (ContextProjection(63, "normal", "claude"), "Doing work", "ctx 63% normal · Doing work"),
-            (ContextProjection(63, "normal", "claude"), None, "ctx 63% normal"),
-            (ContextProjection(None, "unknown", "claude"), "Doing work", "ctx — · Doing work"),
-            (None, None, "ctx —"),
+            (ContextProjection(63, "normal", "claude"), "Doing work",
+             "context ━━━━━─── 63% normal · Doing work"),
+            (ContextProjection(63, "normal", "claude"), None,
+             "context ━━━━━─── 63% normal"),
+            (ContextProjection(None, "unknown", "claude"), "Doing work",
+             "context ──────── — · Doing work"),
+            (None, None, "context ──────── —"),
+            (ContextProjection(0, "normal", "claude"), None,
+             "context ──────── 0% normal"),
         ]
         for context, now, expected in cases:
             row = render._context_detail_row(self._session(context=context, summary=now), term_width=168)
@@ -42,12 +50,31 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                               summary="cached now"), term_width=168)
             self.assertEqual(row, [])
 
+    def test_malformed_legacy_percentage_is_unavailable_not_clamped(self):
+        for malformed in (-1, 101, True, "63"):
+            with self.subTest(malformed=malformed):
+                row = render._context_detail_row(
+                    self._session(ctx_pct=malformed), term_width=168)
+                self.assertEqual(text(row), render._SUBAGENT_IND +
+                                 "context ──────── —")
+
+    def test_context_alert_uses_the_full_visible_label(self):
+        session = self._session(slug="hot", ctx_pct=85)
+        visible = text(render._build_lines([session], [], "fleet", False, 0,
+                                           layout="wide", term_width=168))
+        self.assertIn("⚠ context 85% hot", visible)
+        self.assertNotIn("⚠ ctx ", visible)
+
     def test_context_row_is_cell_safe_at_all_required_widths(self):
+        expected_track_width = {168: 8, 120: 8, 100: 6, 60: 4}
         for width in (168, 120, 100, 60):
             row = render._context_detail_row(
                 self._session(context=ContextProjection(63, "normal", "x"),
                               summary="한글 상태 설명이 아주 길게 이어지는 중"), term_width=width)
             self.assertLessEqual(render._dw(text(row)), width)
+            track = re.search(r"[━─]+", text(row)).group(0)
+            self.assertEqual(len(track), expected_track_width[width])
+            self.assertIn("context ", text(row))
 
     def test_main_session_projection_stage_and_progress_is_visible_at_all_widths(self):
         rid = route.load(REAL)["route_id"]
@@ -65,6 +92,91 @@ class ContextDetailTruthTableTest(unittest.TestCase):
             visible = "\n".join("".join(part for part, _ in line) for line in lines if line)
             self.assertIn("stage execute", visible)
             self.assertIn("0/4", visible)
+            for node_id in ("plan", "execute", "test", "report"):
+                self.assertEqual(len(re.findall(r"\b%s [✓●○✕]" % re.escape(node_id), visible)), 1)
+            self.assertIn("execute ● ←{plan}", visible)
+            self.assertIn("test ○ ←{execute}", visible)
+            self.assertIn("report ○ ←{test}", visible)
+
+    def test_inline_main_session_uses_artifact_stage_without_dispatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plan = os.path.join(tmp, "plans", "2026-07-22_inline-main")
+            os.makedirs(plan)
+            with open(os.path.join(plan, "execute.md"), "w", encoding="utf-8") as stream:
+                stream.write("inline implementation evidence\n")
+            session = Session(harness="codex", pid=205, proc_start="inline", cwd=tmp,
+                              session_id="sid-inline", slug="inline-main",
+                              liveness="working")
+            projection.attach_projections([session], [], artifact_root=tmp, now=100.0)
+            self.assertEqual(session.work_projection.source, "artifact-inferred")
+            self.assertEqual(session.work_projection.stage_label, "exec")
+            for width in (168, 120, 100, 60):
+                lines = render._build_lines([session], [], "fleet", width < 70, 0,
+                                            layout=render._layout_mode(width),
+                                            term_width=width)
+                visible = text(lines)
+                with self.subTest(width=width):
+                    self.assertIn("context ", visible)
+                    for primary in ("plan ✓", "exec ●", "test ○", "report ○"):
+                        self.assertEqual(visible.count(primary), 1)
+                    self.assertIn("exec ● ←{plan}", visible)
+                    stage_rows = render._projection_stage_detail_rows(
+                        session, term_width=width)
+                    self.assertTrue(all(render._dw(text([line])) <= width
+                                        for line in stage_rows))
+
+    def test_composed_pipeline_keeps_parallel_and_fanin_at_all_widths(self):
+        rid = route.load(COMPOSED)["route_id"]
+        owner = Session(harness="claude", pid=210, proc_start="root", cwd="/root",
+                        session_id="sid-composed", slug="root", liveness="working")
+        jobs = [
+            DispatchJob(key="claim", slug="claim-b", parent_sid="sid-composed", depth=2,
+                        route_id=rid, route_file=COMPOSED, route_node="claim-b",
+                        liveness="working"),
+            DispatchJob(key="claim", slug="claim-a", parent_sid="sid-composed", depth=2,
+                        route_id=rid, route_file=COMPOSED, route_node="claim-a",
+                        liveness="working"),
+        ]
+        projection.attach_projections([owner], jobs, now=100.0)
+        view = owner.work_projection._route_view["view"]
+        for width in (168, 120, 100, 60):
+            stage_rows = render._stage_detail_rows(view["nodes"], term_width=width)
+            rendered = text(stage_rows)
+            with self.subTest(width=width):
+                self.assertTrue(all(render._dw(text([row])) <= width for row in stage_rows))
+                for node_id in ("survey", "claim-a", "claim-b", "synth"):
+                    self.assertEqual(
+                        len(re.findall(r"\b%s [✓●○✕]" % re.escape(node_id), rendered)), 1)
+                self.assertIn("claim-a ● ←{survey}", rendered)
+                self.assertIn("claim-b ● ←{survey}", rendered)
+                self.assertIn("synth ○ ←{claim-a,claim-b}", rendered)
+                self.assertIn("| claim-b", rendered)
+
+    def test_arbitrary_dag_keeps_multiple_roots_partial_join_and_exact_edges(self):
+        nodes = [
+            {"id": "root-a", "state": "done", "level": 0, "depends_on": []},
+            {"id": "root-b", "state": "done", "level": 0, "depends_on": []},
+            {"id": "a1", "state": "active", "level": 1, "depends_on": ["root-a"]},
+            {"id": "a2", "state": "pending", "level": 2, "depends_on": ["a1"]},
+            {"id": "partial", "state": "pending", "level": 2,
+             "depends_on": ["a1", "root-b"]},
+            {"id": "final", "state": "pending", "level": 3,
+             "depends_on": ["a2", "partial"]},
+        ]
+        for width in (168, 120, 100, 60):
+            rows = render._stage_detail_rows(nodes, term_width=width)
+            rendered = text(rows)
+            with self.subTest(width=width):
+                self.assertTrue(all(render._dw(text([row])) <= width for row in rows))
+                for node in nodes:
+                    primary = r"\b%s [✓●○✕]" % re.escape(node["id"])
+                    self.assertEqual(len(re.findall(primary, rendered)), 1)
+                for relation in ("a1 ● ←{root-a}", "a2 ○ ←{a1}",
+                                 "partial ○ ←{a1,root-b}",
+                                 "final ○ ←{a2,partial}"):
+                    self.assertIn(relation, rendered)
+                self.assertIn("| root-b", rendered)
+                self.assertIn("| partial", rendered)
 
 
 class ChildAssociationTest(unittest.TestCase):
@@ -124,8 +236,8 @@ class ChildAssociationTest(unittest.TestCase):
         finally:
             render.set_process_view(False)
         visible = "\n".join("".join(part for part, _ in line) for line in lines if line)
-        self.assertLess(visible.index("└▸🚀"), visible.index("ctx 50%"))
-        self.assertLess(visible.index("ctx 50%"), visible.index("⚡tool"))
+        self.assertLess(visible.index("└▸🚀"), visible.index("context "))
+        self.assertLess(visible.index("context "), visible.index("⚡tool"))
 
 
 if __name__ == "__main__":

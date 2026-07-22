@@ -120,9 +120,10 @@ class SummaryRowRenderTest(unittest.TestCase):
         text_seg = next((t, k) for t, k in hits[0] if summary in t)
         self.assertEqual(text_seg[1], "dim")
 
-    def test_summary_absent_still_renders_one_ctx_dash_row(self):
+    def test_summary_absent_still_renders_one_context_dash_row(self):
         # v16 (F-37): the context-first detail row is mandatory on every live identity card —
-        # a summary-less/context-less session renders `ctx —` rather than omitting the row
+        # a summary-less/context-less session renders an empty gauge plus `—` rather than
+        # omitting the row
         # (plan Step 3.3.2's "neither" case), so row COUNT is unchanged either way; only the
         # row's own TEXT differs.
         with_summary = self._session(pid=1, summary="지금 무언가 하는 중")
@@ -132,7 +133,7 @@ class SummaryRowRenderTest(unittest.TestCase):
         self.assertEqual(len(lines_with), len(lines_without))
         joined_without = "\n".join("".join(t for t, _k in ln) for ln in lines_without if ln)
         self.assertNotIn("지금 무언가 하는 중", joined_without)
-        self.assertIn("ctx —", joined_without)
+        self.assertIn("context ──────── —", joined_without)
 
     def test_dead_row_omits_summary(self):
         s = self._session(liveness="dead", mtime=None, summary="지금 뭔가 하는 중")
