@@ -6,7 +6,7 @@ phases:
   spec: done               # v3 PRD 확정 (D-1~7 lock — DB화·저장소분리·통합강화)
   scaffolding: pending
   dev: in_progress         # v20 D-43 complete; unrelated historical clusters remain tracked
-last_updated: 2026-07-20  # v20: on-call incident-to-proposal bridge. snapshot v19
+last_updated: 2026-07-22  # v21: audit-driven engine hardening (Cluster N). snapshot v20
 inputs:
   - .agent_reports/research/hermes-agent/
   - VISION.md
@@ -39,3 +39,4 @@ decisions_locked:
   - D-41: Cluster L(v18) — automatic distill global cost boundary: atomic concurrency slots(default 2/max 4), rolling 10-minute starts(default 4/max 8), .distill-disable, stale recovery, adapter/runtime hash parity
   - D-42: v19 — automatic model-backed lifecycle belongs only to the interactive main session; dispatch/title/distill/loop/native-subagent workers fail closed against injection, counters, sync, curation, and recursive model starts
   - D-43: v20 — on-call may promote full-read, live-corroborated memory leads into the offline proposal inbox using exact incident keys; recurrence is bounded and state-preserving, and named collectors stop at proposed without crossing human decisions
+  - D-44~D-48: Cluster N(v21) — 빈-스토어 생성 가드(파생 경로 fail-loud, MEM_STORE/MEM_INIT만 신규 생성)·cwd_origin canonical 불변식+v6 remap(102건, absorb 근본수정)·CJK bigram shadow FTS(한국어 순위 회수)·dump 미러 plain-commit+실패 경고+mem maintenance(squash/gc, 운영자 전용)·pending drain(doctor 나이순+--drain-pending, D5/D-35 보존, 자동 삭제 경로 없음)

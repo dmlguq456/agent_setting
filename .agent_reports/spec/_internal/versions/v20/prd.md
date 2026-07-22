@@ -12,7 +12,6 @@
 > · **v18 2026-07-14** (Cluster L — background-model storm containment: atomic global slots, rolling start budget, kill switch, adapter/runtime projection parity)
 > · **v19 2026-07-15** (D-42 — main-session-only model lifecycle and explicit worker bootstrap boundary)
 > · **v20 2026-07-20** (D-43 — on-call incident-to-proposal bridge with live corroboration, exact-key recurrence, and human-state ceiling)
-> · **v21 2026-07-22** (Cluster N — 감사-주도 엔진 하드닝: 빈-스토어 생성 가드·cwd_origin v6 remap·CJK bigram 회수·plain-commit 미러+`mem maintenance`·pending drain. 근거=`plans/2026-07-22_memory-system-audit/`)
 > 본 문서는 청사진(PRD). 구현은 autopilot-code (산출물 `plans/`).
 > **방향(사용자 확정 2026-06-15)**: "대공사 OK, 보수적 현상유지 X, 제대로·깔끔·근본부터." Hermes 메모리 적극 결합 + 중복 cut + DB-SoT.
 
@@ -347,57 +346,6 @@ mem_write / mem_recall / mem_index_rebuild / mem_inject / mem_sync / mem_export(
 
 ## [cli] `mem` 명령
 v3 명령 + **v5 신규 `mem profile <aspect>`** (DB type=profile 레코드의 body를 결정론적으로 출력 — sub-agent·CLAUDE.md 트리거의 user_profile 파일 Read 대체). **v14 신규 `mem show <id>`, `mem recall --full [--limit N]`, `mem consume <id>`, `mem restore <id>`**. **v17 retires `mem recall --auto`** because recall relevance is an agent judgment (D-40). **v15 신규 `mem log [--limit/--action/--tier/--actor/--json]`, `mem doctor`** (§5.12). `export --target profile`은 on-demand 사람 열람 캐시용으로만(SoT 아님, sync/analyze-user 자동 wiring 불필요 — 파일 없음). `register-postit`·`.postit-roots`는 **폐기**(post-it.md 파일 제거). B2 turn-counter는 hook+state.
-
-## 5.16 Cluster N — Audit-driven engine hardening (v21, 2026-07-22)
-
-> 계기: 2026-07-22 메모리 체계 전수 감사(사용자 지시 "매우 강하게"). 4-stream 병렬 감사가
-> 신뢰성 실측·아키텍처·화석 스윕·OSS 지형을 판정, 사용자 3답(값 확정·remap 승인·추천안
-> 일괄)으로 실행. 전 항목 구현·병합 완료 상태의 사후 spec-sync. 산출물:
-> `plans/2026-07-22_memory-system-audit/`(감사·verdict), `plans/2026-07-22_pending-drain/`(구현 사이클).
-
-### 5.16.1 D-44 — 빈-스토어 생성 가드 (파생 경로 fail-loud)
-- 파생(AGENT_HOME/기본) 해석에서 `memory.db` 부재 시 조용한 빈 DB 생성을 거부하고 해석된
-  STORE/DB 경로를 stderr로 출력한다. 명시적 `MEM_STORE`(테스트·격리 환경)와 `MEM_INIT=1`
-  (진짜 첫 설치)만 신규 생성을 허용한다.
-- 폐쇄한 위험: worktree/drill식 export가 빈 스토어를 만들어 "지식이 존재하지 않는다"는
-  거짓 확신을 주던 최고위험 미커버 경로(감사 P2, relocation 선행조건). 회귀:
-  `empty-store-guard.test.sh` 4케이스.
-
-### 5.16.2 D-45 — cwd_origin 정규화 불변식 + v6 remap
-- absorb/이관 경로는 항상 canonical `project_key` 형태의 `cwd_origin`을 기록한다(legacy
-  경로-망글 키 재생산 금지). 스키마 v6 일회성 remap: 비모호 키 102건 정규화(주소 오류 24
-  + `claude_setting` 계보 65 + 13), 홈-디렉터리 등 비모호화 불가 90건은 근거와 함께 잔류.
-- 효과: 7/15–21 고가치 사용자 교정 기억 24건이 기본 recall에 재가시화(split-brain 해소).
-  UPDATE-only(삭제 없음)·idempotent·`pre-remap-v6.bak` 백업. D-22(project_key robust)의
-  절단면을 흡수 경로까지 확장.
-
-### 5.16.3 D-46 — 한국어 회수: CJK bigram shadow FTS
-- SQLite 3.31(trigram 부재) 제약 하에서 한글/CJK 연속열을 겹침 bigram으로 색인·질의하는
-  shadow FTS(`records_cjk`)를 도입 — 한국어 부분문자열이 무순위 LIKE 폴백 대신 bm25
-  순위로 회수된다. 영어/토큰 경로 무변경, 1379/1379 parity, 최초 open 시 self-healing
-  backfill. `MEM_NO_TRIGRAM` 비활성 후크 유지.
-- 검증: retrieval-eval 하네스(TIER2 한국어 프로브 상시화) + `mem_repairs_v15` 스위트.
-
-### 5.16.4 D-47 — dump 미러 내구성: plain commit + `mem maintenance`
-- `_commit_dump`는 amend-rolling을 폐기하고 plain commit을 쓴다. git 실패는 삼키지 않고
-  stderr 1줄 경고(rc+tail)로 보고한다(비치명 유지). 신설 `mem maintenance [--squash-days N]
-  [--apply]`: N일 이전 first-parent 이력 squash + reflog expire + gc — 운영자 실행 전용,
-  dry-run 기본, push 안 함.
-- 계기(사건 기록): 7/14 고아 `index.lock`(0바이트)이 모든 dump commit을 rc=128로 죽이고
-  실패가 침묵 흡수되어 **재해복구 미러가 8일간 사망** — 복구 과정에서 원격 전용 169건 중
-  168건은 deleted-records로 정당 삭제 확인, 진짜 유실 1건(onedrive 피드백)은 정식 경로로
-  복원. amend 루프의 고아 blob 축적(406MB)은 squash+gc로 5.1MB로 정리. D1(dump=재해복구
-  미러) 계약의 실질 복원.
-
-### 5.16.5 D-48 — pending 배수(drain) 정책 (Cluster I 연장)
-- `mem doctor`: 정체 pending을 나이순(oldest-first)으로 노출(기존 `[WARN] stale-pending:`
-  prefix·exit 계약 보존). `mem maintenance --drain-pending [--pending-stale-days N]`:
-  consumed 레코드만 graveyard 백업 후 정리(--apply), N일 초과 정체 pending은 **보고 전용**
-  폐기 후보. dry-run 기본.
-- 불변식: D5(gc만 사람 게이트)·D-35(파괴 경로 fail-closed) 보존 — pending 자동 삭제 경로는
-  어떤 형태로도 존재하지 않는다(회귀로 봉인). CLI 표면 추가는 [cli] 모드 계약에 포함.
-- 구현 provenance: 신규 unit 파이프라인 정식 사이클(autopilot-code standard,
-  `rt-04b88e3110f2c2f0`, 6노드 marker 완주)로 구현 — dogfood 겸 인도.
 
 ## 데이터 모델
 기존 records v4 15컬럼에 v14 `delivery_state`를 추가한 schema v5. `records_fts` FTS5 + trigram 보조 + `idx_records_scope`; `dump.jsonl` 결정론적 export/import는 delivery_state를 round-trip하고 구 dump는 heuristic backfill한다. profile = type=profile 레코드(body=aspect 전문), source=`user-profile:<stem>` (A2 파일명 도출 근거).

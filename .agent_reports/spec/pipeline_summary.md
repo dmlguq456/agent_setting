@@ -146,3 +146,13 @@ Claude Code와 Codex의 동시 진단을 교차검증해 “저장은 되지만 
 - Agent-authored exact incident key recurrence는 lock 안에서 bounded evidence/history를 append하고 기존 state, human decision, base context를 보존한다.
 - Named collector는 current-context-bound `reproduced`와 `proposed`까지만 가능하며 prior human-review boundary를 넘지 못한다. On-call worker는 memory lifecycle, source/runtime mutation, activation, nested model session을 수행하지 않는다.
 - 현행 7/15 worklog approvals contract를 보존해 promoted incident 한 건을 proposal ID가 포함된 `## ` finding block 한 건으로 보고한다.
+
+
+### v20 → v21 (2026-07-22, update mode — 감사-주도 엔진 하드닝, snapshot `_internal/versions/v20/`)
+- **계기**: 메모리 체계 전수 감사(4-stream 병렬) — "602MB DB"는 신화(실 DB 3.6MB, 406MB=amend 고아 blob), dump 미러 7/14부터 침묵 사망, worktree 빈-스토어 함정, 한국어 회수 저하, cwd split-brain(고가치 24건 불가시)을 실측. 사용자 3답으로 실행 승인.
+- **D-44** 빈-스토어 생성 가드: 파생 경로 fail-loud, 테스트/첫 설치만 명시 허용.
+- **D-45** cwd_origin canonical 불변식 + v6 remap 102건(absorb 경로 근본수정 동시) — 24건 recall 재가시화, 유실 1건 원격 dump에서 복원.
+- **D-46** CJK bigram shadow FTS — SQLite 3.31에서 한국어 bm25 순위 회수, 영어 경로 무변경.
+- **D-47** dump 미러 plain-commit + 실패 1줄 경고 + `mem maintenance`(squash/gc) — D1 재해복구 계약 복원, .git 406MB→5.1MB.
+- **D-48** pending drain(Cluster I 연장) — doctor 나이순 노출 + `--drain-pending`(dry-run 기본, graveyard 백업, 보고-전용 폐기 후보), D5/D-35 보존. 신규 unit 파이프라인 사이클(rt-04b88e3110f2c2f0)로 구현.
+- 전 변경 main 병합·push 완료 상태의 **사후 spec-sync**(autopilot-spec update, route rt-c602b4c2e1a88c56).
