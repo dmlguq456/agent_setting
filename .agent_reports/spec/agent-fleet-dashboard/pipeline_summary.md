@@ -234,9 +234,10 @@
 - 2026-07-19 (v11 minor #2): **tracked/untracked 게이트 배지 퇴역** — 하네스 전역 tracked/untracked 모드 폐기(사용자 결정 "굳이 의미가 있나"→"없애는 방향이 맞다"; 근거 = 실사용 0·정보량 0·상시 tracked 라벨의 healthy-silent 위반, 유일 기계 효과였던 생성순서 게이트는 성숙 프로젝트에서 구조적 불발)에 따라 그룹 헤더 게이트 배지·세션 행 게이트 태그·wide 태그 공간 예약을 표시 계약에서 제거, 대체 표식 없음. route-record `tracked_gate_evidence` 스키마·spec-read 게이트는 불변. 구현 = plans/2026-07-19_tracked-retirement standard 사이클(worker `452690ff`+harvest fix, 152+8 files, main merge `84dcdf34`), fleet 664 tests·portable-guards 355/355·라이브 스모크 게이트 워드 0건.
 - 2026-07-20 (v11 minor #3): **제목 생성 시작 예산 10→16 상향** — TUI 재시작 직후 일괄 refresh burst가 창당 상한(10/600s)에 걸려 신규 세션 제목이 지연되는 배압을 사용자 지시로 해소("16까지 상향"). `DEFAULT_START_LIMIT=16`(=MAX, env `FLEET_TITLE_MAX_STARTS` 상한 불변), 동시 2·600s 창·디바운스 불변.
 
-## v17 hotfix (2026-07-23) — 부제 우선, context 오른편 배치
+## v17 hotfix (2026-07-23) — context 선두 + 콜론 구분
 
-- detail row를 `context … · NOW`에서 `NOW · context <gauge> …` 순서로 바꿨다.
-- NOW가 없으면 context-only 행을 유지하고, context 값이 없으면 빈 gauge와
-  `—`를 유지한다. stage/DAG·telemetry·worker 계약은 변경하지 않는다.
-- 이전 current v16은 `_internal/versions/v16-context-first/prd.md`에 보존했다.
+- detail row를 `context <gauge> <value>: NOW` 순서로 고정했다.
+- `normal|tight|critical` band 이름은 숨기되 기존 telemetry와 색상 판정은 유지한다.
+- NOW가 없으면 콜론 없는 context-only 행을 유지하고, context 값이 없으면
+  빈 gauge와 `—`를 유지한다. stage/DAG·worker 계약은 변경하지 않는다.
+- 이전 v16과 v17 배치는 각각 `v16-context-first`, `v17-subtitle-first`에 보존했다.

@@ -30,14 +30,14 @@ class ContextDetailTruthTableTest(unittest.TestCase):
     def test_context_now_truth_table(self):
         cases = [
             (ContextProjection(63, "normal", "claude"), "Doing work",
-             "Doing work · context ━━━━━─── 63% normal"),
+             "context ━━━━━─── 63%: Doing work"),
             (ContextProjection(63, "normal", "claude"), None,
-             "context ━━━━━─── 63% normal"),
+             "context ━━━━━─── 63%"),
             (ContextProjection(None, "unknown", "claude"), "Doing work",
-             "Doing work · context ──────── —"),
+             "context ──────── —: Doing work"),
             (None, None, "context ──────── —"),
             (ContextProjection(0, "normal", "claude"), None,
-             "context ──────── 0% normal"),
+             "context ──────── 0%"),
         ]
         for context, now, expected in cases:
             row = render._context_detail_row(self._session(context=context, summary=now), term_width=168)
@@ -75,7 +75,18 @@ class ContextDetailTruthTableTest(unittest.TestCase):
             track = re.search(r"[━─]+", text(row)).group(0)
             self.assertEqual(len(track), expected_track_width[width])
             self.assertIn("context ", text(row))
-            self.assertLess(text(row).index("한글"), text(row).index("context "))
+            self.assertLess(text(row).index("context "), text(row).index("한글"))
+            self.assertIn(": ", text(row))
+
+    def test_context_band_is_not_rendered(self):
+        for band in ("normal", "tight", "critical"):
+            with self.subTest(band=band):
+                row = render._context_detail_row(
+                    self._session(context=ContextProjection(85, band, "x"),
+                                  summary="Doing work"), term_width=168)
+                visible = text(row)
+                self.assertNotIn(band, visible)
+                self.assertIn("85%: Doing work", visible)
 
     def test_main_session_projection_stage_and_progress_is_visible_at_all_widths(self):
         rid = route.load(REAL)["route_id"]

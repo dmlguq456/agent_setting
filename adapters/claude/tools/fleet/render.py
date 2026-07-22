@@ -1971,12 +1971,11 @@ def _compact_context_gauge_width(available):
 
 
 def _context_detail_row(entity, depth=0, term_width=None):
-    """One ``NOW · context <gauge> <value> [band]`` row for every live card."""
+    """One ``context <gauge> <value>: NOW`` row for every live card."""
     if getattr(entity, "liveness", None) in ("stale", "dead"):
         return []
     context = getattr(entity, "context", None)
     pct = getattr(context, "used_pct", None) if context is not None else getattr(entity, "ctx_pct", None)
-    band = getattr(context, "band", "unknown") if context is not None else "unknown"
     now_text = getattr(entity, "summary", None)
     indent = _SUBAGENT_IND + "  " * max(0, depth)
     available = max(0, (term_width or _SUMMARY_FALLBACK_W) - _dw(indent))
@@ -1986,23 +1985,19 @@ def _context_detail_row(entity, depth=0, term_width=None):
         shown_pct = int(round(pct))
     else:
         shown_pct = None
-    context_segs = [("context ", "dim")]
-    context_segs.extend(_gauge_segs(shown_pct, gauge_width))
+    segs = [(indent, None), ("context ", "dim")]
+    segs.extend(_gauge_segs(shown_pct, gauge_width))
     if shown_pct is None:
-        context_segs.append((" —", "dim"))
+        segs.append((" —", "dim"))
     else:
-        context_segs.append((" %d%%" % shown_pct, _pct_key(shown_pct)))
-        if band and band != "unknown":
-            context_segs.append((" " + str(band), "dim"))
-    segs = [(indent, None)]
+        segs.append((" %d%%" % shown_pct, _pct_key(shown_pct)))
     if now_text:
-        # The subtitle leads visually, while context keeps a reserved right-side slot.
-        context_width = sum(_dw(text) for text, _key in context_segs)
-        now_room = max(0, available - context_width - 3)
+        # Context remains the stable lead; only the subtitle clips after the colon.
+        fixed = sum(_dw(text) for text, _key in segs) - _dw(indent) + 2
+        now_room = max(0, available - fixed)
         now_text = _clip_w(str(now_text), now_room) if now_room else ""
         if now_text:
-            segs.extend([(now_text, "dim"), (" · ", "dim")])
-    segs.extend(context_segs)
+            segs.extend([(": ", "dim"), (now_text, "dim")])
     return [segs]
 
 
