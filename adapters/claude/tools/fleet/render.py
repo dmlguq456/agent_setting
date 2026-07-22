@@ -1990,7 +1990,7 @@ def _context_detail_row(entity, depth=0, term_width=None):
     if shown_pct is None:
         segs.append((" —", "dim"))
     else:
-        segs.append((" %d%%" % shown_pct, _pct_key(shown_pct)))
+        segs.append((" %d%%" % shown_pct, "dim"))
     if now_text:
         # Context remains the stable lead; only the subtitle clips after the colon.
         fixed = sum(_dw(text) for text, _key in segs) - _dw(indent) + 2

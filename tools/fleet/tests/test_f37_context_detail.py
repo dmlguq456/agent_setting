@@ -88,6 +88,13 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                 self.assertNotIn(band, visible)
                 self.assertIn("85%: Doing work", visible)
 
+    def test_percentage_is_dim_while_gauge_keeps_level_color(self):
+        row = render._context_detail_row(
+            self._session(context=ContextProjection(85, "critical", "x")),
+            term_width=168)[0]
+        self.assertEqual([key for value, key in row if value == " 85%"], ["dim"])
+        self.assertIn("lvl_r", [key for value, key in row if "━" in value])
+
     def test_main_session_projection_stage_and_progress_is_visible_at_all_widths(self):
         rid = route.load(REAL)["route_id"]
         session = Session(harness="claude", pid=200, proc_start="root", cwd="/root",

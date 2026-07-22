@@ -237,7 +237,9 @@
 ## v17 hotfix (2026-07-23) — context 선두 + 콜론 구분
 
 - detail row를 `context <gauge> <value>: NOW` 순서로 고정했다.
-- `normal|tight|critical` band 이름은 숨기되 기존 telemetry와 색상 판정은 유지한다.
+- `normal|tight|critical` band 이름은 숨기고 퍼센트 숫자는 dim으로 낮추되,
+  기존 telemetry와 gauge threshold 색상은 유지한다.
 - NOW가 없으면 콜론 없는 context-only 행을 유지하고, context 값이 없으면
   빈 gauge와 `—`를 유지한다. stage/DAG·worker 계약은 변경하지 않는다.
-- 이전 v16과 v17 배치는 각각 `v16-context-first`, `v17-subtitle-first`에 보존했다.
+- 이전 단계는 `v16-context-first`, `v17-subtitle-first`,
+  `v17-colored-percentage`에 보존했다.

@@ -2,7 +2,7 @@
 
 > mode: **cli** (터미널 TUI 도구) · 작성 2026-07-01 · **v2 2026-07-10** (drift 흡수 + stage-dispatch 관제 parity + UI 가독성 개선) · **v3 2026-07-12** (minor 5건[F-14~F-19] 흡수 승격 — §4.7 분리 신설 + audit 🟡 3건 반영: §3 `--demo` 등재·§9 모듈 트리 현행화. 근거 = `_internal/audit/audit_2026-07-12T0910.md`) · **v4 2026-07-13** (F-20 dynamic Codex rate-window contract) · **v5 2026-07-13** (F-21 Codex native title + cross-harness fleet title provider. Claude-only refresher 계약 폐기) · **v6 2026-07-14** (F-22 responsive titles + F-23 recursive-storm containment) · **v7 2026-07-15** (F-24 portable worker attribution + unique Codex rollout ownership) · **v8 2026-07-15** (F-25~F-28 — 상태 판정 단일 모델·interactive 세션 레지스트리 1급·제한적 세션 제어[Non-goal 반전]·분사 정책 연동 계약. 근거 = 사용자 결정 4건: "fleet 직접 세션 제어"·"반쪽짜리 해소, 전향적 확장"·"버그가 아니라 판정 기준 자체가 불안정"·"분사 정책과 연동되는 가장 중요한 UI") · **v9 2026-07-15** (minor 6건 흡수 + audit 🟡 2건 해소[어휘 매핑 표·§10 다이어그램] + F-27 마우스 1급 재설계 + F-30 종착 비전 등재 "dispatch·서브에이전트 처리 과정 시각화". 근거 = `_internal/audit/audit_2026-07-15T1734.md` + 사용자 방향 2건) · **v10 2026-07-15** (F-28 구현 확정 + F-30 처리-과정 뷰 설계 확정 — 전제였던 stage-dispatch topology registry·route record·broker가 v11 구현으로 main 착륙[`f5f3949f`], 실측 record 스키마 기반) · **v11 2026-07-17** (두-평면 실험 폐기 후 채택분 등재 — F-29 스트립·비동기 판정 개정 + F-19 레포별 카드 행 + F-17 분사 세션 요약 전면 적용 + §4.10 F-32~F-34[분사 제목 입양·harness(model·effort) 통합·표시 문법 정리]. 근거 = 사용자 결정 연쇄 2026-07-16 "전부 다 버리고, 메모리 쪽과 서브 에이전트 쪽만 기존의 fleet에" 외 다수. 구현 선행·등재 후행 — 사용자 명시 이연의 사후 소급, 코드 실측 기준)
 > · **v12 reliability minor 2026-07-20** (exact dispatch terminal evidence·namespace heartbeat expiry·Codex task lifecycle 우선·unmatched depth-2 canonical parity) · **v13 2026-07-21** (live TUI stable session/group order — refresh liveness·mtime 변화가 살아남은 행의 위치를 바꾸지 않음) · **v14 2026-07-22** (portable unit catalog·compositional route metadata·legacy worker_role 경계·runtime surface 구분) · **v15 2026-07-22** (F-19/F-35f — sync/migrate 신규 흡수의 `add`/literal `sync`·원천 논리 cwd·무변이 반복 0건·historical backfill 금지) · **v16 2026-07-22** (F-36~F-39 — interactive/dispatch 공통 work projection·composed DAG·ctx+NOW subordinate line·title worker 상향)
-> · **v17 hotfix 2026-07-23** (F-37을 `context <gauge> …: NOW`로 정리하고 band 문구 숨김·퍼센트 숫자 dim 처리; topology·telemetry 계약 불변)
+> · **v17 hotfix 2026-07-23** (F-37 표시를 `context <gauge> …: NOW`로 정리하고 band 문구 숨김; topology·telemetry 계약 불변)
 > 컴포넌트: `agent_setting` repo 의 **별도 내부 도구** — 기존 `spec/prd.md`(Unified Memory System)와 무관, 이 폴더(`spec/agent-fleet-dashboard/`)가 자체 청사진.
 > 입력(1순위 근거): `research/agent-fleet-dashboard/00_prior_art.md`(build-vs-adopt·herdr·렌더스택) · `research/agent-fleet-dashboard/01_tap_mechanics.md`(하네스별 tap·discovery·liveness, file-cited)
 > **v2 추가 입력**: `spec/stage-dispatch/prd.md`(SD-1~9 — 스테이지 단위 depth-2 headless 분사 계약, §9-13 fleet 표시 = Phase 2 잔여) · 현행 `tools/fleet/` 코드 전수 실측(2026-07-10 Explore, file:line-cited) · 사용자 관찰("워크플로우를 못 따라감 + UI 아쉬운 점 다수").
@@ -369,7 +369,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 - **F-36c (임의 composed DAG)**: commit `e8938809`의 compose-on-demand route는 기존 route schema v2·dispatch contract v3·sealed hash를 그대로 사용하고 arbitrary `nodes[].id`, `unit`, `depends_on`, `completion_gate`, `write_scope`를 제공한다. Fleet은 node ID를 opaque label로, `depends_on`을 유일한 순서/분기 근거로 취급하여 record 순서의 topological level·parallel branch·fan-in·모든 active sibling을 그린다. `plan/exec/test/report`나 3단 고정 stage 하드코딩은 route tuple이 완전히 부재한 legacy fallback에서만 허용하고, Fleet은 catalog를 재조립하거나 node 이름에서 capability/stage를 추론하지 않는다.
 - **F-36d (artifact fallback 경계)**: artifact 유도는 route tuple이 전혀 없고 exact plan-dir 후보가 하나일 때만 `source=artifact-inferred`로 `stage_label`만 채운다. `route_id`, `route_node`, progress, gate, node 완료를 절대 합성하지 않는다. 후보가 0개면 `source=none`, 2개 이상이면 `source=none`+`multiple-artifact-plan-dirs`로 남고, fuzzy "최선" 후보를 임의 선택하지 않는다.
 
-- **F-37a (정확히 한 개의 context detail row)**: wide 주 행의 확장 context gauge, narrow/stack inline context telemetry, wide-only NOW 행을 이 계약이 대체한다. live session/dispatch 정체성 카드 직후·sub-agent strip 전에 depth inset을 맞춘 subordinate line 하나를 wide/narrow/stack 모두에 표시한다. context block을 먼저 읽고 fresh NOW와 콜론으로 구분하는 `context <gauge> <NN%|—>[: <fresh NOW>]` 문법이다. `normal|tight|critical` band는 데이터와 gauge 색상 판정에는 남지만 문자열로 표시하지 않으며, 퍼센트 숫자 자체는 threshold 색을 쓰지 않고 dim으로 낮춘다. truth table:
+- **F-37a (정확히 한 개의 context detail row)**: wide 주 행의 확장 context gauge, narrow/stack inline context telemetry, wide-only NOW 행을 이 계약이 대체한다. live session/dispatch 정체성 카드 직후·sub-agent strip 전에 depth inset을 맞춘 subordinate line 하나를 wide/narrow/stack 모두에 표시한다. context block을 먼저 읽고 fresh NOW와 콜론으로 구분하는 `context <gauge> <NN%|—>[: <fresh NOW>]` 문법이다. `normal|tight|critical` band는 데이터·색상 판정에는 남지만 문자열로 표시하지 않는다. truth table:
   - live context+NOW → `context <gauge> 63%: <NOW>`;
   - live context, NOW 부재 → `context <gauge> 63%`(콜론 없음);
   - live context 부재, NOW 있음 → `context <empty-gauge> —: <NOW>`;
@@ -387,7 +387,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 
 | 표면 | 필수 픽스처·언단 |
 |---|---|
-| wide/narrow/stack 및 overflow | `wide@168`, `wide@120`, `narrow@100`, `stack@60`에서 identity → `context <gauge> …[: NOW]` → sub-agent strip 순서, band 문자열 부재, 퍼센트 숫자 dim, gauge threshold 색 유지, CJK-safe clip, 행 폭 `<= terminal width`; NOW 부재, context 부재, 둘 다 부재, stale, dead 픽스처를 각각 고정한다. |
+| wide/narrow/stack 및 overflow | `wide@168`, `wide@120`, `narrow@100`, `stack@60`에서 identity → `context <gauge> …[: NOW]` → sub-agent strip 순서, band 문자열 부재, CJK-safe clip, 행 폭 `<= terminal width`; NOW 부재, context 부재, 둘 다 부재, stale, dead 픽스처를 각각 고정한다. |
 | child 정체성 | `(pid,proc_start)` exact 조인이 title/NOW/context를 함께 복사하고 부모/자식 서로 다른 ctx가 상속 금지를 증명한다. PID reuse·중복 PID·cwd 2후보·cross-harness는 세 값 전체를 보류한다. |
 | projection parity | 같은 exact route/node evidence를 interactive `Session`과 registered `DispatchJob`으로 각각 입력해 normalized route/node/state/progress가 동일함을 증명하고, group/process/plain/JSON이 공통 projection만 소비함을 검사한다. |
 | exact-over-artifact | exact `route_node=research`와 artifact `test` 충돌 시 exact가 이긴다. explicit tuple 무효+그럴듯한 plan-dir은 unknown/ambiguity이지 artifact fallback이 아니다. |
@@ -584,7 +584,7 @@ flowchart TD
 
 - **F-36 lock**: interactive `Session`과 registered `DispatchJob`은 동일 additive `WorkProjection`을 소비한다. 검증된 route/node evidence > exact registry/env identity > 단일 cwd 후보 > route-부재 artifact stage 순서며, 충돌/복수 후보는 임의 최신 route를 고르지 않고 unknown/ambiguity로 남긴다.
 - **F-36 composed lock**: sealed route의 arbitrary `nodes[].id/unit/depends_on/completion_gate/write_scope`를 opaque DAG로 그린다. record에 대해 plan/exec/test/report 하드코딩을 사용하지 않고 parallel sibling/fan-in을 보존한다.
-- **F-37 lock (v17 hotfix)**: wide/narrow/stack의 primary identity row에서 context를 제거하고 subordinate line을 `context <gauge> …[: NOW]` 문법으로 통일한다. band 이름은 표시하지 않고 퍼센트 숫자는 dim으로 낮추되 gauge의 threshold 색은 유지한다. NOW 부재에는 context-only, context 부재에는 빈 gauge+`—`, dead/stale에는 row 전체 생략. child의 title/NOW/context는 하나의 ambiguity-refusing association으로만 공급하고 parent context를 상속하지 않는다.
+- **F-37 lock (v17 hotfix)**: wide/narrow/stack의 primary identity row에서 context를 제거하고 subordinate line을 `context <gauge> …[: NOW]` 문법으로 통일한다. band 이름은 표시하지 않고, NOW 부재에는 context-only, context 부재에는 빈 gauge+`—`, dead/stale에는 row 전체 생략. child의 title/NOW/context는 하나의 ambiguity-refusing association으로만 공급하고 parent context를 상속하지 않는다.
 - **F-38 lock**: context pressure는 관측/표시만 바꾸며 intensity, graph/depth, model/effort, QA/test/retry/gate/guard/definition of done와 직교한다.
 - **F-39 lock**: title/NOW worker는 default concurrency 3(max 4), rolling 4 starts/60s(max 4), main/child debounce 600/150s다. 공유 lease/kill switch/no-live-provider tests와 shell-free pluggable no-tools provider 경계를 유지하고 vendor를 hard-pin하지 않는다.
 
@@ -592,7 +592,7 @@ flowchart TD
 
 1. `projection.py`와 additive model/JSON을 추가하고, exact route/registry evidence → ambiguity refusal → route-부재 단일 artifact stage 순서의 `WorkProjection` resolver를 구현한다.
 2. sealed arbitrary DAG의 opaque node/unit/gate/scope, parallel sibling, fan-in을 group/process/plain/JSON에 공통 투영한다.
-3. wide/narrow/stack identity 아래 하나의 `context <gauge> …[: NOW]` row와 title/NOW/context 단일 child association을 구현하고, band 문자열은 숨기고 퍼센트 숫자는 dim으로 표시하며 현행 TITLE 3~6단어·최대 40자 및 F-39의 3/4 concurrency·4 starts/60s·600/150s 계약을 적용한다.
+3. wide/narrow/stack identity 아래 하나의 `context <gauge> …[: NOW]` row와 title/NOW/context 단일 child association을 구현하고, band 문자열은 숨기며 현행 TITLE 3~6단어·최대 40자 및 F-39의 3/4 concurrency·4 starts/60s·600/150s 계약을 적용한다.
 4. §4.12 acceptance matrix, canonical↔Claude mirror parity, public JSON compatibility를 hermetic fixture/fake clock으로 검증한다. default/custom live provider 호출과 실세션 spawn/signal은 금지한다.
 
 권장 진입: `/autopilot-code --mode dev --intensity strong "agent-fleet-dashboard PRD v16 F-36~F-39 구현 및 §4.12 검증"`. v6/v8/v9/v10 및 v2의 이전 구현 순서는 위 version history와 pipeline summary에 보존된 **완료·대체된 역사**이며 현재 실행 지시가 아니다.
