@@ -1,0 +1,25 @@
+{
+  "tuples": [
+    {
+      "parent_harness": "codex",
+      "parent_transport": "headless",
+      "parent_sandbox": "workspace-write",
+      "child_harness": "codex",
+      "launch_authority": "conductor",
+      "status": "supported",
+      "probe_source": "preflight-nested-headless:codex-owner-network-contract+direct-auth+headless-check",
+      "probe_time": "2026-07-22T12:57:33.101504Z",
+      "failure_class": ""
+    }
+  ],
+  "native_subagent": [
+    {
+      "harness": "codex",
+      "transport": "headless",
+      "execution_surface": "codex-native-subagent",
+      "registered_worker": false,
+      "status": "unsupported",
+      "check_source": "assignment-excludes-runtime-native-subagents"
+    }
+  ]
+}
