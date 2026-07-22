@@ -1276,6 +1276,15 @@ check_codex_utility_projection() {
   for f in utilities/*; do
     [ -f "$f" ] || continue
     bn=$(basename "$f")
+    # Test files are DERIVED-deferred: no *.test.* file has ever been (or may be)
+    # projected into an adapter utilities dir, so the projected/deferred census
+    # holds no real decision for them. Hand-listing each new test recreated the
+    # "new file → forgotten census row → CI red after push" class
+    # (2026-07-22 dispatch_parent_context_conformance.test.py incident).
+    # Non-test utilities still require an explicit census decision below.
+    case "$bn" in
+      *.test.py|*.test.sh) continue ;;
+    esac
     case " $UTILITY_PROJECTED $UTILITY_DEFERRED " in
       *" $bn "*) ;;
       *) fail_msg "no projection decision for utilities/$bn (must be classified projected or deferred)" ;;
@@ -2284,6 +2293,15 @@ check_opencode_utility_projection() {
   for f in utilities/*; do
     [ -f "$f" ] || continue
     bn=$(basename "$f")
+    # Test files are DERIVED-deferred: no *.test.* file has ever been (or may be)
+    # projected into an adapter utilities dir, so the projected/deferred census
+    # holds no real decision for them. Hand-listing each new test recreated the
+    # "new file → forgotten census row → CI red after push" class
+    # (2026-07-22 dispatch_parent_context_conformance.test.py incident).
+    # Non-test utilities still require an explicit census decision below.
+    case "$bn" in
+      *.test.py|*.test.sh) continue ;;
+    esac
     case " $UTILITY_PROJECTED $UTILITY_DEFERRED " in
       *" $bn "*) ;;
       *) fail_msg "no projection decision for utilities/$bn (must be classified projected or deferred)" ;;
