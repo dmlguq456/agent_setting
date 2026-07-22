@@ -60,6 +60,16 @@ python3 "$ROOT/tools/generate.py" >/dev/null
 python3 "$ROOT/tools/generate.py" --check >/dev/null
 python3 "$ROOT/tools/entry-skill-layer.test.py" >/dev/null
 
+# sync-missing-projections must cover the high-churn utilities domain, so a new
+# utility's missing Claude counterpart is caught by the standard generate.py
+# --check battery instead of by the boundary guard on CI after push. Remove the
+# probe before asserting so set -e cannot leak it.
+PROBE="$ROOT/utilities/_zz_projection_probe.py"
+printf '#!/usr/bin/env python3\n' > "$PROBE"
+cov_out=$(python3 "$ROOT/tools/sync-missing-projections.py" --check 2>&1 || true)
+rm -f "$PROBE" "$ROOT/adapters/claude/utilities/_zz_projection_probe.py"
+printf '%s' "$cov_out" | grep -q "adapters/claude/utilities/_zz_projection_probe.py"
+
 find "$ROOT/capabilities" "$ROOT/adapters/claude/skills" "$ROOT/adapters/claude/plugin-marketplace/plugins/agent-harness-claude" "$ROOT/adapters/codex/skills" "$ROOT/adapters/codex/agents" "$ROOT/adapters/codex/modes" "$ROOT/adapters/codex/plugins/agent-harness-codex" "$ROOT/adapters/opencode/skills" "$ROOT/adapters/opencode/commands" "$ROOT/adapters/opencode/agents" -type f -print | sort | xargs sha256sum > "$TMP/first.sha"
 sha256sum "$ROOT/tools/skill-conformance/invocation-policy.tsv" >> "$TMP/first.sha"
 python3 "$ROOT/tools/generate.py" >/dev/null
