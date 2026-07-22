@@ -570,6 +570,21 @@ def _run_migrations(con):
 
 def get_con():
     """Open the DB through the single schema-and-migration entry point."""
+    # Empty-store creation guard (2026-07-22 memory audit P2): when the store path was
+    # DERIVED (AGENT_HOME/default) and no memory.db exists there, refuse instead of
+    # silently fabricating an empty store — a worktree/mis-resolved AGENT_HOME would
+    # otherwise report "knowledge does not exist" with full confidence. Explicit
+    # MEM_STORE (tests, isolated envs) or MEM_INIT=1 (genuine first install) may create.
+    if (not DB.exists()) and "MEM_STORE" not in os.environ \
+            and os.environ.get("MEM_INIT") != "1":
+        sys.stderr.write(
+            "mem: refusing to create a NEW empty store at a derived path.\n"
+            f"  resolved STORE : {STORE}\n"
+            f"  resolved DB    : {DB} (missing)\n"
+            f"  AGENT_HOME     : {os.environ.get('AGENT_HOME', '(unset; default resolution)')}\n"
+            "  If this is a worktree/export, point AGENT_HOME at the primary checkout.\n"
+            "  For a genuine first install, set MEM_INIT=1 (or MEM_STORE).\n")
+        raise SystemExit(2)
     STORE.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(DB)
     con.execute("PRAGMA journal_mode=WAL")
