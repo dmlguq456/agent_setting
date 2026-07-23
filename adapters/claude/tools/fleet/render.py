@@ -483,8 +483,9 @@ def _wt_count(cwd):
 # stay aligned for comparison. Job flow never sits under branch/gate.
 _HW = 16                      # Bare harness-badge width — narrow/stack L1 badges and the
                               # dispatch-prefix budget math still use this unmerged value.
-_HMW = 32                     # F-33 (v11, 사용자 확정 2026-07-16): WIDE-layout harness field with
-                              # model/effort folded in as a parenthetical ('claude code (Fable 5
+_HMW = 33                     # F-33 (v19 spacing hotfix): WIDE-layout harness field with one
+                              # extra trailing cell before the session column. Model/effort stay
+                              # folded in as a parenthetical ('claude code (Fable 5
                               # · xhigh)') — replaces the separate model column (_MW) on the wide
                               # session/dispatch rows only; narrow/stack keep _HW plus their own
                               # L2 model cell, unchanged.
@@ -513,6 +514,8 @@ _OPTW = 18                    # F-15a options column width (dim mode·qa·profil
                               # between the model cell and the stage breadcrumb — declutters
                               # the name zone, which used to carry this as a parenthetical tag)
 _BRANCH_SUFFIX_W = 14         # Space reserved inside the session column for `` (branch)``.
+_WIDE_STAGE_GAP = 5           # One-cell wider boundary between session and stages (was 4).
+_WIDE_TIME_GAP = 1            # Extra owned spacer before the right-flushed time column.
 _MW = 23                      # model cell: name + FULL effort word ('Opus 4.8 xhigh' — no abbrev)
 _EFW = 7                      # effort subfield ("medium"=6 +1 gap) — FIXED width so every row's
                               # effort lands in the same column, under its own 'effort' header
@@ -584,7 +587,8 @@ def _wide_slack(term_width):
     # F-33 (v11): no more separate model column (_MW) — model/effort now ride inside
     # _NAME_COL's harness-model field (_HMW), so the column merge's freed width flows
     # straight into this reservation and out to the name/ctx-gauge slack below.
-    fixed_row = _NAME_COL + _BRANCH_SUFFIX_W + 4 + _CTX_W + 5 + _STAGE_RESERVE
+    fixed_row = (_NAME_COL + _BRANCH_SUFFIX_W + _WIDE_STAGE_GAP + _WIDE_TIME_GAP
+                 + _CTX_W + 5 + _STAGE_RESERVE)
     if _TINT_OK:
         framing = (_INSET + _PAD_IN) + _INSET + (2 + _PAD_IN) + 6 + 2
     else:
@@ -629,7 +633,7 @@ def _col_head(name_width):
     # content does too — no more separate "model" header between branch and the gauge.
     return ("    " + "harness (model·effort)".ljust(_HMW)
             + "session (branch)".ljust(name_width + _BRANCH_SUFFIX_W)
-            + "    context / stage")
+            + " " * _WIDE_STAGE_GAP + "stages" + " " * _WIDE_TIME_GAP)
 
 
 def _branch_suffix_segs(cwd, branch, dim=True, optional=False):
@@ -847,7 +851,7 @@ def _stage_segs(key, stage, working=False, max_width=None, route_seq=None):
         if stage == "running":
             return [("running", "stg0_off")]
         return [(stage, _cur_key(0))]
-    return [("—", "dim")]
+    return [("-", "dim")]
 
 
 def _dispatch_stage_segs(j, key, stage, slug_name, working=False, route_seq=None):
@@ -900,10 +904,10 @@ def _stage_zone_segs(bc):
     separates the breadcrumb from the options dial. The leading space is load-bearing: a
     dial that overflows _OPTW leaves no pad, and a flush colon would read as the dial's own
     label ('layer2: pre'). Skipped when the breadcrumb already opens with its own
-    'label: ' prefix (SD-F1 rows) — a second colon would stutter — and on an empty
-    breadcrumb, where a dangling colon would mark nothing."""
+    'label: ' prefix (SD-F1 rows) — a second colon would stutter. An empty
+    breadcrumb gets an explicit ``-`` instead of leaving the stages slot blank."""
     if not bc:
-        return bc
+        return [(" : ", "dim"), ("-", "dim")]
     lead_text, lead_key = bc[0]
     own_prefix = lead_key == "name_dim" and lead_text.endswith(": ")
     return ([("  ", None)] if own_prefix else [(" : ", "dim")]) + bc
@@ -1046,23 +1050,21 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx
         segs.append((" " * (session_width - used), None))
 
     projection_stage = _projection_stage_text(s)
-    if projection_stage:
-        segs += [("  ", None), (projection_stage, "g_work" if live == "working" else "dim")]
+    segs.append((" " * _WIDE_STAGE_GAP, None))
+    segs.append((projection_stage or "-",
+                 "g_work" if projection_stage and live == "working" else "dim"))
     if dead_stale:
         # F-13: a stale/dead row has no live model/effort/ctx to show — a wall of "—" placeholders
         # read as broken telemetry rather than "this session stopped". One `last seen <age>` cell
         # replaces the whole model+gauge zone (LIVE rows keep the explicit "—" convention, F-3).
         age_min = int((time.time() - s.mtime) / 60) if s.mtime else (s.elapsed_min or 0)
-        segs += [("    ", None), ("last seen %s" % fmt_min(age_min), "dim")]
-    else:
-        # v16: context is a subordinate detail row, never an inline primary-row gauge.
-        segs += [("    ", None)]
+        segs += [("  ", None), ("last seen %s" % fmt_min(age_min), "dim")]
     if s.app_server:
         segs.append(("  app-server", "dim"))
     if s.orphan:
         segs.append(("  worktree-gone", "g_dead"))
 
-    segs.append((_RFLUSH, None))                                     # ⏱uptime flush right
+    segs += [(" " * _WIDE_TIME_GAP, None), (_RFLUSH, None)]          # uptime flush right
     # Cost display intentionally omitted.
     segs += [(_CLOCK, "dim"), ("%6s" % fmt_min(s.elapsed_min), "dim")]
     return segs
@@ -1386,7 +1388,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
         segs.append((" " * (session_width - used), None))
 
     if j.liveness == "dead":
-        segs.append(("    ", None))
+        segs.append((" " * _WIDE_STAGE_GAP, None))
         if getattr(j, "note", None) == "dead-parent-orphaned":
             # SD-64/71: distinct from the generic dead-conductor cell — never blank, and
             # always names the exact node a dispatch-depth-0 decision would resume from.
@@ -1400,12 +1402,13 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     elif j.liveness == "stale":
         # F-13: a stale job has no live model/effort/stage worth showing — collapse the whole
         # telemetry zone (model cell + stage breadcrumb) into one `last seen <age>` cell.
-        segs.append(("    ", None))
-        segs.append(("last seen %s" % fmt_min(j.elapsed_min), "dim"))
+        segs.append((" " * _WIDE_STAGE_GAP, None))
+        segs += [("-", "dim"), ("  ", None),
+                 ("last seen %s" % fmt_min(j.elapsed_min), "dim")]
     else:
         # F-15a options column (fixed-ish gap, dim mode/qa/profile) — a declutter move OUT of
         # the name zone, not a new axis. model/effort now live in the harness field (F-4/SD-F3).
-        segs.append(("    ", None))
+        segs.append((" " * _WIDE_STAGE_GAP, None))
         opt_segs, optw = _opts_segs(j)
         segs += opt_segs
         if optw < _OPTW:
@@ -1415,7 +1418,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
             _dispatch_stage_segs(j, key, stage, slug_name, working=(j.liveness == "working"),
                                  route_seq=route_seq))
 
-    segs.append((_RFLUSH, None))
+    segs += [(" " * _WIDE_TIME_GAP, None), (_RFLUSH, None)]
     segs += [(_CLOCK, "dim"), ("%6s" % fmt_min(j.elapsed_min), "dim")]
     return segs
 
@@ -1489,8 +1492,8 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False, term_wid
     l2 = [("    ", None), (_pad(fmt_min(s.elapsed_min), _HW), "dim")]
     l2 += _model_cell(s.model, s.effort, _MW, dim=dim_tel)
     projection_stage = _projection_stage_text(s, max_width=28)
-    if projection_stage:
-        l2 += [("  ", None), (projection_stage, "g_work" if live == "working" else "dim")]
+    l2 += [("  ", None), (projection_stage or "-",
+                           "g_work" if projection_stage and live == "working" else "dim")]
     # v16: context is emitted by _context_detail_row beneath the complete card.
     if _split:
         return l1, l2, br_segs
@@ -1976,6 +1979,8 @@ def _summary_row(summary, depth=0, term_width=None):
 
 
 _CONTEXT_VALUE_W = 4
+_CONTEXT_DESCRIPTION_GAP = max(
+    1, _NAME_COL - (len(_SUBAGENT_IND) + len("context ") + _HW + _CONTEXT_VALUE_W))
 
 
 def _compact_context_gauge_width(available, depth=0):
@@ -1985,12 +1990,13 @@ def _compact_context_gauge_width(available, depth=0):
     # the shared wide-layout session start instead of drifting to the right.
     desired = max(4, _HW - 2 * max(0, int(depth or 0)))
     # Preserve at least one subtitle cell on unexpectedly tiny terminals.
-    fixed = _dw("context ") + _CONTEXT_VALUE_W + _dw("  ") + 1
+    fixed = (_dw("context ") + _CONTEXT_VALUE_W
+             + _CONTEXT_DESCRIPTION_GAP + 1)
     return min(desired, max(4, available - fixed))
 
 
 def _context_detail_row(entity, depth=0, term_width=None):
-    """One ``context <gauge> <value>  NOW`` row for every live card."""
+    """One ``context <gauge> <value>   NOW`` row for every live card."""
     if getattr(entity, "liveness", None) in ("stale", "dead"):
         return []
     context = getattr(entity, "context", None)
@@ -2012,12 +2018,13 @@ def _context_detail_row(entity, depth=0, term_width=None):
         value_text = "%d%%" % shown_pct
     segs.append((value_text.rjust(_CONTEXT_VALUE_W), "dim"))
     if now_text:
-        # Context remains the stable lead; only the subtitle clips after the two-cell gap.
-        fixed = sum(_dw(text) for text, _key in segs) - _dw(indent) + 2
+        # The description follows the shifted wide session column; only it clips.
+        fixed = (sum(_dw(text) for text, _key in segs) - _dw(indent)
+                 + _CONTEXT_DESCRIPTION_GAP)
         now_room = max(0, available - fixed)
         now_text = _clip_w(str(now_text), now_room) if now_room else ""
         if now_text:
-            segs.extend([("  ", None), (now_text, "dim")])
+            segs.extend([(" " * _CONTEXT_DESCRIPTION_GAP, None), (now_text, "dim")])
     return [segs]
 
 

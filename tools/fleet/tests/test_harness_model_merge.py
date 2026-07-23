@@ -65,10 +65,16 @@ class ColumnHeaderTest(unittest.TestCase):
             head,
             "    " + "harness (model·effort)".ljust(render._HMW)
             + "session (branch)".ljust(28 + render._BRANCH_SUFFIX_W)
-            + "    context / stage",
+            + " " * render._WIDE_STAGE_GAP + "stages"
+            + " " * render._WIDE_TIME_GAP,
         )
         self.assertNotIn("model".ljust(render._MW), head)
         self.assertNotIn("session".ljust(28) + "branch", head)
+        self.assertEqual(head.index("session"), render._NAME_COL)
+        self.assertEqual(
+            head.index("stages"),
+            render._NAME_COL + 28 + render._BRANCH_SUFFIX_W + render._WIDE_STAGE_GAP,
+        )
 
     def test_wide_board_keeps_time_as_the_fourth_column(self):
         lines = render._build_lines([], [], "fleet", False, 0,
@@ -77,7 +83,9 @@ class ColumnHeaderTest(unittest.TestCase):
                       any("harness (model·effort)" in text for text, _key in line))
         self.assertEqual(header[-1][0].strip(), "time")
         self.assertIn("session (branch)", header[0][0])
-        self.assertIn("context / stage", header[0][0])
+        self.assertIn("stages", header[0][0])
+        self.assertNotIn("context / stage", header[0][0])
+        self.assertTrue(header[0][0].endswith("stages "))
 
 
 class SessionRowMergeTest(unittest.TestCase):
@@ -97,6 +105,23 @@ class SessionRowMergeTest(unittest.TestCase):
         text = "".join(t for t, _k in segs)
         self.assertIn("claude code (Fable 5·xhigh)", text)
         self.assertIn("t (main)", text)
+
+    def test_empty_stage_uses_a_dash_at_the_stages_column(self):
+        segs = render._session_row(self._session(), narrow=False, name_width=40)
+        stage_i = next(i for i, (value, _key) in enumerate(segs) if value == "-")
+        stage_col = sum(render._dw(value) for value, _key in segs[:stage_i])
+        self.assertEqual(
+            stage_col,
+            render._NAME_COL + 40 + render._BRANCH_SUFFIX_W + render._WIDE_STAGE_GAP,
+        )
+        self.assertEqual(segs[stage_i], ("-", "dim"))
+        flush_i = next(i for i, (value, _key) in enumerate(segs)
+                       if value == render._RFLUSH)
+        self.assertEqual(segs[flush_i - 1], (" " * render._WIDE_TIME_GAP, None))
+
+    def test_narrow_empty_stage_also_uses_a_dash(self):
+        _l1, l2 = render._session_row_2line(self._session())
+        self.assertIn(("-", "dim"), l2)
 
     def test_no_separate_model_cell_survives_on_the_row(self):
         """The old bare `Fable 5 (xhigh)` model-cell phrasing (no leading harness text right

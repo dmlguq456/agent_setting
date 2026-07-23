@@ -149,8 +149,11 @@ class StageZoneLeadInTest(unittest.TestCase):
         out = render._stage_zone_segs([("drill: ", "name_dim"), ("—", "dim")])
         self.assertEqual(out[0], ("  ", None))
 
-    def test_empty_breadcrumb_gets_no_dangling_colon(self):
-        self.assertEqual(render._stage_zone_segs([]), [])
+    def test_empty_breadcrumb_gets_a_dash_placeholder(self):
+        self.assertEqual(render._stage_zone_segs([]), [(" : ", "dim"), ("-", "dim")])
+
+    def test_missing_stage_uses_ascii_dash(self):
+        self.assertEqual(render._stage_segs("unknown", ""), [("-", "dim")])
 
 
 if __name__ == "__main__":

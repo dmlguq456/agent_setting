@@ -30,11 +30,11 @@ class ContextDetailTruthTableTest(unittest.TestCase):
     def test_context_now_truth_table(self):
         cases = [
             (ContextProjection(63, "normal", "claude"), "Doing work",
-             "context ━━━━━━━━━━────── 63%  Doing work"),
+             "context ━━━━━━━━━━────── 63%   Doing work"),
             (ContextProjection(63, "normal", "claude"), None,
              "context ━━━━━━━━━━────── 63%"),
             (ContextProjection(None, "unknown", "claude"), "Doing work",
-             "context ────────────────   —  Doing work"),
+             "context ────────────────   —   Doing work"),
             (None, None, "context ────────────────   —"),
             (ContextProjection(0, "normal", "claude"), None,
              "context ────────────────  0%"),
@@ -76,7 +76,7 @@ class ContextDetailTruthTableTest(unittest.TestCase):
             self.assertIn("context ", text(row))
             self.assertLess(text(row).index("context "), text(row).index("한글"))
             self.assertNotIn(": ", text(row))
-            self.assertIn("  한글", text(row))
+            self.assertIn("   한글", text(row))
             self.assertEqual(text(row).index("한글"), render._NAME_COL)
 
     def test_description_column_is_stable_for_value_width_and_depth(self):
@@ -100,7 +100,7 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                                   summary="Doing work"), term_width=168)
                 visible = text(row)
                 self.assertNotIn(band, visible)
-                self.assertIn("85%  Doing work", visible)
+                self.assertIn("85%   Doing work", visible)
                 self.assertNotIn(": ", visible)
 
     def test_percentage_is_dim_while_gauge_keeps_level_color(self):

@@ -251,3 +251,10 @@
 - narrow/stack도 같은 `(branch)` 문법을 쓰며 기존 name+branch 총폭과 time 정렬은 유지한다.
 - context와 NOW 사이의 콜론을 제거하고 두 칸 간격으로 session 시작 열에 맞췄다.
 - 이전 정본은 `_internal/versions/v17/prd.md`에 보존했다.
+
+## v19 hotfix (2026-07-23) — 칼럼 간격 + stages
+
+- wide 헤더를 `harness | session (branch) | stages | time`으로 정정했다.
+- 세 칼럼 경계의 소유 여백을 각각 1칸 늘리고, 빈 stage는 dim `-`로 표시한다.
+- 이동한 session 시작 열에 맞춰 context와 NOW 사이 간격을 두 칸에서 세 칸으로 늘렸다.
+- 이전 정본은 `_internal/versions/v18/prd.md`에 보존했다.
