@@ -1017,14 +1017,18 @@ else
     bad "claude dispatch wrapper should fail cleanly without model selection"
   fi
 fi
+# Expected light-tier values derive from the adapter config SoT (models.conf);
+# restating them as literals here re-creates the drift the SoT removed.
+claude_light_model=$(. "$ROOT/adapters/claude/config/models.conf" && printf '%s' "$CFG_TIER_LIGHT_MODEL")
+claude_light_effort=$(. "$ROOT/adapters/claude/config/models.conf" && printf '%s' "$CFG_TIER_LIGHT_EFFORT")
 if python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --dry-run --worktree "$TMP/repo" --slug claude-role-model --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model-role "fast implementer" --jobs "$TMP/claude-role-model.log" >/tmp/claude_role_model.out 2>/tmp/claude_role_model.err \
   && grep -q '^adapter=claude$' /tmp/claude_role_model.out \
   && grep -q '^model_source=role$' /tmp/claude_role_model.out \
   && grep -q '^model_role=fast implementer$' /tmp/claude_role_model.out \
-  && grep -q '^model=sonnet$' /tmp/claude_role_model.out \
-  && grep -q '^effort=medium$' /tmp/claude_role_model.out \
-  && grep -q -- '--model sonnet' /tmp/claude_role_model.out \
-  && grep -q -- '--effort medium' /tmp/claude_role_model.out \
+  && grep -q "^model=${claude_light_model}\$" /tmp/claude_role_model.out \
+  && grep -q "^effort=${claude_light_effort}\$" /tmp/claude_role_model.out \
+  && grep -q -- "--model ${claude_light_model}" /tmp/claude_role_model.out \
+  && grep -q -- "--effort ${claude_light_effort}" /tmp/claude_role_model.out \
   && [ ! -e "$TMP/claude-role-model.log" ]; then
   ok "claude dispatch wrapper supports main-selected model roles"
 else
@@ -3323,12 +3327,15 @@ if AGENT_EXTERNAL_CMD="missing-external-adversary-command --review" "$OPENCODE" 
 else
   bad "opencode role wrapper should report missing external adversary command"
 fi
+# Unconfigured fast roles fall back to the config-declared mini tier (models.conf
+# SoT retired the old `opencode-default` placeholder); derive the expectation.
+opencode_mini_model=$(. "$ROOT/adapters/opencode/config/models.conf" && printf '%s' "$CFG_TIER_MINI_MODEL")
 if "$OPENCODE" role fast reviewer >/tmp/opencode_role.out 2>/tmp/opencode_role.err \
-  && grep -q '^model=opencode-default$' /tmp/opencode_role.out \
+  && grep -q "^model=${opencode_mini_model}\$" /tmp/opencode_role.out \
   && grep -q '^variant=runtime-default$' /tmp/opencode_role.out; then
-  ok "opencode role wrapper reports opencode-default when unconfigured"
+  ok "opencode role wrapper falls back to the config mini tier when unconfigured"
 else
-  bad "opencode role wrapper should report opencode-default when unconfigured"
+  bad "opencode role wrapper should fall back to the config mini tier when unconfigured"
 fi
 if command -v opencode >/dev/null 2>&1; then
   mkdir -p "$TMP/opencode_bootstrap_home/.config/opencode" "$TMP/opencode_bootstrap_home/.local/share"
