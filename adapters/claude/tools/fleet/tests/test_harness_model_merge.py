@@ -61,8 +61,23 @@ class HarnessModelCellTest(unittest.TestCase):
 class ColumnHeaderTest(unittest.TestCase):
     def test_header_shows_merged_harness_model_label(self):
         head = render._col_head(28)
-        self.assertIn("harness (model·effort)", head)
+        self.assertEqual(
+            head,
+            "    " + "harness (model·effort)".ljust(render._HMW)
+            + "session (branch)".ljust(28 + render._BRANCH_SUFFIX_W)
+            + "    context / stage",
+        )
         self.assertNotIn("model".ljust(render._MW), head)
+        self.assertNotIn("session".ljust(28) + "branch", head)
+
+    def test_wide_board_keeps_time_as_the_fourth_column(self):
+        lines = render._build_lines([], [], "fleet", False, 0,
+                                    layout="wide", term_width=168)
+        header = next(line for line in lines if line and
+                      any("harness (model·effort)" in text for text, _key in line))
+        self.assertEqual(header[-1][0].strip(), "time")
+        self.assertIn("session (branch)", header[0][0])
+        self.assertIn("context / stage", header[0][0])
 
 
 class SessionRowMergeTest(unittest.TestCase):
@@ -81,6 +96,7 @@ class SessionRowMergeTest(unittest.TestCase):
         segs = render._session_row(s, narrow=False, name_width=40)
         text = "".join(t for t, _k in segs)
         self.assertIn("claude code (Fable 5·xhigh)", text)
+        self.assertIn("t (main)", text)
 
     def test_no_separate_model_cell_survives_on_the_row(self):
         """The old bare `Fable 5 (xhigh)` model-cell phrasing (no leading harness text right
@@ -127,6 +143,7 @@ class DispatchRowMergeTest(unittest.TestCase):
         segs = render._dispatch_row(j, name_width=40)
         text = "".join(t for t, _k in segs)
         self.assertIn("claude code (Opus 4.8·high)", text)
+        self.assertIn("j1 (main)", text)
 
     def test_dispatch_row_falls_back_to_parent_effort_shown_plain(self):
         # user 2026-07-16: the `~` derived-value marker is retired — inherited effort

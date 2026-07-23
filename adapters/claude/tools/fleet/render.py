@@ -497,11 +497,9 @@ _NW_S = 28                    # wide-layout name field width (both row types) �
                               # _NAME_COL above for the harness/model merge never shrinks it.
 _NAME2_MAX = 40               # 2-line name zone tail-cut cap (display cells) — no fixed branch
                               # column there, so an unbounded title could push branch off-draw (F-14)
-_NAME_GAP = 1                 # Cells inside the name zone reserved as a guaranteed separator
-                              # before the branch column. Without it a name+suffix that exactly
-                              # fills the zone renders as "trackedmain" — the padding below only
-                              # fires on `used < avail`. Latent pre-v8 (a 77-cell zone was rarely
-                              # filled); the 40-cell cap makes filling it the common case.
+_NAME_GAP = 1                 # Cell reserved before the integrated `` (branch)`` suffix. Without
+                              # it a name+identity suffix that exactly fills the title budget can
+                              # collide with the branch parenthesis.
 _NAME_WIDE_MAX = 40           # F-22 minor (v8): FIXED upper bound for the wide-layout name zone.
                               # Adjust here and nowhere else. Without it the zone absorbed ALL
                               # remaining slack (measured: 168 cols → 77, 200 → 109), which
@@ -514,7 +512,7 @@ _TITLE_MAX = 24               # Legacy/fallback title budget and F-15 dispatch-n
 _OPTW = 18                    # F-15a options column width (dim mode·qa·profile token, sits
                               # between the model cell and the stage breadcrumb — declutters
                               # the name zone, which used to carry this as a parenthetical tag)
-_BRW = 14                     # ⎇branch field (always ≥1 trailing space so it never touches model)
+_BRANCH_SUFFIX_W = 14         # Space reserved inside the session column for `` (branch)``.
 _MW = 23                      # model cell: name + FULL effort word ('Opus 4.8 xhigh' — no abbrev)
 _EFW = 7                      # effort subfield ("medium"=6 +1 gap) — FIXED width so every row's
                               # effort lands in the same column, under its own 'effort' header
@@ -586,7 +584,7 @@ def _wide_slack(term_width):
     # F-33 (v11): no more separate model column (_MW) — model/effort now ride inside
     # _NAME_COL's harness-model field (_HMW), so the column merge's freed width flows
     # straight into this reservation and out to the name/ctx-gauge slack below.
-    fixed_row = _NAME_COL + _BRW + 4 + _CTX_W + 5 + _STAGE_RESERVE
+    fixed_row = _NAME_COL + _BRANCH_SUFFIX_W + 4 + _CTX_W + 5 + _STAGE_RESERVE
     if _TINT_OK:
         framing = (_INSET + _PAD_IN) + _INSET + (2 + _PAD_IN) + 6 + 2
     else:
@@ -629,15 +627,25 @@ def _wide_ctx_width(term_width):
 def _col_head(name_width):
     # F-33 (v11): the model/effort header folds into the harness column now that the row
     # content does too — no more separate "model" header between branch and the gauge.
-    return ("    " + "harness (model·effort)".ljust(_HMW) + "session".ljust(name_width)
-            + "branch".ljust(_BRW)
+    return ("    " + "harness (model·effort)".ljust(_HMW)
+            + "session (branch)".ljust(name_width + _BRANCH_SUFFIX_W)
             + "    context / stage")
 
 
-def _branch_seg(cwd, branch, dim=True):
-    """A single branch cell — normal brightness on main session rows, dim on dispatch rows."""
+def _branch_suffix_segs(cwd, branch, dim=True, optional=False):
+    """Integrated `` (branch)`` suffix for the session column.
+
+    Wide rows reserve a fixed amount for this suffix; narrow/stack rows use only
+    its visible width. Branch text keeps the former brightness distinction while
+    the punctuation recedes.
+    """
     br = branch or _git_branch(cwd)
-    return (_pad((br or "—")[: _BRW - 1], _BRW), "dim" if dim else "branch_s")
+    if not br and optional:
+        return []
+    # The title side reserves `_NAME_GAP`, so the visible suffix may use one cell
+    # beyond its nominal reserve without moving the next column.
+    shown = _clip_w(str(br or "—"), max(1, _BRANCH_SUFFIX_W - 2))
+    return [(" (", "dim"), (shown, "dim" if dim else "branch_s"), (")", "dim")]
 
 
 def _eff_key(effort, dim):
@@ -1030,10 +1038,13 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx
     for text, key in suffix:
         segs.append((text, key))
         used += _dw(text)
-    if used < avail:
-        segs.append((" " * (avail - used), None))
+    branch_segs = _branch_suffix_segs(s.cwd, s.branch, dim=dim_tel)
+    segs += branch_segs
+    used += sum(_dw(text) for text, _key in branch_segs)
+    session_width = avail + _BRANCH_SUFFIX_W
+    if used < session_width:
+        segs.append((" " * (session_width - used), None))
 
-    segs.append(_branch_seg(s.cwd, s.branch, dim=dim_tel))     # main row = bright branch/model
     projection_stage = _projection_stage_text(s)
     if projection_stage:
         segs += [("  ", None), (projection_stage, "g_work" if live == "working" else "dim")]
@@ -1316,7 +1327,7 @@ def _opts_segs(j):
 def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True,
                   parent_effort=None, stage_override=None, name_width=None, route_seq=None):
     """A dispatch job rendered as a session-ANALOGUE, mirroring the session columns 1:1:
-      harness (model · effort)  |  [stage label] name  |  branch  |  options  |  stage breadcrumb
+      harness (model · effort)  |  [stage label] session (branch)  |  stage breadcrumb  |  time
     F-33 (v11): model/effort fold into the harness field (no more separate model column).
     F-15a: the name zone is identity-only (no more parenthetical mode/qa tag — that moved to
     its own options column). A dispatch-depth-2 stage worker's identity is its stage label + slug
@@ -1351,7 +1362,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     avail = max(3, name_width or _NW_S)
     otag = "  (orphan)" if orphan else ""
     label = _dispatch_stage_label(j)
-    name_room = min(_TITLE_MAX, max(3, avail - len(otag)))
+    name_room = min(_TITLE_MAX, max(3, avail - len(otag) - _NAME_GAP))
     if label:
         # P2-6 composed cap: slug shares the same budget as its stage label.
         slug_room = max(1, name_room - len(label) - 1)
@@ -1366,10 +1377,14 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     segs.append((nm, name_key_j))
     if otag and used + len(otag) <= avail:
         segs.append((otag, "gate_u")); used += len(otag)
-    if used < avail:
-        segs.append((" " * (avail - used), None))
+    branch_segs = _branch_suffix_segs(
+        "" if key in _LOOPS_KEYS else j.cwd, j.branch, optional=key in _LOOPS_KEYS)
+    segs += branch_segs
+    used += sum(_dw(text) for text, _key in branch_segs)
+    session_width = avail + _BRANCH_SUFFIX_W
+    if used < session_width:
+        segs.append((" " * (session_width - used), None))
 
-    segs.append(_branch_seg("" if key in _LOOPS_KEYS else j.cwd, j.branch))  # loop temp repos hide throwaway branches
     if j.liveness == "dead":
         segs.append(("    ", None))
         if getattr(j, "note", None) == "dead-parent-orphaned":
@@ -1406,7 +1421,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
 
 
 # ---------- 2-line cards (round-4 responsive narrow mode) ----------
-# L1 = identity (dot · harness · name · ▾N · gate · branch) / L2 = telemetry (model · effort ·
+# L1 = identity (dot · harness · session (branch) · ▾N · gate) / L2 = telemetry (model · effort ·
 # bracket gauge · cost · ⏱). model keeps its fixed width so gauges align vertically across cards
 # (the nvtop column feel). Same segment parts as the 1-line rows — zero new color keys.
 def _session_row_2line(s, is_parent=False, child_count=0, _split=False, term_width=None):
@@ -1436,10 +1451,9 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False, term_wid
     # is actually inserted is decided below, once the name's budget is known.
     prov_seg = (" %s" % s.provenance, "dim") if getattr(s, "provenance", None) else None
     prov_pos = len(suffix)
-    br = s.branch or _git_branch(s.cwd)
-    br_seg = ("  " + _clip_w(br, _BRW - 2), "dim" if dim_tel else "branch_s") if br else None
-    if not _split and br_seg:
-        suffix.append(br_seg)
+    br_segs = _branch_suffix_segs(s.cwd, s.branch, dim=dim_tel, optional=True)
+    if not _split:
+        suffix.extend(br_segs)
     if s.app_server:
         suffix.append(("  app-server", "dim"))
     if s.orphan:
@@ -1479,7 +1493,7 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False, term_wid
         l2 += [("  ", None), (projection_stage, "g_work" if live == "working" else "dim")]
     # v16: context is emitted by _context_detail_row beneath the complete card.
     if _split:
-        return l1, l2, br_seg
+        return l1, l2, br_segs
     return l1, l2
 
 
@@ -1535,10 +1549,10 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
           (_pad(hn, max(1, _HW - len(prefix))), _BADGE_KEY.get(j.harness, "dim")), (shown_name, name_key_j)]
     if orphan:
         l1.append(("  (orphan)", "gate_u"))
-    br = None if key in _LOOPS_KEYS else (j.branch or _git_branch(j.cwd))
-    br_seg = ("  " + br, "dim") if br else None
-    if not _split and br_seg:
-        l1.append(br_seg)
+    br_segs = _branch_suffix_segs(
+        "" if key in _LOOPS_KEYS else j.cwd, j.branch, optional=True)
+    if not _split:
+        l1.extend(br_segs)
 
     stage = stage_override if stage_override is not None else (j.stage or "")
     eff = j.effort or parent_effort or None
@@ -1553,7 +1567,7 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
         _dispatch_stage_segs(j, key, stage, slug_name, working=(j.liveness == "working"),
                              route_seq=route_seq))
     if _split:
-        return l1, l2, br_seg
+        return l1, l2, br_segs
     return l1, l2
 
 
@@ -1971,12 +1985,12 @@ def _compact_context_gauge_width(available, depth=0):
     # the shared wide-layout session start instead of drifting to the right.
     desired = max(4, _HW - 2 * max(0, int(depth or 0)))
     # Preserve at least one subtitle cell on unexpectedly tiny terminals.
-    fixed = _dw("context ") + _CONTEXT_VALUE_W + _dw(": ") + 1
+    fixed = _dw("context ") + _CONTEXT_VALUE_W + _dw("  ") + 1
     return min(desired, max(4, available - fixed))
 
 
 def _context_detail_row(entity, depth=0, term_width=None):
-    """One ``context <gauge> <value>: NOW`` row for every live card."""
+    """One ``context <gauge> <value>  NOW`` row for every live card."""
     if getattr(entity, "liveness", None) in ("stale", "dead"):
         return []
     context = getattr(entity, "context", None)
@@ -1998,12 +2012,12 @@ def _context_detail_row(entity, depth=0, term_width=None):
         value_text = "%d%%" % shown_pct
     segs.append((value_text.rjust(_CONTEXT_VALUE_W), "dim"))
     if now_text:
-        # Context remains the stable lead; only the subtitle clips after the colon.
+        # Context remains the stable lead; only the subtitle clips after the two-cell gap.
         fixed = sum(_dw(text) for text, _key in segs) - _dw(indent) + 2
         now_room = max(0, available - fixed)
         now_text = _clip_w(str(now_text), now_room) if now_room else ""
         if now_text:
-            segs.extend([(": ", "dim"), (now_text, "dim")])
+            segs.extend([("  ", None), (now_text, "dim")])
     return [segs]
 
 

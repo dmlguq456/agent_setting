@@ -337,10 +337,10 @@ class DegradationLadderTest(unittest.TestCase):
         self.assertIn("…", txt)                     # last resort
         self.assertIn("unused", txt)                # the F-26 signal still survives
 
-    def test_wide_row_never_exceeds_the_capped_name_zone(self):
-        """Whatever the ladder does, the zone stays exactly _NAME_WIDE_MAX wide."""
+    def test_wide_row_keeps_one_fixed_session_branch_column(self):
+        """The integrated title + ``(branch)`` cell keeps its fixed combined width."""
         for name in ("short", "agent-setting-17", "q" * 200):
-            s = self._ghost(registry_name=name)
+            s = self._ghost(registry_name=name, branch="main")
             nw = render._wide_name_width(168)
             segs = render._session_row(s, narrow=False, name_width=nw)
             # Skip past the prefix (gap, glyph, gap) + the harness(+model) field — F-33 (v11)
@@ -352,23 +352,23 @@ class DegradationLadderTest(unittest.TestCase):
                 consumed += render._dw(segs[i][0])
                 i += 1
             zone = 0
-            for t, k in segs[i:]:
-                if k == "branch_s":
-                    break
+            target = nw + render._BRANCH_SUFFIX_W
+            for t, _k in segs[i:]:
                 zone += render._dw(t)
-            self.assertEqual(zone, nw, "name zone drifted for %r" % name[:20])
+                if zone >= target:
+                    break
+            self.assertEqual(zone, target, "session (branch) column drifted for %r" % name[:20])
 
-    def test_name_zone_never_touches_the_branch_column(self):
-        """The `trackedmain` collision: name+suffix exactly filling the zone left no gap."""
+    def test_branch_is_an_integrated_parenthesized_suffix(self):
         for name in ("agent-setting-17", "x" * 60, "Stage-dispatch v10 diagnosis and spec"):
-            s = self._ghost(registry_name=name)
+            s = self._ghost(registry_name=name, branch="main")
             segs = render._session_row(s, narrow=False,
                                        name_width=render._wide_name_width(168))
             txt = "".join(t for t, _k in segs)
-            self.assertNotIn("trackedmain", txt)
+            self.assertIn("(main)", txt)
             branch_i = next(i for i, (_t, k) in enumerate(segs) if k == "branch_s")
-            self.assertTrue(segs[branch_i - 1][0].endswith(" "),
-                            "no separator before branch for %r" % name[:20])
+            self.assertEqual(segs[branch_i - 1][0], " (")
+            self.assertEqual(segs[branch_i + 1][0], ")")
 
 
 class UnusedVisibilityTest(unittest.TestCase):

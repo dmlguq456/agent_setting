@@ -8,7 +8,7 @@ inputs:
   - spec/stage-dispatch/prd.md   # v2: SD-3·§9-13 스테이지 row 관제 parity
   - spec/prd.md                  # v3/F-19: Unified Memory System v15 Cluster J (write-events 저널 = F-19 소스)
 phases:
-  spec: done            # PRD v17 hotfix: context first, colon, band hidden, percent dim
+  spec: done            # PRD v18 hotfix: four columns, session (branch), colon-free context row
   scaffolding: deferred # lean — skeleton 은 autopilot-code 로 이월 (module 구조만 §9 확정)
   design: n/a           # 시각 UI 아님 (터미널 TUI 레이아웃은 PRD §4)
   dev: done             # corrected v16 F-36~F-39 구현·strong 검증·main push 완료 (`460b248f`)

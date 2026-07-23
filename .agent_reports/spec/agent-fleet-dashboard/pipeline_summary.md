@@ -243,3 +243,11 @@
   빈 gauge와 `—`를 유지한다. stage/DAG·worker 계약은 변경하지 않는다.
 - 이전 단계는 `v16-context-first`, `v17-subtitle-first`,
   `v17-colored-percentage`에 보존했다.
+
+## v18 hotfix (2026-07-23) — 4칼럼 + session(branch)
+
+- wide 헤더를 `harness | session (branch) | context / stage | time` 네 칼럼으로 고정하고,
+  별도 branch 칼럼을 session의 괄호 suffix로 통합했다.
+- narrow/stack도 같은 `(branch)` 문법을 쓰며 기존 name+branch 총폭과 time 정렬은 유지한다.
+- context와 NOW 사이의 콜론을 제거하고 두 칸 간격으로 session 시작 열에 맞췄다.
+- 이전 정본은 `_internal/versions/v17/prd.md`에 보존했다.

@@ -345,7 +345,7 @@ class TitleCapTest(unittest.TestCase):
         l1, _l2 = render._session_row_2line(sess, term_width=60)
         self.assertLessEqual(sum(render._dw(text) for text, _key in l1), 54)
         text = "".join(part for part, _key in l1)
-        self.assertIn("feature/long", text)
+        self.assertIn("(feature/long)", text)
 
     def test_dispatch_composed_label_plus_slug_stays_capped_in_wide_column(self):
         job = DispatchJob(key="code-execute", slug="a-very-long-dispatch-session-slug-name",
