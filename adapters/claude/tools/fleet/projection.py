@@ -1,4 +1,4 @@
-"""Single fail-closed work/context projection for Fleet.
+"""Single fail-closed work projection plus interactive-session context for Fleet.
 
 This module is deliberately source-agnostic: collectors supply already observed
 entities and route evidence, while every display and JSON surface consumes the
@@ -424,14 +424,19 @@ def resolve_projection(*args, **kwargs):
 
 def attach_projections(sessions: Iterable[Session], jobs: Iterable[DispatchJob],
                       route_records=None, node_evidence=None, artifact_root=None, now=None):
-    """Attach exactly one work/context projection to every row and return both lists."""
+    """Attach work to every row and context only to interactive session rows."""
     sessions, jobs = list(sessions), list(jobs)
     route_records = _load_evidence_records(node_evidence, route_records)
     all_entities = sessions + jobs
-    for entity in all_entities:
-        public, private = normalize_context(_evidence(entity), now=now)
-        entity.context = public
-        entity._context_evidence = private
+    for session in sessions:
+        public, private = normalize_context(_evidence(session), now=now)
+        session.context = public
+        session._context_evidence = private
+    for job in jobs:
+        # A registered dispatch stream does not expose a session-owned context
+        # window.  Drop legacy/inferred values instead of projecting "unknown".
+        job.context = None
+        job._context_evidence = None
     for entity in all_entities:
         entity.work_projection = resolve_work_projection(
             entity, jobs=jobs, route_records=route_records,

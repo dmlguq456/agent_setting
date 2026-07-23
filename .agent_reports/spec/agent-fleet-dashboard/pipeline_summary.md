@@ -1,16 +1,16 @@
 # agent-fleet-dashboard — Spec Pipeline Summary
 
-- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8/v9/v10) · 2026-07-17 (v11) · 2026-07-20 (v12) · 2026-07-21 (v13) · 2026-07-22 (v14/v15/v16) · 2026-07-23 (v17/v18/v19/v20)
+- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8/v9/v10) · 2026-07-17 (v11) · 2026-07-20 (v12) · 2026-07-21 (v13) · 2026-07-22 (v14/v15/v16) · 2026-07-23 (v17/v18/v19/v20/v21)
 - **Mode**: cli (터미널 TUI 도구)
-- **Status**: spec **v20 done** / dev **done** — dispatch wrapper/runtime PID split context recovery와 linear route stage single-render hotfix
+- **Status**: spec **v21 done** / dev **done** — dispatch context 추론·표시 철회, summary-only NOW와 linear stage single-render
 - **Placement**: 별도 컴포넌트 `spec/agent-fleet-dashboard/` — 기존 `spec/prd.md`(Unified Memory System) 무수정.
 
 ## v16 update (2026-07-22) — common work projection + subordinate context
 
 - Interactive main `Session`과 registered `DispatchJob`이 같은 additive `WorkProjection`을 소비한다. sealed route/node exact evidence가 우선이며, route tuple이 완전히 없는 행만 단일 artifact 후보로 stage label을 유도한다. 명시 tuple 불일치·복수 후보는 임의 최신 route를 고르지 않고 unknown/ambiguity로 남긴다.
 - commit `e8938809`의 compose-on-demand route를 schema 그대로 읽어 arbitrary `nodes[].id/unit/depends_on/completion_gate/write_scope`, parallel sibling, fan-in을 그린다. composed record에 plan/exec/test/report 하드코딩을 적용하지 않는다.
-- wide primary row의 확장 ctx gauge와 narrow/stack inline ctx를 폐기했다. live wide/narrow/stack 모두 identity 바로 아래 하나의 `ctx … [· NOW]` detail row를 사용하고 subtitle 부재는 ctx-only, context 부재는 `ctx —`, dead/stale는 row 생략으로 정직하게 강등한다.
-- child dispatch의 title/NOW/context는 exact `(pid,proc_start)` 후 unique `(harness,realpath(cwd))`인 단일 association만 공유한다. PID reuse·cross-harness·복수 후보는 세 값 모두 거부하며 parent context는 상속하지 않는다.
+- wide primary row의 확장 ctx gauge와 narrow/stack inline ctx를 폐기했다. v21 현재 계약에서는 interactive session만 identity 아래 `context <gauge> …[   NOW]`를 사용하고, dispatch는 context 없이 fresh NOW만 session 열에 표시한다.
+- child dispatch의 title/NOW는 exact `(pid,proc_start)` → attempt stream session id → unique `(harness,realpath(cwd))`인 단일 association을 공유한다. PID reuse·cross-harness·복수 후보는 두 값 모두 거부하며 context는 입양·추론하지 않는다.
 - title/NOW worker의 현행 단일 예산은 concurrency 기본 3/최대 4, rolling starts 기본·최대 4/60s, main/child debounce 600/150s다. shared leases·start pool·kill switch·stale recovery·default Haiku no-tools·shell-free pluggable `FLEET_TITLE_COMMAND`/`FLEET_TITLE_MODEL` 경계를 유지하며 tests는 live provider를 호출하지 않는다.
 - context pressure는 표시 신호로만 남고 intensity, route/depth, model/effort, QA, test, retry, gate, guard, definition of done과 직교한다. compaction에 따른 정상 수치 하락은 허용한다.
 
@@ -265,3 +265,10 @@
 - 최신 assistant usage는 fresh official statusline의 exact model-id context window가 있을 때만 context%로 정규화하며, denominator가 없으면 `—`를 유지한다.
 - 같은 route를 가진 visible depth-1 owner가 있으면 parent stage는 `-`로 낮추고, linear route는 owner `stages` 칼럼에 한 번만 표시한다. 비선형 DAG detail과 process view는 유지한다.
 - 이전 정본은 `_internal/versions/v19/prd.md`에 보존했다.
+
+## v21 correction (2026-07-23) — 분사 context 철회
+
+- v20의 dispatch context 계산은 해당 분사 session의 context window 실측이 아니라 같은 model id의 다른 statusline denominator를 빌린 추론이었다. 이를 context 실측처럼 표시한 판단을 철회한다.
+- dispatch collector는 attempt stream에서 title/NOW association용 session id만 읽고 usage/window/context evidence를 만들지 않는다.
+- group/process와 wide/narrow/stack의 dispatch 행은 `context` block을 전부 제거한다. fresh NOW가 있으면 session 열에 설명만 표시하고, 없으면 subordinate row도 없다.
+- v20의 parent/owner stage ownership과 `one-shot` 단일 표시는 그대로 유지한다. 이전 정본은 `_internal/versions/v20/prd.md`에 보존했다.

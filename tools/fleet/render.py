@@ -1971,7 +1971,7 @@ _SUMMARY_FALLBACK_W = 60   # hermetic/no-terminal-width callers (mirrors the dim
                            # convention used elsewhere, e.g. the memory-row snippet cells)
 
 
-def _summary_row(summary, depth=0, term_width=None):
+def _summary_row(summary, depth=0, term_width=None, start_col=None):
     """One dim subtitle row directly under a session/dispatch row (F-16/F-17 merge,
     사용자 확정 2026-07-19): the live one-sentence status from the SAME haiku call that
     produced the title. Pure inset — no connector/icon, `_SUBAGENT_IND` + the same
@@ -1980,8 +1980,28 @@ def _summary_row(summary, depth=0, term_width=None):
     (summary truthy, row not dead/stale — F-13) and ordering (this row before the
     owner's `⚡` strip, never after)."""
     indent = _SUBAGENT_IND + "  " * max(0, depth)
-    maxw = max(1, term_width - _dw(indent)) if term_width else _SUMMARY_FALLBACK_W
-    return [[(indent, None), (_clip_w(summary, maxw), "dim")]]
+    target_col = int(start_col or 0)
+    if term_width:
+        target_col = min(target_col, max(_dw(indent), term_width - 1))
+    padding = max(0, target_col - _dw(indent))
+    used = _dw(indent) + padding
+    maxw = max(1, term_width - used) if term_width else _SUMMARY_FALLBACK_W
+    segs = [(indent, None)]
+    if padding:
+        segs.append((" " * padding, None))
+    segs.append((_clip_w(summary, maxw), "dim"))
+    return [segs]
+
+
+def _dispatch_summary_detail_row(job, depth=1, term_width=None):
+    """Dispatch has no session-owned context window; show only fresh NOW."""
+    if getattr(job, "liveness", None) in ("stale", "dead"):
+        return []
+    summary = getattr(job, "summary", None)
+    if not summary:
+        return []
+    return _summary_row(str(summary), depth=depth, term_width=term_width,
+                        start_col=_NAME_COL)
 
 
 _CONTEXT_VALUE_W = 4
@@ -2500,7 +2520,7 @@ def _route_card(view, session_by_identity, term_width, now):
         job = n["job"]
         out.append(_route_job_row(job, max_width=term_width))
         job_rows.append((len(out) - 1, job))
-        detail = _context_detail_row(job, depth=1, term_width=term_width)
+        detail = _dispatch_summary_detail_row(job, depth=1, term_width=term_width)
         if detail:
             out.extend(detail)
         sess = _session_for_job(session_by_identity, job)
@@ -2581,8 +2601,8 @@ def _degrade_card(job, session_by_identity, term_width):
     breadcrumb = _stage_segs(job.key, _projection_stage_for_dispatch(job), working=(job.liveness == "working"),
                              max_width=_STAGE_ZONE_MAX)
     out.append([("    ", None)] + breadcrumb)
-    detail = _context_detail_row(job, depth=max(1, int(getattr(job, "depth", 1) or 1)),
-                                 term_width=term_width)
+    detail = _dispatch_summary_detail_row(
+        job, depth=max(1, int(getattr(job, "depth", 1) or 1)), term_width=term_width)
     if detail:
         out.extend(detail)
     # F-29 — the degraded job's session's own active sub-agents, the same strip the route card
@@ -3250,7 +3270,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                                            parent_effort=row_parent_effort, is_last=is_last,
                                            stage_override=stage_override,
                                            name_width=wide_name_width, route_seq=route_seq))
-            detail = _context_detail_row(
+            detail = _dispatch_summary_detail_row(
                 job, depth=max(1, int(getattr(job, "depth", 1) or 1)), term_width=term_width)
             if detail:
                 lines.extend(detail)

@@ -13,7 +13,7 @@ from fleet import collectors as fleet_collectors  # noqa: E402
 from fleet import projection, render, route  # noqa: E402
 from fleet.collectors import dispatch as dispatch_collector  # noqa: E402
 from fleet.model import (  # noqa: E402
-    ContextEvidence, ContextProjection, DispatchJob, ProgressProjection, Session,
+    ContextProjection, DispatchJob, ProgressProjection, Session,
     SubAgent, WorkProjection,
 )
 
@@ -55,6 +55,31 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                 self._session(liveness=state, context=ContextProjection(85, "critical", "x"),
                               summary="cached now"), term_width=168)
             self.assertEqual(row, [])
+
+    def test_dispatch_omits_context_and_keeps_only_fresh_now(self):
+        job = DispatchJob(
+            key="code", slug="worker", harness="claude", depth=1,
+            liveness="working", summary="NOW",
+            context=ContextProjection(85, "critical", "legacy"),
+        )
+        for width, layout in ((168, "wide"), (120, "wide"),
+                              (100, "narrow"), (60, "stack")):
+            with self.subTest(width=width):
+                row = render._dispatch_summary_detail_row(
+                    job, depth=1, term_width=width)
+                visible = text(row)
+                self.assertNotIn("context", visible)
+                self.assertEqual(visible.index("NOW"), render._NAME_COL)
+                self.assertLessEqual(render._dw(visible), width)
+
+                rendered = text(render._build_lines(
+                    [], [job], "both", False, 0,
+                    layout=layout, term_width=width))
+                self.assertNotIn("context ", rendered)
+                self.assertIn("NOW", rendered)
+
+        job.summary = None
+        self.assertEqual(render._dispatch_summary_detail_row(job), [])
 
     def test_malformed_legacy_percentage_is_unavailable_not_clamped(self):
         for malformed in (-1, 101, True, "63"):
@@ -242,24 +267,17 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                 self.assertIn("| partial", rendered)
 
 
-class ClaudeStreamContextTest(unittest.TestCase):
+class ClaudeStreamSessionTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.claude_home = os.path.join(self.tmp.name, "claude")
         self.logs = os.path.join(self.tmp.name, ".dispatch", "logs")
         os.makedirs(self.logs)
-        os.makedirs(os.path.join(self.claude_home, ".statusline"))
-        self.env = mock.patch.dict(os.environ, {
-            "AGENT_HOME": self.tmp.name,
-            "CLAUDE_CONFIG_DIR": self.claude_home,
-        })
+        self.env = mock.patch.dict(os.environ, {"AGENT_HOME": self.tmp.name})
         self.env.start()
         dispatch_collector._CLAUDE_STREAM_CACHE.clear()
-        dispatch_collector._CLAUDE_WINDOW_CACHE.clear()
 
     def tearDown(self):
         dispatch_collector._CLAUDE_STREAM_CACHE.clear()
-        dispatch_collector._CLAUDE_WINDOW_CACHE.clear()
         self.env.stop()
         self.tmp.cleanup()
 
@@ -276,14 +294,6 @@ class ClaudeStreamContextTest(unittest.TestCase):
             for row in rows:
                 stream.write(json.dumps(row) + "\n")
 
-    def _window(self, model_id, size):
-        path = os.path.join(self.claude_home, ".statusline", "sample.json")
-        with open(path, "w", encoding="utf-8") as stream:
-            json.dump({
-                "model": {"id": model_id},
-                "context_window": {"context_window_size": size},
-            }, stream)
-
     @staticmethod
     def _assistant(sid, model_id, active):
         return {
@@ -295,38 +305,34 @@ class ClaudeStreamContextTest(unittest.TestCase):
             }},
         }
 
-    def test_attempt_stream_recovers_exact_session_and_latest_context(self):
+    def test_attempt_stream_recovers_exact_session_without_context(self):
         job = self._job()
-        self._window("claude-fable-5", 1000)
         self._write_log(job, [
             {"type": "system", "session_id": "sid-child"},
             self._assistant("sid-child", "claude-fable-5", 100),
             self._assistant("sid-child", "claude-fable-5", 160),
         ])
-        now = os.path.getmtime(job._log_file)
-        dispatch_collector._enrich_claude_stream_context(job, now=now)
-        public, _ = projection.normalize_context(job._context_evidence, now=now)
+        dispatch_collector._enrich_claude_stream_session(job)
         self.assertEqual(job._runtime_session_id, "sid-child")
-        self.assertEqual((public.used_pct, public.source), (16, "claude-stream-json"))
+        self.assertIsNone(job.context)
+        self.assertIsNone(job._context_evidence)
 
-    def test_missing_exact_model_window_keeps_context_unknown_but_session_exact(self):
+    def test_stream_usage_does_not_create_context_or_model(self):
         job = self._job()
-        self._window("claude-other-5", 1000)
         self._write_log(job, [self._assistant("sid-child", "claude-fable-5", 160)])
-        dispatch_collector._enrich_claude_stream_context(
-            job, now=os.path.getmtime(job._log_file))
+        dispatch_collector._enrich_claude_stream_session(job)
         self.assertEqual(job._runtime_session_id, "sid-child")
+        self.assertIsNone(job.model)
+        self.assertIsNone(job.context)
         self.assertIsNone(job._context_evidence)
 
     def test_multiple_stream_session_ids_and_foreign_path_fail_closed(self):
         job = self._job()
-        self._window("claude-fable-5", 1000)
         self._write_log(job, [
             self._assistant("sid-a", "claude-fable-5", 100),
             self._assistant("sid-b", "claude-fable-5", 160),
         ])
-        dispatch_collector._enrich_claude_stream_context(
-            job, now=os.path.getmtime(job._log_file))
+        dispatch_collector._enrich_claude_stream_session(job)
         self.assertFalse(hasattr(job, "_runtime_session_id"))
         self.assertEqual(job.association_ambiguity, "multiple-stream-session-ids")
 
@@ -334,7 +340,7 @@ class ClaudeStreamContextTest(unittest.TestCase):
         foreign._log_file = os.path.join(self.tmp.name, "foreign.att-foreign.claude.jsonl")
         with open(foreign._log_file, "w", encoding="utf-8") as stream:
             stream.write(json.dumps(self._assistant("sid-x", "claude-fable-5", 160)) + "\n")
-        dispatch_collector._enrich_claude_stream_context(foreign)
+        dispatch_collector._enrich_claude_stream_session(foreign)
         self.assertFalse(hasattr(foreign, "_runtime_session_id"))
 
 
@@ -345,28 +351,25 @@ class ChildAssociationTest(unittest.TestCase):
                        title="Child title", summary="Child now",
                        context=ContextProjection(70, "tight", "child"))
 
-    def test_exact_identity_copies_title_now_and_context_atomically(self):
+    def test_exact_identity_copies_title_and_now_only(self):
         child = self._child(7, "new", "/child")
         job = DispatchJob(key="code", slug="job", pid=7, proc_start="new", cwd="/other",
                           harness="claude", liveness="working", is_child=True)
         fleet_collectors._adopt_child_titles([child], [job])
-        self.assertEqual((job.title, job.summary, job.context.used_pct), ("Child title", "Child now", 70))
+        self.assertEqual((job.title, job.summary, job.context),
+                         ("Child title", "Child now", None))
 
-    def test_wrapper_pid_uses_attempt_stream_session_id_and_stream_context(self):
+    def test_wrapper_pid_uses_attempt_stream_session_id_for_title_and_now(self):
         child = self._child(7, "runtime", "/child")
-        child.context = ContextProjection(None, "unknown", "claude")
-        child._context_evidence = None
         job = DispatchJob(
             key="code", slug="job", pid=99, proc_start="wrapper", cwd="/child",
             harness="claude", liveness="working", is_child=True,
-            context=ContextProjection(16, "normal", "claude-stream-json"),
         )
         job._runtime_session_id = child.session_id
-        job._context_evidence = ContextEvidence(used_pct=16, source="claude-stream-json")
         fleet_collectors._adopt_child_titles([child], [job])
-        self.assertEqual((job.title, job.summary, job.context.used_pct),
-                         ("Child title", "Child now", 16))
-        self.assertEqual(child.context.used_pct, 16)
+        self.assertEqual((job.title, job.summary, job.context),
+                         ("Child title", "Child now", None))
+        self.assertEqual(child.context.used_pct, 70)
 
     def test_duplicate_stream_session_id_candidates_fail_closed(self):
         first = self._child(7, "a", "/first")
@@ -374,12 +377,11 @@ class ChildAssociationTest(unittest.TestCase):
         second.session_id = first.session_id
         job = DispatchJob(
             key="code", slug="job", harness="claude", is_child=True,
-            context=ContextProjection(16, "normal", "claude-stream-json"),
         )
         job._runtime_session_id = first.session_id
-        job._context_evidence = ContextEvidence(used_pct=16, source="claude-stream-json")
         fleet_collectors._adopt_child_titles([first, second], [job])
         self.assertIsNone(job.title)
+        self.assertIsNone(job.summary)
         self.assertIsNone(job.context)
         self.assertEqual(job.association_ambiguity,
                          "multiple-child-session-id-candidates")
@@ -410,12 +412,11 @@ class ChildAssociationTest(unittest.TestCase):
         fleet_collectors._adopt_child_titles([parent, child], [job])
         self.assertIsNone(job.context)
 
-    def test_process_route_chunk_orders_job_context_then_exact_session_subagents(self):
+    def test_process_route_chunk_orders_job_now_then_exact_session_subagents(self):
         rid = route.load(REAL)["route_id"]
         job = DispatchJob(key="code", slug="process-leaf", pid=301, proc_start="leaf",
                           route_id=rid, route_file=REAL, route_node="execute",
                           harness="claude", liveness="working", summary="NOW")
-        job._context_evidence = ContextEvidence(used_pct=50, source="claude")
         session = Session(harness="claude", pid=301, proc_start="leaf", cwd="/x",
                           is_child=True, liveness="working",
                           subagents=[SubAgent(agent_type="tool", active=True)])
@@ -427,8 +428,11 @@ class ChildAssociationTest(unittest.TestCase):
         finally:
             render.set_process_view(False)
         visible = "\n".join("".join(part for part, _ in line) for line in lines if line)
-        self.assertLess(visible.index("└▸🚀"), visible.index("context "))
-        self.assertLess(visible.index("context "), visible.index("⚡tool"))
+        self.assertNotIn("context ", visible)
+        self.assertLess(visible.index("└▸🚀"), visible.index("NOW"))
+        self.assertLess(visible.index("NOW"), visible.index("⚡tool"))
+        now_line = next(line for line in visible.splitlines() if "NOW" in line)
+        self.assertEqual(now_line.index("NOW"), render._NAME_COL)
 
 
 if __name__ == "__main__":

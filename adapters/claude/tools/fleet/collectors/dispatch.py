@@ -24,7 +24,7 @@ import time
 from datetime import datetime, timezone
 
 from .. import model
-from ..model import ContextEvidence, DispatchJob, etime_to_min
+from ..model import DispatchJob, etime_to_min
 from . import procscan
 
 _AUTOPILOT = re.compile(r"/autopilot-([a-z-]+)")
@@ -576,9 +576,7 @@ def _proj_home():
 
 
 _CLAUDE_STREAM_TAIL_BYTES = 512 * 1024
-_CLAUDE_STREAM_FRESH_SEC = 15 * 60
 _CLAUDE_STREAM_CACHE = {}       # path -> (mtime_ns, size, parsed)
-_CLAUDE_WINDOW_CACHE = {}       # runtime home -> (monotonic deadline, {model_id: window})
 
 
 def _owned_claude_stream_path(job):
@@ -606,7 +604,7 @@ def _owned_claude_stream_path(job):
 
 
 def _parse_claude_stream_tail(path):
-    """Read a bounded tail and return exact session/model/active-token evidence."""
+    """Read a bounded tail and return its one exact runtime session id."""
     try:
         st = os.stat(path)
     except OSError:
@@ -626,7 +624,6 @@ def _parse_claude_stream_tail(path):
     if start and lines:
         lines = lines[1:]  # the first item is a partial JSON line
     session_ids = set()
-    latest = None
     for line in lines:
         try:
             payload = json.loads(line)
@@ -637,29 +634,10 @@ def _parse_claude_stream_tail(path):
         sid = payload.get("session_id")
         if isinstance(sid, str) and sid:
             session_ids.add(sid)
-        if payload.get("type") != "assistant":
-            continue
-        message = payload.get("message")
-        if not isinstance(message, dict) or not isinstance(message.get("usage"), dict):
-            continue
-        model_id = message.get("model")
-        usage = message["usage"]
-        keys = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
-        if not isinstance(model_id, str) or not model_id or not any(key in usage for key in keys):
-            continue
-        values = [usage.get(key, 0) for key in keys]
-        if any(isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0
-               for value in values):
-            continue
-        latest = (model_id, int(sum(values)))
     ambiguity = "multiple-stream-session-ids" if len(session_ids) > 1 else None
     parsed = {
         "session_id": next(iter(session_ids)) if len(session_ids) == 1 else None,
-        "model_id": latest[0] if latest and ambiguity is None else None,
-        "active_tokens": latest[1] if latest and ambiguity is None else None,
         "ambiguity": ambiguity,
-        "sequence": cache_key,
-        "observed_at": st.st_mtime,
     }
     _CLAUDE_STREAM_CACHE[path] = (cache_key[0], cache_key[1], parsed)
     if len(_CLAUDE_STREAM_CACHE) > 128:
@@ -667,49 +645,8 @@ def _parse_claude_stream_tail(path):
     return parsed
 
 
-def _fresh_claude_model_windows(now):
-    """Newest fresh official statusline denominator for each exact model id."""
-    home = _proj_home()
-    current = time.monotonic()
-    cached = _CLAUDE_WINDOW_CACHE.get(home)
-    if cached and cached[0] >= current:
-        return cached[1]
-    found = {}
-    directory = os.path.join(home, ".statusline")
-    try:
-        names = os.listdir(directory)
-    except OSError:
-        names = ()
-    for name in names:
-        if not name.endswith(".json") or name.startswith("."):
-            continue
-        path = os.path.join(directory, name)
-        try:
-            st = os.stat(path)
-            if st.st_mtime + _CLAUDE_STREAM_FRESH_SEC < now or st.st_size > 1024 * 1024:
-                continue
-            with open(path, encoding="utf-8", errors="replace") as stream:
-                payload = json.load(stream)
-        except Exception:
-            continue
-        model_data = payload.get("model") if isinstance(payload, dict) else None
-        context_data = payload.get("context_window") if isinstance(payload, dict) else None
-        model_id = model_data.get("id") if isinstance(model_data, dict) else None
-        window = (context_data.get("context_window_size")
-                  if isinstance(context_data, dict) else None)
-        if (not isinstance(model_id, str) or not model_id or isinstance(window, bool)
-                or not isinstance(window, (int, float)) or window <= 0):
-            continue
-        prior = found.get(model_id)
-        if prior is None or st.st_mtime > prior[0]:
-            found[model_id] = (st.st_mtime, int(window))
-    result = {model_id: value[1] for model_id, value in found.items()}
-    _CLAUDE_WINDOW_CACHE[home] = (current + 5.0, result)
-    return result
-
-
-def _enrich_claude_stream_context(job, now=None):
-    """Attach exact child session id and context evidence from one attempt stream."""
+def _enrich_claude_stream_session(job):
+    """Attach only the exact child session id from one attempt stream."""
     path = _owned_claude_stream_path(job)
     if path is None:
         return
@@ -723,21 +660,6 @@ def _enrich_claude_stream_context(job, now=None):
     if not session_id:
         return
     job._runtime_session_id = session_id
-    model_id = parsed.get("model_id")
-    active = parsed.get("active_tokens")
-    if model_id and not getattr(job, "model", None):
-        job.model = _model_display(model_id)
-    now = time.time() if now is None else now
-    window = _fresh_claude_model_windows(now).get(model_id)
-    if window is None or active is None:
-        return
-    sequence = parsed["sequence"]
-    observed_at = parsed["observed_at"]
-    job._context_evidence = ContextEvidence(
-        used_pct=round(100.0 * active / window), source="claude-stream-json",
-        sequence=sequence, source_head_sequence=sequence,
-        observed_at=observed_at, fresh_until=observed_at + _CLAUDE_STREAM_FRESH_SEC,
-    )
 
 
 def _enc(path):
@@ -1639,7 +1561,7 @@ def collect(jobs_path=None, harness_filter=None):
     # classification, so every row is decided exactly once, by the single classifier.
     jobs = _reconcile_drill_rows(jobs, now)
     for j in jobs:
-        _enrich_claude_stream_context(j, now=now)
+        _enrich_claude_stream_session(j)
     for j in jobs:
         j.liveness = _dispatch_liveness(j, now)
     _annotate_orphan_conductors(jobs, now, jobs_path=jobs_path)

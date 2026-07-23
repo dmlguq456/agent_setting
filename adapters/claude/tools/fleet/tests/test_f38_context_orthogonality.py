@@ -6,22 +6,28 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from fleet import projection  # noqa: E402
-from fleet.model import ContextEvidence, DispatchJob  # noqa: E402
+from fleet.model import ContextEvidence, DispatchJob, Session  # noqa: E402
 
 
 class ContextOrthogonalityTest(unittest.TestCase):
-    def test_threshold_truth_table_is_display_only(self):
+    def test_interactive_threshold_truth_table_is_display_only(self):
         projections = []
         for pct in (69, 70, 85):
-            entity = DispatchJob(key="code", slug="s-%d" % pct, route_id="r", route_node="n",
-                                 assigned_contract="research", unit="research/claim-verify")
+            entity = Session(harness="codex", pid=pct, slug="s-%d" % pct)
             entity._context_evidence = ContextEvidence(used_pct=pct, source="codex",
                                                        sequence=(2,), source_head_sequence=(2,))
-            projection.attach_projections([], [entity], now=100.0)
+            projection.attach_projections([entity], [], now=100.0)
             projections.append((entity.work_projection.to_dict(), entity.context.to_dict()))
         self.assertEqual(projections[0][0], projections[1][0])
         self.assertEqual(projections[1][0], projections[2][0])
         self.assertEqual([row[1]["band"] for row in projections], ["normal", "tight", "critical"])
+
+    def test_dispatch_drops_legacy_context_instead_of_projecting_unknown(self):
+        job = DispatchJob(key="code", slug="worker")
+        job._context_evidence = ContextEvidence(used_pct=85, source="legacy")
+        projection.attach_projections([], [job], now=100.0)
+        self.assertIsNone(job.context)
+        self.assertIsNone(job._context_evidence)
 
     def test_newer_compaction_decrease_is_valid_but_sequence_regression_is_unknown(self):
         valid = ContextEvidence(used_pct=40, source="claude", sequence=(11,),

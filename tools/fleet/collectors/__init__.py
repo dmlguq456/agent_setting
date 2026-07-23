@@ -61,7 +61,7 @@ def _mark_dispatch_child_sessions(sessions, jobs):
 
 
 def _adopt_child_titles(sessions, jobs):
-    """Atomically associate title, NOW and context from one exact child."""
+    """Atomically associate title and NOW from one exact child."""
     children = [s for s in sessions if getattr(s, 'is_child', False)]
     by_identity = {}
     by_session_id = {}
@@ -105,26 +105,12 @@ def _adopt_child_titles(sessions, jobs):
             if ambiguity:
                 job.association_ambiguity = ambiguity
                 job.summary = None
-                job.context = None
-                job._context_evidence = None
             continue
-        # Values cross the boundary as one association decision; no parent context.
+        # Values cross the boundary as one association decision. Dispatch context
+        # is intentionally absent: headless runtimes expose no session-owned window.
         if not getattr(job, 'title', None):
             job.title = getattr(source, 'title', None)
         job.summary = getattr(source, 'summary', None)
-        child_context = getattr(source, 'context', None)
-        stream_context = getattr(job, 'context', None)
-        if getattr(child_context, 'used_pct', None) is not None:
-            job.context = child_context
-            job._context_evidence = getattr(source, '_context_evidence', None)
-        elif getattr(stream_context, 'used_pct', None) is not None:
-            # The stream is exact to this associated runtime session.  Make the child
-            # and its dispatch representative consume the same normalized sample.
-            source.context = stream_context
-            source._context_evidence = getattr(job, '_context_evidence', None)
-        else:
-            job.context = child_context
-            job._context_evidence = getattr(source, '_context_evidence', None)
 
 
 def collect_all(harness_filter=None, jobs_path=None):
@@ -233,9 +219,9 @@ def collect_all(harness_filter=None, jobs_path=None):
     try:
         from ..projection import normalize_context, _evidence
         now = _time.time()
-        for entity in sessions + jobs:
-            entity.context, entity._context_evidence = normalize_context(
-                _evidence(entity), now=now)
+        for session in sessions:
+            session.context, session._context_evidence = normalize_context(
+                _evidence(session), now=now)
     except Exception:
         pass
 
