@@ -7,8 +7,6 @@
 > · **v18 2026-07-19** (conductor 생존·Codex linked-worktree mutation 경계·completion marker↔attempt row 결합 — SD-69~71)
 > · **v19 2026-07-20** (transient PID namespace lifecycle — foreground-scoped wrapper·outer-sandbox 경계·exact parent·unmatched depth-2 visibility, SD-72) · **v19 reliability minor 2026-07-20** (sandbox-init terminal handoff·canonical transport·same-route fallback·exact-attempt liveness)
 > · **v20 2026-07-20** (`quick` registered-headless-only fail-closed·portable `dispatch_depth` namespace·Codex/Claude execution-surface terminology, SD-73~75; SD-19 superseded)
-> · **v21 2026-07-22** (strong+ 2-way cross-harness replica-and-merge route 컴파일 — recipe `replication` 선언·compiler 확장·conductor verdict-merge, SD-76; 2026-07-21 core 강화 9b4e81b2의 실행 배선 사후 spec-sync)
-> · **v22 2026-07-23** (parent-bound teardown — exact parent attempt 봉인·owner 사망 시 직접 자식 bounded cascade reconcile·Codex/Claude wrapper parity, SD-77)
 > 컴포넌트: `agent_setting` repo 의 **autopilot 파이프 디스패치 토폴로지 개정** — 각 sub-skill 스테이지(code-plan / code-execute / code-test / code-report)를 `standard+` 에서 **기본으로 별개 headless 세션**으로 분사하는 계약. 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 와 무관한 독립 청사진. 이 폴더(`spec/stage-dispatch/`)가 자체 SoT.
 > 입력(1순위 근거):
 > - **사용자 승인 결정 (2026-07-20 v20)**: `effective_intensity=quick` 인 모든 route는 registered headless worker session만 사용한다. `native-subagent`, `inline-fallback`, interactive/empty, unknown/arbitrary surface는 compile 단계에서 fail-closed이며 dispatch depth로 이름 붙이지 않는다. `direct` inline과 `standard+` fallback은 유지한다. portable nesting은 `dispatch_depth`/`max_dispatch_depth`로 한정하고 Codex `agents.max_depth`와 분리한다. Claude subagent, Claude agent-team teammate session, registered headless worker session을 구별하며 multi-capability composition은 추가하지 않는다.
@@ -1123,40 +1121,7 @@ subagent만 포함한다. Claude agent-team teammate를 포함하지 않는다. 
 registered wrapper를 호출한 경우에도 team membership과 그 wrapper child attempt의
 registered-headless status는 별도 속성이다.
 
-### 13.12.4 SD-76 — strong+ 2-way cross-harness replica-and-merge의 route 컴파일 (v21)
-
-**근거**: 2026-07-21 사용자 지침(검토 적대화·독립 병렬화 일반화, core 등재
-9b4e81b2 — `CONVENTIONS §3.5/§3.12`, `WORKFLOW.md` intensity 표,
-`DESIGN_PRINCIPLES.md` 독립 QA 규칙)이 실행 표면에 미배선된 갭의 사후 spec-sync.
-실측: strong 요청 route가 standard와 동일 노드 그래프로 컴파일됨
-(`plans/2026-07-22_codex-headless-context-parity/_internal/route.json`).
-
-- registry recipe `standard_plus`는 선택적 `replication` 블록을 가진다 —
-  `{node, min_intensity, ways: 2, independence_axis: "cross-harness"}`. `node`는
-  해당 capability의 가장 위험한 review-worker 노드(예: autopilot-code의
-  `impl-review`)를 가리킨다. review-worker 노드가 없는 recipe(autopilot-note)는
-  선언하지 않는다 — 스테이지 발명 금지(CONVENTIONS §3.2).
-- compiler는 `effective_intensity >= min_intensity`일 때 대상 노드를 복제 확장한다:
-  id `<node>-replica`, 양쪽 leg에 `replica_group=<node>`, replica에
-  `independence_axis`, outputs는 `name.ext -> name.replica.ext`(파일 충돌 방지),
-  하류 노드 depends_on에 replica 추가. replica는 완전한 dispatch-depth-2 노드로
-  기존 fallback 사슬(SD-50/61/72 순서 불변)·seal(SD-68)·attempt/marker 계약을
-  그대로 따른다. standard 이하 그래프와 direct/quick는 결과 불변(§3.2 보존).
-- 독립성 축의 실현은 dispatch 시점 conductor 계약이다: 두 leg를 서로 다른
-  harness/model family에 분사하고, 단일 harness 환경에서는 same-harness 독립
-  세션으로 fallback하며 독립성 저하를 결정 기록에 남긴다(DESIGN_PRINCIPLES 규칙
-  그대로). fallback hop 어휘·순서는 SD-75에서 변경 없다.
-- merge는 conductor의 verdict-수준 병합이다: 두 leg의 memo verdict만 읽고
-  (SD-1 thin conductor 유지), stricter-wins + blocking findings 합집합으로
-  완료 gate를 판정한다. 두 leg의 verdict를 읽고 병합을 기록하기 전에는 해당
-  gate를 통과하지 않는다.
-- 규칙 구간: replication 블록 스키마 검증(review-worker 대상·ways==2·axis 어휘·
-  standard+ tier)·컴파일 확장의 결정론(동일 입력=동일 그래프)·replica 출력 경로
-  변환·composed route 검증의 동일 확장 적용. 의미 판단 구간: 어느 노드가 "가장
-  위험한 지점"인가(registry 선언 시 1회 판단), leg 배치의 harness/family 선택과
-  독립성 저하 사유 서술.
-
-### 13.12.5 v20 acceptance / implementation handoff
+### 13.12.4 v20 acceptance / implementation handoff
 
 1. every-capability quick default compile = one node, qualified depth fields, headless only;
    quick native/inline/interactive/empty/arbitrary negative fixtures는 route/row/spawn 0.
@@ -1178,53 +1143,6 @@ registered-headless status는 별도 속성이다.
 10. multi-capability composition, co-primary route, cross-capability DAG/envelope, source
     implementation, concrete model choice, user runtime config 변경은 본 v20 범위 밖이다.
 
-
-## 13.13 v22 — parent-bound teardown와 orphan-free convergence (2026-07-23)
-
-> 근거: `plans/2026-07-22_codex-headless-context-parity` 실측에서 depth-1 owner
-> 로그가 `turn.completed` 없이 plan-refine foreground 대기 중 끊겼고, SD-64/71
-> watcher는 계약대로 owner만 `dead-parent-orphaned`로 닫아 depth-2 row가 수동
-> exact-process audit 전까지 open으로 남았다. 2026-07-23 사용자 지시: orphan이
-> 생기지 않도록 대책을 구현하고 Codex/Claude Code parity를 함께 검증한다.
-> 공식 런타임 경계는 Codex native subagent thread 및 Claude subagent/background
-> session과 별도인 `codex exec`/`claude -p` registered process surface다. 따라서
-> parent-death ownership은 portable harness가 동일하게 제공한다.
-
-### 13.13.1 SD-77 — exact parent binding과 bounded child cascade
-
-- 신규 dispatch-depth-2 attempt는 claim 전에 같은 repo/worktree의 open
-  dispatch-depth-1 owner를 정확히 하나 해석하고 `parent_attempt_id`와 parent
-  PID/start identity를 봉인한다. parent 부재·사망·모호성은 child row/spawn 0으로
-  실패한다. slug만 같은 과거 owner retry에 결합하지 않는다.
-- child spawn은 namespace-visible PID/start와 `/proc`가 제공하는 outer-namespace
-  PID/start를 attempt row에 기록한다. 새 row의 direct-parent binding과 process-group
-  identity는 immutable parent axes + mutable launch evidence로 분리한다.
-- owner post-exit watcher는 기존 orphan 분류를 재검증한 뒤 exact completion marker와
-  typed terminal handoff를 먼저 보존하고, owner를 `dead-parent-orphaned`로 닫은 다음
-  그 `parent_attempt_id`에 봉인된 open direct child만 한 번 cascade reconcile한다.
-  host-visible live group은 PID/start 및 `pgid == pid`를 다시 확인한 뒤
-  SIGTERM → bounded grace → 필요 시 SIGKILL로 회수하고 row를
-  `dead-parent-terminated`로 닫는다. 이미 사라진 process나 parent namespace와 함께
-  소실된 row는 별도 typed note로 닫는다.
-- PID reuse, identity 누락, group-leader 불일치, route tuple 충돌, legacy live row는
-  신호를 보내지 않고 fail-closed로 남겨 Fleet/depth-0가 볼 수 있게 한다. marker나
-  terminal evidence가 signal/close와 경합하면 terminal evidence가 우선한다.
-- watcher는 replacement conductor, retry, successor launch, completion marker 생성,
-  route advance를 수행하지 않는다. resume boundary와 재개 여부는 계속 depth-0
-  의미 판단이다. unrelated/sibling attempt는 byte-identical이고 재실행은 idempotent다.
-- Codex와 Claude registered-headless wrapper는 같은 shared parent-binding/cascade
-  primitive와 closed note vocabulary를 사용한다. native subagent, Claude agent teams,
-  `claude agents` supervisor/background session은 이 계약의 parity 증거가 아니다.
-
-**acceptance**: ① owner 사망+live direct child fixture가 bounded 시간 내 owner/child
-terminal·실제 child process 0으로 수렴 ② parent retry/route conflict/PID reuse/non-group-
-leader/missing identity는 signal 0·무관 row mutation 0 ③ marker/FAIL/BLOCKED terminal
-race는 기존 exact terminal 결과 우선 ④ namespace-local row는 outer identity가 있을
-때만 signal하고 legacy unverifiable row는 계속 visible ⑤ Codex·Claude wrapper가
-`parent_attempt_id`와 outer PID evidence를 동형 기록 ⑥ 기존 lifecycle/registry/
-liveness/wait/harvest/Fleet/adaptation suite 회귀 0 ⑦ 실제 두 CLI의 terminal envelope는
-각 공식 headless 표면으로 확인하되 runtime-native registry 지원으로 과장하지 않는다.
-
 ## 14. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
 
 - **규칙 구간(코드로 강제)**: depth ≤ 2(wrapper 게이트)·jobs.log row 형식·스테이지-워커 write 클래스·lock 범위·model role 명시 — 전부 결정론 가드/wrapper(§2.4). "산출물 기반 소통"의 완결성은 파일 존재로 결정론적 감사. **v2 추가**: SD-14(b) Stop hook(open 자식 row = 결정론적 차단 조건)·SD-14(c) dispatch-wait(대기 판단을 코드로)·SD-14(a) depth_note(계약 전달의 결정론화). **v6 추가**: quick depth-2 금지, quick jobs.log child-row 부재, mutation quick isolated worktree 는 결정론 gate 대상. **v7 추가**: hard eligibility 기반 후보 제거·adapter exact-ID probe·reason trace 필드·helper read-only·Fleet env child-hidden/metadata-exact 분류는 결정론 테스트 대상. **v8 추가**: canonical path 해석·worker-local artifact write 차단·cleanup eligibility·registry 직렬화는 모두 deterministic fail-closed 규칙이다. **v10 추가**: route record hash/scope 검증·tracked gate 증거 4종 필드 존재 검사·guard↔write_scope validator 항목·spec-transaction lock 시퀀스와 버전 경합 대기 규칙은 전부 결정론 검사 대상이다. **v11 추가**: nested eligibility tuple/status, immutable global registry path, attempt-first row identity, no-change retry 금지, fallback hop 순서·broker parent linkage는 결정론 validator/fixture 대상이다. **v12 추가**: broker endpoint/identity·request schema/idempotency·atomic state transition·fencing/lease·spawn 전 registry·4조합 logical parent 보존은 결정론 protocol/fixture 대상이다. **v13 추가**: per-request lease 직렬화·전역 락 비보유 실행·record v2 필드 규칙(stable identity만)·hop 시점 ensure 해석·completion marker 존재/필드/경로 검사·후속 노드 launch의 선행 marker gate는 전부 결정론 검사 대상이다. **v14 추가**: 생존증거 위계(exact-proc/flock 프로브/fenced ping+heartbeat) 판정 순서·spool publish/consume 원자성과 idempotency·발화-비인정 liveness 신호 집합·capacity failure class 감지와 모델 cooldown·registry reconcile 안전 게이트와 현재-작업 필터는 전부 결정론 검사 대상이다.
@@ -1233,6 +1151,5 @@ liveness/wait/harvest/Fleet/adaptation suite 회귀 0 ⑦ 실제 두 CLI의 term
 - **v17 추가**: mutation 노드 재시도 계보 판정의 세 입력(route record `resume_retry_boundaries` 선언·바인딩된 전역 registry의 선행 attempt row·first-parent 계보)과 registry 부재 시 정확 일치 회귀, 그리고 `harness_affinity` 어휘 검증·`dispatch_defaults_digest` 봉인·registry row 기록은 결정론 검사 대상이다. 재시도를 할지·언제 할지의 판단과 record affinity 이탈 사유의 타당성은 conductor 의미 구간으로 남는다.
 - **v18 추가**: exact attempt marker↔row 마감·marker 기반 reconcile, Codex linked-worktree no-commit 분류와 좁은 `.spec-grounding` writable root, verified Claude async-tool deny 목록, `dead-parent-orphaned` 사후 분류·표면화는 결정론 검사 대상이다. marker가 나타내는 stage 통과의 타당성, 고아 route를 실제 재개할지, no-commit diff를 최종 commit할지는 각각 conductor/depth-0 의미 판단으로 남는다.
 - **v20 추가**: quick `registered-headless` 단일 surface allowlist, namespace별 closed vocabulary, exact compile/runtime failure enum, one-node/at-most-one-live-attempt cardinality, qualified dispatch-depth fields, node topology↔attempt surface 분리, four-surface terminology, legacy read-only migration은 전부 compiler/schema/conformance fixture로 강제한다. SD-19 quick fallback과 bare current terminology는 superseded다. direct/standard+ 보존과 multi-capability composition 비추가는 회귀 fixture 대상이다.
-- **v22 추가**: exact parent-attempt binding, parent live preclaim, outer PID/start + process-group revalidation, terminal-evidence precedence, bounded direct-child cascade, typed closure와 idempotence는 결정론 fixture 대상이다. 실제 route를 재개할지와 unverifiable legacy row를 사람이 종료할지는 depth-0 의미 판단으로 남는다.
 - **의미 판단 구간(사람/LLM)**: (1) 마이크로-스테이지 inline 경계 임계 — 계측 후 판정(SD-OPEN-1). (2) 스테이지 실패 시 재분사 vs 이어쓰기 판단 — conductor 의 부분 산출물 해석. (3) 산출물 계약이 "완전한가"의 판정 — 스테이지가 대화 없이 완주 가능한지. **v2 추가**: (4) SD-11 을 deny 가 아니라 reminder 로 시작 — hook 이 intensity(direct/quick 정당 fallback)를 결정론적으로 알 수 없어, 규칙화 불가 구간을 deny 로 억지 규칙화하지 않음(경계 존중). deny 상향은 계측 후. (5) SD-14(b) 피드백도 "대기 강제"가 아니라 liveness 진단→행동 분기 지시 — 죽은 스테이지 해석은 의미 판단으로 남김. **v6 추가**: headless 실패 시 native subagent 로 충분한지, 또는 inline fallback 으로 낮출지의 fallback reason 작성은 runtime 상태 해석이므로 의미 판단으로 남긴다. **v7 추가**: stage affinity와 family diversity의 품질 판단은 의미 구간이지만, 그 적용 순서와 후보 탈락 사유는 helper가 구조화한다. **v10 추가**: "산출물을 추적할 가치가 있는가"(tracking)와 "분사할 실익이 있는가"(promotion/separability)는 각각 의미 판단으로 남되, 두 판단을 하나로 동일시하지 않는 것이 SD-44의 축 분리다 — record는 판단 결과와 근거 신호만 구조화한다. **v11 추가**: eligible 후보가 여러 개일 때 role affinity·family diversity로 어느 cross-harness를 고를지와 새로운 failure class의 의미 해석은 판단 구간이지만, 지원 여부·hop 순서·row 기록은 규칙 구간이다. **v13 추가**: "스테이지 산출물이 계약상 완전한가"의 통과 판정은 conductor의 의미 판단으로 남긴다 — SD-56은 그 판단을 대체하지 않고 판단 결과를 marker로 결정론화하며, marker 부재를 실패로 해석하지 않는 것도 의미 구간의 존중이다. **v14 추가**: 무진행 worker에 대한 최종 interrupt vs 계속 대기, 그리고 재분사 시 이어쓰기/재시작 선택은 conductor 의미 판단으로 남긴다 — SD-58은 경고·차단의 발동 조건과 인정 가능한 liveness 신호 집합만 결정론화한다. capacity failover에서 "어느 대체 모델인가"의 품질 판단도 SD-22 affinity 의미 구간이며, SD-59는 재시도 횟수·cooldown·증거 기록만 규칙화한다.
 - **충돌**: 없음 — 반전의 핵심 우려(현행 "상태 재발굴·연속성 상실")를 §0.5 계약 완결성 의무 + §8 inline 경계로 규칙화해 흡수했다. 우려를 사람 vigilance 로 남기지 않고 "산출물이 상태를 완전히 담는가"라는 검증 가능한 규칙으로 전환한 것이 이 경계 존중. per-stage cost 는 추측으로 규칙화하지 않고 계측(SD-OPEN-1)으로 미룬 것도 동일.

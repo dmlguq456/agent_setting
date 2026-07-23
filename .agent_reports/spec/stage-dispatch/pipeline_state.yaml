@@ -1,7 +1,7 @@
 project_name: stage-dispatch
 component: stage-dispatch          # autopilot 파이프 디스패치 토폴로지 개정 (repo spec/prd.md = Unified Memory System, spec/harness-layer-sync·dispatch-profiles·agent-fleet-dashboard 무관)
 created: 2026-07-10
-version: 20
+version: 22
 mode: [library, cli]              # library(스테이지 분사 계약·오케스트레이션) + cli(dispatch wrapper·jobs.log·fleet 관제) — infra
 scope_note: "dispatch_depth=0 main은 substantive tracked work의 orchestration/integration만 소유. direct=atomic main-inline, quick=registered-headless-only capability owner 1개(owner/max dispatch depth=1, child 없음), standard+=capability-specific recipe와 기존 checked fallback. v20부터 portable dispatch depth는 Codex agents.max_depth 및 runtime-native agent surfaces와 별도 namespace다."
 inputs:
@@ -37,12 +37,13 @@ inputs:
   - '사용자 승인 결정 2026-07-20 (v20): effective_intensity=quick는 registered headless worker session만; native-subagent/inline-fallback/interactive/empty/unknown은 compile fail-closed. direct inline과 standard+ fallback 유지. portable dispatch_depth namespace와 Codex/Claude 4-surface terminology 확정; multi-capability composition 제외'
   - 'documents/2026-07-20_depth1-surface-terminology-audit.md + shards/spec-research/depth1-surface-terminology.md + reviews/spec/spec-verdict.json (registered depth-2 research/review; V20-R1~R6 transaction 반영)'
 phases:
-  spec: done              # PRD v20 — quick registered-headless-only, qualified dispatch-depth namespace, four execution surfaces. previous v19 snapshot = _internal/versions/v19/
+  spec: done              # PRD v22 — parent-bound child teardown + prior v21 strong replica wiring. snapshots repaired through _internal/versions/v21/
   scaffolding: deferred   # lean — 코드 skeleton 은 autopilot-code 로 이월 (§11 module 구조만 확정, wrapper 재작성 불요)
   design: n/a             # 시각 UI 없음 (인프라 계약)
   dev: pending            # v20 source implementation은 별도 autopilot-code cycle 소관
-last_updated: 2026-07-20
+last_updated: 2026-07-23
 decisions_locked:
+  - 'SD-77(v22): depth-2 claim은 one live exact parent_attempt_id에 봉인. owner death watcher는 terminal evidence를 우선한 뒤 exact direct child만 PID/start/PGID 재검증하여 bounded TERM→KILL cascade; unverifiable legacy는 signal 없이 visible, 자동 재개/재분사 없음; Codex/Claude wrapper 동형'
   - 'SD-73(v20, SD-19 supersedes): quick는 one capability-owner node(dispatch_depth=1, max_dispatch_depth=1), registered-headless-only, at most one live attempt. compile headless 부재=quick-headless-unavailable, serial registered-headless 소진=quick-registered-headless-exhausted; native/inline attempt 0. direct/standard+ semantics 보존'
   - 'SD-74(v20): dispatch_depth/max_dispatch_depth/owner_dispatch_depth는 portable logical route ownership. runtime transport·process ancestry·registration·Codex agents.max_depth와 독립. node depth와 attempt execution_surface/registered_worker evidence를 분리하고 legacy bare fields는 version-tagged read-only'
   - 'SD-75(v20): wrapper transport, attempt execution_surface, fallback_hop은 별도 closed vocabulary. Codex native subagent, Claude subagent, Claude agent-team teammate session, registered headless worker session을 명시 구별; multi-capability composition 미추가'
