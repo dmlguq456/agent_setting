@@ -227,6 +227,19 @@ path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
 PY
 }
 
+write_claude_terminal_log() { # $1=path $2=verdict $3=blocker
+  python3 - "$1" "$2" "$3" <<'PY'
+import json, pathlib, sys
+path, verdict, blocker = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+result = f"artifact: -\nverdict: {verdict}\nblocker: {blocker}"
+rows = [
+    {"type":"system","subtype":"init"},
+    {"type":"result","subtype":"success","result":result},
+]
+path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
+PY
+}
+
 for verdict in PASS FAIL BLOCKED; do
   lower=$(printf '%s' "$verdict" | tr '[:upper:]' '[:lower:]')
   log="$tmp/$lower.codex.jsonl"
@@ -292,18 +305,20 @@ else
   bad "missing root expected unsafe-root; got rc=$missing_rc out=[$missing_out]"
 fi
 
-# Mixed harness rows bypass the Codex inspector even when their pipe has a log_file.
+# Claude rows use the same closed terminal inspector with their native result event.
 mixed_wt="$tmp/wt/mixed"
-mixed_enc=$(printf '%s' "$mixed_wt" | sed 's#[/._]#-#g')
-mkdir -p "$runtime_root/projects/$mixed_enc"
-: > "$runtime_root/projects/$mixed_enc/session.jsonl"
-sed "s#${term_wt}#${mixed_wt}#;s/harness=codex/harness=claude/" "$tmp/fail.jobs.log" > "$tmp/mixed.jobs.log"
+mkdir -p "$mixed_wt"
+git -C "$mixed_wt" init -q
+claude_log="$tmp/pass.claude.jsonl"
+write_claude_terminal_log "$claude_log" PASS none
+printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-22T00:00:00" "open" "repo" "$mixed_wt" "claude-pass" \
+  "attempt_schema_version=2,dispatch_depth=1,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless,attempt_id=att-claude-pass,harness=claude,artifact_root=$term_root,log_file=$claude_log" > "$tmp/mixed.jobs.log"
 mixed_out=$(AGENT_HOME="$agent_home" AGENT_ARTIFACT_ROOT="$term_root" DISPATCH_RUNTIME_ROOT="$runtime_root" bash "$LIVENESS" "$tmp/mixed.jobs.log" 2>&1); mixed_rc=$?
-if [ "$mixed_rc" -eq 0 ] && printf '%s' "$mixed_out" | grep -q 'ALIVE' \
-    && ! printf '%s' "$mixed_out" | grep -q 'turn.completed\|private-fail'; then
-  ok "mixed-harness row bypasses Codex terminal inspection"
+if [ "$mixed_rc" -eq 3 ] && printf '%s' "$mixed_out" | grep -q 'COMPLETED.*exact Claude result PASS' \
+    && ! printf '%s' "$mixed_out" | grep -q 'ALIVE'; then
+  ok "Claude stream-json result uses the shared exact terminal inspection"
 else
-  bad "mixed harness should use Claude fallback; got rc=$mixed_rc out=[$mixed_out]"
+  bad "Claude result should be terminal; got rc=$mixed_rc out=[$mixed_out]"
 fi
 
 # Linked-worktree resolution selects the primary canonical artifact root, never

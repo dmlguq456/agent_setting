@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import subprocess
 import sys
 import tempfile
@@ -40,6 +41,10 @@ ATTEMPT_MUTABLE_METADATA = {
     "pid",
     "pid_start",
     "pid_scope",
+    "pid_host",
+    "pid_host_start",
+    "pgid",
+    "launch_lifecycle",
     "updated_at",
     "note",
     "completion_marker",
@@ -141,10 +146,301 @@ class BrokerSelection:
     jobs: Path
 
 
+@dataclass(frozen=True)
+class ParentAttemptBinding:
+    """One live depth-1 owner identity sealed into a depth-2 attempt."""
+
+    attempt_id: str
+    pid: int
+    pid_start: str
+    pid_scope: str
+    pid_host: int | None
+    pid_host_start: str
+    observed_pid: int
+    observed_pid_start: str
+
+
 def parse_registry_metadata(pipe: str) -> dict[str, str]:
     """Parse the stable six-column registry's comma-delimited metadata."""
 
     return dict(part.split("=", 1) for part in pipe.split(",") if "=" in part)
+
+
+def process_start_ticks(pid: int) -> str | None:
+    """Return Linux proc start ticks for an exact PID identity."""
+
+    if pid <= 0:
+        return None
+    try:
+        raw = (Path("/proc") / str(pid) / "stat").read_text(encoding="utf-8")
+        tail = raw[raw.rfind(")") + 2 :].split()
+        return tail[19]
+    except (OSError, IndexError):
+        return None
+
+
+def process_state(pid: int) -> str | None:
+    """Return the one-letter proc state; zombies are not live workers."""
+
+    if pid <= 0:
+        return None
+    try:
+        raw = (Path("/proc") / str(pid) / "stat").read_text(encoding="utf-8")
+        tail = raw[raw.rfind(")") + 2 :].split()
+        return tail[0]
+    except (OSError, IndexError):
+        return None
+
+
+def process_identity_is_live(pid: int, expected_start: str) -> bool:
+    return (
+        bool(expected_start)
+        and process_start_ticks(pid) == expected_start
+        and process_state(pid) != "Z"
+    )
+
+
+def process_namespace_pids(pid: int) -> tuple[int, ...]:
+    """Return the outer-to-inner NSpid vector without guessing on failure."""
+
+    try:
+        lines = (Path("/proc") / str(pid) / "status").read_text(
+            encoding="utf-8"
+        ).splitlines()
+    except OSError:
+        return ()
+    for line in lines:
+        if not line.startswith("NSpid:"):
+            continue
+        try:
+            return tuple(int(value) for value in line.split()[1:])
+        except ValueError:
+            return ()
+    return ()
+
+
+def process_launch_identity(pid: int) -> dict[str, str]:
+    """Capture local and outer PID evidence for one new-session leader."""
+
+    values = {"pid": str(pid)}
+    start = process_start_ticks(pid)
+    if start:
+        values["pid_start"] = start
+    namespace_pids = process_namespace_pids(pid)
+    if namespace_pids:
+        values["pid_host"] = str(namespace_pids[0])
+        if start:
+            values["pid_host_start"] = start
+    try:
+        values["pgid"] = str(os.getpgid(pid))
+    except (OSError, ProcessLookupError):
+        pass
+    return values
+
+
+def spawn_claimed_attempt(
+    jobs: Path,
+    attempt_id: str,
+    *,
+    parent_binding: ParentAttemptBinding | None,
+    spawn: Callable[[], subprocess.Popen],
+    launch_metadata: dict[str, str] | None = None,
+) -> tuple[subprocess.Popen, dict[str, str]]:
+    """Spawn one claimed attempt and publish its process identity atomically.
+
+    The registry lock closes the parent-death gap between the final live-parent
+    check and publication of the child PID.  A parent watcher can therefore
+    observe either no spawned child or a fully identified process group, never
+    a launch-claimed row whose process was created but not yet attributable.
+    """
+
+    if not attempt_id:
+        raise DispatchContractError("attempt-id-required")
+    ensure_global_registry_writable(jobs)
+    lock_path = Path(f"{jobs}.lock")
+    with lock_path.open("a", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
+        matches = []
+        for index, line in enumerate(lines):
+            fields = line.split("\t")
+            if len(fields) == 6 and row_has_attempt(fields[5], attempt_id):
+                matches.append((index, fields, parse_registry_metadata(fields[5])))
+        if len(matches) != 1:
+            raise DispatchContractError(
+                "attempt-row-not-unique", f"attempt_id={attempt_id} rows={len(matches)}"
+            )
+        child_index, child_fields, child_meta = matches[0]
+        validate_attempt_metadata(child_meta)
+        if child_fields[1] not in {"open", "running"}:
+            raise DispatchContractError("attempt-not-open", attempt_id)
+        if child_meta.get("launch_claimed") != "1":
+            raise DispatchContractError("attempt-launch-not-claimed", attempt_id)
+
+        if parent_binding is not None:
+            parent_matches = []
+            for line in lines:
+                fields = line.split("\t")
+                if len(fields) != 6 or fields[1] not in {"open", "running"}:
+                    continue
+                meta = parse_registry_metadata(fields[5])
+                if meta.get("attempt_id") == parent_binding.attempt_id:
+                    parent_matches.append((fields, meta))
+            if len(parent_matches) != 1:
+                raise DispatchContractError(
+                    "parent-attempt-not-live", parent_binding.attempt_id
+                )
+            parent_fields, parent_meta = parent_matches[0]
+            try:
+                validate_attempt_metadata(parent_meta)
+            except DispatchContractError as exc:
+                raise DispatchContractError(
+                    "parent-attempt-not-live", parent_binding.attempt_id
+                ) from exc
+            same_identity = (
+                parent_meta.get("dispatch_depth") == "1"
+                and parent_meta.get("worker_type") == "owner"
+                and parent_fields[2] == child_fields[2]
+                and parent_fields[3] == child_fields[3]
+                and parent_fields[4] == child_meta.get("parent")
+                and child_meta.get("parent_attempt_id") == parent_binding.attempt_id
+                and parent_meta.get("pid") == str(parent_binding.pid)
+                and parent_meta.get("pid_start") == parent_binding.pid_start
+            )
+            if parent_binding.pid_host is not None:
+                same_identity = same_identity and (
+                    parent_meta.get("pid_host") == str(parent_binding.pid_host)
+                    and (parent_meta.get("pid_host_start") or parent_meta.get("pid_start"))
+                    == parent_binding.pid_host_start
+                )
+            if not same_identity:
+                raise DispatchContractError(
+                    "parent-attempt-identity-changed", parent_binding.attempt_id
+                )
+            if not process_identity_is_live(
+                parent_binding.observed_pid, parent_binding.observed_pid_start
+            ):
+                raise DispatchContractError(
+                    "parent-attempt-not-live", parent_binding.attempt_id
+                )
+
+        proc = spawn()
+        identity = process_launch_identity(proc.pid)
+        identity.update(
+            {
+                key: str(value)
+                for key, value in (launch_metadata or {}).items()
+                if value not in (None, "")
+            }
+        )
+        try:
+            replace_keys = set(identity)
+            parts = [
+                part
+                for part in child_fields[5].split(",")
+                if part.split("=", 1)[0] not in replace_keys
+            ]
+            parts.extend(f"{key}={value}" for key, value in sorted(identity.items()))
+            child_fields[5] = ",".join(parts)
+            lines[child_index] = "\t".join(child_fields)
+            _atomic_registry_replace(jobs, lines)
+        except OSError as exc:
+            try:
+                os.killpg(proc.pid, signal.SIGTERM)
+                proc.wait(timeout=0.5)
+            except (OSError, subprocess.TimeoutExpired):
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                    proc.wait(timeout=0.5)
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
+            raise DispatchContractError(
+                "attempt-launch-identity-record-failed", str(exc)
+            ) from exc
+        return proc, identity
+
+
+def resolve_live_parent_attempt(
+    jobs: Path,
+    *,
+    parent_slug: str,
+    repo: str,
+    worktree: str,
+    expected_attempt_id: str | None = None,
+) -> ParentAttemptBinding:
+    """Resolve exactly one open, live depth-1 owner before a depth-2 claim.
+
+    A slug is only a lookup constraint.  Teardown authority is the returned
+    attempt id, and a same-slug retry cannot satisfy an explicitly inherited
+    parent attempt id.
+    """
+
+    if not parent_slug:
+        raise DispatchContractError("parent-slug-required", "depth-2 parent is required")
+    ensure_global_registry_writable(jobs)
+    with Path(f"{jobs}.lock").open("a", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
+        candidates: list[dict[str, str]] = []
+        for line in lines:
+            fields = line.split("\t")
+            if len(fields) != 6 or fields[1] not in {"open", "running"}:
+                continue
+            if fields[2] != repo or fields[3] != worktree or fields[4] != parent_slug:
+                continue
+            metadata = parse_registry_metadata(fields[5])
+            try:
+                validate_attempt_metadata(metadata)
+            except DispatchContractError:
+                continue
+            if metadata.get("dispatch_depth") != "1" or metadata.get("worker_type") != "owner":
+                continue
+            if expected_attempt_id and metadata.get("attempt_id") != expected_attempt_id:
+                continue
+            candidates.append(metadata)
+
+        if not candidates:
+            reason = "parent-attempt-not-found" if expected_attempt_id else "live-parent-not-found"
+            raise DispatchContractError(reason, expected_attempt_id or parent_slug)
+        if len(candidates) != 1:
+            raise DispatchContractError(
+                "parent-attempt-ambiguous",
+                f"parent={parent_slug} candidates={len(candidates)}",
+            )
+        metadata = candidates[0]
+        attempt_id = metadata.get("attempt_id", "")
+        raw_pid = metadata.get("pid", "")
+        pid_start = metadata.get("pid_start", "")
+        raw_host = metadata.get("pid_host", "")
+        host_start = metadata.get("pid_host_start", "") or pid_start
+        if not attempt_id or not raw_pid.isdigit() or not pid_start:
+            raise DispatchContractError("parent-process-identity-missing", attempt_id or parent_slug)
+        pid = int(raw_pid)
+        host_pid = int(raw_host) if raw_host.isdigit() else None
+        identities: list[tuple[int, str]] = []
+        if host_pid is not None and host_start:
+            identities.append((host_pid, host_start))
+        identities.append((pid, pid_start))
+        observed = next(
+            (
+                identity
+                for identity in dict.fromkeys(identities)
+                if process_identity_is_live(identity[0], identity[1])
+            ),
+            None,
+        )
+        if observed is None:
+            raise DispatchContractError("parent-attempt-not-live", attempt_id)
+        return ParentAttemptBinding(
+            attempt_id=attempt_id,
+            pid=pid,
+            pid_start=pid_start,
+            pid_scope=metadata.get("pid_scope", "host-visible"),
+            pid_host=host_pid,
+            pid_host_start=host_start,
+            observed_pid=observed[0],
+            observed_pid_start=observed[1],
+        )
 
 
 def _registered_worker(value: object) -> bool:

@@ -83,7 +83,7 @@ while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
   artifact_root=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^artifact_root=//p' | head -1)
   [ -n "$harness" ] || harness="claude"
   terminal_state=""; terminal_source=""; terminal_verdict=""; terminal_artifact=""; terminal_blocker=""
-  if [ "$harness" = "codex" ] && [ -n "$log_file" ]; then
+  if { [ "$harness" = "codex" ] || [ "$harness" = "claude" ]; } && [ -n "$log_file" ]; then
     wire_out=$(python3 "$CODEX_TERMINAL_INSPECTOR" \
       --worktree "$wt" --artifact-root-metadata "${artifact_root:--}" "$log_file" 2>/dev/null)
     wire_rc=$?
@@ -95,19 +95,32 @@ while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
       wire_key="$wire_rc|$terminal_state|$terminal_source|$terminal_verdict|$terminal_artifact|$terminal_blocker"
       case "$wire_key" in
         0\|valid\|exact-turn-completed\|PASS\|none\|none|\
+        0\|valid\|exact-claude-result\|PASS\|none\|none|\
         0\|valid\|exact-turn-completed\|PASS\|readable\|none|\
+        0\|valid\|exact-claude-result\|PASS\|readable\|none|\
         0\|valid\|exact-turn-completed\|FAIL\|none\|none|\
+        0\|valid\|exact-claude-result\|FAIL\|none\|none|\
         0\|valid\|exact-turn-completed\|FAIL\|none\|worker-reported|\
+        0\|valid\|exact-claude-result\|FAIL\|none\|worker-reported|\
         0\|valid\|exact-turn-completed\|FAIL\|readable\|none|\
+        0\|valid\|exact-claude-result\|FAIL\|readable\|none|\
         0\|valid\|exact-turn-completed\|FAIL\|readable\|worker-reported|\
+        0\|valid\|exact-claude-result\|FAIL\|readable\|worker-reported|\
         0\|valid\|exact-turn-completed\|BLOCKED\|none\|none|\
+        0\|valid\|exact-claude-result\|BLOCKED\|none\|none|\
         0\|valid\|exact-turn-completed\|BLOCKED\|none\|worker-reported|\
+        0\|valid\|exact-claude-result\|BLOCKED\|none\|worker-reported|\
         0\|valid\|exact-turn-completed\|BLOCKED\|readable\|none|\
+        0\|valid\|exact-claude-result\|BLOCKED\|readable\|none|\
         0\|valid\|exact-turn-completed\|BLOCKED\|readable\|worker-reported|\
+        0\|valid\|exact-claude-result\|BLOCKED\|readable\|worker-reported|\
         2\|absent\|none\|-\|unchecked\|-|\
         3\|invalid\|exact-turn-completed\|-\|unchecked\|contract-violation|\
+        3\|invalid\|exact-claude-result\|-\|unchecked\|contract-violation|\
         3\|invalid\|exact-turn-completed\|-\|missing\|contract-violation|\
+        3\|invalid\|exact-claude-result\|-\|missing\|contract-violation|\
         3\|invalid\|exact-turn-completed\|-\|outside-root\|contract-violation|\
+        3\|invalid\|exact-claude-result\|-\|outside-root\|contract-violation|\
         4\|error\|runtime-error\|-\|unchecked\|contract-violation|\
         4\|error\|runtime-error\|-\|unsafe-root\|contract-violation) ;;
         *) terminal_state="wire-invalid" ;;
@@ -141,10 +154,12 @@ while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
 
   case "$terminal_state" in
     valid)
+      terminal_event_label="turn.completed"
+      [ "$terminal_source" = "exact-claude-result" ] && terminal_event_label="Claude result"
       if [ "$terminal_verdict" = "PASS" ]; then
-        echo "⚠️ COMPLETED ${slug:-?}  — exact turn.completed PASS; harvest required (artifact_state=$terminal_artifact; blocker_reason=none)  [open: $ts]"
+        echo "⚠️ COMPLETED ${slug:-?}  — exact $terminal_event_label PASS; harvest required (artifact_state=$terminal_artifact; blocker_reason=none)  [open: $ts]"
       else
-        echo "⚠️ EXITED   ${slug:-?}  — exact turn.completed $terminal_verdict (blocker_reason=$terminal_blocker; artifact_state=$terminal_artifact)  [open: $ts]"
+        echo "⚠️ EXITED   ${slug:-?}  — exact $terminal_event_label $terminal_verdict (blocker_reason=$terminal_blocker; artifact_state=$terminal_artifact)  [open: $ts]"
       fi
       suspect=$((suspect + 1)); continue ;;
     invalid)

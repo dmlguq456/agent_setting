@@ -620,6 +620,23 @@ this avoids unsupported nested mount setup without widening the outer filesystem
 or network authority. The wrapper also exports its exact self slug so
 `dispatch-chain` can reject parent-identity drift before Fleet registration.
 
+### SD-77 parent-bound orphan convergence — realized
+
+Both registered-headless wrappers bind a dispatch-depth-2 attempt to one live
+exact dispatch-depth-1 `parent_attempt_id`. The final parent liveness check,
+process spawn, and PID/start/PGID publication are serialized by the canonical
+jobs lock. Parent death therefore yields either zero child processes or one
+exact process group that foreground supervision or the detached owner watcher
+can terminate with a bounded TERM/KILL cascade. PID reuse is never signalled,
+same-slug retries stay untouched, and completion markers or typed terminal
+handoffs retain precedence.
+
+The shared terminal inspector normalizes Codex `turn.completed` and Claude
+stream-json `result` events into the same three-line handoff contract. Codex
+liveness and harvest accept either registered harness while keeping runtime
+native subagents, Claude subagents, and agent-team sessions outside this parity
+claim.
+
 ## Distillation Boundary
 
 Claude's adapter runs a detached `claude -p` worker with tool use denied by

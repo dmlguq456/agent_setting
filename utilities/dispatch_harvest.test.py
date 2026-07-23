@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exact-attempt harvest regression tests for Codex and OpenCode adapters."""
+"""Exact-attempt harvest regression tests across registered headless adapters."""
 
 import importlib.util
 import json
@@ -119,6 +119,19 @@ class HarvestTest(unittest.TestCase):
         row = self.current_row(attempt, slug).replace("\topen\t", f"\t{status}\t")
         return row.rstrip("\n") + (
             f",harness=codex,artifact_root={self.artifact},log_file={log}\n"
+        )
+
+    def claude_terminal_row(self, attempt, verdict, blocker, *, status="open"):
+        log = self.base / f"{verdict.lower()}.claude.jsonl"
+        result = f"artifact: -\nverdict: {verdict}\nblocker: {blocker}"
+        log.write_text(json.dumps({"type": "system", "subtype": "init"}) + "\n" +
+                       json.dumps({"type": "result", "subtype": "success",
+                                   "result": result}) + "\n")
+        row = self.current_row(attempt, "claude-worker").replace(
+            "\topen\t", f"\t{status}\t"
+        )
+        return row.rstrip("\n") + (
+            f",harness=claude,artifact_root={self.artifact},log_file={log}\n"
         )
 
     def test_routed_harvest_replays_shared_completion_for_one_exact_attempt(self):
@@ -264,6 +277,22 @@ class HarvestTest(unittest.TestCase):
                 if blocker != "none":
                     self.assertNotIn(blocker, result.stdout + result.stderr)
                 self.assertEqual(jobs.read_bytes(), before, "read-only exact selector mutated row")
+
+    def test_codex_harvest_reads_cross_harness_claude_result(self):
+        attempt = "att-harvest-claude-pass"
+        jobs = self.base / "claude-pass.jobs.log"
+        jobs.write_text(self.claude_terminal_row(attempt, "PASS", "none"))
+        before = jobs.read_bytes()
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "adapters/codex/bin/dispatch-harvest.py"),
+             "--jobs", str(jobs), "--attempt-id", attempt, "--status", "open"],
+            text=True, capture_output=True, env=self.env(),
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("handoff_state=valid", result.stdout)
+        self.assertIn("handoff_source=exact-claude-result", result.stdout)
+        self.assertIn("terminal_verdict=PASS", result.stdout)
+        self.assertEqual(jobs.read_bytes(), before)
 
     def test_codex_failure_detail_is_explicit_bounded_and_pass_is_rejected(self):
         blocker = "B\t" + "한" * 400

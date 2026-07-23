@@ -10,6 +10,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import signal
 import sys
 import time
 
@@ -17,6 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "utilities")]
 from tools.fleet.model import ATTEMPT_CLASSIFIER_SOURCE, classify_attempt_evidence  # noqa: E402
 from dispatch_contract import (DispatchContractError, close_attempt_row_if,
+                               process_identity_is_live,
+                               process_state,
+                               process_start_ticks,
                                reconcile_local_registry, resolve_agent_home,
                                validate_attempt_metadata)  # noqa: E402
 from codex_dispatch_terminal import inspect_terminal_log  # noqa: E402
@@ -118,9 +122,8 @@ def proc_inputs(row, home=None):
     pid = int(raw) if raw.isdigit() else None; expected = meta.get("pid_start", "")
     actual = ""; alive = False
     if pid is not None:
-        try:
-            actual = (Path("/proc") / str(pid) / "stat").read_text().split()[21]; alive = True
-        except (OSError, IndexError): pass
+        actual = process_start_ticks(pid) or ""
+        alive = bool(actual) and process_state(pid) != "Z"
     return {"pid": pid, "proc_start": expected, "actual_proc_start": actual,
             "pid_alive": alive, "proc_start_match": bool(alive and expected == actual),
             "pid_scope": meta.get("pid_scope"),
@@ -254,6 +257,33 @@ def _marker_backed_repair(row, home):
         return False
 
 
+def direct_child_rows(row, rows):
+    """Return exact-attempt children, with legacy slug fallback only if safe."""
+
+    owner_attempt = row["meta"].get("attempt_id")
+    scoped = [
+        other
+        for other in rows or []
+        if other is not row
+        and other["repo"] == row["repo"]
+        and other["worktree"] == row["worktree"]
+        and other["meta"].get("parent") == row["slug"]
+    ]
+    exact = [
+        other
+        for other in scoped
+        if owner_attempt
+        and other["meta"].get("parent_attempt_id") == owner_attempt
+    ]
+    if exact:
+        return exact
+    if any(other["meta"].get("parent_attempt_id") for other in scoped):
+        # A same-slug retry has started using exact bindings. Its children can
+        # never provide route context or teardown authority for this owner.
+        return []
+    return scoped
+
+
 def resolve_owner_route(row, rows=None):
     """Resolve an owner's immutable route from itself or its registered children.
 
@@ -267,10 +297,8 @@ def resolve_owner_route(row, rows=None):
     direct_id, direct_file = meta.get("route_id"), meta.get("route_file")
     candidates = set()
     if rows is not None:
-        for other in rows:
+        for other in direct_child_rows(row, rows):
             other_meta = other["meta"]
-            if other_meta.get("parent") != row["slug"]: continue
-            if other["repo"] != row["repo"] or other["worktree"] != row["worktree"]: continue
             child_id, child_file = other_meta.get("route_id"), other_meta.get("route_file")
             if child_id and child_file:
                 candidates.add((child_id, child_file))
@@ -320,11 +348,9 @@ def route_incomplete(row, home, rows=None):
 def has_orphaned_dependents(row, rows, incomplete_nodes, args):
     """SD-64/71: any registered open child, or an un-started successor node."""
     if not incomplete_nodes: return False
-    slug = row["slug"]
-    for other in rows:
-        if other is row or other["status"] not in OPEN: continue
-        if other["meta"].get("parent") != slug: continue
-        if other["repo"] != row["repo"] or other["worktree"] != row["worktree"]: continue
+    children = direct_child_rows(row, rows)
+    for other in children:
+        if other["status"] not in OPEN: continue
         return True
     route_id, route_file, context_status = resolve_owner_route(row, rows)
     if context_status != "ok": return False
@@ -335,9 +361,8 @@ def has_orphaned_dependents(row, rows, incomplete_nodes, args):
         return False
     if depends is None: return False
     attempted_nodes = {
-        r["meta"].get("route_node") for r in rows
+        r["meta"].get("route_node") for r in children
         if r["meta"].get("route_id") == route_id
-        and r["repo"] == row["repo"] and r["worktree"] == row["worktree"]
     }
     for node_id in incomplete_nodes:
         if node_id in attempted_nodes: continue
@@ -371,12 +396,12 @@ def classify(row, args, newest_orders, rows=None):
         and meta.get("route_id")
         and meta.get("route_node")
         and terminal
-        and terminal.get("failure_note")
     ):
+        terminal_note = terminal.get("failure_note") or "completed-terminal-handoff"
         return (
             "terminal-handoff",
             f"{terminal['terminal_event']}:{terminal['verdict']}",
-            terminal["failure_note"],
+            terminal_note,
         )
     exact = classify_attempt_evidence(proc_inputs(row, args.agent_home), args.now)
     if exact and exact["state"] == "working": return "active", exact["rule"], None
@@ -433,6 +458,7 @@ def reconcile(rows, args):
     for row in selected:
         category, reason, note = classify(row, args, newest, rows)
         closed = False
+        cascade = []
         revalidated = None
         if args.apply and note and row["meta"].get("attempt_id"):
             fresh_decision = {}
@@ -460,9 +486,13 @@ def reconcile(rows, args):
             revalidated = bool(closed)
             if not closed and fresh_decision:
                 reason = f"revalidation-veto:{fresh_decision.get('category')}:{fresh_decision.get('reason')}"
+            if closed and note == "dead-parent-orphaned":
+                route_id, _, _ = resolve_owner_route(row, rows)
+                cascade = cascade_orphan_children(row, route_id, args)
         decisions.append({"attempt_id": row["meta"].get("attempt_id"), "slug": row["slug"],
                           "category": category, "reason": reason, "proposed_note": note,
-                          "revalidated": revalidated, "closed": closed})
+                          "revalidated": revalidated, "closed": closed,
+                          "cascade": cascade})
     record = {"at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
               "apply": args.apply, "classifier_source": ATTEMPT_CLASSIFIER_SOURCE,
               "attempted": len(selected), "closed": sum(item["closed"] for item in decisions),
@@ -470,6 +500,236 @@ def reconcile(rows, args):
     if args.audit:
         cleanup.append_audit(args.audit, record)
     print(json.dumps(record, sort_keys=True)); return 0
+
+
+_CASCADE_TERMINAL_CATEGORIES = {
+    "terminal-handoff",
+    "terminal-heartbeat",
+    "marker-backed-stale",
+    "stale-terminal",
+}
+
+
+def _newest_orders(rows):
+    newest = {}
+    for row in rows:
+        key = (row["meta"].get("route_id"), row["meta"].get("route_node"))
+        if all(key):
+            newest[key] = row["order"]
+    return newest
+
+
+def _cascade_terminal_note(row, rows, args):
+    # A hash-bound marker wins even while the exact process is still alive and
+    # flushing. The generic classifier checks process liveness first, so the
+    # cascade must make this precedence explicit.
+    if _marker_backed_repair(row, args.agent_home):
+        return "completed-marker", "completed-marker-linkage"
+    category, reason, note = classify(row, args, _newest_orders(rows), rows)
+    if category in _CASCADE_TERMINAL_CATEGORIES and note:
+        return note, reason
+    return None, None
+
+
+def _cascade_process_state(meta):
+    """Classify only a process-group identity; never infer from a slug."""
+
+    local_pid = meta.get("pid", "")
+    local_start = meta.get("pid_start", "")
+    host_pid = meta.get("pid_host", "")
+    host_start = meta.get("pid_host_start", "") or local_start
+    # Parent-bound wrappers publish spawn + PID identity under the same jobs
+    # lock. No PID therefore means that no process was launched, regardless of
+    # whether the wrapper stopped just before or just after claiming launch.
+    if not local_pid and not host_pid:
+        return "never-launched", None, None
+    if host_pid.isdigit() and host_start:
+        pid, expected = int(host_pid), host_start
+    elif meta.get("pid_scope") == "namespace-local":
+        return "scope-unverifiable", None, None
+    elif local_pid.isdigit() and local_start:
+        pid, expected = int(local_pid), local_start
+    else:
+        return "identity-missing", None, None
+    actual = process_start_ticks(pid)
+    if actual is None or process_state(pid) == "Z":
+        return "gone", pid, expected
+    if actual != expected:
+        # PID reuse proves the exact recorded child is gone. Never signal the
+        # unrelated replacement, but the attempt row can close as exited.
+        return "gone-pid-reused", pid, expected
+    try:
+        pgid = os.getpgid(pid)
+    except ProcessLookupError:
+        return "gone", pid, expected
+    except OSError:
+        return "group-unverifiable", pid, expected
+    if pgid != pid:
+        return "non-group-leader", pid, expected
+    return "live-group", pid, expected
+
+
+def _signal_exact_group(pid, expected_start, signum):
+    """Revalidate immediately before killpg; return a closed status enum."""
+
+    if not process_identity_is_live(pid, expected_start):
+        return "gone"
+    try:
+        if os.getpgid(pid) != pid:
+            return "non-group-leader"
+        os.killpg(pid, signum)
+    except ProcessLookupError:
+        return "gone"
+    except OSError:
+        return "signal-error"
+    return "signalled"
+
+
+def _wait_exact_group_end(pid, expected_start, timeout):
+    deadline = time.monotonic() + max(timeout, 0.0)
+    while time.monotonic() < deadline:
+        if not process_identity_is_live(pid, expected_start):
+            return True
+        time.sleep(min(0.02, max(0.0, deadline - time.monotonic())))
+    return not process_identity_is_live(pid, expected_start)
+
+
+def _close_cascade_child(args, owner, child_attempt, fallback_note, route_id):
+    """Close one child with marker/terminal precedence under the registry lock."""
+
+    for _ in range(3):
+        rows = read_rows(args.jobs)
+        child = next(
+            (row for row in rows if row["meta"].get("attempt_id") == child_attempt),
+            None,
+        )
+        if child is None or child["status"] not in OPEN:
+            return False, "already-terminal"
+        if (
+            child["repo"] != owner["repo"]
+            or child["worktree"] != owner["worktree"]
+            or child["meta"].get("parent_attempt_id")
+            != owner["meta"].get("attempt_id")
+        ):
+            return False, "parent-binding-changed"
+        if route_id and child["meta"].get("route_id") not in {None, "", route_id}:
+            return False, "route-context-conflict"
+        terminal_note, terminal_reason = _cascade_terminal_note(child, rows, args)
+        selected_note = terminal_note or fallback_note
+        if not selected_note:
+            return False, "no-terminal-evidence"
+
+        decision = {}
+
+        def still_safe(_fields):
+            fresh_rows = read_rows(args.jobs)
+            fresh = next(
+                (
+                    row
+                    for row in fresh_rows
+                    if row["meta"].get("attempt_id") == child_attempt
+                ),
+                None,
+            )
+            if fresh is None or fresh["status"] not in OPEN:
+                decision["reason"] = "already-terminal"
+                return False
+            if (
+                fresh["repo"] != owner["repo"]
+                or fresh["worktree"] != owner["worktree"]
+                or fresh["meta"].get("parent_attempt_id")
+                != owner["meta"].get("attempt_id")
+            ):
+                decision["reason"] = "parent-binding-changed"
+                return False
+            if route_id and fresh["meta"].get("route_id") not in {None, "", route_id}:
+                decision["reason"] = "route-context-conflict"
+                return False
+            fresh_terminal, _ = _cascade_terminal_note(fresh, fresh_rows, args)
+            if fresh_terminal:
+                decision["reason"] = f"terminal:{fresh_terminal}"
+                return fresh_terminal == selected_note
+            if selected_note != fallback_note:
+                decision["reason"] = "terminal-evidence-changed"
+                return False
+            state, _, _ = _cascade_process_state(fresh["meta"])
+            decision["reason"] = state
+            return state in {"gone", "gone-pid-reused", "never-launched"}
+
+        closed = close_attempt_row_if(
+            args.jobs,
+            child_attempt,
+            selected_note,
+            still_safe,
+            evidence={
+                "classifier_source": ATTEMPT_CLASSIFIER_SOURCE,
+                "parent_attempt_id": owner["meta"].get("attempt_id", ""),
+                "reconcile_reason": terminal_reason or "post-exit-child-cascade",
+            },
+        )
+        if closed:
+            return True, selected_note
+        if decision.get("reason", "").startswith("terminal:"):
+            continue
+        return False, decision.get("reason", "revalidation-veto")
+    return False, "revalidation-retry-exhausted"
+
+
+def cascade_orphan_children(owner, route_id, args):
+    """Bounded teardown of exact direct children for one dead owner attempt."""
+
+    owner_attempt = owner["meta"].get("attempt_id")
+    rows = read_rows(args.jobs)
+    children = [
+        row
+        for row in direct_child_rows(owner, rows)
+        if row["status"] in OPEN
+        and row["meta"].get("parent_attempt_id") == owner_attempt
+    ]
+    decisions = []
+    for child in children:
+        attempt = child["meta"].get("attempt_id")
+        if not attempt:
+            decisions.append({"attempt_id": None, "status": "identity-missing"})
+            continue
+        if route_id and child["meta"].get("route_id") not in {None, "", route_id}:
+            decisions.append({"attempt_id": attempt, "status": "route-context-conflict"})
+            continue
+        closed, result = _close_cascade_child(args, owner, attempt, None, route_id)
+        if closed:
+            decisions.append({"attempt_id": attempt, "status": result, "closed": True})
+            continue
+        state, pid, expected = _cascade_process_state(child["meta"])
+        if state in {"gone", "gone-pid-reused", "never-launched"}:
+            closed, result = _close_cascade_child(
+                args, owner, attempt, "dead-parent-exited", route_id
+            )
+            decisions.append({"attempt_id": attempt, "status": result, "closed": closed})
+            continue
+        if state != "live-group" or pid is None or expected is None:
+            decisions.append({"attempt_id": attempt, "status": state, "closed": False})
+            continue
+        term = _signal_exact_group(pid, expected, signal.SIGTERM)
+        if term in {"non-group-leader", "signal-error"}:
+            decisions.append({"attempt_id": attempt, "status": term, "closed": False})
+            continue
+        ended = term == "gone" or _wait_exact_group_end(pid, expected, args.cascade_grace)
+        if not ended:
+            killed = _signal_exact_group(pid, expected, signal.SIGKILL)
+            if killed in {"non-group-leader", "signal-error"}:
+                decisions.append({"attempt_id": attempt, "status": killed, "closed": False})
+                continue
+            ended = killed == "gone" or _wait_exact_group_end(
+                pid, expected, args.cascade_kill_wait
+            )
+        if not ended:
+            decisions.append({"attempt_id": attempt, "status": "group-still-live", "closed": False})
+            continue
+        closed, result = _close_cascade_child(
+            args, owner, attempt, "dead-parent-terminated", route_id
+        )
+        decisions.append({"attempt_id": attempt, "status": result, "closed": closed})
+    return decisions
 
 
 def emit_orphan_status(rows, args):
@@ -485,6 +745,14 @@ def emit_orphan_status(rows, args):
     row = next((r for r in rows if r["meta"].get("attempt_id") == args.attempt), None)
     if row is None:
         print("check=ok\norphan=0\nreason=attempt-not-found"); return 0
+    if row["status"] not in OPEN and row["meta"].get("note") == "dead-parent-orphaned":
+        route_id, _, _ = resolve_owner_route(row, rows)
+        cascade = cascade_orphan_children(row, route_id, args) if args.apply else []
+        print("check=ok\norphan=0\nclosed=0")
+        print(f"cascade_attempted={len(cascade)}")
+        print(f"cascade_closed={sum(bool(item.get('closed')) for item in cascade)}")
+        print("cascade=" + json.dumps(cascade, sort_keys=True))
+        return 0
     newest = {}
     for item in rows:
         key = (item["meta"].get("route_id"), item["meta"].get("route_node"))
@@ -495,6 +763,7 @@ def emit_orphan_status(rows, args):
         incomplete, _ = route_incomplete(row, args.agent_home, rows)
         boundary = resume_boundary(route_file, incomplete)
         closed = False
+        cascade = []
         if args.apply and row["meta"].get("attempt_id"):
             def still_orphan(_fields):
                 fresh_rows = read_rows(args.jobs)
@@ -522,12 +791,17 @@ def emit_orphan_status(rows, args):
                     "reconcile_reason": "post-exit-owner-watch",
                 },
             )
+            if closed:
+                cascade = cascade_orphan_children(row, route_id, args)
         print("check=ok\norphan=1")
         print(f"route_id={route_id}")
         print(f"resume_boundary={boundary or '-'}")
         print(f"closed={int(closed)}")
+        print(f"cascade_attempted={len(cascade)}")
+        print(f"cascade_closed={sum(bool(item.get('closed')) for item in cascade)}")
+        print("cascade=" + json.dumps(cascade, sort_keys=True))
     else:
-        print("check=ok\norphan=0\nclosed=0")
+        print("check=ok\norphan=0\nclosed=0\ncascade_attempted=0\ncascade_closed=0\ncascade=[]")
     return 0
 
 
@@ -569,7 +843,11 @@ def main(argv):
     p.add_argument("--apply", action="store_true"); p.add_argument("--audit", type=Path); p.add_argument("--integration-ref")
     p.add_argument("--agent-home", type=Path); p.add_argument("--now", type=float, default=time.time(), help=argparse.SUPPRESS)
     p.add_argument("--pid", type=int); p.add_argument("--pid-start"); p.add_argument("--pid-scope")
+    p.add_argument("--cascade-grace", type=float, default=2.0, help=argparse.SUPPRESS)
+    p.add_argument("--cascade-kill-wait", type=float, default=1.0, help=argparse.SUPPRESS)
     args = p.parse_args(argv[1:]); args.agent_home = (args.agent_home or resolve_agent_home()).resolve()
+    if args.cascade_grace < 0 or args.cascade_kill_wait < 0:
+        print("check=failed\nreason=invalid-cascade-timeout"); return 64
     if args.operation == "attempt-state":
         if args.pid is None or not args.pid_start:
             print("check=failed\nreason=exact-identity-required"); return 64

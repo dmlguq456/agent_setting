@@ -99,6 +99,45 @@ class CodexDispatchTerminalTest(unittest.TestCase):
         self.assertEqual(failed["failure_note"], "dead-worker-fail")
         self.assertEqual(passed["failure_note"], "")
 
+    def test_claude_stream_result_uses_the_same_handoff_contract(self):
+        for verdict, blocker, note in (
+            ("PASS", "none", ""),
+            ("FAIL", "fixture failure", "dead-worker-fail"),
+            ("BLOCKED", "fixture blocker", "dead-worker-blocked"),
+        ):
+            with self.subTest(verdict=verdict):
+                path = self.base / f"claude-{verdict.lower()}.jsonl"
+                path.write_text(
+                    json.dumps({
+                        "type": "result",
+                        "subtype": "success",
+                        "is_error": False,
+                        "result": (
+                            f"artifact: -\nverdict: {verdict}\nblocker: {blocker}"
+                        ),
+                    }) + "\n",
+                    encoding="utf-8",
+                )
+                compatibility = inspect_terminal_log(path)
+                self.assertEqual(compatibility["terminal_event"], "result")
+                self.assertEqual(compatibility["failure_note"], note)
+                result = self.inspect(path)
+                self.assertEqual(result["source"], "exact-claude-result")
+                self.assertEqual(result["verdict"], verdict)
+
+    def test_claude_runtime_error_cannot_promote_valid_looking_pass(self):
+        path = self.base / "claude-runtime-error.jsonl"
+        path.write_text(json.dumps({
+            "type": "result",
+            "subtype": "error_during_execution",
+            "is_error": True,
+            "result": "artifact: -\nverdict: PASS\nblocker: none",
+        }) + "\n", encoding="utf-8")
+        parsed = terminal._read_terminal(path)
+        self.assertEqual(parsed["state"], "invalid")
+        self.assertEqual(parsed["source"], "exact-claude-result")
+        self.assertEqual(parsed["reason"], "claude-result-runtime-error")
+
     def test_valid_verdict_matrix_and_readable_artifact_reference(self):
         artifact = self.root / "plans" / "final report.md"
         artifact.parent.mkdir()

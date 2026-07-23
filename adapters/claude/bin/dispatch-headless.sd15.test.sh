@@ -49,12 +49,23 @@ launch() { # $1=fake-claude-body $2=slug $3=watch
   printf '%s' "$1" > "$bin/claude"; chmod +x "$bin/claude"
   wt="$tmp/wt/$2"; mkdir -p "$wt"
   ( cd "$wt" && git init -q && git -c user.email=a@b -c user.name=a commit -q --allow-empty -m x )
-  AGENT_HOME="$AH" AGENT_DISPATCH_JOBS="$AH/.dispatch/jobs.log" PATH="$bin:$PATH" python3 "$WRAP" --start \
+  sleep 60 & parent_pid=$!
+  parent_start=$(awk '{print $22}' "/proc/$parent_pid/stat")
+  parent_attempt="att-parent-$2-fixture"
+  mkdir -p "$AH/.dispatch"
+  printf '2026-07-23T00:00:00Z\topen\t%s\t%s\tcx\tattempt_schema_version=2,dispatch_depth=1,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless,worker_type=owner,attempt_id=%s,pid=%s,pid_start=%s\n' \
+    "$wt" "$wt" "$parent_attempt" "$parent_pid" "$parent_start" >> "$AH/.dispatch/jobs.log"
+  AGENT_HOME="$AH" AGENT_DISPATCH_JOBS="$AH/.dispatch/jobs.log" \
+    AGENT_DISPATCH_ATTEMPT_ID="$parent_attempt" PATH="$bin:$PATH" python3 "$WRAP" --start \
     --worktree "$wt" --slug "$2" --capability code-plan --mode dev --qa standard \
     --intensity standard --dispatch-depth 2 --parent cx --worker-role code-plan --owner autopilot-code \
     --parent-harness claude --parent-transport headless --parent-sandbox fixture \
     --launch-authority conductor --nested-eligibility supported --eligibility-source sd15-fixture \
     --model sonnet --effort medium --early-exit-watch "$3" 2>&1
+  rc=$?
+  kill "$parent_pid" 2>/dev/null || true
+  wait "$parent_pid" 2>/dev/null || true
+  return "$rc"
 }
 
 # --- Case: limit-death closes row ---
@@ -85,7 +96,7 @@ echo ok done
 exit 0" clean1 4)
 echo "$out" | grep -q 'early_death=-' \
   && awk -F'\t' '$5=="clean1"{print $2}' "$AH/.dispatch/jobs.log" | grep -qx open \
-  && grep -q '/.agent_reports/.runtime/model-worker-governor' "$AH/.dispatch/logs/clean1.claude.log" \
+  && grep -q '/.agent_reports/.runtime/model-worker-governor' "$AH/.dispatch/logs/clean1."*.claude.jsonl \
   && ok "clean fast exit → row stays open (normal harvest owns it)" \
   || bad "clean exit or inherited governor root invalid. out=[$out]"
 

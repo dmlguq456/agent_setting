@@ -21,6 +21,12 @@ capability/stage contract. It does not explicitly read the full adapter
 target project's `AGENTS.md`; no verified per-worker disable switch is claimed,
 so this is prompt isolation with a documented physical-masking fallback.
 
+Registered-headless child attempts are exact-parent bound across both Codex and
+Claude Code. Codex liveness/harvest normalize Codex `turn.completed` and Claude
+stream-json `result` envelopes, while parent-death reconciliation uses only
+sealed attempt and PID/start/PGID evidence; runtime-native subagents are a
+separate surface.
+
 Codex native Skill projection is materialized under `adapters/codex/skills/`
 from `capabilities/`. Codex custom agent projections are materialized under
 `adapters/codex/agents/` from `roles/`. A Codex plugin projection is materialized under

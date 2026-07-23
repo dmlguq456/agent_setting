@@ -29,6 +29,15 @@ ADAPTERS = {
 
 
 class WorkerDispatchPromptTest(unittest.TestCase):
+    def setUp(self):
+        self.parents = []
+
+    def tearDown(self):
+        for proc in self.parents:
+            if proc.poll() is None:
+                proc.kill()
+            proc.wait()
+
     def test_custom_assignment_is_wrapped_for_every_adapter(self):
         for harness, (wrapper, model, suffix) in ADAPTERS.items():
             with self.subTest(harness=harness), tempfile.TemporaryDirectory() as tmp:
@@ -50,6 +59,18 @@ class WorkerDispatchPromptTest(unittest.TestCase):
                 artifact_root = root / ".agent_reports"
                 artifact_root.mkdir()
                 logs = root / "logs"
+                jobs = root / "jobs.log"
+                if harness in {"codex", "claude"}:
+                    parent = subprocess.Popen(["sleep", "60"])
+                    self.parents.append(parent)
+                    start = (Path("/proc") / str(parent.pid) / "stat").read_text().split()[21]
+                    jobs.write_text(
+                        f"2026-07-23T00:00:00Z\topen\t{repo}\t{repo}\towner\t"
+                        "attempt_schema_version=2,dispatch_depth=1,transport=headless,"
+                        "execution_surface=registered-headless,registered_worker=1,"
+                        "fallback_hop=same-harness-headless,worker_type=owner,"
+                        f"attempt_id=att-prompt-parent,pid={parent.pid},pid_start={start}\n"
+                    )
                 slug = f"{harness}-typed"
                 command = [
                     sys.executable,
@@ -76,7 +97,7 @@ class WorkerDispatchPromptTest(unittest.TestCase):
                     "--prompt-text",
                     "CUSTOM ASSIGNMENT",
                     "--jobs",
-                    str(root / "jobs.log"),
+                    str(jobs),
                     "--log-dir",
                     str(logs),
                     *model,
@@ -88,6 +109,8 @@ class WorkerDispatchPromptTest(unittest.TestCase):
                     "OPENCODE_CONFIG_CONTENT": "{}",
                 }
                 env.pop("AGENT_DISPATCH_JOBS", None)
+                if harness in {"codex", "claude"}:
+                    env["AGENT_DISPATCH_ATTEMPT_ID"] = "att-prompt-parent"
                 result = subprocess.run(command, text=True, capture_output=True, env=env)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 prompt = (logs / f"{slug}.{suffix}").read_text(encoding="utf-8")

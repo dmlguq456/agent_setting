@@ -9,41 +9,32 @@ import subprocess
 import sys
 import time
 
+from dispatch_contract import process_start_ticks
+
 
 OPEN = {"open", "running"}
 
 
 def process_start(pid: int) -> str | None:
-    try:
-        raw = (Path("/proc") / str(pid) / "stat").read_text(encoding="utf-8")
-        tail = raw[raw.rfind(")") + 2:].split()
-        return tail[19]
-    except (OSError, IndexError):
-        return None
+    return process_start_ticks(pid)
 
 
-def attempt_is_open(jobs: Path, attempt_id: str) -> bool:
+def attempt_status(jobs: Path, attempt_id: str) -> str | None:
     try:
         lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError:
-        return False
+        return None
     for line in lines:
         fields = line.split("\t")
         if len(fields) != 6:
             continue
         meta = dict(part.split("=", 1) for part in fields[5].split(",") if "=" in part)
         if meta.get("attempt_id") == attempt_id:
-            return fields[1] in OPEN
-    return False
+            return fields[1]
+    return None
 
 
-def watch(args) -> int:
-    while True:
-        if not attempt_is_open(args.jobs, args.attempt_id):
-            return 0
-        if process_start(args.pid) != args.pid_start:
-            break
-        time.sleep(args.interval)
+def reconcile(args) -> int:
     result = subprocess.run(
         [
             sys.executable,
@@ -59,6 +50,20 @@ def watch(args) -> int:
         stderr=subprocess.DEVNULL,
     )
     return result.returncode
+
+
+def watch(args) -> int:
+    while True:
+        status = attempt_status(args.jobs, args.attempt_id)
+        if status not in OPEN:
+            # A prior watcher may have closed the owner and died before its
+            # child cascade. orphan-status is idempotent and only continues a
+            # row already typed dead-parent-orphaned.
+            return reconcile(args) if status == "done" else 0
+        if process_start(args.pid) != args.pid_start:
+            break
+        time.sleep(args.interval)
+    return reconcile(args)
 
 
 def main(argv=None) -> int:

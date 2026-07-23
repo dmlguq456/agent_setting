@@ -32,6 +32,8 @@ from dispatch_contract import (  # noqa: E402
     new_attempt_id,
     parse_registry_metadata,
     resolve_global_registry,
+    resolve_live_parent_attempt,
+    spawn_claimed_attempt,
     validate_nested_eligibility,
 )
 from dispatch_lifecycle import (  # noqa: E402
@@ -47,6 +49,7 @@ from worker_bootstrap import (  # noqa: E402
     render_worker_bootstrap,
     resolve_worker_type,
 )
+from codex_dispatch_terminal import inspect_terminal_attempt  # noqa: E402
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "adversarial"}
 # Verification rigor is derived from intensity — CONVENTIONS §1.1 mapping table (SoT).
@@ -126,6 +129,10 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--intensity", default="standard")
     p.add_argument("--dispatch-depth", dest="dispatch_depth", type=int, default=1)
     p.add_argument("--parent", dest="parent_slug")
+    p.add_argument(
+        "--parent-attempt-id",
+        default=os.environ.get("AGENT_DISPATCH_ATTEMPT_ID") or None,
+    )
     p.add_argument(
         "--parent-session-id",
         default=os.environ.get("AGENT_DISPATCH_PARENT_SESSION_ID")
@@ -411,7 +418,11 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
     # `claude -p` reads the prompt from stdin when no positional prompt is
     # given and prints the response non-interactively, mirroring the codex
     # wrapper's file-piped `codex exec ... < prompt_path` invocation.
-    cmd = ["claude", "-p", "--add-dir", args.artifact_root]
+    cmd = [
+        "claude", "-p", "--add-dir", args.artifact_root,
+        "--output-format", "stream-json", "--verbose",
+        "--no-session-persistence",
+    ]
     if args.resolved_model_settings["source"] != "inherit":
         cmd += [
             "--model",
@@ -482,6 +493,18 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     )
     if args.parent_slug:
         pipe += f",parent={args.parent_slug}"
+    if getattr(args, "parent_binding", None) is not None:
+        binding = args.parent_binding
+        pipe += (
+            f",parent_attempt_id={binding.attempt_id}"
+            f",parent_pid={binding.pid},parent_pid_start={binding.pid_start}"
+            f",parent_pid_scope={binding.pid_scope}"
+        )
+        if binding.pid_host is not None:
+            pipe += (
+                f",parent_pid_host={binding.pid_host}"
+                f",parent_pid_host_start={binding.pid_host_start}"
+            )
     if args.parent_session_id:
         pipe += f",parent_sid={args.parent_session_id}"
     if args.parent_slug or args.parent_session_id:
@@ -952,14 +975,36 @@ def main(argv: list[str]) -> int:
             ensure_global_registry_writable(jobs)
     except DispatchContractError as e:
         return fail(e.reason, 73, detail=e.detail, child_spawned="0")
+    args.parent_binding = None
+    if args.dispatch_depth == 2 and action in ("register", "start"):
+        try:
+            repo = subprocess.check_output(
+                ["git", "-C", args.worktree, "rev-parse", "--show-toplevel"],
+                text=True,
+            ).strip()
+            args.parent_binding = resolve_live_parent_attempt(
+                jobs,
+                parent_slug=args.parent_slug or "",
+                repo=repo,
+                worktree=args.worktree,
+                expected_attempt_id=args.parent_attempt_id,
+            )
+            args.parent_attempt_id = args.parent_binding.attempt_id
+        except (DispatchContractError, subprocess.SubprocessError) as e:
+            reason = e.reason if isinstance(e, DispatchContractError) else "parent-repo-unreadable"
+            detail = e.detail if isinstance(e, DispatchContractError) else str(e)
+            return fail(reason, 73, detail=detail, child_spawned="0")
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
     home_root = agent_home / ".dispatch" / "homes"
     instance_dir = home_root / f"{args.slug}.{args.profile}" if args.profile else None
 
     prompt_text, prompt_source = dispatch_prompt(args)
     prompt_path = log_dir / f"{args.slug}.claude.prompt.txt"
-    log_name = (f"{args.slug}.{args.attempt_id}.claude.log"
-                if args.route_id and args.attempt_id else f"{args.slug}.claude.log")
+    log_name = (
+        f"{args.slug}.{args.attempt_id}.claude.jsonl"
+        if args.attempt_id
+        else f"{args.slug}.claude.jsonl"
+    )
     log_path = log_dir / log_name
     args.log_path = log_path
     command = shell_command(args, prompt_path, log_path)
@@ -1022,6 +1067,8 @@ def main(argv: list[str]) -> int:
             # do so from AGENT_DISPATCH_PARENT_SLUG (which points at the parent).
             "AGENT_DISPATCH_SELF_SLUG": args.slug,
             "AGENT_DISPATCH_PARENT_SLUG": args.parent_slug or "",
+            "AGENT_DISPATCH_ATTEMPT_ID": args.attempt_id,
+            "AGENT_DISPATCH_PARENT_ATTEMPT_ID": args.parent_attempt_id or "",
             "AGENT_DISPATCH_PARENT_SESSION_ID": args.parent_session_id or "",
             "AGENT_DISPATCH_WORKER_TYPE": args.worker_type,
             "AGENT_DISPATCH_ASSIGNED_CONTRACT": args.assigned_contract,
@@ -1064,8 +1111,8 @@ def main(argv: list[str]) -> int:
                         "owner), or set AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN=1 in a "
                         "long-lived container"),
                 attempt_id=args.attempt_id, child_spawned="0")
-        try:
-            proc = subprocess.Popen(
+        def spawn_worker() -> subprocess.Popen:
+            return subprocess.Popen(
                 [sys.executable, str(governor), "--root", str(governor_root),
                  "run", "--class", "dispatch", "--", "sh", "-c", command],
                 env=env,
@@ -1074,18 +1121,35 @@ def main(argv: list[str]) -> int:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+        launch_metadata = {"launch_lifecycle": args.launch_lifecycle}
+        if args.dispatch_depth >= 2 and os.environ.get("AGENT_DISPATCH_CHILD") == "1":
+            launch_metadata["pid_scope"] = "namespace-local"
+        try:
+            proc, launch_metadata = spawn_claimed_attempt(
+                jobs,
+                args.attempt_id,
+                parent_binding=args.parent_binding,
+                spawn=spawn_worker,
+                launch_metadata=launch_metadata,
+            )
+        except DispatchContractError as exc:
+            reason = (
+                "parent-exited"
+                if exc.reason.startswith("parent-attempt-")
+                else "launch-error"
+            )
+            close_job_row(jobs, args.slug, args.worktree, reason, "", args.attempt_id)
+            return fail(
+                exc.reason, 73, detail=exc.detail,
+                attempt_id=args.attempt_id, child_spawned="0",
+            )
         except OSError as exc:
             close_job_row(jobs, args.slug, args.worktree, "launch-error", "", args.attempt_id)
             return fail("child-launch-failed", 70, detail=str(exc), attempt_id=args.attempt_id)
         # Shared-worktree aliasing (OPERATIONS §5.10 signal order ①): record
         # the child pid so liveness can use a process signal. Conductor activity
         # in the same worktree can contaminate transcript mtime.
-        start_ticks = process_start_ticks(proc.pid)
-        launch_identity = (f"pid={proc.pid}" + (f",pid_start={start_ticks}" if start_ticks else "")
-                           + f",launch_lifecycle={args.launch_lifecycle}")
-        if args.dispatch_depth >= 2 and os.environ.get("AGENT_DISPATCH_CHILD") == "1":
-            launch_identity += ",pid_scope=namespace-local"
-        annotate_job_row(jobs, args.slug, args.worktree, launch_identity, args.attempt_id)
+        start_ticks = launch_metadata.get("pid_start", "")
         if (args.dispatch_depth == 1 and args.worker_type == "owner"
                 and args.launch_lifecycle == DETACHED):
             try:
@@ -1109,10 +1173,46 @@ def main(argv: list[str]) -> int:
         args.child_pid_start = start_ticks
         args.launch_heartbeat = seed_launch_heartbeat(args, jobs, proc.pid, start_ticks)
         if args.launch_lifecycle == FOREGROUND_SCOPED:
-            outcome = wait_foreground(proc, args.foreground_timeout)
+            binding = args.parent_binding
+            outcome = wait_foreground(
+                proc,
+                args.foreground_timeout,
+                parent_pid=binding.observed_pid if binding else None,
+                parent_pid_start=binding.observed_pid_start if binding else None,
+            )
             args.worker_exit = outcome.exit_code
             args.worker_failure = outcome.failure
-            if outcome.failure:
+            terminal = inspect_terminal_attempt(
+                log_path,
+                worktree=args.worktree,
+                artifact_root_metadata=args.artifact_root,
+            )
+            args.terminal_inspection = terminal
+            args.terminal_verdict = (
+                terminal.get("verdict") if terminal.get("state") == "valid" else None
+            )
+            terminal_note = (
+                terminal.get("failure_note", "")
+                if terminal.get("state") == "valid"
+                else ""
+            )
+            if outcome.failure and terminal.get("state") == "valid" and not terminal_note:
+                terminal_note = "completed-terminal-handoff"
+            terminal_closed = False
+            if terminal_note:
+                terminal_closed = close_attempt_row(
+                    jobs,
+                    args.attempt_id,
+                    terminal_note,
+                    evidence={
+                        "detected_by": "foreground-terminal-handoff",
+                        "failure_class": terminal["failure_class"],
+                        "terminal_event": terminal["terminal_event"],
+                        "log_file": str(log_path),
+                    },
+                )
+                args.worker_failure = terminal_note
+            if outcome.failure and not terminal_closed:
                 close_job_row(
                     jobs, args.slug, args.worktree, outcome.failure, "", args.attempt_id
                 )
@@ -1140,6 +1240,7 @@ def main(argv: list[str]) -> int:
     print(f"dispatch_depth={args.dispatch_depth}")
     print(f"eligibility_probe={getattr(args, 'eligibility_probe', None) or '-'}")
     print(f"parent={args.parent_slug or '-'}")
+    print(f"parent_attempt_id={args.parent_binding.attempt_id if args.parent_binding else '-'}")
     print(f"parent_session_id={args.parent_session_id or '-'}")
     print(f"worker_role={args.worker_role or '-'}")
     print(f"worker_type={args.worker_type}")
@@ -1175,6 +1276,7 @@ def main(argv: list[str]) -> int:
     print(f"launch_lifecycle={args.launch_lifecycle}")
     print(f"worker_exit={getattr(args, 'worker_exit', '-')}")
     print(f"worker_failure={getattr(args, 'worker_failure', None) or '-'}")
+    print(f"terminal_verdict={getattr(args, 'terminal_verdict', None) or '-'}")
     early_death = getattr(args, "early_death", None)
     if early_death:
         reason, reset = early_death

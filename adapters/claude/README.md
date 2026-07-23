@@ -10,7 +10,7 @@ This adapter maps the common agent harness onto Claude Code.
 | Runtime settings | `adapters/claude/settings.json` |
 | Slash commands | `adapters/claude/commands/` |
 | Runtime worker wrappers | `adapters/claude/bin/` |
-| Dispatch registry metadata | `adapters/claude/bin/dispatch-headless.py` records route/depth ownership plus SD-49 `attempt_id`, launch authority, fallback ordinal, and checked nested tuple evidence in the inherited canonical global registry so Fleet can render cross-harness ownership such as Codex → Claude. |
+| Dispatch registry metadata | `adapters/claude/bin/dispatch-headless.py` records route/depth ownership plus SD-49 `attempt_id`, exact `parent_attempt_id`, PID/start/PGID identity, launch authority, fallback ordinal, and checked nested tuple evidence in the inherited canonical global registry so Fleet can render and safely reconcile cross-harness ownership such as Codex → Claude. |
 | Capabilities | `adapters/claude/skills/*/SKILL.md` |
 | Role profiles | `adapters/claude/agents/*.md` |
 | Hook scripts | `hooks/`, `utilities/` |

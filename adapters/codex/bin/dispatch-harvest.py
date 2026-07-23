@@ -161,7 +161,7 @@ def main(argv: list[str]) -> int:
     for fields in rows:
         metadata = parse_registry_metadata(fields[5])
         attempt_id = metadata.get("attempt_id", f"row-{len(terminal_results)}")
-        if metadata.get("harness") not in (None, "", "codex"):
+        if metadata.get("harness") not in (None, "", "codex", "claude"):
             continue
         result = inspect_terminal_attempt(
             metadata.get("log_file"),

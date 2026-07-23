@@ -51,8 +51,20 @@ class CodexNoCommitFixtureTest(unittest.TestCase):
         self.artifact.mkdir()
         self.jobs = self.base / "jobs.log"
         self.logs = self.base / "logs"
+        self.owner = subprocess.Popen(["sleep", "60"])
+        owner_start = (Path("/proc") / str(self.owner.pid) / "stat").read_text().split()[21]
+        self.jobs.write_text(
+            f"2026-07-23T00:00:00Z\topen\t{self.linked}\t{self.linked}\towner\t"
+            "attempt_schema_version=2,dispatch_depth=1,transport=headless,"
+            "execution_surface=registered-headless,registered_worker=1,"
+            "fallback_hop=same-harness-headless,worker_type=owner,"
+            f"attempt_id=att-nocommit-parent,pid={self.owner.pid},pid_start={owner_start}\n"
+        )
 
     def tearDown(self):
+        if self.owner.poll() is None:
+            self.owner.kill()
+        self.owner.wait()
         subprocess.run(["git", "-C", str(self.primary), "worktree", "remove", "--force", str(self.linked)],
                         capture_output=True)
         self.temp.cleanup()
@@ -75,7 +87,12 @@ class CodexNoCommitFixtureTest(unittest.TestCase):
         )
 
     def base_env(self):
-        return {**os.environ, "AGENT_HOME": str(self.primary), "AGENT_ARTIFACT_ROOT": str(self.artifact)}
+        return {
+            **os.environ,
+            "AGENT_HOME": str(self.primary),
+            "AGENT_ARTIFACT_ROOT": str(self.artifact),
+            "AGENT_DISPATCH_ATTEMPT_ID": "att-nocommit-parent",
+        }
 
     def test_writable_roots_and_no_commit_encoding(self):
         route = self.compile_route()
@@ -97,6 +114,7 @@ class CodexNoCommitFixtureTest(unittest.TestCase):
             "--registry-digest", route["registry_digest"],
             "--write-scope", ";".join(node["write_scope"]),
             "--completion-gate", node["completion_gate"],
+            "--unit", node.get("unit", ""),
             "--model", "gpt-test", "--reasoning", "low",
             "--jobs", str(self.jobs), "--log-dir", str(self.logs),
         ]

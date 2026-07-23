@@ -96,6 +96,27 @@ class RegistryTest(unittest.TestCase):
   self.assertIn("COMPLETED pass-terminal - exact turn.completed PASS; harvest required",result.stdout)
   self.assertNotIn("RAW_COMMAND_SENTINEL",result.stdout+result.stderr)
   self.assertIn(f"\topen\t/r\t{self.base}\tpass-terminal\t",self.jobs.read_text())
+ def test_claude_terminal_pass_is_completed_and_stays_open(self):
+  attempt="att-claude-pass";log=self.base/"pass.claude.jsonl";artifact_root=self.base/".agent_reports";artifact_root.mkdir(exist_ok=True)
+  events=[
+   {"type":"system","subtype":"init"},
+   {"type":"result","subtype":"success","result":"artifact: -\nverdict: PASS\nblocker: none"},
+  ]
+  log.write_text("\n".join(json.dumps(event) for event in events)+"\n")
+  with self.jobs.open("a") as out:
+   out.write(f"2026-07-16T00:00:04Z\topen\t/r\t{self.base}\tclaude-pass\t"
+             f"route_id=rt-claude-pass,route_node=test,attempt_id={attempt},pid=99999995,pid_start=1,"
+             f"harness=claude,artifact_root={artifact_root},log_file={log}\n")
+  currentize_registry(self.jobs)
+  result=subprocess.run(
+   [sys.executable,str(ROOT/"adapters/codex/bin/dispatch-liveness.py"),str(self.jobs)],
+   capture_output=True,text=True,
+   env={**os.environ,"AGENT_HOME":str(self.base),"AGENT_ARTIFACT_ROOT":str(artifact_root),
+        "CODEX_SESSIONS":str(self.base/"missing")},
+  )
+  self.assertEqual(result.returncode,3,result.stdout+result.stderr)
+  self.assertIn("COMPLETED claude-pass - exact Claude result PASS; harvest required",result.stdout)
+  self.assertIn(f"\topen\t/r\t{self.base}\tclaude-pass\t",self.jobs.read_text())
  def test_codex_preflight_projects_current_and_dry_reconcile(self):
   pre=ROOT/"adapters/codex/bin/preflight.sh"
   current=subprocess.run([str(pre),"dispatch-current","--jobs",str(self.jobs),"--route","r1","--agent-home",str(self.base)],capture_output=True,text=True,env={**os.environ,"AGENT_HOME":str(ROOT)})
@@ -256,7 +277,10 @@ class OrphanReconcileTest(unittest.TestCase):
   (self.marker_dir/f"{node_id}.json").write_text(json.dumps({"node_id":node_id}))
  def owner_row(self,slug,attempt_id,pid,pid_start,extra="",include_route=True):
   route_meta=f"route_id={self.route_id},route_file={self.route_file}," if include_route else ""
-  meta=f"{route_meta}worker_type=owner,attempt_id={attempt_id},pid={pid},pid_start={pid_start}"
+  meta=(f"attempt_schema_version=2,dispatch_depth=1,transport=headless,"
+        f"execution_surface=registered-headless,registered_worker=1,"
+        f"fallback_hop=same-harness-headless,{route_meta}worker_type=owner,"
+        f"attempt_id={attempt_id},pid={pid},pid_start={pid_start}")
   if extra: meta+=","+extra
   return f"2026-07-16T00:00:00Z\topen\t/r\t/w\t{slug}\t{meta}"
  def invoke(self,*args):
@@ -264,11 +288,11 @@ class OrphanReconcileTest(unittest.TestCase):
   return subprocess.run([sys.executable,str(SCRIPT),*args,"--jobs",str(self.jobs),"--agent-home",str(self.home)],capture_output=True,text=True)
  def test_dead_owner_with_open_child_is_orphaned(self):
   self.mark("plan")
-  live=subprocess.Popen(["sleep","60"]);start=(Path("/proc")/str(live.pid)/"stat").read_text().split()[21]
+  live=subprocess.Popen(["sleep","60"],start_new_session=True);start=(Path("/proc")/str(live.pid)/"stat").read_text().split()[21]
   try:
    rows=[
     self.owner_row("owner","att-owner-dead",99999995,1),
-    f"2026-07-16T00:00:01Z\topen\t/r\t/w\tchild\troute_id={self.route_id},route_node=execute,attempt_id=att-child-live,parent=owner,pid={live.pid},pid_start={start}",
+    f"2026-07-16T00:00:01Z\topen\t/r\t/w\tchild\troute_id={self.route_id},route_node=execute,attempt_id=att-child-live,parent=owner,parent_attempt_id=att-owner-dead,pid={live.pid},pid_start={start}",
    ]
    self.jobs.write_text("\n".join(rows)+"\n")
    dry=json.loads(self.invoke("reconcile","--attempt","att-owner-dead").stdout)
@@ -277,7 +301,9 @@ class OrphanReconcileTest(unittest.TestCase):
    self.assertEqual(applied["closed"],1)
    text=self.jobs.read_text()
    self.assertIn("note=dead-parent-orphaned",text)
-   self.assertIn("\topen\t/r\t/w\tchild\t",text, "a live child must never be closed by the orphan repair")
+   self.assertIn("\tdone\t/r\t/w\tchild\t",text)
+   self.assertIn("note=dead-parent-terminated",text)
+   self.assertIsNotNone(live.poll())
   finally:
    live.kill();live.wait()
  def test_codex_terminal_post_exit_orphan_reconcile(self):
@@ -372,6 +398,112 @@ class OrphanReconcileTest(unittest.TestCase):
   self.jobs.write_text("\n".join(rows)+"\n")
   result=json.loads(self.invoke("reconcile","--attempt","att-owner-conflict").stdout)
   self.assertNotEqual(result["decisions"][0]["category"],"orphan")
+ def test_same_slug_replacement_owner_and_child_are_byte_identical(self):
+  self.mark("plan")
+  old_child=subprocess.Popen(["sleep","60"],start_new_session=True)
+  replacement_owner=subprocess.Popen(["sleep","60"])
+  replacement_child=subprocess.Popen(["sleep","60"],start_new_session=True)
+  try:
+   old_start=(Path("/proc")/str(old_child.pid)/"stat").read_text().split()[21]
+   owner_start=(Path("/proc")/str(replacement_owner.pid)/"stat").read_text().split()[21]
+   new_start=(Path("/proc")/str(replacement_child.pid)/"stat").read_text().split()[21]
+   rows=[
+    self.owner_row("owner","att-owner-old",99999981,1),
+    f"2026-07-16T00:00:01Z\topen\t/r\t/w\told-child\troute_id={self.route_id},route_file={self.route_file},route_node=execute,attempt_id=att-child-old,parent=owner,parent_attempt_id=att-owner-old,pid={old_child.pid},pid_start={old_start}",
+    self.owner_row("owner","att-owner-new",replacement_owner.pid,owner_start),
+    f"2026-07-16T00:00:03Z\topen\t/r\t/w\tnew-child\troute_id={self.route_id},route_file={self.route_file},route_node=execute,attempt_id=att-child-new,parent=owner,parent_attempt_id=att-owner-new,pid={replacement_child.pid},pid_start={new_start}",
+   ]
+   self.jobs.write_text("\n".join(rows)+"\n")
+   currentize_registry(self.jobs)
+   before=self.jobs.read_text().splitlines()
+   new_owner_before=next(line for line in before if "att-owner-new" in line)
+   new_child_before=next(line for line in before if "att-child-new" in line)
+   applied=json.loads(self.invoke("reconcile","--attempt","att-owner-old","--apply").stdout)
+   self.assertEqual(applied["decisions"][0]["cascade"][0]["status"],"dead-parent-terminated")
+   after=self.jobs.read_text().splitlines()
+   self.assertEqual(next(line for line in after if "att-owner-new" in line),new_owner_before)
+   self.assertEqual(next(line for line in after if "att-child-new" in line),new_child_before)
+   self.assertIsNone(replacement_owner.poll());self.assertIsNone(replacement_child.poll())
+   stable=self.jobs.read_bytes()
+   self.invoke("reconcile","--attempt","att-owner-old","--apply")
+   self.assertEqual(self.jobs.read_bytes(),stable)
+  finally:
+   for proc in (old_child,replacement_owner,replacement_child):
+    if proc.poll() is None:proc.kill()
+    proc.wait()
+ def test_pid_reuse_closes_exact_row_without_signalling_replacement(self):
+  self.mark("plan")
+  unrelated=subprocess.Popen(["sleep","60"],start_new_session=True)
+  try:
+   actual=(Path("/proc")/str(unrelated.pid)/"stat").read_text().split()[21]
+   wrong=str(int(actual)+1)
+   rows=[
+    self.owner_row("owner","att-owner-reuse",99999980,1),
+    f"2026-07-16T00:00:01Z\topen\t/r\t/w\tchild\troute_id={self.route_id},route_file={self.route_file},route_node=execute,attempt_id=att-child-reuse,parent=owner,parent_attempt_id=att-owner-reuse,pid={unrelated.pid},pid_start={wrong}",
+   ]
+   self.jobs.write_text("\n".join(rows)+"\n")
+   applied=json.loads(self.invoke("reconcile","--attempt","att-owner-reuse","--apply").stdout)
+   self.assertEqual(applied["decisions"][0]["cascade"][0]["status"],"dead-parent-exited")
+   self.assertIn("note=dead-parent-exited",self.jobs.read_text())
+   self.assertIsNone(unrelated.poll())
+  finally:
+   if unrelated.poll() is None:unrelated.kill()
+   unrelated.wait()
+ def test_registered_but_unstarted_child_closes_without_process_identity(self):
+  self.mark("plan")
+  rows=[
+   self.owner_row("owner","att-owner-unstarted",99999976,1),
+   f"2026-07-16T00:00:01Z\topen\t/r\t/w\tchild\troute_id={self.route_id},route_file={self.route_file},route_node=execute,attempt_id=att-child-unstarted,parent=owner,parent_attempt_id=att-owner-unstarted,launch_claimed=0",
+  ]
+  self.jobs.write_text("\n".join(rows)+"\n")
+  applied=json.loads(self.invoke("reconcile","--attempt","att-owner-unstarted","--apply").stdout)
+  self.assertEqual(applied["decisions"][0]["cascade"][0]["status"],"dead-parent-exited")
+  self.assertIn("note=dead-parent-exited",self.jobs.read_text())
+ def test_claimed_but_unspawned_child_closes_without_process_identity(self):
+  self.mark("plan")
+  rows=[
+   self.owner_row("owner","att-owner-claimed",99999975,1),
+   f"2026-07-16T00:00:01Z\topen\t/r\t/w\tchild\troute_id={self.route_id},route_file={self.route_file},route_node=execute,attempt_id=att-child-claimed,parent=owner,parent_attempt_id=att-owner-claimed,launch_claimed=1",
+  ]
+  self.jobs.write_text("\n".join(rows)+"\n")
+  applied=json.loads(self.invoke("reconcile","--attempt","att-owner-claimed","--apply").stdout)
+  self.assertEqual(applied["decisions"][0]["cascade"][0]["status"],"dead-parent-exited")
+  self.assertIn("note=dead-parent-exited",self.jobs.read_text())
+ def test_non_group_leader_and_namespace_local_without_outer_pid_fail_closed(self):
+  self.mark("plan")
+  nongroup=subprocess.Popen(["sleep","60"])
+  try:
+   start=(Path("/proc")/str(nongroup.pid)/"stat").read_text().split()[21]
+   rows=[
+    self.owner_row("owner","att-owner-unsafe",99999979,1),
+    f"2026-07-16T00:00:01Z\topen\t/r\t/w\tnongroup\troute_id={self.route_id},route_file={self.route_file},route_node=execute,attempt_id=att-child-nongroup,parent=owner,parent_attempt_id=att-owner-unsafe,pid={nongroup.pid},pid_start={start}",
+    f"2026-07-16T00:00:02Z\topen\t/r\t/w\tnamespace\troute_id={self.route_id},route_file={self.route_file},route_node=test,attempt_id=att-child-namespace,parent=owner,parent_attempt_id=att-owner-unsafe,pid=437,pid_start=1,pid_scope=namespace-local",
+   ]
+   self.jobs.write_text("\n".join(rows)+"\n")
+   applied=json.loads(self.invoke("reconcile","--attempt","att-owner-unsafe","--apply").stdout)
+   statuses={item["attempt_id"]:item["status"] for item in applied["decisions"][0]["cascade"]}
+   self.assertEqual(statuses["att-child-nongroup"],"non-group-leader")
+   self.assertEqual(statuses["att-child-namespace"],"scope-unverifiable")
+   self.assertIn("\topen\t/r\t/w\tnongroup\t",self.jobs.read_text())
+   self.assertIn("\topen\t/r\t/w\tnamespace\t",self.jobs.read_text())
+   self.assertIsNone(nongroup.poll())
+  finally:
+   if nongroup.poll() is None:nongroup.kill()
+   nongroup.wait()
+ def test_claude_result_failure_outranks_parent_death_note(self):
+  self.mark("plan")
+  log=self.base/"child.claude.jsonl"
+  log.write_text(json.dumps({"type":"result","subtype":"success","is_error":False,
+   "result":"artifact: -\nverdict: FAIL\nblocker: fixture failure"})+"\n")
+  rows=[
+   self.owner_row("owner","att-owner-claude",99999978,1),
+   f"2026-07-16T00:00:01Z\topen\t/r\t/w\tchild\troute_id={self.route_id},route_file={self.route_file},route_node=execute,attempt_id=att-child-claude,parent=owner,parent_attempt_id=att-owner-claude,pid=99999977,pid_start=1,harness=claude,log_file={log}",
+  ]
+  self.jobs.write_text("\n".join(rows)+"\n")
+  applied=json.loads(self.invoke("reconcile","--attempt","att-owner-claude","--apply").stdout)
+  self.assertEqual(applied["decisions"][0]["cascade"][0]["status"],"dead-worker-fail")
+  text=self.jobs.read_text();self.assertIn("note=dead-worker-fail",text)
+  self.assertNotIn("note=dead-parent-exited",next(line for line in text.splitlines() if "att-child-claude" in line))
  def test_live_conductor_completed_route_live_child_is_never_orphaned(self):
   for node in ("plan","execute","test","report"): self.mark(node)
   live_owner=subprocess.Popen(["sleep","60"]);owner_start=(Path("/proc")/str(live_owner.pid)/"stat").read_text().split()[21]

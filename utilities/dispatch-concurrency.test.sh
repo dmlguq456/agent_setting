@@ -40,12 +40,19 @@ chmod +x "$bin/claude"
 # 3대의 다축 워커(perspective/verifier/adversary)를 같은 parent 로 동시 분사.
 PARENT="conductor-thorough"
 roles="perspective verifier adversary"
+wt="$tmp/wt/shared"; mkdir -p "$wt"
+( cd "$wt" && git init -q && git -c user.email=a@b -c user.name=a commit -q --allow-empty -m x )
+sleep 60 & parent_pid=$!
+parent_start=$(awk '{print $22}' "/proc/$parent_pid/stat")
+parent_attempt="att-concurrency-parent"
+mkdir -p "$AH/.dispatch"
+printf '2026-07-23T00:00:00Z\topen\t%s\t%s\t%s\tattempt_schema_version=2,dispatch_depth=1,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless,worker_type=owner,attempt_id=%s,pid=%s,pid_start=%s\n' \
+  "$wt" "$wt" "$PARENT" "$parent_attempt" "$parent_pid" "$parent_start" > "$AH/.dispatch/jobs.log"
 i=0
 for r in $roles; do
   i=$((i + 1))
-  wt="$tmp/wt/w$i"; mkdir -p "$wt"
-  ( cd "$wt" && git init -q && git -c user.email=a@b -c user.name=a commit -q --allow-empty -m x )
   AGENT_HOME="$AH" AGENT_DISPATCH_JOBS="$AH/.dispatch/jobs.log" \
+    AGENT_DISPATCH_ATTEMPT_ID="$parent_attempt" \
     CLAUDE_CONFIG_DIR="$RT" PATH="$bin:$PATH" python3 "$WRAP" --start \
     --worktree "$wt" --slug "thr-$r" --capability autopilot-code --mode dev --qa thorough \
     --intensity thorough --dispatch-depth 2 --parent "$PARENT" --worker-type review \
@@ -54,6 +61,8 @@ for r in $roles; do
     --launch-authority conductor --nested-eligibility supported --eligibility-source concurrency-fixture \
     --model sonnet --effort medium --early-exit-watch 0 >/dev/null 2>&1
 done
+kill "$parent_pid" 2>/dev/null || true
+wait "$parent_pid" 2>/dev/null || true
 jobs="$AH/.dispatch/jobs.log"
 
 # (1) 동시 open row 3개, 동일 parent, distinct slug.

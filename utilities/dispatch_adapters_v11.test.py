@@ -13,6 +13,21 @@ ADAPTERS={
 }
 
 class AdapterV11Test(unittest.TestCase):
+ def setUp(self): self.parent_procs=[]
+ def tearDown(self):
+  for proc in self.parent_procs:
+   if proc.poll() is None: proc.kill()
+   proc.wait()
+ def seed_parent(self,jobs,repo,attempt="att-parent-fixture"):
+  proc=subprocess.Popen(["sleep","60"]);self.parent_procs.append(proc)
+  start=(Path("/proc")/str(proc.pid)/"stat").read_text().split()[21]
+  jobs.write_text(
+   f"2026-07-23T00:00:00Z\topen\t{repo}\t{repo}\towner\t"
+   "attempt_schema_version=2,dispatch_depth=1,transport=headless,"
+   "execution_surface=registered-headless,registered_worker=1,"
+   "fallback_hop=same-harness-headless,worker_type=owner,"
+   f"attempt_id={attempt},pid={proc.pid},pid_start={start}\n")
+  return attempt
  def load_wrapper(self,harness):
   spec=importlib.util.spec_from_file_location(f"{harness}_dispatch_fixture",ROOT/f"adapters/{harness}/bin/dispatch-headless.py")
   wrapper=importlib.util.module_from_spec(spec); spec.loader.exec_module(wrapper); return wrapper
@@ -31,15 +46,20 @@ class AdapterV11Test(unittest.TestCase):
     root=Path(td); repo,art=self.fixture(root); jobs=root/"jobs.log"; logs=root/"logs"
     env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),
          "AGENT_DISPATCH_JOBS":str(jobs),"OPENCODE_CONFIG_CONTENT":"{}"}
+    if harness in ("codex","claude"): self.seed_parent(jobs,repo)
+    if harness in ("codex","claude"): env["AGENT_DISPATCH_ATTEMPT_ID"]="att-parent-fixture"
     registered=subprocess.run(self.command(harness,"register",repo,jobs,logs),text=True,capture_output=True,env=env)
     self.assertEqual(registered.returncode,0,registered.stdout+registered.stderr)
     row=jobs.read_text(encoding="utf-8")
     self.assertIn(f"harness={harness}",row); self.assertIn("attempt_id=att-",row)
     self.assertIn("nested_eligibility=supported",row); self.assertIn("fallback_ordinal=1",row)
+    if harness in ("codex","claude"):
+     self.assertIn("parent_attempt_id=att-parent-fixture",row)
+     self.assertIn("parent_pid=",row);self.assertIn("parent_pid_start=",row)
     duplicate=subprocess.run(self.command(harness,"register",repo,jobs,logs),text=True,capture_output=True,env=env)
     self.assertEqual(duplicate.returncode,0,duplicate.stdout+duplicate.stderr)
     self.assertIn("duplicate_attempt=1",duplicate.stdout); self.assertIn("registered=0",duplicate.stdout)
-    self.assertEqual(len(jobs.read_text(encoding="utf-8").splitlines()),1)
+    self.assertEqual(len(jobs.read_text(encoding="utf-8").splitlines()),2 if harness in ("codex","claude") else 1)
     denied=subprocess.run(self.command(harness,"start",repo,jobs,logs,status="unknown"),text=True,capture_output=True,env=env)
     self.assertEqual(denied.returncode,69,denied.stdout+denied.stderr)
     self.assertIn("reason=nested-child-spawn-unknown",denied.stdout)
@@ -64,11 +84,24 @@ class AdapterV11Test(unittest.TestCase):
    self.assertIn("nested_headless_network=1",result.stdout)
    self.assertIn("sandbox_workspace_write.network_access=true",result.stdout)
    self.assertIn(f"--add-dir {ROOT / '.dispatch'}",result.stdout)
-   self.assertIn(f"--add-dir {ROOT / '.core-grounding'}",result.stdout)
+   if (ROOT/".core-grounding").is_dir():
+    self.assertIn(f"--add-dir {ROOT / '.core-grounding'}",result.stdout)
    self.assertIn(f"--add-dir {claude_config / 'session-env'}",result.stdout)
    self.assertIn("nested_owner_writable_dirs=",result.stdout)
    self.assertIn("nested_codex_home=",result.stdout)
    self.assertIn("broker_lifecycle=retired",result.stdout)
+ def test_codex_and_claude_refuse_depth_two_before_any_row_without_live_parent(self):
+  for harness in ("codex","claude"):
+   with self.subTest(harness=harness),tempfile.TemporaryDirectory() as td:
+    root=Path(td);repo,art=self.fixture(root);jobs=root/"jobs.log";logs=root/"logs"
+    env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),
+         "AGENT_DISPATCH_JOBS":str(jobs)}
+    result=subprocess.run(self.command(harness,"register",repo,jobs,logs),
+                          text=True,capture_output=True,env=env)
+    self.assertEqual(result.returncode,73,result.stdout+result.stderr)
+    self.assertIn("reason=live-parent-not-found",result.stdout)
+    self.assertIn("child_spawned=0",result.stdout)
+    self.assertFalse(jobs.exists() and jobs.read_text().strip())
  def test_route_bound_depth_two_codex_gets_heartbeat_scope_without_network(self):
   spec=importlib.util.spec_from_file_location("codex_dispatch_scope",ROOT/"adapters/codex/bin/dispatch-headless.py")
   wrapper=importlib.util.module_from_spec(spec);spec.loader.exec_module(wrapper)
@@ -95,13 +128,18 @@ class AdapterV11Test(unittest.TestCase):
   for harness in ADAPTERS:
    with self.subTest(harness=harness):
     source=(ROOT/f"adapters/{harness}/bin/dispatch-headless.py").read_text(encoding="utf-8")
-    start=source.index("proc = subprocess.Popen")
+    marker=("return subprocess.Popen" if "return subprocess.Popen" in source
+            else "proc = subprocess.Popen")
+    start=source.index(marker)
     end=source.index("except OSError",start)
     launch=source[start:end]
     self.assertIn("stdin=subprocess.DEVNULL",launch)
     self.assertIn("stdout=subprocess.DEVNULL",launch)
     self.assertIn("stderr=subprocess.DEVNULL",launch)
-    self.assertIn('pid_scope=namespace-local',source)
+    if harness in ("codex","claude"):
+     self.assertIn('"pid_scope"] = "namespace-local"',source)
+    else:
+     self.assertIn('pid_scope=namespace-local',source)
     self.assertIn('os.environ.get("AGENT_DISPATCH_CHILD") == "1"',source)
  def test_nested_codex_home_links_auth_but_keeps_mutable_state_local(self):
   with tempfile.TemporaryDirectory() as td:
@@ -122,9 +160,10 @@ class AdapterV11Test(unittest.TestCase):
    with self.subTest(harness=harness), tempfile.TemporaryDirectory() as td:
     root=Path(td); repo,art=self.fixture(root); jobs=root/"jobs.log"; logs=root/"logs"; fakebin=root/"bin"; fakebin.mkdir()
     fake=fakebin/harness; fake.write_text("#!/bin/sh\nexit 0\n",encoding="utf-8"); fake.chmod(0o755)
+    self.seed_parent(jobs,repo)
     command=self.command(harness,"start",repo,jobs,logs)+["--launch-lifecycle","foreground-scoped","--foreground-timeout","2"]
     wrapper=self.load_wrapper(harness); argv=["dispatch-headless.py",*command[2:]]
-    env={**os.environ,"PATH":str(fakebin)+os.pathsep+os.environ.get("PATH",""),"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),"AGENT_DISPATCH_JOBS":str(jobs),"AGENT_DISPATCH_CHILD":"1"}
+    env={**os.environ,"PATH":str(fakebin)+os.pathsep+os.environ.get("PATH",""),"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),"AGENT_DISPATCH_JOBS":str(jobs),"AGENT_DISPATCH_CHILD":"1","AGENT_DISPATCH_ATTEMPT_ID":"att-parent-fixture"}
     stream=io.StringIO()
     patches=[mock.patch.dict(os.environ,env,clear=True)]
     if hasattr(wrapper,"check_runtime_projection"): patches.append(mock.patch.object(wrapper,"check_runtime_projection",return_value=0))
@@ -140,6 +179,12 @@ class AdapterV11Test(unittest.TestCase):
     self.assertIn("worker_failure=-",stream.getvalue())
     row=jobs.read_text(encoding="utf-8")
     self.assertIn("launch_lifecycle=foreground-scoped",row)
+    self.assertIn("parent_attempt_id=att-parent-fixture",row)
+    self.assertIn("pid_host=",row);self.assertIn("pid_host_start=",row)
+    self.assertIn("pgid=",row)
+    if harness=="claude":
+     self.assertIn("--output-format stream-json",stream.getvalue())
+     self.assertIn("--no-session-persistence",stream.getvalue())
     self.assertIn("\topen\t",row)
  def test_exact_attempt_row_closure_is_isolated_for_both_wrappers(self):
   for harness in ("codex","claude"):
@@ -164,12 +209,14 @@ class AdapterV11Test(unittest.TestCase):
    fake.write_text("#!/bin/sh\nprintf 'child\\n' >> \"$FAKE_CHILD_COUNT\"\n",encoding="utf-8")
    fake.chmod(0o755)
    command=self.command("codex","start",repo,jobs,logs)
+   self.seed_parent(jobs,repo)
    spec=importlib.util.spec_from_file_location("codex_dispatch_concurrency",ROOT/"adapters/codex/bin/dispatch-headless.py")
    wrapper=importlib.util.module_from_spec(spec); spec.loader.exec_module(wrapper)
    argv=["dispatch-headless.py",*command[2:]]
    env={**os.environ,"PATH":str(fakebin)+os.pathsep+os.environ.get("PATH",""),
         "AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),
         "AGENT_DISPATCH_JOBS":str(jobs),"AGENT_DISPATCH_CHILD":"1",
+        "AGENT_DISPATCH_ATTEMPT_ID":"att-parent-fixture",
         "AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN":"1",
         "FAKE_CHILD_COUNT":str(count)}
    codes=[]
@@ -186,7 +233,7 @@ class AdapterV11Test(unittest.TestCase):
     import time; time.sleep(.02)
    self.assertTrue(count.is_file(),codes)
    self.assertEqual(count.read_text(encoding="utf-8").splitlines(),["child"])
-   self.assertEqual(len(jobs.read_text(encoding="utf-8").splitlines()),1)
+   self.assertEqual(len(jobs.read_text(encoding="utf-8").splitlines()),2)
    self.assertIn("launch_claimed=1",jobs.read_text(encoding="utf-8"))
    self.assertIn("pid_scope=namespace-local",jobs.read_text(encoding="utf-8"))
    self.assertIn("launch_lifecycle=detached",jobs.read_text(encoding="utf-8"))

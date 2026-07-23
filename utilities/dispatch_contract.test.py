@@ -10,6 +10,109 @@ import dispatch_contract as D
 CURRENT="attempt_schema_version=2,dispatch_depth=2,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless"
 
 class DispatchContractTest(unittest.TestCase):
+ def owner_row(self,attempt,pid,start,slug="owner"):
+  return (f"2026-07-23T00:00:00Z\topen\t/repo\t/wt\t{slug}\t"
+          "attempt_schema_version=2,dispatch_depth=1,transport=headless,"
+          "execution_surface=registered-headless,registered_worker=1,"
+          "fallback_hop=same-harness-headless,worker_type=owner,"
+          f"attempt_id={attempt},pid={pid},pid_start={start}")
+
+ def test_live_parent_binding_is_attempt_exact_and_same_slug_safe(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log"
+   first=subprocess.Popen(["sleep","60"])
+   second=subprocess.Popen(["sleep","60"])
+   try:
+    first_start=D.process_start_ticks(first.pid);second_start=D.process_start_ticks(second.pid)
+    jobs.write_text(self.owner_row("att-parent-first",first.pid,first_start)+"\n"+
+                    self.owner_row("att-parent-second",second.pid,second_start)+"\n")
+    with self.assertRaises(D.DispatchContractError) as caught:
+     D.resolve_live_parent_attempt(jobs,parent_slug="owner",repo="/repo",worktree="/wt")
+    self.assertEqual(caught.exception.reason,"parent-attempt-ambiguous")
+    binding=D.resolve_live_parent_attempt(
+     jobs,parent_slug="owner",repo="/repo",worktree="/wt",
+     expected_attempt_id="att-parent-second")
+    self.assertEqual(binding.attempt_id,"att-parent-second")
+    self.assertEqual((binding.observed_pid,binding.observed_pid_start),(second.pid,second_start))
+   finally:
+    for proc in (first,second):
+     if proc.poll() is None:proc.kill()
+     proc.wait()
+
+ def test_dead_or_identity_missing_parent_prevents_claim(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log"
+   jobs.write_text(self.owner_row("att-parent-dead",99999971,"1")+"\n")
+   with self.assertRaises(D.DispatchContractError) as caught:
+    D.resolve_live_parent_attempt(
+     jobs,parent_slug="owner",repo="/repo",worktree="/wt",
+     expected_attempt_id="att-parent-dead")
+   self.assertEqual(caught.exception.reason,"parent-attempt-not-live")
+
+ def test_launch_identity_records_outer_pid_start_and_group(self):
+  proc=subprocess.Popen(["sleep","60"],start_new_session=True)
+  try:
+   identity=D.process_launch_identity(proc.pid)
+   self.assertEqual(identity["pid"],str(proc.pid))
+   self.assertEqual(identity["pid_start"],D.process_start_ticks(proc.pid))
+   self.assertEqual(identity.get("pid_host"),str(proc.pid))
+   self.assertEqual(identity.get("pid_host_start"),identity["pid_start"])
+   self.assertEqual(identity.get("pgid"),str(proc.pid))
+  finally:
+   proc.kill();proc.wait()
+
+ def test_claimed_spawn_rechecks_parent_and_publishes_identity_under_lock(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log"
+   parent=subprocess.Popen(["sleep","60"])
+   child=None
+   try:
+    start=D.process_start_ticks(parent.pid)
+    owner=self.owner_row("att-parent-atomic",parent.pid,start)
+    child_row=("2026-07-23T00:00:01Z\topen\t/repo\t/wt\tchild\t"
+               f"{CURRENT},worker_type=stage,parent=owner,"
+               "parent_attempt_id=att-parent-atomic,attempt_id=att-child-atomic")
+    jobs.write_text(owner+"\n")
+    binding=D.resolve_live_parent_attempt(
+     jobs,parent_slug="owner",repo="/repo",worktree="/wt",
+     expected_attempt_id="att-parent-atomic")
+    self.assertTrue(D.claim_attempt_row(jobs,"att-child-atomic",child_row,launch=True))
+    child,identity=D.spawn_claimed_attempt(
+     jobs,"att-child-atomic",parent_binding=binding,
+     spawn=lambda: subprocess.Popen(["sleep","60"],start_new_session=True),
+     launch_metadata={"launch_lifecycle":"detached"})
+    meta=D.parse_registry_metadata(jobs.read_text().splitlines()[1].split("\t")[5])
+    self.assertEqual(meta["pid"],str(child.pid))
+    self.assertEqual(meta["pid_start"],identity["pid_start"])
+    self.assertEqual(meta["pgid"],str(child.pid))
+    self.assertEqual(meta["launch_lifecycle"],"detached")
+   finally:
+    for proc in (child,parent):
+     if proc is not None and proc.poll() is None:proc.kill()
+     if proc is not None:proc.wait()
+
+ def test_claimed_spawn_starts_zero_children_when_parent_dies_before_final_check(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log"
+   parent=subprocess.Popen(["sleep","60"])
+   start=D.process_start_ticks(parent.pid)
+   jobs.write_text(self.owner_row("att-parent-race",parent.pid,start)+"\n")
+   binding=D.resolve_live_parent_attempt(
+    jobs,parent_slug="owner",repo="/repo",worktree="/wt",
+    expected_attempt_id="att-parent-race")
+   child_row=("2026-07-23T00:00:01Z\topen\t/repo\t/wt\tchild\t"
+              f"{CURRENT},worker_type=stage,parent=owner,"
+              "parent_attempt_id=att-parent-race,attempt_id=att-child-race")
+   self.assertTrue(D.claim_attempt_row(jobs,"att-child-race",child_row,launch=True))
+   parent.kill();parent.wait()
+   spawned=[]
+   with self.assertRaises(D.DispatchContractError) as caught:
+    D.spawn_claimed_attempt(
+     jobs,"att-child-race",parent_binding=binding,
+     spawn=lambda: spawned.append(True))
+   self.assertEqual(caught.exception.reason,"parent-attempt-not-live")
+   self.assertEqual(spawned,[])
+
  def test_nested_registry_is_inherited_and_immutable(self):
   with tempfile.TemporaryDirectory() as td:
    root=Path(td); global_jobs=(root/"global/jobs.log").resolve(); local=(root/"cycle/jobs.log").resolve()

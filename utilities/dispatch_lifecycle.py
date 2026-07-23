@@ -9,7 +9,10 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+import time
 from typing import Mapping
+
+from dispatch_contract import process_identity_is_live, process_start_ticks
 
 DETACHED = "detached"
 FOREGROUND_SCOPED = "foreground-scoped"
@@ -94,7 +97,23 @@ def _terminate_group(proc: subprocess.Popen, signum: int) -> None:
         pass
 
 
-def wait_foreground(proc: subprocess.Popen, timeout: float) -> ForegroundResult:
+def _bounded_group_stop(proc: subprocess.Popen, grace: float = 5.0) -> int:
+    _terminate_group(proc, signal.SIGTERM)
+    try:
+        return proc.wait(timeout=grace)
+    except subprocess.TimeoutExpired:
+        _terminate_group(proc, signal.SIGKILL)
+        return proc.wait()
+
+
+def wait_foreground(
+    proc: subprocess.Popen,
+    timeout: float,
+    *,
+    parent_pid: int | None = None,
+    parent_pid_start: str | None = None,
+    poll_interval: float = 0.2,
+) -> ForegroundResult:
     """Wait in scope, forwarding termination and returning a typed outcome."""
 
     received: list[int] = []
@@ -108,16 +127,27 @@ def wait_foreground(proc: subprocess.Popen, timeout: float) -> ForegroundResult:
         previous[signum] = signal.getsignal(signum)
         signal.signal(signum, forward)
     try:
-        try:
-            exit_code = proc.wait(timeout=bounded_foreground_timeout(timeout))
-        except subprocess.TimeoutExpired:
-            _terminate_group(proc, signal.SIGTERM)
+        bounded_timeout = bounded_foreground_timeout(timeout)
+        if parent_pid is not None and parent_pid_start:
+            deadline = time.monotonic() + bounded_timeout
+            while True:
+                exit_code = proc.poll()
+                if exit_code is not None:
+                    break
+                if not process_identity_is_live(parent_pid, parent_pid_start):
+                    exit_code = _bounded_group_stop(proc)
+                    return ForegroundResult(exit_code, "parent-terminated")
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    exit_code = _bounded_group_stop(proc)
+                    return ForegroundResult(exit_code, "timeout")
+                time.sleep(min(max(poll_interval, 0.01), remaining))
+        else:
             try:
-                exit_code = proc.wait(timeout=5)
+                exit_code = proc.wait(timeout=bounded_timeout)
             except subprocess.TimeoutExpired:
-                _terminate_group(proc, signal.SIGKILL)
-                exit_code = proc.wait()
-            return ForegroundResult(exit_code, "timeout")
+                exit_code = _bounded_group_stop(proc)
+                return ForegroundResult(exit_code, "timeout")
     finally:
         for signum, handler in previous.items():
             signal.signal(signum, handler)

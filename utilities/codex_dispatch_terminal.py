@@ -35,20 +35,27 @@ _DETAIL_LIMIT = 512
 ARTIFACT_STATES = frozenset(
     {"unchecked", "none", "readable", "missing", "outside-root", "unsafe-root"}
 )
+_TERMINAL_SOURCES = ("exact-turn-completed", "exact-claude-result")
 _LEGAL_WIRE = frozenset(
     {
-        (0, "valid", "exact-turn-completed", "PASS", "none", "none"),
-        (0, "valid", "exact-turn-completed", "PASS", "readable", "none"),
         *(
-            (0, "valid", "exact-turn-completed", verdict, artifact, blocker)
+            (0, "valid", source, "PASS", artifact, "none")
+            for source in _TERMINAL_SOURCES
+            for artifact in ("none", "readable")
+        ),
+        *(
+            (0, "valid", source, verdict, artifact, blocker)
+            for source in _TERMINAL_SOURCES
             for verdict in ("FAIL", "BLOCKED")
             for artifact in ("none", "readable")
             for blocker in ("none", "worker-reported")
         ),
         (2, "absent", "none", "-", "unchecked", "-"),
-        (3, "invalid", "exact-turn-completed", "-", "unchecked", "contract-violation"),
-        (3, "invalid", "exact-turn-completed", "-", "missing", "contract-violation"),
-        (3, "invalid", "exact-turn-completed", "-", "outside-root", "contract-violation"),
+        *(
+            (3, "invalid", source, "-", artifact, "contract-violation")
+            for source in _TERMINAL_SOURCES
+            for artifact in ("unchecked", "missing", "outside-root")
+        ),
         (4, "error", "runtime-error", "-", "unchecked", "contract-violation"),
         (4, "error", "runtime-error", "-", "unsafe-root", "contract-violation"),
     }
@@ -125,7 +132,7 @@ def _read_terminal(path: str | Path | None) -> dict[str, object]:
         (
             index
             for index in range(len(rows) - 1, -1, -1)
-            if rows[index].get("type") == "turn.completed"
+            if rows[index].get("type") in {"turn.completed", "result"}
         ),
         None,
     )
@@ -134,18 +141,40 @@ def _read_terminal(path: str | Path | None) -> dict[str, object]:
             2, "absent", "none", "-", "unchecked", "-", reason="terminal-event-absent"
         )
 
+    terminal_row = rows[terminal_index]
+    terminal_event = str(terminal_row.get("type"))
+    terminal_source = (
+        "exact-turn-completed"
+        if terminal_event == "turn.completed"
+        else "exact-claude-result"
+    )
     final_message: str | None = None
-    final_row = rows[terminal_index - 1] if terminal_index > 0 else None
-    if isinstance(final_row, dict) and final_row.get("type") == "item.completed":
-        item = final_row.get("item")
-        if isinstance(item, dict) and item.get("type") == "agent_message":
-            text = item.get("text")
-            final_message = text if isinstance(text, str) else None
+    if terminal_event == "result":
+        subtype = terminal_row.get("subtype")
+        if terminal_row.get("is_error") is True or subtype not in {None, "success"}:
+            return _result(
+                3,
+                "invalid",
+                terminal_source,
+                "-",
+                "unchecked",
+                "contract-violation",
+                reason="claude-result-runtime-error",
+            )
+        text = terminal_row.get("result")
+        final_message = text if isinstance(text, str) else None
+    else:
+        final_row = rows[terminal_index - 1] if terminal_index > 0 else None
+        if isinstance(final_row, dict) and final_row.get("type") == "item.completed":
+            item = final_row.get("item")
+            if isinstance(item, dict) and item.get("type") == "agent_message":
+                text = item.get("text")
+                final_message = text if isinstance(text, str) else None
     if final_message is None:
         return _result(
             3,
             "invalid",
-            "exact-turn-completed",
+            terminal_source,
             "-",
             "unchecked",
             "contract-violation",
@@ -156,7 +185,7 @@ def _read_terminal(path: str | Path | None) -> dict[str, object]:
         return _result(
             3,
             "invalid",
-            "exact-turn-completed",
+            terminal_source,
             "-",
             "unchecked",
             "contract-violation",
@@ -168,7 +197,7 @@ def _read_terminal(path: str | Path | None) -> dict[str, object]:
         return _result(
             3,
             "invalid",
-            "exact-turn-completed",
+            terminal_source,
             "-",
             "unchecked",
             "contract-violation",
@@ -203,7 +232,7 @@ def _read_terminal(path: str | Path | None) -> dict[str, object]:
     return _result(
         0,
         "valid",
-        "exact-turn-completed",
+        terminal_source,
         verdict,
         "unchecked",
         "none" if handoff["blocker"] == "none" else "worker-reported",
@@ -213,7 +242,7 @@ def _read_terminal(path: str | Path | None) -> dict[str, object]:
         diagnostic=diagnostic,
         failure_note=failure_note,
         failure_class="sandbox-init" if sandbox_init else verdict.lower(),
-        terminal_event="turn.completed",
+        terminal_event=terminal_event,
         log_file=str(log_path),
     )
 
@@ -395,7 +424,7 @@ def inspect_terminal_attempt(
             return _result(
                 3,
                 "invalid",
-                "exact-turn-completed",
+                str(parsed["source"]),
                 "-",
                 "outside-root",
                 "contract-violation",
@@ -408,7 +437,7 @@ def inspect_terminal_attempt(
             return _result(
                 3,
                 "invalid",
-                "exact-turn-completed",
+                str(parsed["source"]),
                 "-",
                 "outside-root",
                 "contract-violation",
@@ -418,7 +447,7 @@ def inspect_terminal_attempt(
             return _result(
                 3,
                 "invalid",
-                "exact-turn-completed",
+                str(parsed["source"]),
                 "-",
                 "missing",
                 "contract-violation",

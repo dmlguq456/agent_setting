@@ -14,7 +14,19 @@ class FallbackTest(unittest.TestCase):
   subprocess.run(["git","init","-q",str(self.repo)],check=True); subprocess.run(["git","-C",str(self.repo),"config","user.email","fixture@example.com"],check=True); subprocess.run(["git","-C",str(self.repo),"config","user.name","Fixture"],check=True)
   (self.repo/"x").write_text("x"); subprocess.run(["git","-C",str(self.repo),"add","x"],check=True); subprocess.run(["git","-C",str(self.repo),"commit","-qm","init"],check=True)
   self.art=base/".agent_reports"; self.art.mkdir(); self.jobs=base/"jobs.log"
- def tearDown(self): self.tmp.cleanup()
+  self.owner=subprocess.Popen(["sleep","60"])
+ def tearDown(self):
+  if self.owner.poll() is None:self.owner.kill()
+  self.owner.wait();self.tmp.cleanup()
+ def seed_parent(self):
+  if self.jobs.exists():return
+  start=(Path("/proc")/str(self.owner.pid)/"stat").read_text().split()[21]
+  self.jobs.write_text(
+   f"2026-07-23T00:00:00Z\topen\t{self.repo}\t{self.repo}\towner\t"
+   "attempt_schema_version=2,dispatch_depth=1,transport=headless,"
+   "execution_surface=registered-headless,registered_worker=1,"
+   "fallback_hop=same-harness-headless,worker_type=owner,"
+   f"attempt_id=att-fallback-parent,pid={self.owner.pid},pid_start={start}\n")
  def tuple(self,child,status):
   return {"parent_harness":"codex","parent_transport":"headless","parent_sandbox":"workspace-write","child_harness":child,"launch_authority":"conductor","status":status,"probe_source":"fixture","probe_time":"2026-07-16T00:00:00Z","failure_class":"nested-network-unconfirmed" if status!="supported" else ""}
  def route(self,native="unsupported",same_status="unsupported"):
@@ -30,8 +42,9 @@ class FallbackTest(unittest.TestCase):
   env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(self.art),"AGENT_DISPATCH_JOBS":str(self.jobs),"AGENT_DISPATCH_SELF_SLUG":"owner"}
   return subprocess.run(cmd,text=True,capture_output=True,env=env)
  def run_register(self,path):
+  self.seed_parent()
   cmd=[sys.executable,str(ROOT/"utilities/stage-dispatch-fallback.py"),"--route",str(path),"--node","plan","--slug","fallback-plan","--parent","owner","--mode","dev/backend","--model-role","deep maker","--jobs",str(self.jobs),"--register"]
-  env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(self.art),"AGENT_DISPATCH_JOBS":str(self.jobs),"AGENT_DISPATCH_SELF_SLUG":"owner"}
+  env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(self.art),"AGENT_DISPATCH_JOBS":str(self.jobs),"AGENT_DISPATCH_SELF_SLUG":"owner","AGENT_DISPATCH_ATTEMPT_ID":"att-fallback-parent"}
   return subprocess.run(cmd,text=True,capture_output=True,env=env)
  def test_cross_harness_direct_precedes_inline(self):
   result=self.run_chain(self.route()); self.assertEqual(result.returncode,0,result.stdout+result.stderr)
@@ -89,7 +102,7 @@ class FallbackTest(unittest.TestCase):
  def test_direct_register_is_idempotent_without_broker(self):
   path=self.route(); first=self.run_register(path); second=self.run_register(path)
   self.assertEqual(first.returncode,0,first.stdout+first.stderr); self.assertEqual(second.returncode,0,second.stdout+second.stderr)
-  self.assertEqual(len(self.jobs.read_text().splitlines()),1)
+  self.assertEqual(len(self.jobs.read_text().splitlines()),2)
   self.assertIn("duplicate_attempt=1",second.stdout)
   self.assertNotIn("broker_request_id=",self.jobs.read_text())
  def test_registry_prevents_unchanged_same_harness_retry(self):

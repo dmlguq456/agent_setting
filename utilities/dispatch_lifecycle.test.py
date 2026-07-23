@@ -6,6 +6,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -77,6 +78,31 @@ class LifecycleTest(unittest.TestCase):
             outcome = L.wait_foreground(proc, 1)
         killpg.assert_called_once_with(4313, signal.SIGTERM)
         self.assertEqual(outcome.failure, "timeout")
+
+    def test_foreground_parent_identity_loss_terminates_child_group(self):
+        parent = subprocess.Popen(["sleep", "60"])
+        child = subprocess.Popen(["sleep", "60"], start_new_session=True)
+        parent_start = L.process_start_ticks(parent.pid)
+        timer = threading.Timer(0.05, parent.kill)
+        timer.start()
+        try:
+            outcome = L.wait_foreground(
+                child,
+                3,
+                parent_pid=parent.pid,
+                parent_pid_start=parent_start,
+                poll_interval=0.01,
+            )
+            self.assertEqual(outcome.failure, "parent-terminated")
+            self.assertIsNotNone(child.poll())
+        finally:
+            timer.cancel()
+            if parent.poll() is None:
+                parent.kill()
+            parent.wait()
+            if child.poll() is None:
+                child.kill()
+            child.wait()
 
 
 if __name__ == "__main__":

@@ -323,7 +323,7 @@ def main(argv: list[str]) -> int:
             metadata = parse_metadata(pipe)
             harness = metadata.get("harness", "")
             terminal = None
-            if harness in {"", "codex"} and metadata.get("log_file"):
+            if harness in {"", "codex", "claude"} and metadata.get("log_file"):
                 terminal = inspect_terminal_attempt(
                     metadata.get("log_file"),
                     worktree=worktree,
@@ -344,14 +344,19 @@ def main(argv: list[str]) -> int:
             if terminal and terminal.get("state") == "valid":
                 verdict = terminal["verdict"]
                 artifact_state = terminal["artifact_state"]
+                terminal_label = (
+                    "Claude result"
+                    if terminal.get("source") == "exact-claude-result"
+                    else "turn.completed"
+                )
                 if verdict == "PASS":
                     print(
-                        f"COMPLETED {label} - exact turn.completed PASS; harvest required "
+                        f"COMPLETED {label} - exact {terminal_label} PASS; harvest required "
                         f"(artifact_state={artifact_state}; blocker_reason=none) [open: {ts}]"
                     )
                 else:
                     print(
-                        f"EXITED   {label} - exact turn.completed {verdict} "
+                        f"EXITED   {label} - exact {terminal_label} {verdict} "
                         f"({terminal['failure_note']}; blocker_reason={terminal['blocker_reason']}; "
                         f"artifact_state={artifact_state}) [open: {ts}]"
                     )

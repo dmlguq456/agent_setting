@@ -109,9 +109,11 @@ main sessions and the adapter-owned statusline script. Its CLI supports one-off
 model/effort overrides, so dispatch model selection follows the core rule:
 main/orchestrator chooses per job and the wrapper only reflects that choice:
 
-- Full ceremony dispatch runs a background headless main in the target worktree,
-  currently shaped as `claude -p "/autopilot-code --mode <mode> --qa <level> ..."`
-  with tools pre-approved through Claude Code flags/settings.
+- Full ceremony dispatch runs a headless main in the target worktree, currently
+  shaped as `claude -p --output-format stream-json --verbose
+  --no-session-persistence` with the typed worker prompt on stdin and tools
+  pre-approved through Claude Code flags/settings. The wrapper owns one
+  attempt-specific `.claude.jsonl`; it does not depend on Claude session storage.
 - The headless wrapper does not choose a default model. The main/orchestrator
   selects `--model-role <portable-role>`, `--model <model> --effort <level>`,
   or explicit `--inherit-model-settings` per job; that is where simple jobs
@@ -121,13 +123,18 @@ main/orchestrator chooses per job and the wrapper only reflects that choice:
   harness. Cross-harness launches from Codex pass `CODEX_THREAD_ID` through
   `parent_sid`, so fleet can render the Claude worker under the Codex orchestrator
   instead of as an orphan.
-- `utilities/dispatch-liveness.sh` inspects Claude session transcript mtimes
-  under the Claude runtime project log layout to catch hung headless jobs.
+- `utilities/dispatch-liveness.sh` first inspects the exact wrapper JSONL for a
+  final Claude `result` envelope, then uses process identity and legacy Claude
+  session transcript mtimes as lower-precedence liveness evidence.
 - When shared `dispatch-chain` runs inside a transient PID namespace, it selects
   `foreground-scoped` and the Claude wrapper remains alive with `claude -p`,
   forwarding termination signals and recording the lifecycle on wrapper output
   and the exact jobs row. Outside that scope it keeps the existing `detached`
   launch. The explicit long-lived-namespace override also remains detached.
+- A dispatch-depth-2 claim resolves one live exact depth-1 owner and seals its
+  `parent_attempt_id`. The final parent check, spawn, and PID/start/PGID publish
+  share the jobs lock. Owner death then reaps only exact-bound child groups via
+  the shared bounded cascade; retries with the same slug are never targeted.
 
 Codex and future adapters should preserve the dispatch invariant, but must map
 it onto their own thread/subagent/session/status surfaces instead of copying the
