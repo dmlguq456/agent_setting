@@ -99,6 +99,30 @@ class CodexDispatchTerminalTest(unittest.TestCase):
         self.assertEqual(failed["failure_note"], "dead-worker-fail")
         self.assertEqual(passed["failure_note"], "")
 
+    def test_supervisor_turn_boundary_prevents_cross_turn_diagnostic_bleed(self):
+        old_failure = {
+            "type": "item.completed",
+            "item": {
+                "type": "command_execution",
+                "exit_code": 1,
+                "aggregated_output": (
+                    "bwrap: Can't bind mount /bindfile123 on "
+                    "/newroot/work/repo/.codex: Unable to mount source on "
+                    "destination: No such file or directory\n"
+                ),
+            },
+        }
+        boundary = {
+            "type": "dispatch.supervisor.turn.started",
+            "turn_id": "turn-final",
+        }
+        result = inspect_terminal_log(
+            self.write_log(sandbox=False, prefix=[old_failure, boundary])
+        )
+        self.assertEqual(result["failure_note"], "dead-worker-blocked")
+        self.assertEqual(result["failure_class"], "blocked")
+        self.assertNotIn("diagnostic", result)
+
     def test_claude_stream_result_uses_the_same_handoff_contract(self):
         for verdict, blocker, note in (
             ("PASS", "none", ""),

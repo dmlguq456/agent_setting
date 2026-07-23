@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
 
 from dispatch_contract import process_start_ticks
+from dispatch_completion_join import remove_supervisor_state
 
 
 OPEN = {"open", "running"}
@@ -49,6 +51,13 @@ def reconcile(args) -> int:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+    if re.fullmatch(r"att-[A-Za-z0-9._-]{1,240}", args.attempt_id):
+        remove_supervisor_state(
+            args.agent_home
+            / ".dispatch"
+            / "supervisor-state"
+            / f"{args.attempt_id}.json"
+        )
     return result.returncode
 
 

@@ -15,6 +15,12 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
 PREFLIGHT = ROOT / "adapters" / "codex" / "bin" / "preflight.sh"
+sys.path.insert(0, str(ROOT / "utilities"))
+from dispatch_completion_join import (  # noqa: E402
+    classify_supervised_shell_command,
+    read_supervisor_state,
+)
+
 OPEN_DISPATCH_STATES = {"open", "running"}
 MIN_PARK_WAIT_SECONDS = 300
 
@@ -231,7 +237,13 @@ def parse_long_options(tokens: list[str], valued: set[str], switches: set[str]) 
     return parsed
 
 
-def exact_park_control(base: Path, command: str, attempts: dict[str, str]) -> bool:
+def exact_park_control(
+    base: Path,
+    command: str,
+    attempts: dict[str, str],
+    *,
+    allow_wait: bool = True,
+) -> bool:
     """Allow only an exact-attempt blocking wait or typed harvest command."""
 
     # Shell composition could append arbitrary work after an allowed wait.
@@ -245,6 +257,8 @@ def exact_park_control(base: Path, command: str, attempts: dict[str, str]) -> bo
         return False
 
     if local_contract_path(base, tokens[0], "utilities/dispatch-wait.sh"):
+        if not allow_wait:
+            return False
         options = parse_long_options(
             tokens[1:],
             {"--attempt-id", "--interval", "--max"},
@@ -285,6 +299,39 @@ def exact_park_control(base: Path, command: str, attempts: dict[str, str]) -> bo
 
 
 def park_control_allowed(name: str, payload: dict[str, Any], args: dict[str, Any], attempts: dict[str, str]) -> bool:
+    supervised = os.environ.get("AGENT_DISPATCH_COMPLETION_MODE") == "supervised"
+    if supervised:
+        if not is_shell_tool(name):
+            return False
+        parent_attempt = os.environ.get("AGENT_DISPATCH_ATTEMPT_ID", "")
+        raw_state = os.environ.get("AGENT_DISPATCH_COMPLETION_STATE_FILE", "")
+        delivered = read_supervisor_state(
+            Path(raw_state) if raw_state else None,
+            parent_attempt,
+        )
+        if delivered is None:
+            # Missing state fails closed to recovery-only harvest. It never
+            # grants another child launch from an unproved batch phase.
+            return exact_park_control(
+                cwd(payload), shell_command(payload, args), attempts, allow_wait=False
+            )
+        action = classify_supervised_shell_command(
+            base=cwd(payload),
+            command=shell_command(payload, args),
+            open_attempt_ids=set(attempts),
+            parent_slug=os.environ.get("AGENT_DISPATCH_SELF_SLUG", ""),
+        )
+        delivered_open = set(attempts).intersection(delivered)
+        if delivered_open:
+            return bool(
+                action
+                and action.kind == "harvest"
+                and action.attempt_id in delivered_open
+            )
+        # The first open row of a new, not-yet-delivered batch must not block
+        # registration of its parallel siblings. Only another exact
+        # dispatch-node start bound to this owner is admitted.
+        return bool(action and action.kind == "dispatch")
     # Transport continuations do no new project work. Codex currently does not
     # rerun PreToolUse for write_stdin after the originating unified exec call,
     # while the orchestration bridge can expose a typed wait(cell_id) instead.
@@ -410,8 +457,16 @@ def main() -> int:
     try:
         payload = json.load(sys.stdin)
     except json.JSONDecodeError:
+        if os.environ.get("AGENT_DISPATCH_COMPLETION_MODE") == "supervised":
+            return hook_block(
+                "runtime-supervised-parent: native hook payload is invalid"
+            )
         return 0
     if not isinstance(payload, dict):
+        if os.environ.get("AGENT_DISPATCH_COMPLETION_MODE") == "supervised":
+            return hook_block(
+                "runtime-supervised-parent: native hook payload is invalid"
+            )
         return 0
 
     name = tool_name(payload)
@@ -420,9 +475,31 @@ def main() -> int:
     if not session_id:
         session_id = first_string(nested_mapping(payload, "session"), "id")
 
+    if (
+        os.environ.get("AGENT_DISPATCH_COMPLETION_MODE") == "supervised"
+        and not os.environ.get("AGENT_DISPATCH_ATTEMPT_ID")
+    ):
+        return hook_block(
+            "runtime-supervised-parent: exact parent attempt is missing"
+        )
+    if (
+        os.environ.get("AGENT_DISPATCH_COMPLETION_MODE") == "supervised"
+        and not dispatch_jobs_path().is_file()
+    ):
+        return hook_block(
+            "runtime-supervised-parent: canonical child registry is unavailable"
+        )
+
     attempts = open_child_attempts(session_id)
     if attempts and not park_control_allowed(name, payload, args, attempts):
         attempt_list = ",".join(sorted(attempts))
+        if os.environ.get("AGENT_DISPATCH_COMPLETION_MODE") == "supervised":
+            return hook_block(
+                "runtime-supervised-parent: open registered child attempt(s) "
+                f"{attempt_list}; the runtime owns all waiting. An undelivered batch "
+                "admits only another exact parent-bound dispatch-node start; after the "
+                "typed resume receipt, only exact preflight harvest/closure is allowed"
+            )
         return hook_block(
             "parent-parked: open registered child attempt(s) "
             f"{attempt_list}; only exact dispatch-wait --attempt-id with --max 300..600 "

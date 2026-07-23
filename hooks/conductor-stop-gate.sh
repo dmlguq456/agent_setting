@@ -1,7 +1,7 @@
 #!/bin/sh
 # Stop: SD-14b conductor Stop gate — block turn-end while the conductor still
-# has open depth-2 stage children (deterministic backstop for the one-shot wait
-# contract and the OPERATIONS §5.10 one-shot waiting contract).
+# has open depth-2 stage children (legacy polling-fallback backstop; the normal
+# SD-78 path is owned by the adapter session supervisor).
 #
 #   ┌─────────────────────────────────────────────────────────────────────┐
 #   │ UNREGISTERED / HELD as of 2026-07-10 probe.                          │
@@ -10,7 +10,7 @@
 #   │ output — which would break the very dispatch-harvest it is meant to  │
 #   │ protect. So this script is kept on disk (logic + CLI ready) but is   │
 #   │ NOT added to adapters/claude/settings.json. SD-14 ships via layers   │
-#   │ (a) wrapper depth_note one-shot clause + (c) utilities/dispatch-wait.│
+#   │ (a) explicit wrapper poll-fallback + (c) utilities/dispatch-wait.    │
 #   │ Re-register only when Claude Code fixes headless Stop firing.        │
 #   │ See .agent_reports/plans/2026-07-10_stage-dispatch-phase2/            │
 #   │     _internal/dev_reviews/phaseA_stop_probe.md                       │

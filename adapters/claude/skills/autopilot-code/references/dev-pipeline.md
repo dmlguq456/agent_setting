@@ -30,14 +30,21 @@ command that omits the route record.
 
 The prompt carries only subskill name, absolute input paths, output contract, intensity, and slug. It never carries plan bodies or prior-stage conversation. Each stage reads files; the conductor reads only verdict and gate state. Register every stage in `.dispatch/jobs.log`, monitor liveness, and keep conductor plus active stages at or below five processes. One-line or no-artifact micro-stages stay inline.
 
-#### One-Shot Wait
+#### Runtime-Owned Batch Join
 
-A conductor process ends when its turn ends. After dispatch, poll in the same turn:
+After registering every separable child in the current batch, end the turn with
+`runtime_wait: registered-children`. The adapter supervisor waits outside the model
+until every exact `parent_attempt_id` child is closed or ready for typed harvest, then
+resumes the same Codex thread or Claude session once with a bounded receipt. Do not
+call liveness, inspect raw child output, or do parallel work while parked.
+
+Only when the wrapper reports `completion_delivery=poll-fallback`, use the checked
+legacy wait in the same turn:
 
 ```bash
 sh <agent-home>/utilities/dispatch-wait.sh --parent <conductor-slug>
 # exit 0 = done and harvest
-# exit 2 = still alive; call again
+# exit 2 = still alive; continue the same bounded fallback wait
 # exit 3 = suspect or dead; diagnose and redispatch
 ```
 
@@ -92,13 +99,14 @@ STAGE_PROMPT="<sub-skill contract + absolute input paths + output contract + slu
 # capture ATTEMPT_ID, then use that same value for `capability-route.py complete`.
 ```
 
-Poll in the same turn:
+On the normal supervised path, yield `runtime_wait: registered-children` and consume
+the typed receipt on resume. Only for an explicitly reported `poll-fallback`:
 
 ```bash
 sh "$AGENT_HOME/utilities/dispatch-wait.sh" --parent <cycle-slug>
 ```
 
-Loop until exit 0. Then read only plan status and paths. On exit 3, inspect liveness and transcript tail, then redispatch using existing artifacts. For direct, quick, or unavailable headless runtime, invoke `code-plan` in-session.
+After the typed receipt (or fallback exit 0), read only plan status and paths. A terminal recovery receipt permits checked exact-attempt diagnosis; raw transcript inspection still requires a terminal/closed row or explicit operator recovery. For direct, quick, or unavailable headless runtime, invoke `code-plan` in-session.
 
 ### Step 2: plan-check and Optional Refinement
 

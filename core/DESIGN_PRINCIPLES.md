@@ -252,7 +252,7 @@ Efficiency is not corner cutting. Reduce duplicated orchestrator reasoning, not 
   for the next stage. Main retains route, state, artifact paths, and verdicts;
   the owner remains a thin conductor. If a file cannot carry required context,
   improve the artifact schema instead of passing conversation history.
-- Waiting and harvesting are part of the deterministic flow: conductors poll through `dispatch-wait`, while semantic interpretation remains only for a dead stage. `OPERATIONS §5.10` owns the runtime details.
+- Waiting and harvesting are part of the deterministic flow: registered standard+ conductors yield while an adapter supervisor joins the exact child batch outside the model, then resume once with a typed receipt. `dispatch-wait` is a disclosed checked fallback, and semantic interpretation remains only for terminal recovery. `OPERATIONS §5.10` owns the runtime details.
 - Reduce fixed input before squeezing output: keep always-loaded bootstraps as routers, expose Skill detail progressively, prevent duplicate discovery, and keep ordinary hooks silent. `ADAPTATION §6.1` owns the measurable budgets.
 - Worker pruning follows the same rule: one minimal kernel, one worker-type
   fragment, and only the assigned capability/stage contract. Runtime-owned

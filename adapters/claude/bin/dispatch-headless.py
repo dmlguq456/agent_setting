@@ -190,6 +190,12 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--model", default=os.environ.get("CLAUDE_DISPATCH_MODEL"))
     p.add_argument("--effort", default=os.environ.get("CLAUDE_DISPATCH_EFFORT"))
     p.add_argument(
+        "--completion-delivery",
+        choices=("auto", "supervised", "poll"),
+        default=os.environ.get("CLAUDE_DISPATCH_COMPLETION_DELIVERY", "auto"),
+        help="standard+ owner completion bridge; auto prefers same-session resume",
+    )
+    p.add_argument(
         "--inherit-model-settings",
         action="store_true",
         help="do not override model/effort; inherit the explicitly selected profile or active Claude config",
@@ -345,13 +351,34 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
             "- After a real tool call, write, test, or artifact update, run the same command with phase tool|file-write|test|artifact and kind tool|file|test|artifact plus a deterministic id/signature.\n"
             "- Repeated prose or an unchanged phase/evidence pair is not progress. Emit terminal only after the assigned artifact is durable.\n\n"
         )
-    sync_wait_clause = (
-        "No asynchronous Monitor/wakeup/scheduling waits; poll synchronously with "
-        "utilities/dispatch-wait.sh in the current turn until terminal, then harvest "
-        "(OPERATIONS.md §5.10, SD-71 auxiliary layer only — not a substitute for "
-        "runtime tool policy or post-exit orphan reconcile).\n\n"
-        if args.intensity in _STANDARD_PLUS_INTENSITY and args.worker_type == "owner"
-        else ""
+    completion_delivery = getattr(args, "resolved_completion_delivery", "poll-fallback")
+    supervised = completion_delivery == "session-resume-supervised"
+    owner_standard_plus = (
+        args.intensity in _STANDARD_PLUS_INTENSITY and args.worker_type == "owner"
+    )
+    sync_wait_clause = ""
+    if owner_standard_plus and supervised:
+        sync_wait_clause = (
+            "Runtime-owned completion join (SD-78): register every separable child in the "
+            "current batch, then end this turn with exactly `runtime_wait: registered-children`. "
+            "Do not call dispatch-wait, Monitor, liveness, or scheduling/wakeup tools. The "
+            "session supervisor joins all exact parent_attempt_id children outside the model "
+            "and resumes this same Claude session once with a typed bounded receipt. On resume, "
+            "harvest only the listed exact attempts; never emit the final handoff with an open "
+            "owned child.\n\n"
+        )
+    elif owner_standard_plus:
+        sync_wait_clause = (
+            "Checked polling fallback (Claude session-resume bridge unavailable): poll "
+            "synchronously with utilities/dispatch-wait.sh in the current turn until terminal, "
+            "then harvest. This fallback is not runtime completion parity (OPERATIONS.md §5.10).\n\n"
+        )
+    ending = (
+        "End a child-registration turn only with `runtime_wait: registered-children`. "
+        "When the full route is complete, end with the kernel's exact three-line handoff "
+        "and nothing after it.\n"
+        if supervised and owner_standard_plus
+        else "End with the kernel's exact three-line handoff and nothing after it.\n"
     )
     return (
         f"{sync_wait_clause}"
@@ -377,11 +404,11 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         "Claude realization:\n"
         "- The wrapper validates route/scope and the masked profile before launch. Re-run route validation only for a safety recheck.\n"
         f"- Read only the exposed {args.assigned_contract} Skill, named artifacts, and selected specialization. General Claude custom subagents may still inherit project CLAUDE.md; do not manually load a full harness bootstrap.\n"
-        "- Owner workers use the inherited registry, launch checked adapter wrappers directly, poll in this turn, harvest artifacts, and close rows; stage/review/support workers do not dispatch.\n\n"
+        "- Owner workers use the inherited registry, launch checked adapter wrappers directly, consume typed completion receipts, harvest artifacts, and close rows; stage/review/support workers do not dispatch.\n\n"
         f"{heartbeat}"
         "Assignment:\n"
         f"{task.rstrip()}\n\n"
-        "End with the kernel's exact three-line handoff and nothing after it.\n",
+        f"{ending}",
         source,
     )
 
@@ -389,32 +416,112 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
 # SD-71: names proven by the live `claude -p --help`/tool-enumeration probe
 # (_internal/probe_claude_tools.txt, captured 2026-07-19 against Claude Code
 # 2.1.215) to be asynchronous wait/scheduling/notification tools — the exact
-# class the SD-14 one-shot wait contract forbids any registered `claude -p`
-# launch from reaching, since the process exits at turn end and never receives
-# their later callback. This was first reproduced in a conductor and then in
+# class the SD-14/78 contract forbids any registered Claude print turn from
+# reaching. A supervised owner resumes only through its process supervisor;
+# these runtime-native callbacks are still unrelated and unsafe. This was first reproduced in a conductor and then in
 # an execute stage. Never includes Bash or any synchronous tool;
-# dispatch-wait.sh stays fully available. Update only from fresh probe
+# dispatch-wait.sh stays available only to the reported polling fallback. Update only from fresh probe
 # evidence, never from assumption.
 PROVEN_ASYNC_DENY = (
     "Monitor", "ScheduleWakeup", "CronCreate", "CronDelete", "CronList",
     "PushNotification", "RemoteTrigger",
 )
 
-# The injected synchronous-wait prose remains specific to standard+ owners;
-# the runtime deny above is broader because every wrapper launch is one-shot.
+# The injected completion-delivery prose remains specific to standard+ owners;
+# the runtime deny above is broader because every print turn must avoid callbacks.
 _STANDARD_PLUS_INTENSITY = {"standard", "strong", "thorough", "adversarial"}
 
 
 def _async_deny_tools(args: argparse.Namespace) -> tuple[str, ...]:
-    """SD-71: deny proven-fatal async tools for every one-shot Claude launch."""
+    """SD-71/78: deny proven-fatal async tools for every Claude print turn."""
     return PROVEN_ASYNC_DENY
 
 
 def _async_wait_policy(args: argparse.Namespace) -> str:
+    if getattr(args, "resolved_completion_delivery", "") == "session-resume-supervised":
+        return "runtime-supervised"
     return "deny-proven" if _async_deny_tools(args) else "unsupported"
 
 
+def _completion_owner(args: argparse.Namespace) -> bool:
+    return (
+        args.dispatch_depth == 1
+        and args.worker_type == "owner"
+        and args.intensity in _STANDARD_PLUS_INTENSITY
+    )
+
+
+def claude_session_resume_available() -> bool:
+    if shutil.which("claude") is None:
+        return False
+    try:
+        result = subprocess.run(
+            ["claude", "--help"],
+            text=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0 and "--resume" in result.stdout and "--session-id" in result.stdout
+
+
+def resolve_completion_delivery(args: argparse.Namespace) -> str:
+    requested = args.completion_delivery
+    if not _completion_owner(args):
+        if requested == "supervised":
+            raise DispatchContractError(
+                "completion-delivery-ineligible",
+                "supervised completion is scoped to registered standard+ depth-1 owners",
+            )
+        return "one-shot"
+    if requested == "poll":
+        return "poll-fallback"
+    if claude_session_resume_available():
+        return "session-resume-supervised"
+    if requested == "supervised":
+        raise DispatchContractError(
+            "claude-session-resume-unavailable",
+            "claude --help did not expose --session-id and --resume; no owner was launched",
+        )
+    return "poll-fallback"
+
+
+def completion_state_path(args: argparse.Namespace) -> Path:
+    attempt_id = args.attempt_id or "att-dry-run-placeholder"
+    if re.fullmatch(r"att-[A-Za-z0-9._-]{1,240}", attempt_id) is None:
+        raise DispatchContractError(
+            "completion-state-attempt-invalid",
+            "supervised completion requires a path-safe exact attempt id",
+        )
+    return Path(args.agent_home) / ".dispatch" / "supervisor-state" / f"{attempt_id}.json"
+
+
 def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -> str:
+    if getattr(args, "resolved_completion_delivery", "one-shot") == "session-resume-supervised":
+        command = [
+            sys.executable,
+            str(ROOT / "utilities" / "claude-session-supervisor.py"),
+            "--worktree", args.worktree,
+            "--jobs", str(args.jobs_path),
+            "--parent-attempt-id", args.attempt_id or "unassigned",
+            "--state-file", str(completion_state_path(args)),
+            "--add-dir", str(args.artifact_root),
+        ]
+        if args.resolved_model_settings["source"] != "inherit":
+            command += [
+                "--model", args.resolved_model_settings["model"],
+                "--effort", args.resolved_model_settings["effort"],
+            ]
+        for tool in _async_deny_tools(args):
+            command += ["--disallowed-tool", tool]
+        return (
+            " ".join(shlex.quote(x) for x in command)
+            + f" < {shlex.quote(str(prompt_path))} >> {shlex.quote(str(log_path))} 2>&1"
+        )
     # `claude -p` reads the prompt from stdin when no positional prompt is
     # given and prints the response non-interactively, mirroring the codex
     # wrapper's file-piped `codex exec ... < prompt_path` invocation.
@@ -536,6 +643,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     settings = args.resolved_model_settings
     pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},effort={settings['effort']}"
     pipe += f",async_wait_policy={_async_wait_policy(args)}"
+    pipe += f",completion_delivery={args.resolved_completion_delivery}"
     if args.profile:
         pipe += f",profile={args.profile}"
     pipe += f",artifact_root={args.artifact_root},log_file={args.log_path}"
@@ -994,6 +1102,20 @@ def main(argv: list[str]) -> int:
             reason = e.reason if isinstance(e, DispatchContractError) else "parent-repo-unreadable"
             detail = e.detail if isinstance(e, DispatchContractError) else str(e)
             return fail(reason, 73, detail=detail, child_spawned="0")
+    args.worker_type = resolve_worker_type(
+        explicit=args.worker_type,
+        dispatch_depth=args.dispatch_depth,
+        worker_role=args.worker_role,
+        route_node=args.route_node,
+        profile_type=profile_worker_type(ROOT, args.profile),
+    )
+    args.jobs_path = jobs
+    try:
+        args.resolved_completion_delivery = resolve_completion_delivery(args)
+        if args.resolved_completion_delivery == "session-resume-supervised":
+            completion_state_path(args)
+    except DispatchContractError as e:
+        return fail(e.reason, 69, detail=e.detail, child_spawned="0")
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
     home_root = agent_home / ".dispatch" / "homes"
     instance_dir = home_root / f"{args.slug}.{args.profile}" if args.profile else None
@@ -1083,6 +1205,11 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_CURRENT_HARNESS": "claude",
             "AGENT_DISPATCH_CURRENT_TRANSPORT": "headless",
             "AGENT_DISPATCH_CURRENT_SANDBOX": "adapter-default",
+            "AGENT_DISPATCH_COMPLETION_MODE": (
+                "supervised"
+                if args.resolved_completion_delivery == "session-resume-supervised"
+                else "poll"
+            ),
         })
         if args.worker_role:
             env["AGENT_DISPATCH_WORKER_ROLE"] = args.worker_role
@@ -1094,6 +1221,12 @@ def main(argv: list[str]) -> int:
             env.pop("AGENT_DISPATCH_UNIT", None)
         if args.profile:
             env["CLAUDE_CONFIG_DIR"] = str(instance_dir)
+        if args.resolved_completion_delivery == "session-resume-supervised":
+            env["AGENT_DISPATCH_COMPLETION_STATE_FILE"] = str(
+                completion_state_path(args)
+            )
+        else:
+            env.pop("AGENT_DISPATCH_COMPLETION_STATE_FILE", None)
         if (args.launch_lifecycle == DETACHED
                 and os.environ.get("AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN") != "1"
                 and pid_namespace_scoped()):
@@ -1228,6 +1361,7 @@ def main(argv: list[str]) -> int:
 
     print("adapter=claude")
     print("runtime_surface=claude-print-headless")
+    print(f"completion_delivery={args.resolved_completion_delivery}")
     print(f"status={action}")
     print(f"worktree={args.worktree}")
     print(f"artifact_root={args.artifact_root}")
