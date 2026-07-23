@@ -63,8 +63,8 @@ QA_FROM_INTENSITY = {
     "adversarial": "adversarial",
 }
 INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "adversarial"}
-# standard+ per OPERATIONS.md §5.10 — the SD-71 top-of-prompt sync-wait clause is
-# scoped to this set for owner (conductor) launches only.
+# standard+ per OPERATIONS.md §5.10 — the SD-78 runtime-owned completion clause
+# is scoped to this set for owner (conductor) launches only.
 _STANDARD_PLUS_INTENSITY = {"standard", "strong", "thorough", "adversarial"}
 
 # SD-15 (OPERATIONS §5.10 ⑨): immediate limit/auth failure patterns — homomorphic port of the Claude
@@ -205,6 +205,12 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--model-role", default=os.environ.get("CODEX_DISPATCH_MODEL_ROLE"))
     p.add_argument("--model", default=os.environ.get("CODEX_DISPATCH_MODEL"))
     p.add_argument("--reasoning", default=os.environ.get("CODEX_DISPATCH_REASONING"))
+    p.add_argument(
+        "--completion-delivery",
+        choices=("auto", "supervised", "poll"),
+        default=os.environ.get("CODEX_DISPATCH_COMPLETION_DELIVERY", "auto"),
+        help="standard+ owner completion bridge; auto prefers App Server session resume",
+    )
     p.add_argument(
         "--inherit-model-settings",
         action="store_true",
@@ -494,16 +500,37 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         "- A trusted dispatch-depth-0/Claude boundary commits after this stage's own PASS gate and confirms diff attribution.\n\n"
         if is_no_commit_stage(args) else ""
     )
-    sync_wait_clause = (
-        "Parent parking contract: immediately after a child is registered, run only "
-        "utilities/dispatch-wait.sh --attempt-id <exact-id> --max 600 until terminal, then "
-        "use exact-attempt preflight harvest. Do not inspect child transcripts/logs, source, "
-        "artifacts, git state, or perform parallel work while any registered child remains open. "
-        "No asynchronous Monitor/wakeup/scheduling waits are permitted "
-        "(OPERATIONS.md §5.10, SD-71 auxiliary layer only — not a substitute for "
-        "runtime tool policy or post-exit orphan reconcile).\n\n"
-        if args.intensity in _STANDARD_PLUS_INTENSITY and args.worker_type == "owner"
-        else ""
+    completion_delivery = getattr(args, "resolved_completion_delivery", "poll-fallback")
+    supervised = completion_delivery == "app-server-supervised"
+    owner_standard_plus = (
+        args.intensity in _STANDARD_PLUS_INTENSITY and args.worker_type == "owner"
+    )
+    sync_wait_clause = ""
+    if owner_standard_plus and supervised:
+        sync_wait_clause = (
+            "Runtime-owned completion join (SD-78): register every separable child in the "
+            "current batch, then end this turn with exactly `runtime_wait: registered-children`. "
+            "Do not call dispatch-wait, liveness, Monitor, or any scheduling/wakeup tool. The "
+            "App Server supervisor joins all exact parent_attempt_id children outside the model "
+            "and resumes this same thread once with a typed bounded receipt. On resume, harvest "
+            "only the listed exact attempts. Do not emit the final three-line handoff while an "
+            "owned child remains open.\n\n"
+        )
+    elif owner_standard_plus:
+        sync_wait_clause = (
+            "Checked polling fallback (App Server completion bridge unavailable): immediately "
+            "after a child is registered, run only utilities/dispatch-wait.sh --attempt-id "
+            "<exact-id> --max 600 until terminal, then use exact-attempt preflight harvest. "
+            "Do not inspect child transcripts/logs, source, artifacts, git state, or perform "
+            "parallel work while a registered child remains open. This fallback is not runtime "
+            "completion parity (OPERATIONS.md §5.10).\n\n"
+        )
+    ending = (
+        "End a child-registration turn only with `runtime_wait: registered-children`. "
+        "When the full route is complete, end with the kernel's exact three-line handoff "
+        "and nothing after it.\n"
+        if supervised and owner_standard_plus
+        else "End with the kernel's exact three-line handoff and nothing after it.\n"
     )
     return (
         f"{sync_wait_clause}"
@@ -535,7 +562,7 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         f"{no_commit_clause}"
         "Assignment:\n"
         f"{task.rstrip()}\n\n"
-        "End with the kernel's exact three-line handoff and nothing after it.\n",
+        f"{ending}",
         source,
     )
 
@@ -581,7 +608,96 @@ def nested_owner_writable_dirs(args: argparse.Namespace) -> tuple[Path, ...]:
     return tuple(path.resolve() for path in candidates if path.is_dir())
 
 
+def _completion_owner(args: argparse.Namespace) -> bool:
+    return (
+        args.dispatch_depth == 1
+        and args.worker_type == "owner"
+        and args.intensity in _STANDARD_PLUS_INTENSITY
+    )
+
+
+def codex_app_server_available() -> bool:
+    if shutil.which("codex") is None:
+        return False
+    try:
+        result = subprocess.run(
+            ["codex", "app-server", "--help"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
+def resolve_completion_delivery(args: argparse.Namespace) -> str:
+    requested = args.completion_delivery
+    if not _completion_owner(args):
+        if requested == "supervised":
+            raise DispatchContractError(
+                "completion-delivery-ineligible",
+                "supervised completion is scoped to registered standard+ depth-1 owners",
+            )
+        return "one-shot"
+    if requested == "poll":
+        return "poll-fallback"
+    if codex_app_server_available():
+        return "app-server-supervised"
+    if requested == "supervised":
+        raise DispatchContractError(
+            "codex-app-server-unavailable",
+            "codex app-server --help did not pass; no owner attempt was launched",
+        )
+    return "poll-fallback"
+
+
+def completion_state_path(args: argparse.Namespace) -> Path:
+    attempt_id = args.attempt_id or "att-dry-run-placeholder"
+    if re.fullmatch(r"att-[A-Za-z0-9._-]{1,240}", attempt_id) is None:
+        raise DispatchContractError(
+            "completion-state-attempt-invalid",
+            "supervised completion requires a path-safe exact attempt id",
+        )
+    return Path(args.agent_home) / ".dispatch" / "supervisor-state" / f"{attempt_id}.json"
+
+
 def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -> str:
+    if getattr(args, "resolved_completion_delivery", "one-shot") == "app-server-supervised":
+        command = [
+            sys.executable,
+            str(ROOT / "utilities" / "codex-app-server-supervisor.py"),
+            "--worktree", args.worktree,
+            "--jobs", str(args.jobs_path),
+            "--parent-attempt-id", args.attempt_id or "unassigned",
+            "--state-file", str(completion_state_path(args)),
+            "--sandbox", effective_runtime_sandbox(args),
+            "--approval", args.approval,
+            "--writable-root", str(args.artifact_root),
+        ]
+        if args.nested_headless_network or (
+            args.dispatch_depth == 2 and args.route_id and args.attempt_id
+        ):
+            command += ["--writable-root", str(args.agent_home / ".dispatch")]
+        for writable_dir in nested_owner_writable_dirs(args):
+            command += ["--writable-root", str(writable_dir)]
+        if args.route_id:
+            spec_grounding = args.agent_home / ".spec-grounding"
+            spec_grounding.mkdir(mode=0o700, parents=True, exist_ok=True)
+            command += ["--writable-root", str(spec_grounding)]
+        if args.nested_headless_network:
+            command += ["--network-access"]
+        if args.resolved_model_settings["source"] != "inherit":
+            command += [
+                "--model", args.resolved_model_settings["model"],
+                "--reasoning", args.resolved_model_settings["reasoning"],
+            ]
+        return (
+            " ".join(shlex.quote(x) for x in command)
+            + f" < {shlex.quote(str(prompt_path))} >> {shlex.quote(str(log_path))} 2>&1"
+        )
     cmd = [
         "codex",
         "exec",
@@ -683,7 +799,8 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         f"dispatch_depth={args.dispatch_depth},transport=headless,"
         f"execution_surface={args.execution_surface},"
         f"registered_worker={int(bool(args.registered_worker))},"
-        f"fallback_hop={args.fallback_hop},harness=codex"
+        f"fallback_hop={args.fallback_hop},harness=codex,"
+        f"completion_delivery={args.resolved_completion_delivery}"
     )
     if args.parent_slug:
         pipe += f",parent={args.parent_slug}"
@@ -1345,6 +1462,20 @@ def main(argv: list[str]) -> int:
             reason = e.reason if isinstance(e, DispatchContractError) else "parent-repo-unreadable"
             detail = e.detail if isinstance(e, DispatchContractError) else str(e)
             return fail(reason, 73, detail=detail, child_spawned="0")
+    args.worker_type = resolve_worker_type(
+        explicit=args.worker_type,
+        dispatch_depth=args.dispatch_depth,
+        worker_role=args.worker_role,
+        route_node=args.route_node,
+        profile_type=profile_worker_type(ROOT, args.profile),
+    )
+    args.jobs_path = jobs
+    try:
+        args.resolved_completion_delivery = resolve_completion_delivery(args)
+        if args.resolved_completion_delivery == "app-server-supervised":
+            completion_state_path(args)
+    except DispatchContractError as e:
+        return fail(e.reason, 69, detail=e.detail, child_spawned="0")
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
     prompt_text, prompt_source = dispatch_prompt(args)
     args.nested_headless_network = nested_headless_network_enabled(args)
@@ -1422,6 +1553,11 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_CURRENT_HARNESS": "codex",
             "AGENT_DISPATCH_CURRENT_TRANSPORT": "headless",
             "AGENT_DISPATCH_CURRENT_SANDBOX": effective_runtime_sandbox(args),
+            "AGENT_DISPATCH_COMPLETION_MODE": (
+                "supervised"
+                if args.resolved_completion_delivery == "app-server-supervised"
+                else "poll"
+            ),
         }
         if args.worker_role:
             dispatch_env["AGENT_DISPATCH_WORKER_ROLE"] = args.worker_role
@@ -1435,6 +1571,12 @@ def main(argv: list[str]) -> int:
             dispatch_env["AGENT_NESTED_HEADLESS_NETWORK"] = "1"
         else:
             dispatch_env.pop("AGENT_NESTED_HEADLESS_NETWORK", None)
+        if args.resolved_completion_delivery == "app-server-supervised":
+            dispatch_env["AGENT_DISPATCH_COMPLETION_STATE_FILE"] = str(
+                completion_state_path(args)
+            )
+        else:
+            dispatch_env.pop("AGENT_DISPATCH_COMPLETION_STATE_FILE", None)
         if args.nested_codex_home is not None:
             dispatch_env["CODEX_HOME"] = str(args.nested_codex_home)
         elif profile_home is not None:
@@ -1573,6 +1715,7 @@ def main(argv: list[str]) -> int:
 
     print("adapter=codex")
     print("runtime_surface=codex-exec-headless")
+    print(f"completion_delivery={args.resolved_completion_delivery}")
     print(f"status={action}")
     print(f"worktree={args.worktree}")
     print(f"artifact_root={args.artifact_root}")

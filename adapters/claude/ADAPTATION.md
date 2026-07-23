@@ -109,11 +109,23 @@ main sessions and the adapter-owned statusline script. Its CLI supports one-off
 model/effort overrides, so dispatch model selection follows the core rule:
 main/orchestrator chooses per job and the wrapper only reflects that choice:
 
-- Full ceremony dispatch runs a headless main in the target worktree, currently
-  shaped as `claude -p --output-format stream-json --verbose
-  --no-session-persistence` with the typed worker prompt on stdin and tools
-  pre-approved through Claude Code flags/settings. The wrapper owns one
-  attempt-specific `.claude.jsonl`; it does not depend on Claude session storage.
+- Standard+ depth-1 owners run under `utilities/claude-session-supervisor.py`:
+  the first print turn uses one generated `--session-id`, exact child batches are
+  joined outside the model, and each batch resumes once with `--resume`. The
+  wrapper suppresses intermediate `result` rows and exposes only the final result
+  to the attempt-specific `.claude.jsonl`. Quick and depth-2 one-shot workers keep
+  `--no-session-persistence`. `--completion-delivery auto` probes both CLI flags;
+  forced supervised mode fails before registration, and the checked legacy path
+  is reported as `poll-fallback`. Before each supervised turn the bridge writes
+  an atomic attempt-scoped delivered-set state and supplies a command-scoped
+  `--settings` PreToolUse hook. While the batch is undelivered, only another exact
+  same-parent dispatch start is admitted, so a first child does not block its
+  siblings; once the receipt is delivered, only exact harvest of delivered open
+  rows is admitted. Waits and unrelated tools are denied in both phases, invalid
+  state is recovery-only harvest, and normal exit or the exact owner watcher
+  removes the state. This extra
+  settings object applies only to the spawned command and never edits the user's
+  Claude settings.
 - The headless wrapper does not choose a default model. The main/orchestrator
   selects `--model-role <portable-role>`, `--model <model> --effort <level>`,
   or explicit `--inherit-model-settings` per job; that is where simple jobs

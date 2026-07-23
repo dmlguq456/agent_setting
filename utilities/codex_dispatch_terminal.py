@@ -206,7 +206,11 @@ def _read_terminal(path: str | Path | None) -> dict[str, object]:
 
     sandbox_init = False
     diagnostic = None
-    for row in rows[:terminal_index]:
+    diagnostic_start = 0
+    for index, row in enumerate(rows[:terminal_index]):
+        if row.get("type") == "dispatch.supervisor.turn.started":
+            diagnostic_start = index + 1
+    for row in rows[diagnostic_start:terminal_index]:
         if row.get("type") != "item.completed":
             continue
         item = row.get("item")

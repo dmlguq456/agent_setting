@@ -30,6 +30,11 @@ class OrphanWatchTest(unittest.TestCase):
         marker_dir = self.home / ".dispatch" / "completion" / self.route_id
         marker_dir.mkdir(parents=True)
         (marker_dir / "plan.json").write_text(json.dumps({"node_id": "plan"}))
+        self.supervisor_state = (
+            self.home / ".dispatch" / "supervisor-state" / "att-watch.json"
+        )
+        self.supervisor_state.parent.mkdir(parents=True)
+        self.supervisor_state.write_text("{}", encoding="utf-8")
         self.owner = subprocess.Popen(["sleep", "60"])
         self.owner_start = self.proc_start(self.owner.pid)
         self.children = []
@@ -94,6 +99,7 @@ class OrphanWatchTest(unittest.TestCase):
         self.assertIn("\tdone\t/r\t/w\tchild\t", text)
         self.assertIn("note=dead-parent-terminated", text)
         self.assertIsNotNone(child.poll())
+        self.assertFalse(self.supervisor_state.exists())
 
     def test_terminal_owner_makes_watcher_exit_without_mutation(self):
         self.write_rows(completed_owner=True)
@@ -101,6 +107,7 @@ class OrphanWatchTest(unittest.TestCase):
         watcher = self.watcher()
         self.assertEqual(watcher.wait(timeout=5), 0)
         self.assertEqual(self.jobs.read_text(), before)
+        self.assertFalse(self.supervisor_state.exists())
 
 
 if __name__ == "__main__":

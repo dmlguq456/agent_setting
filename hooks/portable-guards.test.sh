@@ -753,10 +753,11 @@ if "$CODEX" dispatch --dry-run --worktree "$TMP/repo" --slug codex-dispatch --ca
   && grep -q '^model=gpt-test$' /tmp/codex_dispatch.out \
   && grep -q '^reasoning=low$' /tmp/codex_dispatch.out \
   && grep -q '^approval=never$' /tmp/codex_dispatch.out \
-  && grep -q '^command=codex exec ' /tmp/codex_dispatch.out \
+  && grep -q '^completion_delivery=app-server-supervised$' /tmp/codex_dispatch.out \
+  && grep -q '^command=.*/codex-app-server-supervisor.py ' /tmp/codex_dispatch.out \
   && grep -q -- '--model gpt-test' /tmp/codex_dispatch.out \
-  && grep -q -- 'model_reasoning_effort=' /tmp/codex_dispatch.out \
-  && grep -q -- 'approval_policy=' /tmp/codex_dispatch.out \
+  && grep -q -- '--reasoning low' /tmp/codex_dispatch.out \
+  && grep -q -- '--approval never' /tmp/codex_dispatch.out \
   && ! grep -q -- '--ask-for-approval' /tmp/codex_dispatch.out \
   && [ ! -e "$TMP/codex-dispatch.log" ]; then
   ok "codex dispatch wrapper dry-runs headless command with main-selected model settings"
@@ -922,7 +923,7 @@ printf '%s\n' "$*" > "$CODEX_STUB_ARGV"
 EOF
 chmod +x "$TMP/codex-stubbin/codex"
 if PATH="$TMP/codex-stubbin:$PATH" CODEX_HOME="$TMP/codex_headless_home" CODEX_STUB_ARGV="$TMP/codex-start.argv" \
-  "$CODEX" dispatch --start --worktree "$TMP/repo" --slug nested/codex-start --capability autopilot-code --mode dev/backend --qa standard --prompt-text "nested work" --model gpt-test --reasoning low --jobs "$TMP/codex-start.log" --log-dir "$TMP/codex-logs" >/tmp/codex_dispatch_start.out 2>/tmp/codex_dispatch_start.err \
+  "$CODEX" dispatch --start --completion-delivery poll --worktree "$TMP/repo" --slug nested/codex-start --capability autopilot-code --mode dev/backend --qa standard --prompt-text "nested work" --model gpt-test --reasoning low --jobs "$TMP/codex-start.log" --log-dir "$TMP/codex-logs" >/tmp/codex_dispatch_start.out 2>/tmp/codex_dispatch_start.err \
   && grep -q '^status=start$' /tmp/codex_dispatch_start.out \
   && grep -q '^started=1$' /tmp/codex_dispatch_start.out \
   && [ "$(readlink "$TMP/repo/.dispatch/codex-home")" = "$TMP/codex_headless_home" ] \

@@ -132,6 +132,7 @@ class ParentContextConformance(unittest.TestCase):
             "--jobs", str(jobs), "--log-dir", str(self.logs),
             "--prompt-text", "fixture prompt", "--attempt-id", attempt,
             "--sandbox", "danger-full-access",
+            "--completion-delivery", "poll",
             "--launch-lifecycle", "foreground-scoped", "--foreground-timeout", "30",
         ]
         result = subprocess.run(

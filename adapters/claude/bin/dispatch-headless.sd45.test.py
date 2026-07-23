@@ -125,6 +125,7 @@ def _shell_command_args(**overrides):
     base = dict(
         worker_type="owner", intensity="strong", artifact_root="/tmp/fixture-artifacts",
         worktree="/tmp/fixture-worktree",
+        agent_home=Path("/tmp/fixture-agent-home"),
         completion_gate=None, assigned_contract=None, unit=None,
         resolved_model_settings={"source": "inherit", "role": "-", "model": None, "effort": None},
     )
@@ -132,8 +133,8 @@ def _shell_command_args(**overrides):
     return argparse.Namespace(**base)
 
 
-class ClaudeSD71AsyncDeny(unittest.TestCase):
-    """SD-71: deterministic --disallowedTools deny/fallback for every one-shot launch."""
+class ClaudeSD78CompletionDelivery(unittest.TestCase):
+    """SD-78 completion resume plus deterministic async-tool denial."""
 
     def test_owner_standard_plus_gets_exactly_the_proven_names_never_bash(self):
         for intensity in ("standard", "strong", "thorough", "adversarial"):
@@ -167,8 +168,9 @@ class ClaudeSD71AsyncDeny(unittest.TestCase):
             self.assertNotIn("--disallowedTools", command)
             self.assertEqual(WH._async_wait_policy(args), "unsupported")
 
-    def test_owner_prompt_carries_standard_synchronous_wait_clause(self):
+    def test_owner_prompt_carries_runtime_join_clause(self):
         args = _shell_command_args()
+        args.resolved_completion_delivery = "session-resume-supervised"
         args.route_id = args.route_node = args.attempt_id = None
         args.worker_role = None
         args.profile = None
@@ -182,13 +184,44 @@ class ClaudeSD71AsyncDeny(unittest.TestCase):
             "claude_dispatch_headless_task", Path(WH.__file__).with_name("dispatch-headless.py"))
         with mock.patch.object(WH, "task_prompt", return_value=("do the thing", "cli")):
             prompt, _source = WH.dispatch_prompt(args)
-        self.assertTrue(prompt.startswith(
-            "No asynchronous Monitor/wakeup/scheduling waits; poll synchronously with"))
-        self.assertIn("dispatch-wait.sh", prompt)
-        self.assertIn("auxiliary layer only", prompt)
+        self.assertTrue(prompt.startswith("Runtime-owned completion join (SD-78):"))
+        self.assertIn("same Claude session once", prompt)
+        self.assertIn("Do not call dispatch-wait", prompt)
+
+    def test_supervised_shell_uses_session_bridge_without_no_persistence(self):
+        args = _shell_command_args(
+            resolved_completion_delivery="session-resume-supervised",
+            jobs_path=Path("/tmp/jobs.log"), attempt_id="att-parent",
+        )
+        command = WH.shell_command(args, Path("/tmp/p.txt"), Path("/tmp/l.log"))
+        self.assertIn("claude-session-supervisor.py", command)
+        self.assertNotIn("--no-session-persistence", command)
+        self.assertIn("--parent-attempt-id att-parent", command)
+        self.assertIn(
+            "--state-file /tmp/fixture-agent-home/.dispatch/supervisor-state/att-parent.json",
+            command,
+        )
+
+    def test_supervised_state_path_rejects_attempt_path_escape(self):
+        args = _shell_command_args(attempt_id="att-../../outside")
+        with self.assertRaises(WH.DispatchContractError):
+            WH.completion_state_path(args)
+
+    def test_auto_prefers_resume_and_forced_unavailable_fails_closed(self):
+        args = argparse.Namespace(
+            completion_delivery="auto", dispatch_depth=1, worker_type="owner",
+            intensity="strong",
+        )
+        with mock.patch.object(WH, "claude_session_resume_available", return_value=True):
+            self.assertEqual(WH.resolve_completion_delivery(args), "session-resume-supervised")
+        args.completion_delivery = "supervised"
+        with mock.patch.object(WH, "claude_session_resume_available", return_value=False):
+            with self.assertRaises(WH.DispatchContractError):
+                WH.resolve_completion_delivery(args)
 
     def test_stage_prompt_never_carries_the_clause(self):
         args = _shell_command_args(worker_type=None, intensity="strong")
+        args.resolved_completion_delivery = "session-resume-supervised"
         args.route_id = "rt-fixture"; args.route_node = "execute"; args.attempt_id = "att-fixture"
         args.worker_role = "code-execute"
         args.profile = None
@@ -200,7 +233,7 @@ class ClaudeSD71AsyncDeny(unittest.TestCase):
         args.dispatch_depth = 2
         with mock.patch.object(WH, "task_prompt", return_value=("do the thing", "cli")):
             prompt, _source = WH.dispatch_prompt(args)
-        self.assertNotIn("No asynchronous Monitor/wakeup/scheduling waits", prompt)
+        self.assertNotIn("Runtime-owned completion join", prompt)
 
 
 if __name__=="__main__": unittest.main()

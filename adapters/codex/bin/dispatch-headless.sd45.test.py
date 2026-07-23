@@ -199,23 +199,50 @@ def _prompt_args(**overrides):
         capability_owner=None, owner_harness=None, write_scope=None,
         completion_gate=None, assigned_contract=None, unit=None, model_role=None,
         agent_home=Path("/tmp/fixture-agent-home"), artifact_root="/tmp/fixture-artifacts",
+        jobs_path=Path("/tmp/jobs.log"), sandbox="workspace-write", approval="never",
+        nested_headless_network=False,
+        resolved_model_settings={
+            "source": "inherit", "role": "-", "model": None, "reasoning": None
+        },
+        resolved_completion_delivery="app-server-supervised",
     )
     base.update(overrides)
     return argparse.Namespace(**base)
 
 
-class CodexSD71SyncWaitClause(unittest.TestCase):
-    """SD-71: the standard top-of-prompt clause (core/OPERATIONS.md §5.10) is an
-    auxiliary layer for Codex's deterministic local-tool parent park."""
+class CodexSD78CompletionDelivery(unittest.TestCase):
+    """SD-78: standard+ owners park outside the model and resume once."""
 
-    def test_owner_prompt_carries_standard_synchronous_wait_clause(self):
+    def test_owner_prompt_carries_runtime_join_clause(self):
         args = _prompt_args()
         with mock.patch.object(WH, "task_prompt", return_value=("do the thing", "cli")):
             prompt, _source = WH.dispatch_prompt(args)
-        self.assertTrue(prompt.startswith("Parent parking contract:"))
-        self.assertIn("dispatch-wait.sh --attempt-id <exact-id> --max 600", prompt)
-        self.assertIn("Do not inspect child transcripts/logs", prompt)
-        self.assertIn("auxiliary layer only", prompt)
+        self.assertTrue(prompt.startswith("Runtime-owned completion join (SD-78):"))
+        self.assertIn("runtime_wait: registered-children", prompt)
+        self.assertIn("joins all exact parent_attempt_id children outside the model", prompt)
+        self.assertIn("Do not call dispatch-wait", prompt)
+
+    def test_explicit_poll_mode_is_disclosed_as_fallback(self):
+        args = _prompt_args(resolved_completion_delivery="poll-fallback")
+        with mock.patch.object(WH, "task_prompt", return_value=("do the thing", "cli")):
+            prompt, _source = WH.dispatch_prompt(args)
+        self.assertTrue(prompt.startswith("Checked polling fallback"))
+        self.assertIn("not runtime completion parity", prompt)
+
+    def test_supervised_shell_uses_app_server_and_attempt_scoped_state(self):
+        args = _prompt_args(attempt_id="att-parent")
+        command = WH.shell_command(args, Path("/tmp/p.txt"), Path("/tmp/l.log"))
+        self.assertIn("codex-app-server-supervisor.py", command)
+        self.assertIn("--parent-attempt-id att-parent", command)
+        self.assertIn(
+            "--state-file /tmp/fixture-agent-home/.dispatch/supervisor-state/att-parent.json",
+            command,
+        )
+
+    def test_supervised_state_path_rejects_attempt_path_escape(self):
+        args = _prompt_args(attempt_id="att-../../outside")
+        with self.assertRaises(WH.DispatchContractError):
+            WH.completion_state_path(args)
 
     def test_stage_prompt_never_carries_the_clause(self):
         args = _prompt_args(worker_type=None, intensity="strong", dispatch_depth=2,
@@ -223,13 +250,25 @@ class CodexSD71SyncWaitClause(unittest.TestCase):
                             worker_role="code-execute")
         with mock.patch.object(WH, "task_prompt", return_value=("do the thing", "cli")):
             prompt, _source = WH.dispatch_prompt(args)
-        self.assertNotIn("No asynchronous Monitor/wakeup/scheduling waits", prompt)
+        self.assertNotIn("Runtime-owned completion join", prompt)
 
     def test_owner_direct_intensity_never_carries_the_clause(self):
         args = _prompt_args(intensity="direct")
         with mock.patch.object(WH, "task_prompt", return_value=("do the thing", "cli")):
             prompt, _source = WH.dispatch_prompt(args)
-        self.assertNotIn("No asynchronous Monitor/wakeup/scheduling waits", prompt)
+        self.assertNotIn("Runtime-owned completion join", prompt)
+
+    def test_auto_prefers_checked_app_server_and_forced_mode_fails_closed(self):
+        args = argparse.Namespace(
+            completion_delivery="auto", dispatch_depth=1, worker_type="owner",
+            intensity="strong",
+        )
+        with mock.patch.object(WH, "codex_app_server_available", return_value=True):
+            self.assertEqual(WH.resolve_completion_delivery(args), "app-server-supervised")
+        args.completion_delivery = "supervised"
+        with mock.patch.object(WH, "codex_app_server_available", return_value=False):
+            with self.assertRaises(WH.DispatchContractError):
+                WH.resolve_completion_delivery(args)
 
 
 class CodexTerminalReceipt(unittest.TestCase):

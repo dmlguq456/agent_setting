@@ -40,7 +40,7 @@ Defaults:
 | `strong` | standard + cross-harness 2-way replicate-and-merge at the riskiest review (route adds `impl-review-replica`) | Required | Dispatch both legs on different harness/model families; merge verdicts, stricter wins |
 | `thorough`/`adversarial` | strong + multi-axis dispatch-depth-2 planner/verifier/adversary synthesis | Required | Synthesize dispatch-depth-2 reports concisely |
 
-**`standard+` dispatch**: Run each durable stage (`code-plan`, `code-execute`, `code-test`, and `code-report`) in its own dispatch-depth-2 headless session. The dispatch-depth-1 conductor passes artifact paths, reads only verdict and status, and uses deterministic one-shot `dispatch-wait` polling for wait and harvest (dev-pipeline Steps 1-7; OPERATIONS §5.10 and SD-14). Keep `direct`, `quick`, and plan-check micro-stages inline.
+**`standard+` dispatch**: Run each durable stage (`code-plan`, `code-execute`, `code-test`, and `code-report`) in its own dispatch-depth-2 headless session. The dispatch-depth-1 conductor passes artifact paths, reads only verdict and status, then yields while the adapter supervisor joins the exact child batch and resumes the same session once with a typed receipt (dev-pipeline Steps 1-7; OPERATIONS §5.10 and SD-78). Use `dispatch-wait` only when the wrapper explicitly reports `poll-fallback`. Keep `direct`, `quick`, and plan-check micro-stages inline.
 
 ## Mode Routing
 

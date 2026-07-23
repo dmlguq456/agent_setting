@@ -68,14 +68,14 @@ print(json.dumps(out, ensure_ascii=False))' "$1"
 emit_reminder() { # $1=skill
   self="${AGENT_DISPATCH_SELF_SLUG:-\$AGENT_DISPATCH_SELF_SLUG}"
   node=${1#code-}
-  msg="📌 stage-dispatch: this session is a dispatch-depth-1 conductor (intensity=${AGENT_DISPATCH_INTENSITY:-?}). Dispatch ${1} route-bound with dispatch-node.py --route <route-file> --node ${node} --adapter <adapter> --action start --slug <stage-slug> --parent ${self} -- --jobs <canonical-jobs.log>; capture the emitted attempt_id, harvest with dispatch-wait, then complete that exact route/node/attempt (dev-pipeline steps 1-7). Invoke the Skill in-session only for direct inline work, a quick one-shot worker, or a runtime fallback where registered headless dispatch is unavailable."
+  msg="📌 stage-dispatch: this session is a dispatch-depth-1 conductor (intensity=${AGENT_DISPATCH_INTENSITY:-?}). Dispatch ${1} route-bound with dispatch-node.py --route <route-file> --node ${node} --adapter <adapter> --action start --slug <stage-slug> --parent ${self} -- --jobs <canonical-jobs.log>; capture the emitted attempt_id, then yield for the runtime-owned exact-batch join and harvest the typed receipt before completing that route/node/attempt (dev-pipeline steps 1-7). Use dispatch-wait only when the wrapper reports poll-fallback. Invoke the Skill in-session only for direct inline work, a quick one-shot worker, or a checked runtime fallback."
   _json_wrap context "$msg"
 }
 
 emit_deny() { # $1=skill
   self="${AGENT_DISPATCH_SELF_SLUG:-\$AGENT_DISPATCH_SELF_SLUG}"
   node=${1#code-}
-  msg="⛔ stage-dispatch denied: a dispatch-depth-1 conductor (intensity=${AGENT_DISPATCH_INTENSITY:-?}) invoked ${1} in-session. At standard+ intensity, use dispatch-node.py --route <route-file> --node ${node} --adapter <adapter> --action start --slug <stage-slug> --parent ${self} -- --jobs <canonical-jobs.log>; capture attempt_id, harvest with dispatch-wait, and complete that exact route/node/attempt. A legitimate inline case such as a self-modification cycle requires the orchestrator to set STAGE_DISPATCH_INLINE_OK=1 when launching; the conductor cannot grant itself an exception (§8.6.3)."
+  msg="⛔ stage-dispatch denied: a dispatch-depth-1 conductor (intensity=${AGENT_DISPATCH_INTENSITY:-?}) invoked ${1} in-session. At standard+ intensity, use dispatch-node.py --route <route-file> --node ${node} --adapter <adapter> --action start --slug <stage-slug> --parent ${self} -- --jobs <canonical-jobs.log>; capture attempt_id, yield for the runtime-owned exact-batch join, harvest the typed receipt, and complete that route/node/attempt. A legitimate inline case such as a self-modification cycle requires the orchestrator to set STAGE_DISPATCH_INLINE_OK=1 when launching; the conductor cannot grant itself an exception (§8.6.3)."
   if [ "$HOOK_MODE" -eq 1 ]; then
     _json_wrap deny "$msg"
     exit 0

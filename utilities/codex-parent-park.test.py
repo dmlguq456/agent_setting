@@ -15,6 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 GUARD = ROOT / "adapters" / "codex" / "hooks" / "pretooluse-write-guard.py"
 SESSION = "019f89fa-fixture-parent"
 ATTEMPT = "att-fixture-child"
+OWNER_ATTEMPT = "att-fixture-owner"
+OWNER_SLUG = "owner"
 
 
 class ParentParkGuardTest(unittest.TestCase):
@@ -161,6 +163,98 @@ class ParentParkGuardTest(unittest.TestCase):
                 extra_env={"AGENT_DISPATCH_ATTEMPT_ID": owner_attempt},
             )
         )
+
+    def supervised_env(self, delivered: list[str]) -> dict[str, str]:
+        state = self.base / "supervisor-state.json"
+        state.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "parent_attempt_id": OWNER_ATTEMPT,
+                    "delivered_attempt_ids": delivered,
+                }
+            ),
+            encoding="utf-8",
+        )
+        return {
+            "AGENT_DISPATCH_COMPLETION_MODE": "supervised",
+            "AGENT_DISPATCH_ATTEMPT_ID": OWNER_ATTEMPT,
+            "AGENT_DISPATCH_COMPLETION_STATE_FILE": str(state),
+            "AGENT_DISPATCH_SELF_SLUG": OWNER_SLUG,
+        }
+
+    def test_supervised_delivered_batch_denies_model_wait_and_allows_only_harvest(self) -> None:
+        self.write_row("open", ATTEMPT, parent_attempt_id=OWNER_ATTEMPT)
+        supervised = self.supervised_env([ATTEMPT])
+        wait = self.invoke(
+            "Bash",
+            f"utilities/dispatch-wait.sh --attempt-id {ATTEMPT} --max 600",
+            session="worker-session",
+            extra_env=supervised,
+        )
+        self.assertEqual(wait["decision"], "block")
+        self.assertIn("runtime-supervised-parent", wait["reason"])
+        transport_wait = self.invoke(
+            "wait", session="worker-session", extra_env=supervised
+        )
+        self.assertEqual(transport_wait["decision"], "block")
+        self.assertIsNone(
+            self.invoke(
+                "Bash",
+                f"adapters/codex/bin/preflight.sh harvest --attempt-id {ATTEMPT} --status open",
+                session="worker-session",
+                extra_env=supervised,
+            )
+        )
+        dispatch = self.invoke(
+            "Bash",
+            (
+                "utilities/dispatch-node.py --route /tmp/route.json --node test "
+                "--adapter codex --action start --slug sibling --parent owner"
+            ),
+            session="worker-session",
+            extra_env=supervised,
+        )
+        self.assertEqual(dispatch["decision"], "block")
+
+    def test_supervised_undelivered_batch_allows_second_sibling_dispatch_only(self) -> None:
+        self.write_row("open", ATTEMPT, parent_attempt_id=OWNER_ATTEMPT)
+        supervised = self.supervised_env([])
+        exact_dispatch = (
+            "python3 utilities/dispatch-node.py --route /tmp/route.json "
+            "--node test --adapter claude --action start --slug sibling-b "
+            "--parent owner -- --jobs /tmp/jobs.log"
+        )
+        self.assertIsNone(
+            self.invoke(
+                "Bash",
+                exact_dispatch,
+                session="worker-session",
+                extra_env=supervised,
+            )
+        )
+        for name, command in (
+            ("Read", None),
+            ("Bash", "git status --short"),
+            ("Bash", f"utilities/dispatch-wait.sh --attempt-id {ATTEMPT} --max 600"),
+            (
+                "Bash",
+                f"adapters/codex/bin/preflight.sh harvest --attempt-id {ATTEMPT} --status open",
+            ),
+            (
+                "Bash",
+                exact_dispatch.replace("--parent owner", "--parent foreign"),
+            ),
+        ):
+            with self.subTest(name=name, command=command):
+                blocked = self.invoke(
+                    name,
+                    command,
+                    session="worker-session",
+                    extra_env=supervised,
+                )
+                self.assertEqual(blocked["decision"], "block")
+                self.assertIn("runtime-supervised-parent", blocked["reason"])
 
 
 if __name__ == "__main__":
