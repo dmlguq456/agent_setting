@@ -576,6 +576,7 @@ def _proj_home():
 
 
 _CLAUDE_STREAM_TAIL_BYTES = 512 * 1024
+_CLAUDE_SUBAGENT_SCAN_BYTES = 8 * 1024 * 1024
 _CLAUDE_STREAM_CACHE = {}       # path -> (mtime_ns, size, parsed)
 
 
@@ -646,7 +647,7 @@ def _parse_claude_stream_tail(path):
 
 
 def _enrich_claude_stream_session(job):
-    """Attach only the exact child session id from one attempt stream."""
+    """Attach exact child identity and native sub-agents from one attempt stream."""
     path = _owned_claude_stream_path(job)
     if path is None:
         return
@@ -656,6 +657,20 @@ def _enrich_claude_stream_session(job):
     if parsed.get("ambiguity"):
         job.association_ambiguity = parsed["ambiguity"]
         return
+    # The attempt-owned log is an exact source even when the wrapper pid differs from
+    # the runtime pid (and even when no persistent Claude transcript was created).
+    # Reuse the parent-thread Agent lifecycle parser instead of inventing a second
+    # launch/completion state machine. Keep the scan bounded for the 2s Fleet tick.
+    try:
+        from . import claude as claude_collector
+        subagents = claude_collector._tail_subagents(
+            path, max_scan=_CLAUDE_SUBAGENT_SCAN_BYTES)
+    except Exception:
+        subagents = None
+    if subagents is not None:
+        for subagent in subagents:
+            subagent.source = "claude-attempt-stream"
+        job.subagents = subagents
     session_id = parsed.get("session_id")
     if not session_id:
         return

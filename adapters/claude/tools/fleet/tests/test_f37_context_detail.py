@@ -305,6 +305,17 @@ class ClaudeStreamSessionTest(unittest.TestCase):
             }},
         }
 
+    @staticmethod
+    def _agent_use(sid, agent_type="explore"):
+        return {
+            "type": "assistant", "session_id": sid,
+            "timestamp": "2026-07-23T05:00:00Z",
+            "message": {"content": [{
+                "type": "tool_use", "name": "Agent", "id": "toolu-agent-1",
+                "input": {"subagent_type": agent_type},
+            }]},
+        }
+
     def test_attempt_stream_recovers_exact_session_without_context(self):
         job = self._job()
         self._write_log(job, [
@@ -326,6 +337,22 @@ class ClaudeStreamSessionTest(unittest.TestCase):
         self.assertIsNone(job.context)
         self.assertIsNone(job._context_evidence)
 
+    def test_attempt_stream_attaches_native_subagents_without_context(self):
+        job = self._job()
+        self._write_log(job, [
+            {"type": "system", "session_id": "sid-child"},
+            self._agent_use("sid-child", "fact-check"),
+        ])
+        dispatch_collector._enrich_claude_stream_session(job)
+        self.assertEqual(job._runtime_session_id, "sid-child")
+        self.assertEqual(len(job.subagents), 1)
+        self.assertEqual(job.subagents[0].agent_type, "fact-check")
+        self.assertTrue(job.subagents[0].active)
+        self.assertEqual(job.subagents[0].source, "claude-attempt-stream")
+        self.assertIsNone(job.context)
+        self.assertIsNone(job._context_evidence)
+        self.assertEqual(job.to_dict()["subagents"][0]["agent_type"], "fact-check")
+
     def test_multiple_stream_session_ids_and_foreign_path_fail_closed(self):
         job = self._job()
         self._write_log(job, [
@@ -335,6 +362,7 @@ class ClaudeStreamSessionTest(unittest.TestCase):
         dispatch_collector._enrich_claude_stream_session(job)
         self.assertFalse(hasattr(job, "_runtime_session_id"))
         self.assertEqual(job.association_ambiguity, "multiple-stream-session-ids")
+        self.assertIsNone(job.subagents)
 
         foreign = self._job("att-foreign")
         foreign._log_file = os.path.join(self.tmp.name, "foreign.att-foreign.claude.jsonl")
@@ -353,14 +381,17 @@ class ChildAssociationTest(unittest.TestCase):
 
     def test_exact_identity_copies_title_and_now_only(self):
         child = self._child(7, "new", "/child")
+        child.subagents = [SubAgent(agent_type="exact-child", active=True)]
         job = DispatchJob(key="code", slug="job", pid=7, proc_start="new", cwd="/other",
                           harness="claude", liveness="working", is_child=True)
         fleet_collectors._adopt_child_titles([child], [job])
         self.assertEqual((job.title, job.summary, job.context),
                          ("Child title", "Child now", None))
+        self.assertEqual(job.subagents[0].agent_type, "exact-child")
 
     def test_wrapper_pid_uses_attempt_stream_session_id_for_title_and_now(self):
         child = self._child(7, "runtime", "/child")
+        child.subagents = [SubAgent(agent_type="sid-child", active=True)]
         job = DispatchJob(
             key="code", slug="job", pid=99, proc_start="wrapper", cwd="/child",
             harness="claude", liveness="working", is_child=True,
@@ -369,7 +400,20 @@ class ChildAssociationTest(unittest.TestCase):
         fleet_collectors._adopt_child_titles([child], [job])
         self.assertEqual((job.title, job.summary, job.context),
                          ("Child title", "Child now", None))
+        self.assertEqual(job.subagents[0].agent_type, "sid-child")
         self.assertEqual(child.context.used_pct, 70)
+
+    def test_attempt_stream_subagents_win_over_associated_session(self):
+        child = self._child(7, "runtime", "/child")
+        child.subagents = [SubAgent(agent_type="persistent-child", active=True)]
+        job = DispatchJob(
+            key="code", slug="job", pid=99, proc_start="wrapper", cwd="/child",
+            harness="claude", liveness="working", is_child=True,
+            subagents=[SubAgent(agent_type="attempt-stream", active=True)],
+        )
+        job._runtime_session_id = child.session_id
+        fleet_collectors._adopt_child_titles([child], [job])
+        self.assertEqual(job.subagents[0].agent_type, "attempt-stream")
 
     def test_duplicate_stream_session_id_candidates_fail_closed(self):
         first = self._child(7, "a", "/first")
@@ -412,18 +456,35 @@ class ChildAssociationTest(unittest.TestCase):
         fleet_collectors._adopt_child_titles([parent, child], [job])
         self.assertIsNone(job.context)
 
-    def test_process_route_chunk_orders_job_now_then_exact_session_subagents(self):
+    def test_group_dispatch_row_uses_job_subagents_without_runtime_session(self):
+        parent = Session(
+            harness="claude", pid=300, proc_start="parent", cwd="/x",
+            session_id="sid-parent", slug="parent", liveness="working",
+        )
+        job = DispatchJob(
+            key="code", slug="wrapper-child", pid=999, proc_start="wrapper",
+            cwd="/x", parent_sid="sid-parent", harness="claude", is_child=True,
+            liveness="working", subagents=[SubAgent(agent_type="stream-tool", active=True)],
+        )
+        for width, layout in ((168, "wide"), (120, "wide"),
+                              (100, "narrow"), (60, "stack")):
+            visible = text(render._build_lines(
+                [parent], [job], "both", False, 0, layout=layout, term_width=width))
+            with self.subTest(width=width):
+                self.assertEqual(visible.count("⚡stream-tool"), 1)
+                self.assertNotIn("context ", next(
+                    line for line in visible.splitlines() if "stream-tool" in line))
+
+    def test_process_route_chunk_orders_job_now_then_attempt_subagents(self):
         rid = route.load(REAL)["route_id"]
-        job = DispatchJob(key="code", slug="process-leaf", pid=301, proc_start="leaf",
+        job = DispatchJob(key="code", slug="process-leaf", pid=999, proc_start="wrapper",
                           route_id=rid, route_file=REAL, route_node="execute",
-                          harness="claude", liveness="working", summary="NOW")
-        session = Session(harness="claude", pid=301, proc_start="leaf", cwd="/x",
-                          is_child=True, liveness="working",
+                          harness="claude", liveness="working", summary="NOW",
                           subagents=[SubAgent(agent_type="tool", active=True)])
-        projection.attach_projections([session], [job], now=100.0)
+        projection.attach_projections([], [job], now=100.0)
         render.set_process_view(True)
         try:
-            lines = render._build_lines([session], [job], "both", False, 0,
+            lines = render._build_lines([], [job], "both", False, 0,
                                         layout="wide", term_width=168)
         finally:
             render.set_process_view(False)

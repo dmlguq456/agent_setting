@@ -1,9 +1,15 @@
 # agent-fleet-dashboard — Spec Pipeline Summary
 
-- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8/v9/v10) · 2026-07-17 (v11) · 2026-07-20 (v12) · 2026-07-21 (v13) · 2026-07-22 (v14/v15/v16) · 2026-07-23 (v17/v18/v19/v20/v21)
+- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8/v9/v10) · 2026-07-17 (v11) · 2026-07-20 (v12) · 2026-07-21 (v13) · 2026-07-22 (v14/v15/v16) · 2026-07-23 (v17/v18/v19/v20/v21/v22)
 - **Mode**: cli (터미널 TUI 도구)
-- **Status**: spec **v21 done** / dev **done** — dispatch context 추론·표시 철회, summary-only NOW와 linear stage single-render
+- **Status**: spec **v22 done** / dev **done** — attempt-owned dispatch subagent 연결, context는 계속 미수집·미표시
 - **Placement**: 별도 컴포넌트 `spec/agent-fleet-dashboard/` — 기존 `spec/prd.md`(Unified Memory System) 무수정.
+
+## v22 hotfix (2026-07-23) — dispatch subagents only
+
+- wrapper PID와 실제 Claude runtime PID가 달라도 canonical attempt-owned stream-json에서 `Agent` lifecycle을 읽어 `DispatchJob.subagents`에 직접 연결한다. persistent child session이 있으면 exact association은 fallback으로만 사용한다.
+- group/process 및 wide/narrow/stack 모두 dispatch 행 바로 아래 기존 가로 스트립을 재사용한다. public JSON은 `jobs[].subagents`만 additive하며 pulse·liveness·route stage에는 관여하지 않는다.
+- dispatch context는 계속 생성·상속·추론·표시하지 않는다. stream usage/context window는 읽지 않는다.
 
 ## v16 update (2026-07-22) — common work projection + subordinate context
 

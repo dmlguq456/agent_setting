@@ -310,8 +310,9 @@ class Session:
 class SubAgent:
     """F-29 (v9) — one sub-agent/child-session row observed under a parent Session.
 
-    additive-only: this dataclass and `Session.subagents` are the entire F-29 surface; no
-    existing Session/DispatchJob field changes shape (prd.md:294 zero-regression contract).
+    additive-only: this dataclass plus `Session.subagents` and
+    `DispatchJob.subagents` are the entire F-29 surface; existing field shapes remain
+    unchanged (prd.md:294 zero-regression contract).
     """
     agent_type: Optional[str] = None    # harness-reported sub-agent/type label; None = unknown
     active: bool = True                 # False = completed (dim, hidden unless `a` toggled)
@@ -387,6 +388,9 @@ class DispatchJob:
                                         # keeps the slug as the row identity
     summary: Optional[str] = None       # the child session's own live sidecar summary,
                                         # adopted the same way as title (F-16/F-17 merge)
+    # F-29: runtime-native sub-agents owned by this exact dispatch attempt. None means
+    # no trustworthy source; [] means the source was checked and found no calls.
+    subagents: Optional[list] = None
     note: Optional[str] = None          # SD-64/71: registry `note=` annotation for this exact
                                         # attempt (e.g. "dead-parent-orphaned"); None = no note
     resume_boundary: Optional[str] = None  # SD-64/71: first incomplete route node, set only

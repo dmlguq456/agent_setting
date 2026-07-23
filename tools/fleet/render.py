@@ -2460,6 +2460,15 @@ def _session_for_job(session_by_identity, job):
     return session_by_identity.get(key)
 
 
+def _subagents_for_job(session_by_identity, job):
+    """Prefer attempt-owned job evidence, then the exact pid/start child session."""
+    direct = getattr(job, "subagents", None)
+    if direct is not None:
+        return direct
+    session = _session_for_job(session_by_identity, job)
+    return getattr(session, "subagents", None) if session is not None else None
+
+
 def _route_card(view, session_by_identity, term_width, now):
     """One F-30 card. Returns (out_lines, meta) — meta = {"card_key", "fold_line" (index into
     out_lines of the header row), "job_rows": [(index_into_out_lines, DispatchJob), ...]}. The
@@ -2523,9 +2532,8 @@ def _route_card(view, session_by_identity, term_width, now):
         detail = _dispatch_summary_detail_row(job, depth=1, term_width=term_width)
         if detail:
             out.extend(detail)
-        sess = _session_for_job(session_by_identity, job)
-        subs = ([sa for sa in (getattr(sess, "subagents", None) or []) if sa.active or _SHOW_ALL]
-                if sess is not None else [])
+        subs = [sa for sa in (_subagents_for_job(session_by_identity, job) or [])
+                if sa.active or _SHOW_ALL]
         if subs:
             out.extend(_subagent_strip(subs))
 
@@ -2607,9 +2615,8 @@ def _degrade_card(job, session_by_identity, term_width):
         out.extend(detail)
     # F-29 — the degraded job's session's own active sub-agents, the same strip the route card
     # draws (2060-2064); silent when the pid resolves to no session or no active sub-agent.
-    sess = _session_for_job(session_by_identity, job)
-    subs = ([sa for sa in (getattr(sess, "subagents", None) or []) if sa.active or _SHOW_ALL]
-            if sess is not None else [])
+    subs = [sa for sa in (_subagents_for_job(session_by_identity, job) or [])
+            if sa.active or _SHOW_ALL]
     if subs:
         out.extend(_subagent_strip(subs))
     return out, {"card_key": card_key, "fold_line": 0, "job_rows": [], "folded": folded}
@@ -2883,8 +2890,9 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     sid_titles = {s.session_id: (s.title or s.slug) for s in sessions
                   if s.session_id and (s.title or s.slug)}
     # F-29 — a dispatched child session's own sub-agents survive the is_child filter below:
-    # they re-attach as a strip under the dispatch row representing the child (pid join,
-    # the same join title adoption uses — 사용자 2026-07-16 "서브 세션에 서브 에이전트도").
+    # they re-attach as a strip under the dispatch row representing the child. Exact
+    # attempt-owned evidence lives on the job; legacy persistent sessions fall back to
+    # the pid/start join (사용자 2026-07-16 "서브 세션에 서브 에이전트도").
     child_subs_by_pid = {s.pid: s.subagents for s in sessions
                          if getattr(s, "is_child", False) and getattr(s, "subagents", None)}
     # headless dispatch children are shown as dispatch rows under their parent — never as
@@ -3281,7 +3289,9 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             # F-29 — the child session's own sub-agents, one strip directly under the
             # dispatch row that represents it (depth-indented; active always, completed
             # only with `a` — the same convention as session-owned strips above).
-            job_subs = child_subs_by_pid.get(job.pid) if job.pid else None
+            job_subs = getattr(job, "subagents", None)
+            if job_subs is None:
+                job_subs = child_subs_by_pid.get(job.pid) if job.pid else None
             shown_job_subs = [sa for sa in (job_subs or []) if sa.active or _SHOW_ALL]
             if shown_job_subs:
                 lines.extend(_subagent_strip(

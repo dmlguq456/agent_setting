@@ -61,7 +61,7 @@ def _mark_dispatch_child_sessions(sessions, jobs):
 
 
 def _adopt_child_titles(sessions, jobs):
-    """Atomically associate title and NOW from one exact child."""
+    """Atomically associate title, NOW, and sub-agents from one exact child."""
     children = [s for s in sessions if getattr(s, 'is_child', False)]
     by_identity = {}
     by_session_id = {}
@@ -106,11 +106,15 @@ def _adopt_child_titles(sessions, jobs):
                 job.association_ambiguity = ambiguity
                 job.summary = None
             continue
-        # Values cross the boundary as one association decision. Dispatch context
-        # is intentionally absent: headless runtimes expose no session-owned window.
+        # Values cross the boundary as one association decision. Attempt-stream
+        # sub-agents already attached to the job are stronger and stay authoritative.
+        # Dispatch context is intentionally absent: headless runtimes expose no
+        # session-owned window.
         if not getattr(job, 'title', None):
             job.title = getattr(source, 'title', None)
         job.summary = getattr(source, 'summary', None)
+        if getattr(job, 'subagents', None) is None:
+            job.subagents = getattr(source, 'subagents', None)
 
 
 def collect_all(harness_filter=None, jobs_path=None):
