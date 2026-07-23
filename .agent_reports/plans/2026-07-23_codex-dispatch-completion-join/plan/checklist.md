@@ -13,4 +13,4 @@
 - [x] Re-run independent Claude review after correction; retain the report PASS and record the strict terminal-envelope rejection without claiming a false terminal PASS.
 - [x] Record implementation/test evidence.
 - [x] Record final pipeline summary.
-- [ ] Integrate, verify, commit, push, and guarded-clean the task worktree.
+- [x] Integrate, verify, commit, push, and guarded-clean the task worktree.

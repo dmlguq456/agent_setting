@@ -9,7 +9,9 @@
 - runtime parity: Codex App Server same-thread resume PASS; Claude same-session resume and command-scoped hook PASS
 - registry closure: open 0, orphaned conductor 0, supervisor state 0
 - source integration: main `9c0ecae6`
-- artifact integration/push/cleanup: final handoff 직전 수행
+- artifact integration: main `d00a91b3`; ancestry merge `1145976d`
+- push: `origin/main` complete
+- guarded cleanup: task worktree removed; stale registry row 0
 
 The resolved boundary is runtime-owned completion delivery: the model registers
 an exact sibling batch and yields; a non-model supervisor joins it; the same
