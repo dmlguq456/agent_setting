@@ -1,0 +1,36 @@
+{
+  "tuples": [
+    {
+      "parent_harness": "codex",
+      "parent_transport": "headless",
+      "parent_sandbox": "workspace-write",
+      "child_harness": "codex",
+      "launch_authority": "conductor",
+      "status": "supported",
+      "probe_source": "preflight-nested-headless:codex-owner-network-contract+direct-auth+headless-check",
+      "probe_time": "2026-07-23T01:22:29.278402Z",
+      "failure_class": ""
+    },
+    {
+      "parent_harness": "codex",
+      "parent_transport": "headless",
+      "parent_sandbox": "workspace-write",
+      "child_harness": "claude",
+      "launch_authority": "conductor",
+      "status": "supported",
+      "probe_source": "preflight-nested-headless:codex-owner-network-contract+direct-command-check",
+      "probe_time": "2026-07-23T01:22:27.411711Z",
+      "failure_class": ""
+    }
+  ],
+  "native_subagent": [
+    {
+      "harness": "codex",
+      "transport": "headless",
+      "execution_surface": "codex-native-subagent",
+      "registered_worker": false,
+      "status": "unsupported",
+      "check_source": "registered-headless-parity-scope"
+    }
+  ]
+}
