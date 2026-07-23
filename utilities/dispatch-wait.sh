@@ -12,7 +12,7 @@
 #     --attempt-id Limit to the row whose attempt_id=<id> kv field exactly matches.
 #     --jobs       jobs.log path (default: $AGENT_HOME/.dispatch/jobs.log).
 #     --interval   Poll interval in seconds (default 20).
-#     --max        Maximum wait for this call (default 120, capped at 600).
+#     --max        Maximum wait for this call (default and cap: 600).
 #   --parent/--slug/--attempt-id combine with AND when more than one is given.
 #
 #   exit 0: all target children are closed; harvest them.
@@ -31,7 +31,7 @@ SLUG=""
 ATTEMPT_ID=""
 JOBS=""
 INTERVAL=20
-MAX=120
+MAX=600
 while [ $# -gt 0 ]; do
   case "$1" in
     --parent) PARENT="${2:-}"; shift 2 ;;

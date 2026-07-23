@@ -693,7 +693,7 @@ if "$CODEX" headless >/tmp/codex_headless.out 2>/tmp/codex_headless.err \
   && grep -q '^worker_startup_signal_contract=dispatch-wrapper-validates-before-materializing-prompt; worker rechecks only for safety$' /tmp/codex_headless.out \
   && grep -q '^broker_lifecycle=retired-status-stop-only$' /tmp/codex_headless.out \
   && grep -q '^launch_authority=conductor$' /tmp/codex_headless.out \
-  && grep -q '^constraints=main-or-owner-dispatched,max-dispatch-depth-2-for-standard-plus-owner,register-open-job,explicit-capability-mode-qa-intensity-dispatch_depth-parent-parent_sid,transcript-liveness-required$' /tmp/codex_headless.out; then
+  && grep -q '^constraints=main-or-owner-dispatched,max-dispatch-depth-2-for-standard-plus-owner,register-open-job,exact-parent-parking,explicit-capability-mode-qa-intensity-dispatch_depth-parent-parent_sid,transcript-liveness-required$' /tmp/codex_headless.out; then
   ok "codex headless wrapper reports dispatch contract"
 else
   bad "codex headless wrapper should report dispatch contract"
@@ -1938,7 +1938,7 @@ if python3 -m json.tool "$TMP/codex_hook_home/.codex/hooks.json" >/tmp/codex_hoo
   && grep -q 'pretooluse-write-guard.py' /tmp/codex_hook_json.out \
   && grep -q 'posttooluse-read-marker.py' /tmp/codex_hook_json.out \
   && grep -q 'posttooluse-design-check.py' /tmp/codex_hook_json.out \
-  && grep -Fq 'Write|Edit|MultiEdit|apply_patch|functions\\.apply_patch|Bash|Shell|functions\\.exec_command' /tmp/codex_hook_json.out \
+  && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); h=d["hooks"]["PreToolUse"]; c0=h[0]["hooks"][0]["command"]; c1=h[1]["hooks"][0]["command"]; assert h[0]["matcher"]==r"Write|Edit|MultiEdit|apply_patch|functions\.apply_patch|Bash|Shell|functions\.exec_command"; assert h[1]["matcher"]=="*"; assert "AGENT_PARENT_PARK_ONLY=1" not in c0; assert "AGENT_PARENT_PARK_ONLY=1" in c1' "$TMP/codex_hook_home/.codex/hooks.json" \
   && printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo/f" "$TMP/repo" \
     | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_hook.out 2>/tmp/codex_hook.err \
   && [ ! -s /tmp/codex_hook.out ]; then
@@ -2707,6 +2707,8 @@ trusted_hash = "sha256:test"
 trusted_hash = "sha256:test"
 [hooks.state."$RPHOME/hooks.json:pre_tool_use:0:0"]
 trusted_hash = "sha256:test"
+[hooks.state."$RPHOME/hooks.json:pre_tool_use:1:0"]
+trusted_hash = "sha256:test"
 [hooks.state."$RPHOME/hooks.json:post_tool_use:0:0"]
 trusted_hash = "sha256:test"
 EOF
@@ -2736,6 +2738,8 @@ trusted_hash = "sha256:test"
 [hooks.state."$RPHOME/hooks.json:permission_request:0:0"]
 trusted_hash = "sha256:test"
 [hooks.state."$RPHOME/hooks.json:pre_tool_use:0:0"]
+trusted_hash = "sha256:test"
+[hooks.state."$RPHOME/hooks.json:pre_tool_use:1:0"]
 trusted_hash = "sha256:test"
 [hooks.state."$RPHOME/hooks.json:post_tool_use:0:0"]
 trusted_hash = "sha256:test"

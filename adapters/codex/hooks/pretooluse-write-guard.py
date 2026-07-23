@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Codex PreToolUse bridge for portable write guards."""
+"""Codex PreToolUse bridge for portable write guards and parent parking."""
 
 from __future__ import annotations
 
@@ -15,6 +15,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
 PREFLIGHT = ROOT / "adapters" / "codex" / "bin" / "preflight.sh"
+OPEN_DISPATCH_STATES = {"open", "running"}
+MIN_PARK_WAIT_SECONDS = 300
 
 
 def hook_block(reason: str) -> int:
@@ -137,6 +139,162 @@ def shell_command(payload: dict[str, Any], args: dict[str, Any]) -> str:
     )
 
 
+def dispatch_jobs_path() -> Path:
+    override = os.environ.get("AGENT_DISPATCH_JOBS")
+    if override:
+        return Path(override)
+    agent_home = os.environ.get("AGENT_HOME")
+    if agent_home and (Path(agent_home) / "core" / "CORE.md").is_file():
+        return Path(agent_home) / ".dispatch" / "jobs.log"
+    return ROOT / ".dispatch" / "jobs.log"
+
+
+def dispatch_metadata(raw: str) -> dict[str, str]:
+    return dict(part.split("=", 1) for part in raw.split(",") if "=" in part)
+
+
+def open_child_attempts(session_id: str) -> dict[str, str]:
+    """Return exact open attempts owned by this parent session/conductor."""
+
+    if os.environ.get("AGENT_PARENT_PARK_BYPASS") == "1":
+        return {}
+    parent_attempt_id = os.environ.get("AGENT_DISPATCH_ATTEMPT_ID", "")
+    if not session_id and not parent_attempt_id:
+        return {}
+    jobs = dispatch_jobs_path()
+    try:
+        lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
+    except FileNotFoundError:
+        return {}
+    except OSError:
+        # Registry availability is checked by the dispatch wrapper. A hook I/O
+        # failure must not freeze every unrelated Codex tool globally.
+        return {}
+
+    latest: dict[str, tuple[str, str]] = {}
+    for line in lines:
+        fields = line.split("\t")
+        if len(fields) != 6:
+            continue
+        metadata = dispatch_metadata(fields[5])
+        attempt_id = metadata.get("attempt_id", "")
+        if not attempt_id:
+            continue
+        owned_by_session = bool(session_id) and metadata.get("parent_sid") == session_id
+        owned_by_attempt = bool(parent_attempt_id) and metadata.get("parent_attempt_id") == parent_attempt_id
+        if owned_by_session or owned_by_attempt:
+            latest[attempt_id] = (fields[1], fields[4])
+    return {
+        attempt_id: slug
+        for attempt_id, (state, slug) in latest.items()
+        if state in OPEN_DISPATCH_STATES
+    }
+
+
+def local_contract_path(base: Path, raw: str, relative: str) -> bool:
+    """Accept only the harness helper in ROOT or the caller's linked worktree."""
+
+    candidate = Path(raw)
+    if not candidate.is_absolute():
+        candidate = base / candidate
+    candidate = candidate.resolve()
+    expected = (ROOT / relative).resolve()
+    if candidate == expected:
+        return True
+    resolved_base = base.resolve()
+    for parent in (resolved_base, *resolved_base.parents):
+        if (parent / "core" / "CORE.md").is_file():
+            return candidate == (parent / relative).resolve()
+    return False
+
+
+def parse_long_options(tokens: list[str], valued: set[str], switches: set[str]) -> dict[str, list[str]] | None:
+    parsed: dict[str, list[str]] = {}
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if "=" in token and token.startswith("--"):
+            option, value = token.split("=", 1)
+            if option not in valued or not value:
+                return None
+            parsed.setdefault(option, []).append(value)
+            index += 1
+            continue
+        if token in switches:
+            parsed.setdefault(token, []).append("1")
+            index += 1
+            continue
+        if token not in valued or index + 1 >= len(tokens):
+            return None
+        parsed.setdefault(token, []).append(tokens[index + 1])
+        index += 2
+    return parsed
+
+
+def exact_park_control(base: Path, command: str, attempts: dict[str, str]) -> bool:
+    """Allow only an exact-attempt blocking wait or typed harvest command."""
+
+    # Shell composition could append arbitrary work after an allowed wait.
+    if not command or re.search(r"[\n\r;&|<>`]", command) or "$(" in command:
+        return False
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError:
+        return False
+    if not tokens:
+        return False
+
+    if local_contract_path(base, tokens[0], "utilities/dispatch-wait.sh"):
+        options = parse_long_options(
+            tokens[1:],
+            {"--attempt-id", "--interval", "--max"},
+            set(),
+        )
+        if options is None or len(options.get("--attempt-id", [])) != 1:
+            return False
+        if options["--attempt-id"][0] not in attempts:
+            return False
+        if any(len(values) != 1 for values in options.values()):
+            return False
+        try:
+            wait_seconds = int(options.get("--max", ["600"])[0])
+            interval = int(options.get("--interval", ["20"])[0])
+        except ValueError:
+            return False
+        return MIN_PARK_WAIT_SECONDS <= wait_seconds <= 600 and 1 <= interval <= 60
+
+    if (
+        len(tokens) >= 2
+        and local_contract_path(base, tokens[0], "adapters/codex/bin/preflight.sh")
+        and tokens[1] == "harvest"
+    ):
+        options = parse_long_options(
+            tokens[2:],
+            {"--attempt-id", "--status", "--completion"},
+            {"--mark-done", "--keep-home", "--failure-detail"},
+        )
+        if options is None or len(options.get("--attempt-id", [])) != 1:
+            return False
+        if options["--attempt-id"][0] not in attempts:
+            return False
+        if any(len(values) != 1 for values in options.values()):
+            return False
+        return options.get("--status", ["open"])[0] == "open"
+
+    return False
+
+
+def park_control_allowed(name: str, payload: dict[str, Any], args: dict[str, Any], attempts: dict[str, str]) -> bool:
+    # Transport continuations do no new project work. Codex currently does not
+    # rerun PreToolUse for write_stdin after the originating unified exec call,
+    # while the orchestration bridge can expose a typed wait(cell_id) instead.
+    if name in {"wait", "functions.wait", "write_stdin", "functions.write_stdin"}:
+        return True
+    if name.endswith(".wait") or name.endswith(".write_stdin"):
+        return True
+    return is_shell_tool(name) and exact_park_control(cwd(payload), shell_command(payload, args), attempts)
+
+
 def shell_write_files(base: Path, command: str) -> list[str]:
     if not command:
         return []
@@ -257,13 +415,26 @@ def main() -> int:
         return 0
 
     name = tool_name(payload)
+    args = tool_input(payload)
+    session_id = nested_string(payload, "session_id", "sessionID", "thread_id", "threadID")
+    if not session_id:
+        session_id = first_string(nested_mapping(payload, "session"), "id")
+
+    attempts = open_child_attempts(session_id)
+    if attempts and not park_control_allowed(name, payload, args, attempts):
+        attempt_list = ",".join(sorted(attempts))
+        return hook_block(
+            "parent-parked: open registered child attempt(s) "
+            f"{attempt_list}; only exact dispatch-wait --attempt-id with --max 300..600 "
+            "or exact preflight harvest is allowed; raw logs, source, artifacts, git, and other tools are blocked"
+        )
+    if os.environ.get("AGENT_PARENT_PARK_ONLY") == "1":
+        return 0
+
     files = target_files(payload)
     if (name in {"Write", "write", "Edit", "edit", "MultiEdit", "multi_edit", "multiedit"} or is_patch_tool(name)) and not files:
         return hook_block(f"agent harness preflight could not determine target file for Codex tool {name}")
 
-    session_id = nested_string(payload, "session_id", "sessionID", "thread_id", "threadID")
-    if not session_id:
-        session_id = first_string(nested_mapping(payload, "session"), "id")
     session_id = session_id or "codex-hook"
     env = os.environ.copy()
     env.setdefault("AGENT_HOME", str(ROOT))

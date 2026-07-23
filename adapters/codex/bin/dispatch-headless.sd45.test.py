@@ -206,17 +206,15 @@ def _prompt_args(**overrides):
 
 class CodexSD71SyncWaitClause(unittest.TestCase):
     """SD-71: the standard top-of-prompt clause (core/OPERATIONS.md §5.10) is an
-    auxiliary layer only — Codex gets no --disallowedTools equivalent (parity
-    honesty: Codex's fatal-async policy differs and is out of this cycle's
-    proven scope), but the owner prompt clause itself is harness-neutral."""
+    auxiliary layer for Codex's deterministic local-tool parent park."""
 
     def test_owner_prompt_carries_standard_synchronous_wait_clause(self):
         args = _prompt_args()
         with mock.patch.object(WH, "task_prompt", return_value=("do the thing", "cli")):
             prompt, _source = WH.dispatch_prompt(args)
-        self.assertTrue(prompt.startswith(
-            "No asynchronous Monitor/wakeup/scheduling waits; poll synchronously with"))
-        self.assertIn("dispatch-wait.sh", prompt)
+        self.assertTrue(prompt.startswith("Parent parking contract:"))
+        self.assertIn("dispatch-wait.sh --attempt-id <exact-id> --max 600", prompt)
+        self.assertIn("Do not inspect child transcripts/logs", prompt)
         self.assertIn("auxiliary layer only", prompt)
 
     def test_stage_prompt_never_carries_the_clause(self):

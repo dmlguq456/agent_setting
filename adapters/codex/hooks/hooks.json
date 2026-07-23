@@ -65,6 +65,16 @@
             "timeout": 30
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/agent-harness\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then AGENT_PARENT_PARK_ONLY=1 exec \"$root/adapters/codex/hooks/run-hook.sh\" pretooluse-write-guard.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
+            "timeout": 30
+          }
+        ]
       }
     ],
     "PostToolUse": [

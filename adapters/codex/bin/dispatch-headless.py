@@ -495,8 +495,11 @@ def dispatch_prompt(args: argparse.Namespace) -> tuple[str, str]:
         if is_no_commit_stage(args) else ""
     )
     sync_wait_clause = (
-        "No asynchronous Monitor/wakeup/scheduling waits; poll synchronously with "
-        "utilities/dispatch-wait.sh in the current turn until terminal, then harvest "
+        "Parent parking contract: immediately after a child is registered, run only "
+        "utilities/dispatch-wait.sh --attempt-id <exact-id> --max 600 until terminal, then "
+        "use exact-attempt preflight harvest. Do not inspect child transcripts/logs, source, "
+        "artifacts, git state, or perform parallel work while any registered child remains open. "
+        "No asynchronous Monitor/wakeup/scheduling waits are permitted "
         "(OPERATIONS.md §5.10, SD-71 auxiliary layer only — not a substitute for "
         "runtime tool policy or post-exit orphan reconcile).\n\n"
         if args.intensity in _STANDARD_PLUS_INTENSITY and args.worker_type == "owner"

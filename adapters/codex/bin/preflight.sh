@@ -56,7 +56,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh dispatch-reconcile --jobs <jobs.log> (--session <id>|--route <id>|--node <id>|--attempt <id>|--job <slug>) [--apply]
        preflight.sh qa-policy <quick|light|standard|thorough|adversarial> [code|research|doc|general]
        preflight.sh liveness [jobs.log] [--session <id>|--route <id>|--node <id>|--attempt <id>|--job <slug>] [--all]
-       preflight.sh harvest [--jobs <jobs.log>] [--reconcile-local <legacy-jobs.log>] [--slug <slug>|--worktree <path>] [--status open|done|all] [--mark-done]
+       preflight.sh harvest [--jobs <jobs.log>] [--reconcile-local <legacy-jobs.log>] [--attempt-id <id>|--slug <slug>|--worktree <path>] [--status open|done|all] [--mark-done]
        preflight.sh worktree-cleanup [--check|--apply] (--worktree <path>|--all-eligible [--repo <path>]) [--integration-ref <ref>] [--jobs <jobs.log>]
        preflight.sh mcp [--check]
        preflight.sh worklog [cwd]
@@ -481,7 +481,7 @@ broker_lifecycle=retired-status-stop-only
 launch_authority=conductor
 liveness_surface=codex-session-jsonl-mtime
 liveness_check=adapters/codex/bin/preflight.sh liveness [jobs.log]
-harvest_check=adapters/codex/bin/preflight.sh harvest [--jobs jobs.log] [--slug slug] [--mark-done]
+harvest_check=adapters/codex/bin/preflight.sh harvest [--jobs jobs.log] [--attempt-id id|--slug slug] [--mark-done]
 dispatch_prompt_contract=portable-typed-worker-bootstrap
 worker_bootstrap_source=roles/worker-bootstrap.md+roles/worker-types/<owner|stage|review|support>.md
 worker_handoff=artifact,verdict,blocker
@@ -489,7 +489,7 @@ dispatch_input_validation=capability-info,mode-info,qa-level,intensity-dispatch_
 worker_startup_signal=wrapper-validated-metadata-or-immutable-route
 worker_startup_signal_contract=dispatch-wrapper-validates-before-materializing-prompt; worker rechecks only for safety
 physical_project_agents_masking=unsupported-runtime-auto-discovery-may-remain
-constraints=main-or-owner-dispatched,max-dispatch-depth-2-for-standard-plus-owner,register-open-job,explicit-capability-mode-qa-intensity-dispatch_depth-parent-parent_sid,transcript-liveness-required
+constraints=main-or-owner-dispatched,max-dispatch-depth-2-for-standard-plus-owner,register-open-job,exact-parent-parking,explicit-capability-mode-qa-intensity-dispatch_depth-parent-parent_sid,transcript-liveness-required
 claude_headless=unsupported
 fallback=checked-dispatch-chain-or-structured-degradation
 EOF
