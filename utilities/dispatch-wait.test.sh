@@ -116,5 +116,52 @@ done
 # --- Case 4: --max 상한 클램프 확인 (600 초과 → 600, 소스 확증) ---
 if grep -Fq 'MAX=600' "$WAIT"; then ok "--max clamped to 600 in source"; else bad "expected MAX clamp to 600"; fi
 
+# --- Case t1: --slug 정확 일치. 타 slug의 open row는 무시되고, 대상 slug가
+# jobs.log에 없으면 exit 0 (no open children, 필터 표기) ---
+: > "$jobs"
+mk_transcript "$tmp/wt/other-slug"
+printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-23T00:00:00" "open" "repo" "$tmp/wt/other-slug" "other-slug" "capability=code-plan,parent=conf" >> "$jobs"
+out=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" sh "$WAIT" --jobs "$jobs" --slug missing-slug 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'slug=missing-slug has no open children'; then
+  ok "--slug exact match ignores unrelated open rows, absent target → exit 0"
+else bad "--slug filter expected 0 got $rc [$out]"; fi
+
+# --- Case t2: --slug 대상 open + 이후 done row → last-status로 닫힘 처리 exit 0 ---
+: > "$jobs"
+printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-23T00:00:00" "open" "repo" "$tmp/wt/target" "target-slug" "capability=code-plan,parent=conf" >> "$jobs"
+printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-23T00:01:00" "done" "repo" "$tmp/wt/target" "target-slug" "capability=code-plan,parent=conf" >> "$jobs"
+out=$(AGENT_HOME="$agent_home" sh "$WAIT" --jobs "$jobs" --slug target-slug 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'no open children'; then
+  ok "--slug target closed by later done row (last-status) → exit 0"
+else bad "--slug last-status expected 0 got $rc [$out]"; fi
+
+# --- Case t3: --attempt-id 일치 행만 선택 (불일치 attempt_id의 open row는 무시) ---
+: > "$jobs"
+mk_transcript "$tmp/wt/attempt-other"
+printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-23T00:00:00" "open" "repo" "$tmp/wt/attempt-other" "attempt-slug" "capability=code-plan,parent=conf,attempt_id=att-other" >> "$jobs"
+out=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" sh "$WAIT" --jobs "$jobs" --attempt-id att-target 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'attempt_id=att-target has no open children'; then
+  ok "--attempt-id exact match ignores rows with a different attempt_id"
+else bad "--attempt-id filter expected 0 got $rc [$out]"; fi
+
+# --- Case t4: --parent + --slug AND 결합 (같은 slug, 다른 parent는 제외) ---
+: > "$jobs"
+mk_transcript "$tmp/wt/and-match"
+printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-23T00:00:00" "open" "repo" "$tmp/wt/and-match" "and-slug" "capability=code-plan,parent=conf" >> "$jobs"
+printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-23T00:00:00" "open" "repo" "$tmp/wt/and-other" "and-slug-2" "capability=code-plan,parent=OTHER" >> "$jobs"
+out=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" sh "$WAIT" --jobs "$jobs" --parent conf --slug and-slug --interval 1 --max 0 2>&1); rc=$?
+if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'call again'; then
+  ok "--parent + --slug AND selects only the matching row (excludes and-slug-2)"
+else bad "--parent+--slug AND expected 2 got $rc [$out]"; fi
+
+# --- Case t5: 무관 DEAD row 존재 + --slug 필터 → 대상 slug가 jobs.log에
+# 없으면 exit 3이 아니라 exit 0 (2026-07-23 스코프 결함의 회귀 케이스) ---
+: > "$jobs"
+printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-23T00:00:00" "open" "repo" "$tmp/wt/unrelated-dead" "unrelated-dead" "capability=code-test,parent=conf" >> "$jobs"
+out=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" sh "$WAIT" --jobs "$jobs" --slug my-target-slug --max 1 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'slug=my-target-slug has no open children'; then
+  ok "unrelated DEAD row does not steal exit 3 when --slug scopes to an absent target (regression)"
+else bad "--slug scope regression expected 0 got $rc [$out]"; fi
+
 if [ "$fails" -eq 0 ]; then echo "dispatch-wait conformance: PASS"; exit 0; fi
 echo "dispatch-wait conformance: $fails FAIL"; exit 1
