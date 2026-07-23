@@ -1,7 +1,7 @@
 project_name: stage-dispatch
 component: stage-dispatch          # autopilot 파이프 디스패치 토폴로지 개정 (repo spec/prd.md = Unified Memory System, spec/harness-layer-sync·dispatch-profiles·agent-fleet-dashboard 무관)
 created: 2026-07-10
-version: 23
+version: 24
 mode: [library, cli]              # library(스테이지 분사 계약·오케스트레이션) + cli(dispatch wrapper·jobs.log·fleet 관제) — infra
 scope_note: "dispatch_depth=0 main은 substantive tracked work의 orchestration/integration만 소유. direct=atomic main-inline, quick=registered-headless-only capability owner 1개(owner/max dispatch depth=1, child 없음), standard+=capability-specific recipe와 기존 checked fallback. v20부터 portable dispatch depth는 Codex agents.max_depth 및 runtime-native agent surfaces와 별도 namespace다."
 inputs:
@@ -36,13 +36,17 @@ inputs:
   - '운영 실측 2026-07-20 (v19): plans/2026-07-20_namespace-safe-stage-dispatch — transient PID namespace에서 detached depth-2 3회 조기 사망; foreground-scoped Codex·Claude live PASS, Fleet unmatched-parent 누락과 Claude session-env EROFS 확인'
   - '사용자 승인 결정 2026-07-20 (v20): effective_intensity=quick는 registered headless worker session만; native-subagent/inline-fallback/interactive/empty/unknown은 compile fail-closed. direct inline과 standard+ fallback 유지. portable dispatch_depth namespace와 Codex/Claude 4-surface terminology 확정; multi-capability composition 제외'
   - 'documents/2026-07-20_depth1-surface-terminology-audit.md + shards/spec-research/depth1-surface-terminology.md + reviews/spec/spec-verdict.json (registered depth-2 research/review; V20-R1~R6 transaction 반영)'
+  - '사용자 지시·실제 세션 2026-07-23 (v24): 등록형 headless 적극 분사를 유지하되 child 대기 중 parent model/tool 재진입을 0으로 만들고 완료 때 한 번만 재개. 관측 세션은 5분 41초/26 후속 call, parent-parking 뒤에도 wait continuation 5건 잔존'
+  - '공식 Codex 0.145.0 currentness: App Server stable thread/start·turn/start·turn/completed protocol, CLI app-server 표면은 experimental; MCP tool 기본 timeout 60초. 공식 Claude 2.1.218 currentness: --session-id/--resume/stream-json/background agents'
+  - 'plans/2026-07-23_codex-dispatch-completion-join/{plan/plan.md,_internal/metrics.md,_internal/route.json}: runtime-owned exact batch join + adapter-specific supervisor + self-modification inline exception'
 phases:
-  spec: done              # PRD v23 — SD-77 implementation closure; v22 snapshot = _internal/versions/v22/
+  spec: done              # PRD v24 — SD-78 runtime-owned completion join; v23 snapshot = _internal/versions/v23/
   scaffolding: deferred   # lean — 코드 skeleton 은 autopilot-code 로 이월 (§11 module 구조만 확정, wrapper 재작성 불요)
   design: n/a             # 시각 UI 없음 (인프라 계약)
-  dev: in_progress        # SD-77 parent-bound teardown + Codex/Claude terminal parity realized; unrelated open decisions remain
+  dev: done               # SD-78 supervisors/two-phase guard/orphan cleanup integrated at 9c0ecae6; focused 90/90 + portable 356/356 PASS
 last_updated: 2026-07-23
 decisions_locked:
+  - 'SD-78(v24): standard+ registered owner는 child 등록 뒤 model polling 없이 yield. per-owner non-model supervisor가 exact parent_attempt_id의 모든 direct child를 batch join하고 typed aggregate 1회로 같은 Codex thread/Claude session을 resume. attempt-scoped delivered-set state에서 undelivered open batch는 동일 parent exact sibling dispatch만, delivered open batch는 exact harvest만 허용; missing state는 harvest-only recovery. Codex native hook/Claude command-scoped hook 동형, user settings mutation 0. intermediate terminal은 숨기고 final handoff terminal만 1건. probe 불가 시 poll-fallback을 정직 표기; launch broker/native subagent/TUI wake로 대체하지 않음'
   - 'SD-77(v23): final parent recheck+spawn+PID publish는 jobs lock 아래 원자적. PID 없는 exact-bound row는 spawn 0이라 dead-parent-exited; PID reuse는 signal 없이 exact row만 종료. Codex turn.completed와 Claude stream-json result는 liveness/harvest까지 동형'
   - 'SD-73(v20, SD-19 supersedes): quick는 one capability-owner node(dispatch_depth=1, max_dispatch_depth=1), registered-headless-only, at most one live attempt. compile headless 부재=quick-headless-unavailable, serial registered-headless 소진=quick-registered-headless-exhausted; native/inline attempt 0. direct/standard+ semantics 보존'
   - 'SD-74(v20): dispatch_depth/max_dispatch_depth/owner_dispatch_depth는 portable logical route ownership. runtime transport·process ancestry·registration·Codex agents.max_depth와 독립. node depth와 attempt execution_surface/registered_worker evidence를 분리하고 legacy bare fields는 version-tagged read-only'
