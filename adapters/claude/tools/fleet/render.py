@@ -1961,13 +1961,18 @@ def _summary_row(summary, depth=0, term_width=None):
     return [[(indent, None), (_clip_w(summary, maxw), "dim")]]
 
 
-def _compact_context_gauge_width(available):
-    """Responsive v17 gauge width: always visible, never the retired wide meter."""
-    if available >= 108:
-        return 8
-    if available >= 72:
-        return 6
-    return 4
+_CONTEXT_VALUE_W = 4
+
+
+def _compact_context_gauge_width(available, depth=0):
+    """Harness-width track whose right-hand description lands on the session column."""
+    # Root cards use the bare 16-cell harness width. Deeper cards spend their
+    # two-cell ladder inset inside the same column, keeping every description at
+    # the shared wide-layout session start instead of drifting to the right.
+    desired = max(4, _HW - 2 * max(0, int(depth or 0)))
+    # Preserve at least one subtitle cell on unexpectedly tiny terminals.
+    fixed = _dw("context ") + _CONTEXT_VALUE_W + _dw(": ") + 1
+    return min(desired, max(4, available - fixed))
 
 
 def _context_detail_row(entity, depth=0, term_width=None):
@@ -1979,7 +1984,7 @@ def _context_detail_row(entity, depth=0, term_width=None):
     now_text = getattr(entity, "summary", None)
     indent = _SUBAGENT_IND + "  " * max(0, depth)
     available = max(0, (term_width or _SUMMARY_FALLBACK_W) - _dw(indent))
-    gauge_width = _compact_context_gauge_width(available)
+    gauge_width = _compact_context_gauge_width(available, depth=depth)
     if (isinstance(pct, (int, float)) and not isinstance(pct, bool)
             and 0 <= pct <= 100):
         shown_pct = int(round(pct))
@@ -1988,9 +1993,10 @@ def _context_detail_row(entity, depth=0, term_width=None):
     segs = [(indent, None), ("context ", "dim")]
     segs.extend(_gauge_segs(shown_pct, gauge_width))
     if shown_pct is None:
-        segs.append((" —", "dim"))
+        value_text = "—"
     else:
-        segs.append((" %d%%" % shown_pct, "dim"))
+        value_text = "%d%%" % shown_pct
+    segs.append((value_text.rjust(_CONTEXT_VALUE_W), "dim"))
     if now_text:
         # Context remains the stable lead; only the subtitle clips after the colon.
         fixed = sum(_dw(text) for text, _key in segs) - _dw(indent) + 2

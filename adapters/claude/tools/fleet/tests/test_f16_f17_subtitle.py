@@ -133,7 +133,7 @@ class SummaryRowRenderTest(unittest.TestCase):
         self.assertEqual(len(lines_with), len(lines_without))
         joined_without = "\n".join("".join(t for t, _k in ln) for ln in lines_without if ln)
         self.assertNotIn("지금 무언가 하는 중", joined_without)
-        self.assertIn("context ──────── —", joined_without)
+        self.assertIn("context ────────────────   —", joined_without)
 
     def test_dead_row_omits_summary(self):
         s = self._session(liveness="dead", mtime=None, summary="지금 뭔가 하는 중")
