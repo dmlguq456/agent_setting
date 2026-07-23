@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+# Regression for the native-subagent default model injection hook.
+set -u
+
+SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
+HOOK_SRC="$SRC_DIR/subagent-model-default.sh"
+[ -f "$HOOK_SRC" ] || { echo "FAIL: hook missing: $HOOK_SRC"; exit 1; }
+
+PASS=0
+FAIL=0
+ok()  { PASS=$((PASS + 1)); printf '  ok  %s\n' "$1"; }
+bad() { FAIL=$((FAIL + 1)); printf '  BAD %s\n' "$1"; }
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+# Fixture layout: the hook resolves <its-realpath-dir>/../config/models.conf, so
+# a copied hook next to a fixture conf verifies tier resolution deterministically.
+mkdir -p "$TMP/hooks" "$TMP/config" "$TMP/home" "$TMP/noconf/hooks" \
+  "$TMP/proj/.claude/agents"
+cp "$HOOK_SRC" "$TMP/hooks/subagent-model-default.sh"
+cp "$HOOK_SRC" "$TMP/noconf/hooks/subagent-model-default.sh"
+HOOK="$TMP/hooks/subagent-model-default.sh"
+cat > "$TMP/config/models.conf" <<'EOF'
+# fixture conf
+CFG_TIER_LIGHT_MODEL=sonnet
+CFG_TIER_LIGHT_EFFORT=high
+CFG_NATIVE_SUBAGENT=light   # tier reference, not a concrete ID
+EOF
+cat > "$TMP/proj/.claude/agents/zz-pinned-team.md" <<'EOF'
+---
+name: zz-pinned-team
+model: haiku
+---
+Pinned fixture agent.
+EOF
+cat > "$TMP/proj/.claude/agents/zz-unpinned-team.md" <<'EOF'
+---
+name: zz-unpinned-team
+color: gray
+---
+Unpinned fixture agent.
+EOF
+
+run_hook() { # run_hook <out> <err> [ENV=VAL ...]
+  local out="$1" err="$2"; shift 2
+  env -i HOME="$TMP/home" PATH="$PATH" "$@" bash "$HOOK" >"$out" 2>"$err"
+}
+
+assert_injected() { # assert_injected <out-file> <expected-model>
+  python3 -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+o = d["hookSpecificOutput"]
+assert o["hookEventName"] == "PreToolUse", o
+u = o["updatedInput"]
+assert u["model"] == sys.argv[2], u
+assert u["description"] == "x" and u["prompt"] == "y", u
+' "$1" "$2"
+}
+
+echo "== subagent-model-default hook =="
+
+# (a) built-in agent type, no model -> inject the conf tier model
+printf '%s' '{"tool_name":"Agent","tool_input":{"description":"x","prompt":"y","subagent_type":"general-purpose"}}' \
+  | run_hook "$TMP/a.out" "$TMP/a.err"
+[ $? = 0 ] && [ ! -s "$TMP/a.err" ] && assert_injected "$TMP/a.out" sonnet \
+  && ok "built-in spawn gets conf-tier model injected" \
+  || bad "built-in spawn did not get conf-tier injection"
+
+# (a2) Task tool_name takes the same path
+printf '%s' '{"tool_name":"Task","tool_input":{"description":"x","prompt":"y"}}' \
+  | run_hook "$TMP/a2.out" "$TMP/a2.err"
+[ $? = 0 ] && [ ! -s "$TMP/a2.err" ] && assert_injected "$TMP/a2.out" sonnet \
+  && ok "Task spawn gets the same injection" \
+  || bad "Task spawn did not get injection"
+
+# (b) explicit per-invocation model -> untouched
+printf '%s' '{"tool_name":"Agent","tool_input":{"description":"x","prompt":"y","model":"haiku"}}' \
+  | run_hook "$TMP/b.out" "$TMP/b.err"
+[ $? = 0 ] && [ ! -s "$TMP/b.out" ] && [ ! -s "$TMP/b.err" ] \
+  && ok "explicit model param is preserved (no output)" \
+  || bad "explicit model param was overridden"
+
+# (c) fork inherits the parent model on purpose
+printf '%s' '{"tool_name":"Agent","tool_input":{"description":"x","prompt":"y","subagent_type":"fork"}}' \
+  | run_hook "$TMP/c.out" "$TMP/c.err"
+[ $? = 0 ] && [ ! -s "$TMP/c.out" ] && [ ! -s "$TMP/c.err" ] \
+  && ok "fork spawn stays inherited (no output)" \
+  || bad "fork spawn was injected"
+
+# (d) agent definition with a frontmatter model pin -> untouched
+printf '%s' '{"tool_name":"Agent","tool_input":{"description":"x","prompt":"y","subagent_type":"zz-pinned-team"}}' \
+  | run_hook "$TMP/d.out" "$TMP/d.err" CLAUDE_PROJECT_DIR="$TMP/proj"
+[ $? = 0 ] && [ ! -s "$TMP/d.out" ] && [ ! -s "$TMP/d.err" ] \
+  && ok "frontmatter model pin is respected (no output)" \
+  || bad "frontmatter model pin was overridden"
+
+# (d2) agent definition without a pin -> injected
+printf '%s' '{"tool_name":"Agent","tool_input":{"description":"x","prompt":"y","subagent_type":"zz-unpinned-team"}}' \
+  | run_hook "$TMP/d2.out" "$TMP/d2.err" CLAUDE_PROJECT_DIR="$TMP/proj"
+[ $? = 0 ] && [ ! -s "$TMP/d2.err" ] && assert_injected "$TMP/d2.out" sonnet \
+  && ok "unpinned custom agent gets injection" \
+  || bad "unpinned custom agent was not injected"
+
+# (e) malformed JSON -> silent success (fail-open)
+printf 'not json' | run_hook "$TMP/e.out" "$TMP/e.err"
+[ $? = 0 ] && [ ! -s "$TMP/e.out" ] && [ ! -s "$TMP/e.err" ] \
+  && ok "malformed input fails open" \
+  || bad "malformed input did not fail open"
+
+# (f) CLAUDE_NATIVE_SUBAGENT_MODEL=inherit -> hook disabled
+printf '%s' '{"tool_name":"Agent","tool_input":{"description":"x","prompt":"y"}}' \
+  | run_hook "$TMP/f.out" "$TMP/f.err" CLAUDE_NATIVE_SUBAGENT_MODEL=inherit
+[ $? = 0 ] && [ ! -s "$TMP/f.out" ] && [ ! -s "$TMP/f.err" ] \
+  && ok "override=inherit disables injection" \
+  || bad "override=inherit still injected"
+
+# (g) CLAUDE_NATIVE_SUBAGENT_MODEL=<alias> -> that alias wins over conf
+printf '%s' '{"tool_name":"Agent","tool_input":{"description":"x","prompt":"y"}}' \
+  | run_hook "$TMP/g.out" "$TMP/g.err" CLAUDE_NATIVE_SUBAGENT_MODEL=haiku
+[ $? = 0 ] && [ ! -s "$TMP/g.err" ] && assert_injected "$TMP/g.out" haiku \
+  && ok "override alias is injected instead of conf tier" \
+  || bad "override alias was not injected"
+
+# (h) non-matching tool -> untouched
+printf '%s' '{"tool_name":"Bash","tool_input":{"command":"true"}}' \
+  | run_hook "$TMP/h.out" "$TMP/h.err"
+[ $? = 0 ] && [ ! -s "$TMP/h.out" ] && [ ! -s "$TMP/h.err" ] \
+  && ok "non-Agent tool is ignored" \
+  || bad "non-Agent tool produced output"
+
+# (i) missing models.conf -> silent success (fail-open, inheritance kept)
+printf '%s' '{"tool_name":"Agent","tool_input":{"description":"x","prompt":"y"}}' \
+  | env -i HOME="$TMP/home" PATH="$PATH" bash "$TMP/noconf/hooks/subagent-model-default.sh" \
+    >"$TMP/i.out" 2>"$TMP/i.err"
+[ $? = 0 ] && [ ! -s "$TMP/i.out" ] && [ ! -s "$TMP/i.err" ] \
+  && ok "missing conf fails open" \
+  || bad "missing conf did not fail open"
+
+echo
+echo "RESULT: PASS=$PASS FAIL=$FAIL"
+[ "$FAIL" = 0 ]

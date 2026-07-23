@@ -230,20 +230,49 @@ Concrete model names belong here and in Claude-native files only.
 
 ## Role Profile Frontmatter Mapping
 
-Claude Agent frontmatter `model:` values are adapter-specific runtime hints.
-They preserve the pre-migration behavior for the portable role families defined
-in `core/CONVENTIONS.md §2`.
+Behavior personas live in the portable unit catalog `roles/units/` and carry
+portable role names only — they have no Claude `model:` frontmatter. The former
+per-team agent files (plan-team, dev-team, qa-team, and the other five) were
+removed in the unit-catalog migration. The only kernel helper agent under
+`adapters/claude/agents/` is `memory-scout`, whose frontmatter pins the mini
+tier (haiku) as an explicit `check-model-config.py` exemption. Every other
+native subagent spawn resolves its model through the native-subagent default
+below.
 
-| Agent | Portable role | Claude frontmatter | Runtime behavior |
-|---|---|---|---|
-| `plan-team` | deep maker | `opus` | Deep planning and architecture |
-| `qa-team` | variable reviewer | `opus` | Review modes select fast/deep combinations by derived rigor; test and security own their specialized checks |
-| `research-team` | variable research reviewer | `opus` | Deep maker/reviewer by default; narrow fact and light review use fast roles |
-| `material-team` | deep maker default, fast tool worker subroles | `opus` | Collection and extraction may use fast workers; figure and data synthesis remain deep |
-| `dev-team` | fast implementer default | `sonnet` | Routine implementation; complex API/library design may escalate |
-| `design-team` | deep maker with fast verifier | `opus` | Maker is deep; critic and verifier split by nuance and mechanicality |
-| `editorial-team` | deep maker/editor with fast reviewer subrole | `opus` | Translation and polish are deep editorial work; review is fast |
-| `codex-review-team` | external adversary orchestrator | `sonnet` | Wrapper invokes Codex CLI external review and summarizes the result; the wrapper is not the actual reviewer |
+## Native Subagent Default Model (2026-07-23)
+
+Native Claude subagent spawns (Agent/Task tool) no longer silently inherit the
+interactive session model. `adapters/claude/settings.json` registers
+`hooks/subagent-model-default.sh` on PreToolUse matcher `Agent|Task`; when the
+spawn carries no model decision of its own, the hook re-emits the full
+`tool_input` with a `model` field added via the PreToolUse `updatedInput`
+output. The injected value derives from `adapters/claude/config/models.conf`
+(`CFG_NATIVE_SUBAGENT` names a tier; the tier resolves through
+`CFG_TIER_<TIER>_MODEL`), so no concrete model ID lives in the hook.
+
+Injection is skipped — the existing choice or inheritance preserved — when any
+of the following holds: the call already sets a per-invocation model;
+`subagent_type` is `fork` (intentional parent-model inheritance); the resolved
+agent definition file (project `.claude/agents/`, `~/.claude/agents/`, or the
+plugin cache/marketplace agent trees; a namespaced `plugin:agent` type resolves
+to its last segment) pins a model in frontmatter; or the hook cannot decide
+(parse or filesystem error → fail-open, silent exit 0).
+
+Rejected realization — global `CLAUDE_CODE_SUBAGENT_MODEL` env: the official
+subagent model precedence is env > per-invocation `model` param > definition
+frontmatter > session model (official subagents doc, "Choose a model"; since
+v2.1.196 an `inherit` value is treated as unset). The env level is therefore a
+hard override that would kill the `memory-scout` frontmatter pin and per-call
+escalation. The PreToolUse injection sits at the per-invocation level instead
+and yields to frontmatter pins through its own skip logic.
+
+Runtime limits and escape hatch: Claude Code exposes no global subagent
+reasoning-effort knob and the Agent tool input has no effort field, so this
+realization controls the model tier only; per-agent effort remains a
+custom-agent frontmatter concern. `CLAUDE_NATIVE_SUBAGENT_MODEL=<alias>` forces
+a different injected model at runtime, and
+`CLAUDE_NATIVE_SUBAGENT_MODEL=inherit` disables injection (session inheritance
+restored) without touching config.
 
 ## Reproduction Contract
 

@@ -1,0 +1,1 @@
+../../../hooks/subagent-model-default.sh
