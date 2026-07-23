@@ -64,12 +64,15 @@ def _adopt_child_titles(sessions, jobs):
     """Atomically associate title, NOW and context from one exact child."""
     children = [s for s in sessions if getattr(s, 'is_child', False)]
     by_identity = {}
+    by_session_id = {}
     by_cwd = {}
     for child in children:
         identity = (getattr(child, 'harness', None), getattr(child, 'pid', None),
                     getattr(child, 'proc_start', None))
         if all(item is not None for item in identity):
             by_identity.setdefault(identity, []).append(child)
+        if child.harness and child.session_id:
+            by_session_id.setdefault((child.harness, child.session_id), []).append(child)
         if child.cwd and child.harness:
             by_cwd.setdefault((child.harness, os.path.realpath(child.cwd)), []).append(child)
     for job in jobs:
@@ -83,7 +86,16 @@ def _adopt_child_titles(sessions, jobs):
                 source = candidates[0]
             elif len(candidates) > 1:
                 ambiguity = "multiple-child-identity-candidates"
-        elif getattr(job, 'cwd', None) and getattr(job, 'harness', None):
+        runtime_sid = getattr(job, '_runtime_session_id', None)
+        if source is None and ambiguity is None and runtime_sid and getattr(job, 'harness', None):
+            candidates = by_session_id.get((job.harness, runtime_sid), [])
+            if len(candidates) == 1:
+                source = candidates[0]
+            elif len(candidates) > 1:
+                ambiguity = "multiple-child-session-id-candidates"
+        has_exact_binding = all(item is not None for item in identity) or bool(runtime_sid)
+        if (source is None and ambiguity is None and not has_exact_binding
+                and getattr(job, 'cwd', None) and getattr(job, 'harness', None)):
             candidates = by_cwd.get((job.harness, os.path.realpath(job.cwd)), [])
             if len(candidates) == 1:
                 source = candidates[0]
@@ -92,13 +104,27 @@ def _adopt_child_titles(sessions, jobs):
         if source is None:
             if ambiguity:
                 job.association_ambiguity = ambiguity
+                job.summary = None
+                job.context = None
+                job._context_evidence = None
             continue
         # Values cross the boundary as one association decision; no parent context.
         if not getattr(job, 'title', None):
             job.title = getattr(source, 'title', None)
         job.summary = getattr(source, 'summary', None)
-        job.context = getattr(source, 'context', None)
-        job._context_evidence = getattr(source, '_context_evidence', None)
+        child_context = getattr(source, 'context', None)
+        stream_context = getattr(job, 'context', None)
+        if getattr(child_context, 'used_pct', None) is not None:
+            job.context = child_context
+            job._context_evidence = getattr(source, '_context_evidence', None)
+        elif getattr(stream_context, 'used_pct', None) is not None:
+            # The stream is exact to this associated runtime session.  Make the child
+            # and its dispatch representative consume the same normalized sample.
+            source.context = stream_context
+            source._context_evidence = getattr(job, '_context_evidence', None)
+        else:
+            job.context = child_context
+            job._context_evidence = getattr(source, '_context_evidence', None)
 
 
 def collect_all(harness_filter=None, jobs_path=None):
@@ -206,9 +232,10 @@ def collect_all(harness_filter=None, jobs_path=None):
 
     try:
         from ..projection import normalize_context, _evidence
-        for session in sessions:
-            session.context, session._context_evidence = normalize_context(
-                _evidence(session), now=_time.time())
+        now = _time.time()
+        for entity in sessions + jobs:
+            entity.context, entity._context_evidence = normalize_context(
+                _evidence(entity), now=now)
     except Exception:
         pass
 

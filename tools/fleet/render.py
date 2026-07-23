@@ -860,8 +860,6 @@ def _dispatch_stage_segs(j, key, stage, slug_name, working=False, route_seq=None
     projection = getattr(j, "work_projection", None)
     if projection is not None and getattr(projection, "ambiguity", None):
         return []
-    if depth == 1 and intensity == "quick":
-        return [("quick/exec", "stg0_on" if working and _BLINK_ON else "stg0_off")]
     if depth >= 2:
         # P0-1: a dispatch-depth-2 stage worker never repeats its parent conductor's full
         # breadcrumb — its identity already rode the name zone (label above); this slot
@@ -879,6 +877,8 @@ def _dispatch_stage_segs(j, key, stage, slug_name, working=False, route_seq=None
         # shared stage zone) so no stage — plan especially — is silently dropped.
         return _stage_segs(key, stage, working=working, max_width=_ROUTE_STAGE_ZONE_MAX,
                            route_seq=route_seq)
+    if depth == 1 and intensity == "quick":
+        return [("quick/exec", "stg0_on" if working and _BLINK_ON else "stg0_off")]
     if key and key != slug_name and not _entry_skill(j):
         # SD-F1: a dispatch-depth-2 stage worker's `key` IS its capability (code-plan/code-execute/
         # code-test/code-report) — reuse _stage_role_label (same helper the F-13 legend
@@ -976,7 +976,8 @@ def _unused_badge(s, compact=False):
     return " unused %s" % fmt_min(s.elapsed_min if s.elapsed_min is not None else None)
 
 
-def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx_width=None):
+def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx_width=None,
+                 show_projection_stage=True):
     live = s.liveness
     slug = s.slug or (s.cwd.rsplit("/", 1)[-1] if s.cwd else "?")
     dim_tel = live in ("stale", "dead") or s.app_server or s.detached
@@ -1049,7 +1050,7 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx
     if used < session_width:
         segs.append((" " * (session_width - used), None))
 
-    projection_stage = _projection_stage_text(s)
+    projection_stage = _projection_stage_text(s) if show_projection_stage else ""
     segs.append((" " * _WIDE_STAGE_GAP, None))
     segs.append((projection_stage or "-",
                  "g_work" if projection_stage and live == "working" else "dim"))
@@ -1427,7 +1428,8 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
 # L1 = identity (dot · harness · session (branch) · ▾N · gate) / L2 = telemetry (model · effort ·
 # bracket gauge · cost · ⏱). model keeps its fixed width so gauges align vertically across cards
 # (the nvtop column feel). Same segment parts as the 1-line rows — zero new color keys.
-def _session_row_2line(s, is_parent=False, child_count=0, _split=False, term_width=None):
+def _session_row_2line(s, is_parent=False, child_count=0, _split=False, term_width=None,
+                       show_projection_stage=True):
     live = s.liveness
     slug = s.slug or (s.cwd.rsplit("/", 1)[-1] if s.cwd else "?")
     dim_tel = live in ("stale", "dead") or s.app_server or s.detached
@@ -1491,7 +1493,8 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False, term_wid
     # indent / no far-right flush).
     l2 = [("    ", None), (_pad(fmt_min(s.elapsed_min), _HW), "dim")]
     l2 += _model_cell(s.model, s.effort, _MW, dim=dim_tel)
-    projection_stage = _projection_stage_text(s, max_width=28)
+    projection_stage = (_projection_stage_text(s, max_width=28)
+                        if show_projection_stage else "")
     l2 += [("  ", None), (projection_stage or "-",
                            "g_work" if projection_stage and live == "working" else "dim")]
     # v16: context is emitted by _context_detail_row beneath the complete card.
@@ -1510,9 +1513,12 @@ def _stack_split(l2):
     return len(l2)
 
 
-def _session_row_stack(s, is_parent=False, child_count=0, term_width=None):
+def _session_row_stack(s, is_parent=False, child_count=0, term_width=None,
+                       show_projection_stage=True):
     """v16 ultra-narrow card: identity and telemetry, with detail row emitted separately."""
-    l1, l2 = _session_row_2line(s, is_parent, child_count, term_width=term_width)
+    l1, l2 = _session_row_2line(
+        s, is_parent, child_count, term_width=term_width,
+        show_projection_stage=show_projection_stage)
     return [l1, l2]
 
 
@@ -2147,7 +2153,23 @@ def _projection_stage_detail_rows(entity, depth=0, term_width=None):
         return []
     backing = getattr(projection, "_route_view", None) or {}
     view = backing.get("view") or {}
-    return _stage_detail_rows(view.get("nodes") or (), depth=depth, term_width=term_width)
+    nodes = view.get("nodes") or ()
+    if hasattr(entity, "depth") and max(1, int(getattr(entity, "depth", 1) or 1)) == 1:
+        prior = None
+        linear = bool(nodes)
+        seen = set()
+        for index, node in enumerate(nodes):
+            node_id = node.get("id")
+            parents = list(node.get("depends_on") or ())
+            expected = [] if index == 0 else [prior]
+            if not node_id or node_id in seen or parents != expected:
+                linear = False
+                break
+            seen.add(node_id)
+            prior = node_id
+        if linear:
+            return []
+    return _stage_detail_rows(nodes, depth=depth, term_width=term_width)
 
 
 def set_show_all(v):
@@ -3284,29 +3306,41 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 _seen_glyphs.add("child")
             if getattr(s, "subagents", None):
                 _seen_glyphs.add("subagent")
+            session_projection = getattr(s, "work_projection", None)
+            session_route = getattr(session_projection, "route_id", None)
+            visible_route_owner = (
+                bool(session_route)
+                and getattr(session_projection, "source", None) == "route-exact"
+                and not getattr(session_projection, "ambiguity", None)
+                and any(
+                    max(1, int(getattr(child, "depth", 1) or 1)) == 1
+                    and getattr(getattr(child, "work_projection", None), "route_id", None)
+                    == session_route
+                    and getattr(getattr(child, "work_projection", None), "source", None)
+                    == "route-exact"
+                    and not getattr(getattr(child, "work_projection", None), "ambiguity", None)
+                    for child in kids
+                )
+            )
             _n0 = len(lines)
             if _selectable_session(s):
                 _SELECTABLE.append(_select_entry(s, _n0))    # F-27 target map
             if _srow:
                 lines.extend(_srow(s, is_parent=bool(nested_n), child_count=nested_n,
-                                   term_width=term_width))
+                                   term_width=term_width,
+                                   show_projection_stage=not visible_route_owner))
             else:
                 lines.append(_session_row(s, narrow, is_parent=bool(nested_n),
                                           child_count=nested_n,
                                           name_width=wide_name_width,
-                                          ctx_width=wide_ctx_width))
+                                          ctx_width=wide_ctx_width,
+                                          show_projection_stage=not visible_route_owner))
             if not (s.liveness in ("stale", "dead") or s.app_server or s.detached):
                 _sess_bold_ids.update(range(_n0, len(lines)))
             detail = _context_detail_row(s, term_width=term_width)
             if detail:
                 lines.extend(detail)
-            session_route = getattr(getattr(s, "work_projection", None), "route_id", None)
-            dispatch_owner_routes = {
-                getattr(getattr(child, "work_projection", None), "route_id", None)
-                for child in display_jobs
-                if max(1, int(getattr(child, "depth", 1) or 1)) == 1
-            }
-            stage_rows = ([] if session_route and session_route in dispatch_owner_routes else
+            stage_rows = ([] if visible_route_owner else
                           _projection_stage_detail_rows(s, term_width=term_width))
             if stage_rows:
                 lines.extend(stage_rows)

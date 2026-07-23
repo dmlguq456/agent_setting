@@ -1,8 +1,8 @@
 # agent-fleet-dashboard — Spec Pipeline Summary
 
-- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8/v9/v10) · 2026-07-17 (v11) · 2026-07-20 (v12) · 2026-07-21 (v13) · 2026-07-22 (v14/v15/v16)
+- **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8/v9/v10) · 2026-07-17 (v11) · 2026-07-20 (v12) · 2026-07-21 (v13) · 2026-07-22 (v14/v15/v16) · 2026-07-23 (v17/v18/v19/v20)
 - **Mode**: cli (터미널 TUI 도구)
-- **Status**: spec **v16 done; independent PASS** / dev **done** — common projection·arbitrary composed DAG·ctx/NOW subordinate line·bounded title quota를 `460b248f`로 main에 통합
+- **Status**: spec **v20 done** / dev **done** — dispatch wrapper/runtime PID split context recovery와 linear route stage single-render hotfix
 - **Placement**: 별도 컴포넌트 `spec/agent-fleet-dashboard/` — 기존 `spec/prd.md`(Unified Memory System) 무수정.
 
 ## v16 update (2026-07-22) — common work projection + subordinate context
@@ -258,3 +258,10 @@
 - 세 칼럼 경계의 소유 여백을 각각 1칸 늘리고, 빈 stage는 dim `-`로 표시한다.
 - 이동한 session 시작 열에 맞춰 context와 NOW 사이 간격을 두 칸에서 세 칸으로 늘렸다.
 - 이전 정본은 `_internal/versions/v18/prd.md`에 보존했다.
+
+## v20 hotfix (2026-07-23) — 분사 context + one-shot 중복 제거
+
+- dispatch wrapper PID와 실제 Claude runtime PID가 다른 경우, current attempt가 소유한 stream-json의 단일 session id로 child session을 exact 결합한다.
+- 최신 assistant usage는 fresh official statusline의 exact model-id context window가 있을 때만 context%로 정규화하며, denominator가 없으면 `—`를 유지한다.
+- 같은 route를 가진 visible depth-1 owner가 있으면 parent stage는 `-`로 낮추고, linear route는 owner `stages` 칼럼에 한 번만 표시한다. 비선형 DAG detail과 process view는 유지한다.
+- 이전 정본은 `_internal/versions/v19/prd.md`에 보존했다.

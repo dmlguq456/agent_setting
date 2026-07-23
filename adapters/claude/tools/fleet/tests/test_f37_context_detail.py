@@ -1,15 +1,21 @@
 """Focused F-37 context/NOW subordinate-row and child-association checks."""
+import json
 import os
 import re
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from fleet import collectors as fleet_collectors  # noqa: E402
 from fleet import projection, render, route  # noqa: E402
-from fleet.model import ContextEvidence, ContextProjection, Session, DispatchJob, SubAgent  # noqa: E402
+from fleet.collectors import dispatch as dispatch_collector  # noqa: E402
+from fleet.model import (  # noqa: E402
+    ContextEvidence, ContextProjection, DispatchJob, ProgressProjection, Session,
+    SubAgent, WorkProjection,
+)
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures", "route")
@@ -110,11 +116,12 @@ class ContextDetailTruthTableTest(unittest.TestCase):
         self.assertEqual([key for value, key in row if value == " 85%"], ["dim"])
         self.assertIn("lvl_r", [key for value, key in row if "━" in value])
 
-    def test_main_session_projection_stage_and_progress_is_visible_at_all_widths(self):
+    def test_linear_dispatch_owner_owns_projection_stage_once_at_all_widths(self):
         rid = route.load(REAL)["route_id"]
         session = Session(harness="claude", pid=200, proc_start="root", cwd="/root",
                           session_id="sid-root", slug="root", liveness="working")
         owner = DispatchJob(key="code", slug="owner", parent_sid="sid-root", depth=1,
+                            cwd="/root", harness="claude", is_child=True,
                             liveness="working")
         leaf = DispatchJob(key="code-execute", slug="leaf", parent_slug="owner", depth=2,
                            pid=201, proc_start="leaf", route_id=rid, route_file=REAL,
@@ -124,13 +131,35 @@ class ContextDetailTruthTableTest(unittest.TestCase):
             lines = render._build_lines([session], [owner, leaf], "both", False, 0,
                                         layout=layout, term_width=width)
             visible = "\n".join("".join(part for part, _ in line) for line in lines if line)
-            self.assertIn("stage execute", visible)
-            self.assertIn("0/4", visible)
-            for node_id in ("plan", "execute", "test", "report"):
-                self.assertEqual(len(re.findall(r"\b%s [✓●○✕]" % re.escape(node_id), visible)), 1)
-            self.assertIn("execute ● ←{plan}", visible)
-            self.assertIn("test ○ ←{execute}", visible)
-            self.assertIn("report ○ ←{test}", visible)
+            self.assertNotIn("stage execute", visible)
+            self.assertNotIn("←{", visible)
+            self.assertIn("plan › execute › test › report", visible)
+
+    def test_quick_one_shot_is_rendered_once_on_owner_not_parent_or_detail(self):
+        node = {"id": "one-shot", "state": "active", "level": 0, "depends_on": []}
+        work = WorkProjection(
+            source="route-exact", route_id="rt-one", route_node="one-shot",
+            stage_label="one-shot", node_state="active",
+            progress=ProgressProjection(0, 1),
+            _route_view={"view": {"nodes": [node]}},
+        )
+        session = Session(
+            harness="claude", pid=220, proc_start="root", cwd="/tmp/fleet-one",
+            session_id="sid-one", slug="parent", liveness="working",
+            work_projection=work,
+        )
+        owner = DispatchJob(
+            key="code", slug="quick-worker", parent_sid="sid-one", is_child=True,
+            cwd="/tmp/fleet-one", harness="claude", depth=1, intensity="quick",
+            liveness="working", work_projection=work,
+        )
+        for width, layout in ((168, "wide"), (120, "wide"), (100, "narrow"), (60, "stack")):
+            visible = text(render._build_lines(
+                [session], [owner], "both", False, 0, layout=layout, term_width=width))
+            with self.subTest(width=width):
+                self.assertEqual(visible.count("one-shot"), 1)
+                self.assertNotIn("quick/exec", visible)
+                self.assertNotIn("stage one-shot", visible)
 
     def test_inline_main_session_uses_artifact_stage_without_dispatch(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -213,6 +242,102 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                 self.assertIn("| partial", rendered)
 
 
+class ClaudeStreamContextTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.claude_home = os.path.join(self.tmp.name, "claude")
+        self.logs = os.path.join(self.tmp.name, ".dispatch", "logs")
+        os.makedirs(self.logs)
+        os.makedirs(os.path.join(self.claude_home, ".statusline"))
+        self.env = mock.patch.dict(os.environ, {
+            "AGENT_HOME": self.tmp.name,
+            "CLAUDE_CONFIG_DIR": self.claude_home,
+        })
+        self.env.start()
+        dispatch_collector._CLAUDE_STREAM_CACHE.clear()
+        dispatch_collector._CLAUDE_WINDOW_CACHE.clear()
+
+    def tearDown(self):
+        dispatch_collector._CLAUDE_STREAM_CACHE.clear()
+        dispatch_collector._CLAUDE_WINDOW_CACHE.clear()
+        self.env.stop()
+        self.tmp.cleanup()
+
+    def _job(self, attempt="att-stream-exact"):
+        job = DispatchJob(
+            key="code", slug="owner", pid=91, proc_start="wrapper", harness="claude",
+            attempt_id=attempt, is_child=True, liveness="working",
+        )
+        job._log_file = os.path.join(self.logs, "owner.%s.claude.jsonl" % attempt)
+        return job
+
+    def _write_log(self, job, rows):
+        with open(job._log_file, "w", encoding="utf-8") as stream:
+            for row in rows:
+                stream.write(json.dumps(row) + "\n")
+
+    def _window(self, model_id, size):
+        path = os.path.join(self.claude_home, ".statusline", "sample.json")
+        with open(path, "w", encoding="utf-8") as stream:
+            json.dump({
+                "model": {"id": model_id},
+                "context_window": {"context_window_size": size},
+            }, stream)
+
+    @staticmethod
+    def _assistant(sid, model_id, active):
+        return {
+            "type": "assistant", "session_id": sid,
+            "message": {"model": model_id, "usage": {
+                "input_tokens": 10,
+                "cache_creation_input_tokens": 20,
+                "cache_read_input_tokens": active - 30,
+            }},
+        }
+
+    def test_attempt_stream_recovers_exact_session_and_latest_context(self):
+        job = self._job()
+        self._window("claude-fable-5", 1000)
+        self._write_log(job, [
+            {"type": "system", "session_id": "sid-child"},
+            self._assistant("sid-child", "claude-fable-5", 100),
+            self._assistant("sid-child", "claude-fable-5", 160),
+        ])
+        now = os.path.getmtime(job._log_file)
+        dispatch_collector._enrich_claude_stream_context(job, now=now)
+        public, _ = projection.normalize_context(job._context_evidence, now=now)
+        self.assertEqual(job._runtime_session_id, "sid-child")
+        self.assertEqual((public.used_pct, public.source), (16, "claude-stream-json"))
+
+    def test_missing_exact_model_window_keeps_context_unknown_but_session_exact(self):
+        job = self._job()
+        self._window("claude-other-5", 1000)
+        self._write_log(job, [self._assistant("sid-child", "claude-fable-5", 160)])
+        dispatch_collector._enrich_claude_stream_context(
+            job, now=os.path.getmtime(job._log_file))
+        self.assertEqual(job._runtime_session_id, "sid-child")
+        self.assertIsNone(job._context_evidence)
+
+    def test_multiple_stream_session_ids_and_foreign_path_fail_closed(self):
+        job = self._job()
+        self._window("claude-fable-5", 1000)
+        self._write_log(job, [
+            self._assistant("sid-a", "claude-fable-5", 100),
+            self._assistant("sid-b", "claude-fable-5", 160),
+        ])
+        dispatch_collector._enrich_claude_stream_context(
+            job, now=os.path.getmtime(job._log_file))
+        self.assertFalse(hasattr(job, "_runtime_session_id"))
+        self.assertEqual(job.association_ambiguity, "multiple-stream-session-ids")
+
+        foreign = self._job("att-foreign")
+        foreign._log_file = os.path.join(self.tmp.name, "foreign.att-foreign.claude.jsonl")
+        with open(foreign._log_file, "w", encoding="utf-8") as stream:
+            stream.write(json.dumps(self._assistant("sid-x", "claude-fable-5", 160)) + "\n")
+        dispatch_collector._enrich_claude_stream_context(foreign)
+        self.assertFalse(hasattr(foreign, "_runtime_session_id"))
+
+
 class ChildAssociationTest(unittest.TestCase):
     def _child(self, pid, start, cwd, harness="claude"):
         return Session(harness=harness, pid=pid, proc_start=start, cwd=cwd,
@@ -226,6 +351,38 @@ class ChildAssociationTest(unittest.TestCase):
                           harness="claude", liveness="working", is_child=True)
         fleet_collectors._adopt_child_titles([child], [job])
         self.assertEqual((job.title, job.summary, job.context.used_pct), ("Child title", "Child now", 70))
+
+    def test_wrapper_pid_uses_attempt_stream_session_id_and_stream_context(self):
+        child = self._child(7, "runtime", "/child")
+        child.context = ContextProjection(None, "unknown", "claude")
+        child._context_evidence = None
+        job = DispatchJob(
+            key="code", slug="job", pid=99, proc_start="wrapper", cwd="/child",
+            harness="claude", liveness="working", is_child=True,
+            context=ContextProjection(16, "normal", "claude-stream-json"),
+        )
+        job._runtime_session_id = child.session_id
+        job._context_evidence = ContextEvidence(used_pct=16, source="claude-stream-json")
+        fleet_collectors._adopt_child_titles([child], [job])
+        self.assertEqual((job.title, job.summary, job.context.used_pct),
+                         ("Child title", "Child now", 16))
+        self.assertEqual(child.context.used_pct, 16)
+
+    def test_duplicate_stream_session_id_candidates_fail_closed(self):
+        first = self._child(7, "a", "/first")
+        second = self._child(8, "b", "/second")
+        second.session_id = first.session_id
+        job = DispatchJob(
+            key="code", slug="job", harness="claude", is_child=True,
+            context=ContextProjection(16, "normal", "claude-stream-json"),
+        )
+        job._runtime_session_id = first.session_id
+        job._context_evidence = ContextEvidence(used_pct=16, source="claude-stream-json")
+        fleet_collectors._adopt_child_titles([first, second], [job])
+        self.assertIsNone(job.title)
+        self.assertIsNone(job.context)
+        self.assertEqual(job.association_ambiguity,
+                         "multiple-child-session-id-candidates")
 
     def test_pid_reuse_cwd_ambiguity_and_cross_harness_are_fail_closed(self):
         old = self._child(7, "old", "/shared")
