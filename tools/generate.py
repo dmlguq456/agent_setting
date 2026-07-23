@@ -16,6 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 GENERATORS = [
+    ("utility-census", "tools/check-utility-census.py"),
     ("missing-projections", "tools/sync-missing-projections.py"),
     ("entry-skill-layer", "tools/sync-entry-skill-layer.py"),
     ("skill-invocation-policy", "tools/sync-skill-invocation-policy.py"),
