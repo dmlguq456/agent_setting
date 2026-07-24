@@ -478,6 +478,46 @@ def _spec_phase_display(name, index):
     return "Phase%d" % (index + 1)
 
 
+def _spec_mode(root, slug):
+    """Compact spec mode(s) from ``pipeline_state.yaml`` ``mode:`` (flow ``[a, b]`` or a block
+    list). Returns ``"a,b"`` or None. autopilot-spec modes are app/library/api/cli/research/
+    update — shown in the breadcrumb lead so a spec row reads like a dispatch row's capability
+    tag (user 2026-07-24 "spec은 mode가 따로 없나")."""
+    path = _spec_pipeline_state_path(root, slug)
+    if not path:
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.readlines()
+    except (OSError, UnicodeDecodeError):
+        return None
+    modes = []
+    in_block = False
+    for raw in lines:
+        line = raw.rstrip("\n")
+        stripped = line.strip()
+        if not stripped:
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if in_block and indent == 0:
+            in_block = False
+        if indent == 0 and stripped.startswith("mode:"):
+            rest = _strip_comment(stripped[len("mode:"):]).strip()
+            if rest.startswith("[") and rest.endswith("]"):
+                modes = [m.strip().strip("'\"") for m in rest[1:-1].split(",") if m.strip()]
+                break
+            if rest:
+                modes = [rest.strip("'\"")]
+                break
+            in_block = True
+            continue
+        if in_block and stripped.startswith("-"):
+            m = _strip_comment(stripped[1:]).strip().strip("'\"")
+            if m:
+                modes.append(m)
+    return ",".join(modes) if modes else None
+
+
 def _spec_phase_sequence(root, slug):
     """Ordered ``[(display, state), ...]`` of the spec's declared phases for a lit breadcrumb.
     Reads the same ``pipeline_state.yaml`` as ``_spec_stage_parts``; every IO/shape failure
@@ -559,7 +599,8 @@ def _spec_marker_projection(entity, spec_markers, artifact_root=None, now=None):
     # (Phase✓ › … › dev●) instead of only the flat topic label; the topic rides the
     # breadcrumb's own lead-in. `_route_view` is the same carrier route-exact uses.
     phases = _spec_phase_sequence(root, slug)
-    route_view = {"spec_phases": phases, "spec_topic": topic} if phases else None
+    route_view = ({"spec_phases": phases, "spec_topic": topic, "spec_mode": _spec_mode(root, slug)}
+                  if phases else None)
     return (WorkProjection(source="artifact-inferred", stage_label=label,
                            _route_view=route_view),
             None, mtime)

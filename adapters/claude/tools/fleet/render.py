@@ -788,10 +788,10 @@ def _route_stage_segs(route_seq, working, max_width):
             items.append((i, nid + "✓", "stg%d_off" % (i % 5)))
         elif st == "active":
             items.append((i, nid, _cur_key(i)))
-        elif st == "skipped":
-            # deferred / n·a spec phase — present but deliberately not run (2026-07-24).
-            items.append((i, nid + "⊘", "dim"))
         else:
+            # pending (and any residual skipped that a caller did not filter) — the name in the
+            # dim off-hue, no glyph. Kept glyph-free on purpose: ✓/✕ are the only markers, and a
+            # skip glyph like ⊘ is missing from many terminal fonts (user 2026-07-24 icon error).
             items.append((i, nid, "stg%d_off" % (i % 5)))
     if max_width is not None:
         items = _drop_past_stages(items, cur_i, max_width)
@@ -980,9 +980,15 @@ def _session_stage_segs(entity, working, max_width):
     seg list."""
     seq = _spec_phase_seq(entity)
     if seq:
-        topic = (getattr(entity.work_projection, "_route_view", None) or {}).get("spec_topic")
-        lead = ("spec %s: " % topic) if topic else "spec: "
-        body = _route_stage_segs(seq, working, max(4, max_width - _dw(lead)))
+        backing = getattr(entity.work_projection, "_route_view", None) or {}
+        # Drop deferred / n·a phases: they are not part of THIS project's flow, and dropping them
+        # also removes any need for a skip glyph (user 2026-07-24 "그냥 spec이라고만 띄워도" + the
+        # scaffolding/design icon error). Lead with the spec MODE, not the long topic — a spec row
+        # then reads like a dispatch row's capability tag (user "spec은 mode가 따로 없나").
+        shown = [(n, st) for n, st in seq if st != "skipped"] or seq
+        mode = backing.get("spec_mode")
+        lead = ("spec[%s] " % mode) if mode else "spec "
+        body = _route_stage_segs(shown, working, max(4, max_width - _dw(lead)))
         return [(lead, "name_dim")] + body
     text = _projection_stage_text(entity, max_width=max_width)
     return [(text or "-", "g_work" if text and working else "dim")]
