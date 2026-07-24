@@ -183,6 +183,18 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.stage_label, "spec topic-a")
 
+    # (i2) non-UTF-8 pipeline_state.yaml -> degrades to topic-only, never raises
+    def test_i2_non_utf8_pipeline_state_topic_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = os.path.join(tmp, ".agent_reports", "spec", "topic-a")
+            os.makedirs(base, exist_ok=True)
+            with open(os.path.join(base, "pipeline_state.yaml"), "wb") as f:
+                f.write(b"phases:\n  dev: in_progress\xff\xfe\n")
+            markers = {_marker_name("sid-a", tmp, "topic-a"): NOW}
+            entity = _session(sid="sid-a", cwd=tmp)
+            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+            self.assertEqual(entity.work_projection.stage_label, "spec topic-a")
+
     # (j) root marker: project_name: present -> topic reflected; absent (context-recovery-like) -> bare "spec" label
     def test_j_root_marker_with_project_name(self):
         with tempfile.TemporaryDirectory() as tmp:

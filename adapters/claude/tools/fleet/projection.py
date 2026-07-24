@@ -411,7 +411,7 @@ def _spec_stage_parts(root, slug):
     try:
         with open(path, encoding="utf-8") as f:
             lines = f.readlines()
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return topic, phase
     project_name = None
     status = None
