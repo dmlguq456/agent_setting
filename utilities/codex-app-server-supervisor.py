@@ -77,7 +77,12 @@ def _typed_receipt(value: Any, parent_attempt_id: str, attempts: set[str]) -> di
     children: list[dict[str, str]] = []
     observed: set[str] = set()
     allowed_readiness = {"ready", "pending"}
-    allowed_reasons = {"registry-closed", "terminal-observed", "process-alive"}
+    allowed_reasons = {
+        "registry-closed",
+        "terminal-observed",
+        "process-alive",
+        "process-unverifiable",
+    }
     for raw in raw_children:
         if not isinstance(raw, dict):
             raise SupervisorError("join-receipt-child-invalid")

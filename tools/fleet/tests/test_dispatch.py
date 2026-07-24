@@ -631,17 +631,47 @@ class CodexAttemptIdentityTest(unittest.TestCase):
                     "2026-07-16T00:00:00+00:00\topen\trepo\t%s\tretry-r5\t"
                     "capability=autopilot-code,harness=codex,depth=2,"
                     "route_id=rt-a,route_node=test,pid=4242,pid_start=777,pid_scope=namespace-local,"
+                    "pid_host=5252,pid_host_start=888,pid_host_ns=pid:[outer],"
+                    "pid_ns=pid:[inner],pid_observer_ns=pid:[inner],"
+                    "pid_host_proof=nspid-procfs-root-v1,pgid=4242,"
                     "attempt_id=att-0123456789abcdef\n" % tmp
                 )
             rows, malformed = dispatch._scan_jobs_log(jobs_log, set())
 
         self.assertEqual(malformed, 0)
         self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0].pid, 4242)
-        self.assertEqual(rows[0].proc_start, "777")
+        self.assertIsNone(rows[0].pid)
+        self.assertIsNone(rows[0].proc_start)
         self.assertEqual(rows[0].pid_scope, "namespace-local")
+        self.assertEqual(rows[0].pid_local, 4242)
+        self.assertEqual(rows[0].pid_local_start, "777")
+        self.assertEqual(rows[0].pid_host, 5252)
+        self.assertEqual(rows[0].pid_host_start, "888")
+        self.assertEqual(rows[0].pid_host_ns, "pid:[outer]")
+        self.assertEqual(rows[0].pid_ns, "pid:[inner]")
+        self.assertEqual(rows[0].pid_observer_ns, "pid:[inner]")
+        self.assertEqual(rows[0].pid_host_proof, "nspid-procfs-root-v1")
+        self.assertEqual(rows[0].pgid, 4242)
+        self.assertIsNone(rows[0].pid_identity_source)
         self.assertEqual(rows[0].attempt_id, "att-0123456789abcdef")
         self.assertEqual(rows[0].registry_order, 0)
+        payload = rows[0].to_dict()
+        self.assertEqual(
+            {key: payload[key] for key in (
+                "pid", "pid_local", "pid_local_start", "pid_host",
+                "pid_host_start", "pid_host_ns", "pid_ns",
+                "pid_observer_ns", "pid_host_proof", "pgid",
+                "pid_identity_source",
+            )},
+            {
+                "pid": None, "pid_local": 4242, "pid_local_start": "777",
+                "pid_host": 5252, "pid_host_start": "888",
+                "pid_host_ns": "pid:[outer]", "pid_ns": "pid:[inner]",
+                "pid_observer_ns": "pid:[inner]",
+                "pid_host_proof": "nspid-procfs-root-v1", "pgid": 4242,
+                "pid_identity_source": None,
+            },
+        )
 
     def test_exited_retries_cannot_share_fresh_rollout_liveness(self):
         jobs = [
@@ -713,7 +743,7 @@ class CodexAttemptIdentityTest(unittest.TestCase):
         self.assertEqual(job.state_evidence["attempt"]["source"], "heartbeat")
         self.assertEqual(job.state_evidence["attempt"]["pid_scope"], "namespace-local")
 
-    def test_namespace_local_visible_pid_is_live_without_route_or_heartbeat(self):
+    def test_namespace_local_numeric_pid_collision_is_not_process_authority(self):
         with tempfile.TemporaryDirectory() as tmp:
             job = DispatchJob(key="code-execute", slug="namespace-visible", cwd="/work/wt",
                               source="jobs", status="open", harness="codex", pid=437,
@@ -725,9 +755,40 @@ class CodexAttemptIdentityTest(unittest.TestCase):
                  mock.patch.object(dispatch.procscan, "read_proc_start", return_value="777"):
                 state = dispatch._dispatch_liveness(job, now=1000.0, track=False)
 
+        self.assertEqual(state, "unknown")
+        self.assertEqual(job.state_evidence["attempt"]["source"], "namespace")
+        self.assertFalse(job.state_evidence["attempt"]["pid_authoritative"])
+        self.assertIn("no authoritative observer proof", job.state_evidence["attempt"]["rule"])
+
+    def test_namespace_bound_outer_pid_is_authoritative_and_full_evidence_survives(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs_log = os.path.join(tmp, "jobs.log")
+            pid = os.getpid()
+            start = str(dispatch.procscan.read_proc_start(pid))
+            namespace = os.readlink("/proc/self/ns/pid")
+            with open(jobs_log, "w", encoding="utf-8") as out:
+                out.write(
+                    "2026-07-16T00:00:00+00:00\topen\trepo\t%s\tbound\t"
+                    "capability=autopilot-code,harness=codex,depth=2,"
+                    "route_id=rt-a,route_node=test,pid=7,pid_start=42,"
+                    "pid_scope=namespace-local,pid_observer_ns=pid:[inner],"
+                    "pid_host=%s,pid_host_start=%s,pid_host_ns=%s,"
+                    "pid_host_proof=nspid-procfs-root-v1,attempt_id=att-bound\n"
+                    % (tmp, pid, start, namespace)
+                )
+            rows, malformed = dispatch._scan_jobs_log(jobs_log, set())
+            self.assertEqual(malformed, 0)
+            self.assertEqual((rows[0].pid, rows[0].proc_start), (pid, start))
+            self.assertEqual(rows[0].pid_identity_source, "host")
+            with mock.patch.object(dispatch, "_registry_home", return_value=tmp), \
+                 mock.patch.object(dispatch, "_job_transcript_signal", return_value="stale"):
+                state = dispatch._dispatch_liveness(rows[0], now=1000.0, track=False)
+
         self.assertEqual(state, "working")
-        self.assertEqual(job.state_evidence["attempt"]["source"], "proc")
-        self.assertIn("visible and live", job.state_evidence["attempt"]["rule"])
+        evidence = rows[0].state_evidence["attempt"]
+        self.assertTrue(evidence["pid_authoritative"])
+        self.assertEqual(evidence["pid_identity_source"], "host")
+        self.assertEqual((evidence["pid_local"], evidence["pid_host"]), (7, pid))
 
     def test_namespace_local_terminal_heartbeat_is_done(self):
         with tempfile.TemporaryDirectory() as tmp:

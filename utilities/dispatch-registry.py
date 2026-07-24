@@ -13,15 +13,22 @@ from pathlib import Path
 import signal
 import sys
 import time
+import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "utilities")]
 from tools.fleet.model import ATTEMPT_CLASSIFIER_SOURCE, classify_attempt_evidence  # noqa: E402
-from dispatch_contract import (DispatchContractError, close_attempt_row_if,
-                               process_identity_is_live,
+from dispatch_contract import (DispatchContractError, annotate_attempt_row_if,
+                               attempt_process_quiescence,
+                               close_attempt_row_if,
+                               exact_process_group_signal_authority,
+                               parse_registry_metadata,
+                               process_group_observation,
+                               process_observation,
                                process_state,
                                process_start_ticks,
                                reconcile_local_registry, resolve_agent_home,
+                               signal_exact_process_group,
                                validate_attempt_metadata)  # noqa: E402
 from codex_dispatch_terminal import inspect_terminal_log  # noqa: E402
 _cleanup_spec = importlib.util.spec_from_file_location("worktree_cleanup", ROOT / "utilities/worktree-cleanup.py")
@@ -534,37 +541,44 @@ def _cascade_terminal_note(row, rows, args):
 def _cascade_process_state(meta):
     """Classify only a process-group identity; never infer from a slug."""
 
+    try:
+        validate_attempt_metadata(meta)
+    except DispatchContractError:
+        return "contract-unverifiable", None, None
+
     local_pid = meta.get("pid", "")
     local_start = meta.get("pid_start", "")
     host_pid = meta.get("pid_host", "")
     host_start = meta.get("pid_host_start", "") or local_start
-    # Parent-bound wrappers publish spawn + PID identity under the same jobs
-    # lock. No PID therefore means that no process was launched, regardless of
-    # whether the wrapper stopped just before or just after claiming launch.
     if not local_pid and not host_pid:
-        return "never-launched", None, None
-    if host_pid.isdigit() and host_start:
-        pid, expected = int(host_pid), host_start
-    elif meta.get("pid_scope") == "namespace-local":
-        return "scope-unverifiable", None, None
-    elif local_pid.isdigit() and local_start:
-        pid, expected = int(local_pid), local_start
-    else:
-        return "identity-missing", None, None
-    actual = process_start_ticks(pid)
-    if actual is None or process_state(pid) == "Z":
-        return "gone", pid, expected
-    if actual != expected:
-        # PID reuse proves the exact recorded child is gone. Never signal the
-        # unrelated replacement, but the attempt row can close as exited.
-        return "gone-pid-reused", pid, expected
-    try:
-        pgid = os.getpgid(pid)
-    except ProcessLookupError:
-        return "gone", pid, expected
-    except OSError:
+        if meta.get("launch_claimed") == "0" or meta.get("launch_outcome") in {
+            "never-launched", "reaped-before-publish"
+        }:
+            return "never-launched", None, None
+        return "launch-indeterminate", None, None
+    process = attempt_process_quiescence(meta)
+    identity = process.identity
+    if identity is None:
+        syntactic_identity = (
+            (local_pid.isdigit() and bool(local_start))
+            or (host_pid.isdigit() and bool(host_start))
+        )
+        return (
+            "scope-unverifiable" if syntactic_identity else "identity-missing",
+            None,
+            None,
+        )
+    pid, expected = identity.pid, identity.expected_start
+    if process.state == "quiescent":
+        return (
+            "gone-pid-reused" if "reused" in process.reason else "gone",
+            pid,
+            expected,
+        )
+    if process.state != "live":
         return "group-unverifiable", pid, expected
-    if pgid != pid:
+    group_field = "pgid_host" if identity.source == "host" else "pgid"
+    if meta.get(group_field) != str(pid):
         return "non-group-leader", pid, expected
     return "live-group", pid, expected
 
@@ -572,29 +586,52 @@ def _cascade_process_state(meta):
 def _signal_exact_group(pid, expected_start, signum):
     """Revalidate immediately before killpg; return a closed status enum."""
 
-    if not process_identity_is_live(pid, expected_start):
-        return "gone"
-    try:
-        if os.getpgid(pid) != pid:
-            return "non-group-leader"
-        os.killpg(pid, signum)
-    except ProcessLookupError:
-        return "gone"
-    except OSError:
-        return "signal-error"
-    return "signalled"
+    result = signal_exact_process_group(pid, expected_start, signum)
+    return "gone" if result == "pid-reused" else result
 
 
 def _wait_exact_group_end(pid, expected_start, timeout):
     deadline = time.monotonic() + max(timeout, 0.0)
     while time.monotonic() < deadline:
-        if not process_identity_is_live(pid, expected_start):
+        visibility, actual, _state = process_observation(pid)
+        if visibility == "present" and actual != expected_start:
+            return True
+        group = process_group_observation(pid)
+        if group.state == "empty":
             return True
         time.sleep(min(0.02, max(0.0, deadline - time.monotonic())))
-    return not process_identity_is_live(pid, expected_start)
+    visibility, actual, _state = process_observation(pid)
+    if visibility == "present" and actual != expected_start:
+        return True
+    return process_group_observation(pid).state == "empty"
 
 
-def _close_cascade_child(args, owner, child_attempt, fallback_note, route_id):
+def _teardown_claim_state(metadata):
+    """Classify a durable cascade claim by its exact holder PID identity."""
+
+    if not metadata.get("teardown_claim"):
+        return "none"
+    raw_pid = metadata.get("teardown_claim_pid", "")
+    expected = metadata.get("teardown_claim_pid_start", "")
+    if not raw_pid.isdigit() or not expected:
+        return "unverifiable"
+    visibility, actual, state = process_observation(int(raw_pid))
+    if visibility == "inaccessible":
+        return "unverifiable"
+    if visibility == "missing" or actual != expected or state == "Z":
+        return "stale"
+    return "live"
+
+
+def _close_cascade_child(
+    args,
+    owner,
+    child_attempt,
+    fallback_note,
+    route_id,
+    *,
+    teardown_claim=None,
+):
     """Close one child with marker/terminal precedence under the registry lock."""
 
     for _ in range(3):
@@ -605,6 +642,24 @@ def _close_cascade_child(args, owner, child_attempt, fallback_note, route_id):
         )
         if child is None or child["status"] not in OPEN:
             return False, "already-terminal"
+        try:
+            validate_attempt_metadata(child["meta"])
+        except DispatchContractError:
+            return False, "contract-unverifiable"
+        recorded_claim = child["meta"].get("teardown_claim", "")
+        if recorded_claim and recorded_claim != (teardown_claim or ""):
+            claim_state = _teardown_claim_state(child["meta"])
+            if claim_state == "stale" and not teardown_claim:
+                if _release_cascade_claim(args.jobs, child_attempt, recorded_claim):
+                    continue
+                return False, "teardown-claim-revalidation-veto"
+            return False, (
+                "teardown-in-progress"
+                if claim_state == "live"
+                else "teardown-claim-unverifiable"
+            )
+        if teardown_claim and recorded_claim != teardown_claim:
+            return False, "teardown-claim-lost"
         if (
             child["repo"] != owner["repo"]
             or child["worktree"] != owner["worktree"]
@@ -633,6 +688,15 @@ def _close_cascade_child(args, owner, child_attempt, fallback_note, route_id):
             )
             if fresh is None or fresh["status"] not in OPEN:
                 decision["reason"] = "already-terminal"
+                return False
+            if fresh["attempt_contract_status"] != "current":
+                decision["reason"] = "contract-unverifiable"
+                return False
+            fresh_claim = fresh["meta"].get("teardown_claim", "")
+            if fresh_claim != (teardown_claim or ""):
+                decision["reason"] = (
+                    "teardown-in-progress" if fresh_claim else "teardown-claim-lost"
+                )
                 return False
             if (
                 fresh["repo"] != owner["repo"]
@@ -666,6 +730,7 @@ def _close_cascade_child(args, owner, child_attempt, fallback_note, route_id):
                 "parent_attempt_id": owner["meta"].get("attempt_id", ""),
                 "reconcile_reason": terminal_reason or "post-exit-child-cascade",
             },
+            teardown_claim=teardown_claim,
         )
         if closed:
             return True, selected_note
@@ -673,6 +738,113 @@ def _close_cascade_child(args, owner, child_attempt, fallback_note, route_id):
             continue
         return False, decision.get("reason", "revalidation-veto")
     return False, "revalidation-retry-exhausted"
+
+
+def _claim_cascade_signal(args, owner, child_attempt, route_id):
+    """CAS one open child into exclusive teardown ownership before signalling."""
+
+    owner_attempt = owner["meta"].get("attempt_id", "")
+    token = f"cascade-{owner_attempt}-{uuid.uuid4().hex}"
+    holder_pid = os.getpid()
+    holder_start = process_start_ticks(holder_pid)
+    if not holder_start:
+        return None, {}, "teardown-claim-holder-unverifiable"
+    decision = {}
+    snapshot = {}
+
+    def signal_safe(_fields):
+        fresh_rows = read_rows(args.jobs)
+        matches = [
+            row
+            for row in fresh_rows
+            if row["meta"].get("attempt_id") == child_attempt
+        ]
+        if len(matches) != 1:
+            decision["reason"] = "attempt-row-not-unique"
+            return False
+        fresh = matches[0]
+        meta = fresh["meta"]
+        if fresh["status"] not in OPEN:
+            decision["reason"] = "already-terminal"
+            return False
+        if fresh["attempt_contract_status"] != "current":
+            decision["reason"] = "contract-unverifiable"
+            return False
+        claim_state = _teardown_claim_state(meta)
+        if claim_state in {"live", "unverifiable"}:
+            decision["reason"] = (
+                "teardown-in-progress"
+                if claim_state == "live"
+                else "teardown-claim-unverifiable"
+            )
+            return False
+        if (
+            fresh["repo"] != owner["repo"]
+            or fresh["worktree"] != owner["worktree"]
+            or meta.get("parent_attempt_id") != owner_attempt
+        ):
+            decision["reason"] = "parent-binding-changed"
+            return False
+        if route_id and meta.get("route_id") not in {None, "", route_id}:
+            decision["reason"] = "route-context-conflict"
+            return False
+        terminal_note, _terminal_reason = _cascade_terminal_note(
+            fresh, fresh_rows, args
+        )
+        if terminal_note:
+            decision["reason"] = f"terminal:{terminal_note}"
+            return False
+        state, pid, expected = _cascade_process_state(meta)
+        if state != "live-group" or pid is None or expected is None:
+            decision["reason"] = state
+            return False
+        authority = exact_process_group_signal_authority(pid, expected)
+        if authority != "authoritative":
+            decision["reason"] = authority
+            return False
+        snapshot.update(pid=pid, expected=expected)
+        decision["reason"] = "claimed"
+        return True
+
+    try:
+        claimed = annotate_attempt_row_if(
+            args.jobs,
+            child_attempt,
+            {
+                "teardown_claim": token,
+                "teardown_claimed_at": datetime.now(timezone.utc).isoformat(),
+                "teardown_claim_pid": str(holder_pid),
+                "teardown_claim_pid_start": holder_start,
+            },
+            signal_safe,
+        )
+    except DispatchContractError:
+        return None, {}, "contract-unverifiable"
+    if not claimed:
+        return None, {}, decision.get("reason", "revalidation-veto")
+    return token, snapshot, "claimed"
+
+
+def _release_cascade_claim(jobs, child_attempt, token):
+    """Release a still-owned teardown claim without touching a terminal row."""
+
+    def still_owned(fields):
+        return parse_registry_metadata(fields[5]).get("teardown_claim") == token
+
+    try:
+        return annotate_attempt_row_if(
+            jobs,
+            child_attempt,
+            {
+                "teardown_claim": "",
+                "teardown_claimed_at": "",
+                "teardown_claim_pid": "",
+                "teardown_claim_pid_start": "",
+            },
+            still_owned,
+        )
+    except DispatchContractError:
+        return False
 
 
 def cascade_orphan_children(owner, route_id, args):
@@ -699,35 +871,79 @@ def cascade_orphan_children(owner, route_id, args):
         if closed:
             decisions.append({"attempt_id": attempt, "status": result, "closed": True})
             continue
-        state, pid, expected = _cascade_process_state(child["meta"])
+        if result != "no-terminal-evidence":
+            decisions.append(
+                {"attempt_id": attempt, "status": result, "closed": False}
+            )
+            continue
+        state, _pid, _expected = _cascade_process_state(child["meta"])
         if state in {"gone", "gone-pid-reused", "never-launched"}:
             closed, result = _close_cascade_child(
                 args, owner, attempt, "dead-parent-exited", route_id
             )
             decisions.append({"attempt_id": attempt, "status": result, "closed": closed})
             continue
-        if state != "live-group" or pid is None or expected is None:
+        if state != "live-group":
             decisions.append({"attempt_id": attempt, "status": state, "closed": False})
             continue
-        term = _signal_exact_group(pid, expected, signal.SIGTERM)
-        if term in {"non-group-leader", "signal-error"}:
-            decisions.append({"attempt_id": attempt, "status": term, "closed": False})
+        claim, snapshot, claim_status = _claim_cascade_signal(
+            args, owner, attempt, route_id
+        )
+        if claim is None:
+            decisions.append(
+                {"attempt_id": attempt, "status": claim_status, "closed": False}
+            )
             continue
-        ended = term == "gone" or _wait_exact_group_end(pid, expected, args.cascade_grace)
+        pid = snapshot["pid"]
+        expected = snapshot["expected"]
+        delivered_signal = False
+        term = _signal_exact_group(pid, expected, signal.SIGTERM)
+        if term == "signalled":
+            delivered_signal = True
+            ended = _wait_exact_group_end(pid, expected, args.cascade_grace)
+        elif term in {"gone", "leader-gone"}:
+            ended = _wait_exact_group_end(pid, expected, 0.0)
+        else:
+            _release_cascade_claim(args.jobs, attempt, claim)
+            decisions.append(
+                {"attempt_id": attempt, "status": term, "closed": False}
+            )
+            continue
         if not ended:
             killed = _signal_exact_group(pid, expected, signal.SIGKILL)
-            if killed in {"non-group-leader", "signal-error"}:
-                decisions.append({"attempt_id": attempt, "status": killed, "closed": False})
+            if killed == "signalled":
+                delivered_signal = True
+                ended = _wait_exact_group_end(
+                    pid, expected, args.cascade_kill_wait
+                )
+            elif killed in {"gone", "leader-gone"}:
+                ended = _wait_exact_group_end(pid, expected, 0.0)
+            else:
+                _release_cascade_claim(args.jobs, attempt, claim)
+                decisions.append(
+                    {"attempt_id": attempt, "status": killed, "closed": False}
+                )
                 continue
-            ended = killed == "gone" or _wait_exact_group_end(
-                pid, expected, args.cascade_kill_wait
-            )
         if not ended:
-            decisions.append({"attempt_id": attempt, "status": "group-still-live", "closed": False})
+            _release_cascade_claim(args.jobs, attempt, claim)
+            decisions.append(
+                {
+                    "attempt_id": attempt,
+                    "status": "group-still-live",
+                    "closed": False,
+                }
+            )
             continue
         closed, result = _close_cascade_child(
-            args, owner, attempt, "dead-parent-terminated", route_id
+            args,
+            owner,
+            attempt,
+            "dead-parent-terminated" if delivered_signal else "dead-parent-exited",
+            route_id,
+            teardown_claim=claim,
         )
+        if not closed:
+            _release_cascade_claim(args.jobs, attempt, claim)
         decisions.append({"attempt_id": attempt, "status": result, "closed": closed})
     return decisions
 

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
 import tempfile
 import threading
 import time
@@ -22,12 +24,25 @@ sys.modules[SPEC.name] = JOIN
 SPEC.loader.exec_module(JOIN)
 
 
-def row(status: str, attempt: str, parent: str, slug: str, sentinel: str = "") -> str:
+def row(
+    status: str,
+    attempt: str,
+    parent: str,
+    slug: str,
+    sentinel: str = "",
+    *,
+    launch_outcome: str = "",
+    process_metadata: dict[str, str] | None = None,
+) -> str:
     meta = (
         "attempt_schema_version=2,dispatch_depth=2,transport=headless,"
         "execution_surface=registered-headless,registered_worker=1,"
         f"attempt_id={attempt},parent_attempt_id={parent},note={sentinel}"
     )
+    if launch_outcome or (status == "done" and not process_metadata):
+        meta += f",launch_outcome={launch_outcome or 'never-launched'}"
+    for key, value in (process_metadata or {}).items():
+        meta += f",{key}={value}"
     return f"2026-07-23T00:00:00Z\t{status}\t/repo\t/wt\t{slug}\t{meta}\n"
 
 
@@ -82,7 +97,16 @@ class DispatchCompletionJoinTest(unittest.TestCase):
         terminal = self.root / "terminal.sh"
         terminal.write_text("#!/bin/sh\nexit 3\n", encoding="utf-8")
         terminal.chmod(0o755)
-        self.jobs.write_text(row("open", "att-a", "att-parent", "a"), encoding="utf-8")
+        self.jobs.write_text(
+            row(
+                "open",
+                "att-a",
+                "att-parent",
+                "a",
+                launch_outcome="reaped-before-publish",
+            ),
+            encoding="utf-8",
+        )
         receipt = JOIN.join_batch(
             jobs=self.jobs,
             parent_attempt_id="att-parent",
@@ -101,7 +125,14 @@ class DispatchCompletionJoinTest(unittest.TestCase):
         )
         probe.chmod(0o755)
         self.jobs.write_text(
-            row("running", "att-a", "att-parent", "a"), encoding="utf-8"
+            row(
+                "running",
+                "att-a",
+                "att-parent",
+                "a",
+                launch_outcome="reaped-before-publish",
+            ),
+            encoding="utf-8",
         )
         receipt = JOIN.join_batch(
             jobs=self.jobs,
@@ -112,6 +143,59 @@ class DispatchCompletionJoinTest(unittest.TestCase):
         )
         self.assertEqual(receipt["state"], "ready")
         self.assertEqual(receipt["children"][0]["reason"], "terminal-observed")
+
+    def test_done_row_waits_for_exact_process_to_exit(self):
+        proc = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+
+        def stop_process() -> None:
+            if proc.poll() is None:
+                proc.kill()
+            proc.wait(timeout=5)
+
+        self.addCleanup(stop_process)
+        raw = Path(f"/proc/{proc.pid}/stat").read_text(encoding="utf-8")
+        start = raw[raw.rfind(")") + 2 :].split()[19]
+        process_metadata = {
+            "pid": str(proc.pid),
+            "pid_start": start,
+            "pgid": str(proc.pid),
+            "pid_observer_ns": os.readlink("/proc/self/ns/pid"),
+        }
+        self.jobs.write_text(
+            row(
+                "done",
+                "att-a",
+                "att-parent",
+                "a",
+                process_metadata=process_metadata,
+            ),
+            encoding="utf-8",
+        )
+        draining = JOIN.join_batch(
+            jobs=self.jobs,
+            parent_attempt_id="att-parent",
+            interval=0.02,
+            timeout=0.08,
+            liveness_command=[str(self.live)],
+        )
+        self.assertEqual(draining["state"], "timeout")
+        self.assertEqual(draining["children"][0]["reason"], "process-alive")
+        proc.terminate()
+        proc.wait(timeout=5)
+        ready = JOIN.join_batch(
+            jobs=self.jobs,
+            parent_attempt_id="att-parent",
+            interval=0.02,
+            timeout=1,
+            liveness_command=[str(self.live)],
+        )
+        self.assertEqual(ready["state"], "ready")
 
     def test_timeout_is_one_bounded_receipt(self):
         self.jobs.write_text(
@@ -176,6 +260,18 @@ class DispatchCompletionJoinTest(unittest.TestCase):
             parent_slug="owner",
         )
         self.assertEqual(dispatch, JOIN.SupervisorShellAction("dispatch"))
+        batch = JOIN.classify_supervised_shell_command(
+            base=JOIN.ROOT,
+            command=(
+                "adapters/codex/bin/preflight.sh dispatch-batch "
+                "--route /tmp/route.json --replica-group plan "
+                "--action start --slug-prefix review --parent owner "
+                "--jobs /tmp/jobs.log"
+            ),
+            open_attempt_ids=open_attempts,
+            parent_slug="owner",
+        )
+        self.assertEqual(batch, JOIN.SupervisorShellAction("dispatch-batch"))
         for command in (
             "adapters/codex/bin/preflight.sh harvest --attempt-id att-c --status open",
             "adapters/codex/bin/preflight.sh harvest --attempt-id att-a --status open; git status",
@@ -189,6 +285,17 @@ class DispatchCompletionJoinTest(unittest.TestCase):
                 "--parent owner"
             ),
             "git status --short",
+            (
+                "adapters/codex/bin/preflight.sh dispatch-batch "
+                "--route /tmp/route.json --replica-group plan --action start "
+                "--slug-prefix review --parent foreign"
+            ),
+            (
+                "adapters/codex/bin/preflight.sh dispatch-batch "
+                "--route /tmp/route.json --replica-group plan --action start "
+                "--slug-prefix review --parent owner --jobs /tmp/a.log "
+                "--jobs /tmp/b.log"
+            ),
         ):
             with self.subTest(command=command):
                 self.assertIsNone(

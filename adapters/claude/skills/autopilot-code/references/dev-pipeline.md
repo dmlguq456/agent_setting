@@ -24,6 +24,26 @@ ATTEMPT_ID=$(printf '%s\n' "$STAGE_OUTPUT" | sed -n 's/^attempt_id=//p' | tail -
 test -n "$ATTEMPT_ID"
 ```
 
+For an exact two-node `replica_group`, replace the two per-node launches with one
+atomic batch call; the command returns both stable attempt IDs in its bounded JSON receipt:
+
+```bash
+BATCH_OUTPUT=$(python3 "$AGENT_HOME/utilities/dispatch-batch.py" \
+  --route "$ROUTE_FILE" --replica-group "$REPLICA_GROUP" --action start \
+  --slug-prefix "$CONDUCTOR_SLUG" --parent "$CONDUCTOR_SLUG" --qa "$QA" \
+  --jobs "$CANONICAL_JOBS" --prompt-text "$STAGE_PROMPT")
+printf '%s\n' "$BATCH_OUTPUT"
+```
+
+A pair of sequential `dispatch-node.py` or `dispatch-chain` calls is not a
+replica batch, because the two slots and wrapper starts are no longer one transaction.
+Individual replica `register`/`start` calls therefore fail closed. The batch seals
+the complete pair and exact parent attempt into one manifest, binds each opaque
+governor reservation to its route/node/attempt/harness/fallback leg, and copies that
+provenance into the registry row. On an idempotent repeat it consumes no capacity for
+an exact active/completed leg and may reserve only a missing declared peer; a failed
+terminal leg blocks a new peer.
+
 Keep `ROUTE_FILE`, `CANONICAL_JOBS`, `NODE_ID`, and the captured `ATTEMPT_ID` together until
 that node's completion transaction succeeds. Never dispatch standard+ with a raw wrapper
 command that omits the route record.
@@ -85,6 +105,16 @@ If a stage dies immediately from usage, session, or authentication limits, the w
 
 When implementation or reporting requires result plots, experiment-log visualization, or result tables, the code-execute or code-report worker records the need in its artifact. The enumerated autopilot-code recipe compiles no `material/*` node, so the owner satisfies the need per the WORKFLOW compose-on-demand doctrine: a composed route extension node bound to the matching `material/*` unit (e.g. `material/figure-gen`, `material/data-script`) that passes the same validator and hash-seal as a recipe route — or, for narrow throwaway scaffolding only, an ephemeral native helper with no unit semantics. Training and experiment execution remain in autopilot-code; the material units own postprocessing. Record generated asset paths in the relevant dev log.
 
+### Higher-Intensity Perspective Extensions
+
+The enumerated base recipe does not add extra perspective nodes when intensity rises
+from `strong` to `thorough` or `adversarial`; it keeps the same exact `frame`, `plan`,
+and `impl-review` 2-way groups and raises rigor inside the declared nodes. When the
+task actually selects an additional non-replica planner, verifier, security reviewer,
+or adversary, compile it as a compose-on-demand extension with its own disjoint output,
+dependency, completion gate, and dispatch-depth-2 identity. It stays outside every
+`replica_group`; never create an undeclared child or widen an anchor beyond two legs.
+
 ### Step 0: frame (direction briefs, 2-way from standard)
 
 Skip for direct and quick (orient-lite carries the framing posture inline). Every
@@ -95,9 +125,12 @@ not `strong` — because the direction decision is the point of maximum downstre
 leverage (user directive 2026-07-24: an early direction error cascades into
 hotfix/patch work and cost blowups).
 
-Dispatch both legs in parallel through the route-bound transaction
-(`NODE_ID=frame`, `NODE_ID=frame-replica`) and place the legs on different
-harness/model families; prefer the GPT/Codex family for the root-cause-leaning
+Dispatch both legs with one checked `utilities/dispatch-batch.py --action start
+--replica-group frame` call. The batch resolves `frame` and `frame-replica`
+from the immutable route, atomically reserves both slots, and starts their
+wrappers concurrently; two sequential `dispatch-chain` calls do not satisfy
+this transaction. Place the legs on different harness/model families; prefer
+the GPT/Codex family for the root-cause-leaning
 leg per the root-cause-first routing practice, and when only one harness is
 live, fall back to a same-harness independent session and record the reduced
 independence. The legs work blind to each other and each writes its own
@@ -137,8 +170,9 @@ After the typed receipt (or fallback exit 0), read only plan status and paths. A
 At `strong` and above the compiled route also contains `plan-replica`
 (`replica_group=plan`, outputs `plan.replica.md`/`checklist.replica.md`): two
 independent cross-harness planning legs, each reading both direction briefs.
-Dispatch both legs in parallel on different harness/model families. Neither leg
-is "the" plan until Step 2 arbitrates.
+Dispatch both legs through one `dispatch-batch --replica-group plan` call on
+different harness/model families. Neither leg is "the" plan until Step 2
+arbitrates.
 
 ### Step 2: plan-check and Optional Refinement
 
@@ -183,8 +217,9 @@ through the bounded refine/retry path in Step 4 — never an inline hotfix.
 At `strong` and above the compiled route additionally contains `impl-review-replica`
 (`replica_group=impl-review`, `independence_axis=cross-harness`, output
 `_internal/dev_reviews/phase_review.replica.md`): the 2-way independent replicate-and-merge
-that is the default from `strong` (CONVENTIONS §3.12). Dispatch both legs in parallel and
-place the replica on a different harness or model family than the primary leg; when only
+that is the default from `strong` (CONVENTIONS §3.12). Dispatch both legs through one
+`dispatch-batch --replica-group impl-review` call and place the replica on a different
+harness or model family than the primary leg; when only
 one harness is live, fall back to a same-harness independent session and record the
 reduced independence in the decision record. Merge at verdict level only — the stricter
 verdict wins and blocking findings are unioned — and do not proceed past the

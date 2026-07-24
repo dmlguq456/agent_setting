@@ -14,7 +14,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "utilities"))
-from dispatch_contract import anchored_capacity_failure  # noqa: E402
+from dispatch_contract import (  # noqa: E402
+    anchored_capacity_failure,
+    authoritative_process_identities,
+    process_start_ticks,
+    process_state,
+)
 from codex_dispatch_terminal import inspect_terminal_attempt  # noqa: E402
 from tools.fleet.model import (  # noqa: E402
     ATTEMPT_CLASSIFIER_SOURCE,
@@ -168,23 +173,49 @@ def attempt_terminal_observation(
 
 
 def recorded_attempt_state(metadata: dict[str, str], now: float, agent_home: Path) -> dict | None:
-    pid = metadata.get("pid", "")
-    expected = metadata.get("pid_start", "")
-    numeric_pid = int(pid) if pid.isdigit() else None
-    proc = Path("/proc") / pid if numeric_pid is not None else None
-    alive = False
-    actual = ""
-    if proc is not None:
-        try:
-            actual_start = (proc / "stat").read_text(encoding="utf-8").split()[21]
-            actual = actual_start
-            alive = True
-        except (OSError, IndexError):
-            pass
+    raw_local = metadata.get("pid", "")
+    local_pid = int(raw_local) if raw_local.isdigit() else None
+    local_start = metadata.get("pid_start", "")
+    identities = authoritative_process_identities(metadata)
+    selected = None
+    fallback = None
+    for identity in identities:
+        actual = process_start_ticks(identity.pid) or ""
+        alive = bool(actual) and process_state(identity.pid) != "Z"
+        evidence = (identity, actual, alive, bool(alive and actual == identity.expected_start))
+        if fallback is None:
+            fallback = evidence
+        if evidence[3]:
+            selected = evidence
+            break
+    selected = selected or fallback
+    if selected is None:
+        numeric_pid = None
+        expected = ""
+        actual = ""
+        alive = None
+        start_match = None
+        identity_source = None
+    else:
+        identity, actual, alive, start_match = selected
+        numeric_pid = identity.pid
+        expected = identity.expected_start
+        identity_source = identity.source
+    raw_host = metadata.get("pid_host", "")
     return classify_attempt_evidence({
         "pid": numeric_pid, "proc_start": expected, "actual_proc_start": actual,
-        "pid_alive": alive, "proc_start_match": bool(alive and actual == expected),
+        "pid_alive": alive, "proc_start_match": start_match,
         "pid_scope": metadata.get("pid_scope"),
+        "pid_authoritative": selected is not None,
+        "pid_identity_source": identity_source,
+        "pid_local": local_pid, "pid_local_start": local_start,
+        "pid_host": int(raw_host) if raw_host.isdigit() else None,
+        "pid_host_start": metadata.get("pid_host_start"),
+        "pid_host_ns": metadata.get("pid_host_ns"),
+        "pid_ns": metadata.get("pid_ns"),
+        "pid_observer_ns": metadata.get("pid_observer_ns"),
+        "pid_host_proof": metadata.get("pid_host_proof"),
+        "pgid": metadata.get("pgid"),
         "attempt_id": metadata.get("attempt_id"), "route_id": metadata.get("route_id"),
         "route_node": metadata.get("route_node"),
         "heartbeat": attempt_heartbeat(agent_home, metadata),

@@ -51,6 +51,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh broker <status|stop> --jobs <jobs.log> [--root <broker-root>]  # legacy drain only
        preflight.sh dispatch [--dry-run|--register|--start] [--require-hook-trust] --worktree <path> --slug <slug> --capability <name> --mode <family/mode> --qa <level> [--intensity <level>] [--dispatch-depth 1|2] [--parent <slug>] [--worker-type owner|stage|review|support] [--assigned-contract <capability>] [--owner <capability>] (--model-role <role>|--model <model> --reasoning <effort>|--inherit-model-settings) [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
        preflight.sh dispatch-chain --route <route.json> --node <id> --slug <slug> --parent <slug> --mode <mode> [--model-role <role>] [--capacity-model <id> --capacity-reasoning|--capacity-effort|--capacity-variant <level>] [--progress-window-seconds N --watchdog-max-windows M] [--dry-run|--register|--start]
+       preflight.sh dispatch-batch --route <route.json> --replica-group <id> --slug-prefix <slug> --parent <slug> --action dry-run|start [--qa <level>] [--jobs <jobs.log>] [--prompt-text <text>] [--allow-degraded-independence]
        preflight.sh stage-heartbeat --attempt-id <id> --route-id <id> --route-node <id> --jobs <jobs.log> --phase <phase> --kind <kind> --evidence <ref>
        preflight.sh dispatch-current --jobs <jobs.log> (--session <id>|--route <id>|--node <id>|--attempt <id>|--job <slug>) [--all]
        preflight.sh dispatch-reconcile --jobs <jobs.log> (--session <id>|--route <id>|--node <id>|--attempt <id>|--job <slug>) [--apply]
@@ -548,6 +549,10 @@ EOF
   dispatch-chain)
     shift
     AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/stage-dispatch-fallback.py" "$@"
+    ;;
+  dispatch-batch)
+    shift
+    AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/dispatch-batch.py" "$@"
     ;;
   stage-heartbeat)
     shift

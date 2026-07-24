@@ -80,7 +80,10 @@ inheritance. `worker_role` is legacy read-only metadata, not bootstrap or
 Skill identity. Monitor
 `preflight.sh liveness [jobs.log]`; harvest via `preflight.sh harvest`.
 Conductors use `dispatch-chain` to invoke checked same/cross-harness dispatch-depth-2
-adapter wrappers directly. Dispatch contract v3 atomically claims one stable
+adapter wrappers directly. A two-way `replica_group` uses one `dispatch-batch`
+call; OpenCode remains ineligible for that registered standard+ dispatch-depth-2 path
+until exact parent, foreground lifecycle, and supervisor parity are verified.
+Dispatch contract v3 atomically claims one stable
 attempt row before spawn and starts no child for a duplicate claim. Broker v1/v2
 routes are read-only migration inputs; the retired broker exposes only legacy
 `status`/`stop`.

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import hashlib, importlib.util, json, os, subprocess, sys, tempfile, time, unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT=Path(__file__).resolve().parents[1]; SCRIPT=ROOT/"utilities/dispatch-registry.py"
 CURRENT_ATTEMPT_CONTRACT=(
@@ -155,7 +156,7 @@ class RegistryTest(unittest.TestCase):
   applied=self.invoke("reconcile","--attempt",attempt,"--apply")
   record=json.loads(applied.stdout);self.assertEqual(record["closed"],1);self.assertEqual(record["decisions"][0]["category"],"terminal-heartbeat")
   self.assertIn("note=completed-terminal-heartbeat",self.jobs.read_text())
- def test_codex_liveness_accepts_visible_namespace_pid_without_route_or_heartbeat(self):
+ def test_codex_liveness_rejects_visible_namespace_pid_without_proof(self):
   import importlib.util
   path=ROOT/"adapters/codex/bin/dispatch-liveness.py"
   spec=importlib.util.spec_from_file_location("dispatch_liveness_test",path)
@@ -164,8 +165,182 @@ class RegistryTest(unittest.TestCase):
   state=module.recorded_attempt_state(
    {"attempt_id":"att-visible-no-route","pid":str(self.proc.pid),"pid_start":start,
     "pid_scope":"namespace-local"},time.time(),self.base)
+  self.assertEqual(state["state"],"unknown")
+  self.assertEqual(state["source"],"namespace")
+  self.assertFalse(state["pid_authoritative"])
+ def test_codex_liveness_accepts_namespace_bound_outer_pid(self):
+  import importlib.util
+  path=ROOT/"adapters/codex/bin/dispatch-liveness.py"
+  spec=importlib.util.spec_from_file_location("dispatch_liveness_bound_test",path)
+  module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  start=(Path("/proc")/str(self.proc.pid)/"stat").read_text().split()[21]
+  namespace=os.readlink("/proc/self/ns/pid")
+  state=module.recorded_attempt_state(
+   {"attempt_id":"att-bound-no-route","pid":"7","pid_start":start,
+    "pid_scope":"namespace-local","pid_observer_ns":"pid:[inner]",
+    "pid_host":str(self.proc.pid),"pid_host_start":start,
+    "pid_host_ns":namespace,"pid_host_proof":"nspid-procfs-root-v1"},
+   time.time(),self.base)
   self.assertEqual(state["state"],"working")
   self.assertEqual(state["source"],"proc")
+  self.assertTrue(state["pid_authoritative"])
+  self.assertEqual(state["pid_identity_source"],"host")
+
+ def test_cascade_accepts_only_namespace_bound_outer_identity(self):
+  spec=importlib.util.spec_from_file_location("dispatch_registry_bound_pid",SCRIPT)
+  module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  process=subprocess.Popen(["sleep","60"],start_new_session=True)
+  try:
+   start=(Path("/proc")/str(process.pid)/"stat").read_text().split()[21]
+   state,pid,expected=module._cascade_process_state({
+    "attempt_schema_version":"2","dispatch_depth":"2","transport":"headless",
+    "execution_surface":"registered-headless","registered_worker":"1",
+    "fallback_hop":"same-harness-headless",
+    "pid":"7","pid_start":start,"pid_scope":"namespace-local",
+    "pid_observer_ns":"pid:[inner]","pid_host":str(process.pid),
+    "pid_host_start":start,"pid_host_ns":os.readlink("/proc/self/ns/pid"),
+    "pid_host_proof":"nspid-procfs-root-v1","pgid_host":str(process.pid),
+   })
+   self.assertEqual((state,pid,expected),("live-group",process.pid,start))
+  finally:
+   if process.poll() is None:process.kill()
+   process.wait()
+
+ def test_invalid_contract_child_has_no_cascade_signal_authority(self):
+  spec=importlib.util.spec_from_file_location("dispatch_registry_invalid_contract",SCRIPT)
+  module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  attempt="att-invalid-cascade"
+  self.jobs.write_text(
+   "2026-07-16T00:00:00Z\topen\t/r\t/w\tchild\t"
+   "attempt_schema_version=2,dispatch_depth=2,transport=bogus,"
+   "execution_surface=registered-headless,registered_worker=1,"
+   "fallback_hop=same-harness-headless,parent=owner,"
+   f"parent_attempt_id=att-owner-invalid,attempt_id={attempt},"
+   "pid=437,pid_start=42,pgid=437\n")
+  owner={"repo":"/r","worktree":"/w","slug":"owner",
+         "meta":{"attempt_id":"att-owner-invalid"}}
+  args=type("Args",(),{"jobs":self.jobs,"agent_home":self.base,
+       "cascade_grace":0.0,"cascade_kill_wait":0.0})()
+  with mock.patch.object(module,"_signal_exact_group") as send:
+   decisions=module.cascade_orphan_children(owner,None,args)
+  self.assertEqual(decisions[0]["status"],"contract-unverifiable")
+  send.assert_not_called()
+
+ def test_cascade_uses_quiescence_selected_identity_not_metadata_order(self):
+  spec=importlib.util.spec_from_file_location("dispatch_registry_identity_source",SCRIPT)
+  module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  identity=type("Identity",(),{
+   "source":"host","pid":1437,"expected_start":"42"})()
+  process=type("Process",(),{
+   "state":"live","reason":"host-pid-live","identity":identity})()
+  metadata={
+   "attempt_schema_version":"2","dispatch_depth":"2","transport":"headless",
+   "execution_surface":"registered-headless","registered_worker":"1",
+   "fallback_hop":"same-harness-headless","pid":"437","pid_start":"42",
+   "pid_host":"1437","pid_host_start":"42","pgid_host":"1437",
+  }
+  with mock.patch.object(module,"attempt_process_quiescence",return_value=process):
+   state=module._cascade_process_state(metadata)
+  self.assertEqual(state,("live-group",1437,"42"))
+
+ def test_unverifiable_group_scan_never_satisfies_cascade_wait(self):
+  spec=importlib.util.spec_from_file_location("dispatch_registry_unknown_group",SCRIPT)
+  module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  group=type("Group",(),{"state":"unverifiable"})()
+  with mock.patch.object(
+      module,"process_observation",return_value=("missing","", "")), \
+       mock.patch.object(module,"process_group_observation",return_value=group):
+   self.assertFalse(module._wait_exact_group_end(437,"42",0.0))
+
+ def test_terminal_revalidation_veto_prevents_stale_snapshot_signal(self):
+  spec=importlib.util.spec_from_file_location("dispatch_registry_terminal_race",SCRIPT)
+  module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  proc=subprocess.Popen(["sleep","60"],start_new_session=True)
+  try:
+   start=(Path("/proc")/str(proc.pid)/"stat").read_text().split()[21]
+   attempt="att-terminal-race"
+   self.jobs.write_text(
+    "2026-07-16T00:00:00Z\topen\t/r\t/w\tchild\t"
+    f"{CURRENT_ATTEMPT_CONTRACT},parent=owner,parent_attempt_id=att-owner-race,"
+    f"attempt_id={attempt},pid={proc.pid},pid_start={start},pgid={proc.pid}\n")
+   owner={"repo":"/r","worktree":"/w","slug":"owner",
+          "meta":{"attempt_id":"att-owner-race"}}
+   args=type("Args",(),{"jobs":self.jobs,"agent_home":self.base,
+        "cascade_grace":0.0,"cascade_kill_wait":0.0})()
+   with mock.patch.object(
+       module,"_close_cascade_child",return_value=(False,"no-terminal-evidence")), \
+        mock.patch.object(
+         module,"_cascade_terminal_note",
+         return_value=("completed-marker","completed-marker-linkage")), \
+        mock.patch.object(module,"_signal_exact_group") as send:
+    decisions=module.cascade_orphan_children(owner,None,args)
+   self.assertEqual(decisions[0]["status"],"terminal:completed-marker")
+   send.assert_not_called()
+   self.assertIsNone(proc.poll())
+  finally:
+   if proc.poll() is None:proc.kill()
+   proc.wait()
+
+ def test_already_terminal_close_result_never_falls_through_to_signal(self):
+  spec=importlib.util.spec_from_file_location("dispatch_registry_closed_race",SCRIPT)
+  module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  self.jobs.write_text(
+   "2026-07-16T00:00:00Z\topen\t/r\t/w\tchild\t"
+   f"{CURRENT_ATTEMPT_CONTRACT},parent=owner,parent_attempt_id=att-owner-closed,"
+   "attempt_id=att-child-closed,pid=437,pid_start=42,pgid=437\n")
+  owner={"repo":"/r","worktree":"/w","slug":"owner",
+         "meta":{"attempt_id":"att-owner-closed"}}
+  args=type("Args",(),{"jobs":self.jobs,"agent_home":self.base,
+       "cascade_grace":0.0,"cascade_kill_wait":0.0})()
+  with mock.patch.object(
+      module,"_close_cascade_child",return_value=(False,"already-terminal")), \
+       mock.patch.object(module,"_signal_exact_group") as send:
+   decisions=module.cascade_orphan_children(owner,None,args)
+  self.assertEqual(decisions[0]["status"],"already-terminal")
+  send.assert_not_called()
+
+ def test_teardown_claim_takeover_requires_exact_dead_holder(self):
+  spec=importlib.util.spec_from_file_location("dispatch_registry_claim_recovery",SCRIPT)
+  module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  child=subprocess.Popen(["sleep","60"],start_new_session=True)
+  try:
+   start=(Path("/proc")/str(child.pid)/"stat").read_text().split()[21]
+   attempt="att-claim-recovery"
+   base=(
+    f"{CURRENT_ATTEMPT_CONTRACT},parent=owner,parent_attempt_id=att-owner-claim,"
+    f"attempt_id={attempt},pid={child.pid},pid_start={start},pgid={child.pid}")
+   owner={"repo":"/r","worktree":"/w","slug":"owner",
+          "meta":{"attempt_id":"att-owner-claim"}}
+   args=type("Args",(),{"jobs":self.jobs,"agent_home":self.base,
+        "cascade_grace":0.0,"cascade_kill_wait":0.0})()
+   self.jobs.write_text(
+    "2026-07-16T00:00:00Z\topen\t/r\t/w\tchild\t"+base+","
+    "teardown_claim=old,teardown_claimed_at=then,"
+    "teardown_claim_pid=99999991,teardown_claim_pid_start=1\n")
+   with mock.patch.object(module,"_cascade_terminal_note",return_value=(None,None)):
+    token,snapshot,status=module._claim_cascade_signal(
+     args,owner,attempt,None)
+   self.assertEqual(status,"claimed")
+   self.assertTrue(token.startswith("cascade-att-owner-claim-"))
+   self.assertEqual(snapshot["pid"],child.pid)
+   metadata=module.parse_meta(self.jobs.read_text().strip().split("\t",5)[5])
+   self.assertEqual(metadata["teardown_claim"],token)
+   self.assertEqual(metadata["teardown_claim_pid"],str(os.getpid()))
+   self.assertTrue(module._release_cascade_claim(self.jobs,attempt,token))
+
+   holder_start=(Path("/proc")/str(os.getpid())/"stat").read_text().split()[21]
+   self.jobs.write_text(
+    "2026-07-16T00:00:00Z\topen\t/r\t/w\tchild\t"+base+","
+    "teardown_claim=live,teardown_claimed_at=now,"
+    f"teardown_claim_pid={os.getpid()},teardown_claim_pid_start={holder_start}\n")
+   with mock.patch.object(module,"_cascade_terminal_note",return_value=(None,None)):
+    token,_snapshot,status=module._claim_cascade_signal(
+     args,owner,attempt,None)
+   self.assertIsNone(token)
+   self.assertEqual(status,"teardown-in-progress")
+  finally:
+   if child.poll() is None:child.kill()
+   child.wait()
 
 
 class MixedRegistryTest(unittest.TestCase):
@@ -292,7 +467,7 @@ class OrphanReconcileTest(unittest.TestCase):
   try:
    rows=[
     self.owner_row("owner","att-owner-dead",99999995,1),
-    f"2026-07-16T00:00:01Z\topen\t/r\t/w\tchild\troute_id={self.route_id},route_node=execute,attempt_id=att-child-live,parent=owner,parent_attempt_id=att-owner-dead,pid={live.pid},pid_start={start}",
+    f"2026-07-16T00:00:01Z\topen\t/r\t/w\tchild\troute_id={self.route_id},route_node=execute,attempt_id=att-child-live,parent=owner,parent_attempt_id=att-owner-dead,pid={live.pid},pid_start={start},pgid={live.pid}",
    ]
    self.jobs.write_text("\n".join(rows)+"\n")
    dry=json.loads(self.invoke("reconcile","--attempt","att-owner-dead").stdout)
@@ -409,7 +584,7 @@ class OrphanReconcileTest(unittest.TestCase):
    new_start=(Path("/proc")/str(replacement_child.pid)/"stat").read_text().split()[21]
    rows=[
     self.owner_row("owner","att-owner-old",99999981,1),
-    f"2026-07-16T00:00:01Z\topen\t/r\t/w\told-child\troute_id={self.route_id},route_file={self.route_file},route_node=execute,attempt_id=att-child-old,parent=owner,parent_attempt_id=att-owner-old,pid={old_child.pid},pid_start={old_start}",
+    f"2026-07-16T00:00:01Z\topen\t/r\t/w\told-child\troute_id={self.route_id},route_file={self.route_file},route_node=execute,attempt_id=att-child-old,parent=owner,parent_attempt_id=att-owner-old,pid={old_child.pid},pid_start={old_start},pgid={old_child.pid}",
     self.owner_row("owner","att-owner-new",replacement_owner.pid,owner_start),
     f"2026-07-16T00:00:03Z\topen\t/r\t/w\tnew-child\troute_id={self.route_id},route_file={self.route_file},route_node=execute,attempt_id=att-child-new,parent=owner,parent_attempt_id=att-owner-new,pid={replacement_child.pid},pid_start={new_start}",
    ]
@@ -459,7 +634,7 @@ class OrphanReconcileTest(unittest.TestCase):
   applied=json.loads(self.invoke("reconcile","--attempt","att-owner-unstarted","--apply").stdout)
   self.assertEqual(applied["decisions"][0]["cascade"][0]["status"],"dead-parent-exited")
   self.assertIn("note=dead-parent-exited",self.jobs.read_text())
- def test_claimed_but_unspawned_child_closes_without_process_identity(self):
+ def test_claimed_child_without_process_identity_remains_open(self):
   self.mark("plan")
   rows=[
    self.owner_row("owner","att-owner-claimed",99999975,1),
@@ -467,8 +642,9 @@ class OrphanReconcileTest(unittest.TestCase):
   ]
   self.jobs.write_text("\n".join(rows)+"\n")
   applied=json.loads(self.invoke("reconcile","--attempt","att-owner-claimed","--apply").stdout)
-  self.assertEqual(applied["decisions"][0]["cascade"][0]["status"],"dead-parent-exited")
-  self.assertIn("note=dead-parent-exited",self.jobs.read_text())
+  self.assertEqual(applied["decisions"][0]["cascade"][0]["status"],"launch-indeterminate")
+  self.assertIn("\topen\t/r\t/w\tchild\t",self.jobs.read_text())
+  self.assertNotIn("note=dead-parent-exited",self.jobs.read_text())
  def test_non_group_leader_and_namespace_local_without_outer_pid_fail_closed(self):
   self.mark("plan")
   nongroup=subprocess.Popen(["sleep","60"])
@@ -490,6 +666,32 @@ class OrphanReconcileTest(unittest.TestCase):
   finally:
    if nongroup.poll() is None:nongroup.kill()
    nongroup.wait()
+ def test_remounted_proc_outer_pid_claim_never_signals_unrelated_group(self):
+  self.mark("plan")
+  unrelated=subprocess.Popen(["sleep","60"],start_new_session=True)
+  try:
+   start=(Path("/proc")/str(unrelated.pid)/"stat").read_text().split()[21]
+   inner="pid:[inner-remounted]"
+   rows=[
+    self.owner_row("owner","att-owner-remounted",99999974,1),
+    f"2026-07-16T00:00:01Z\topen\t/r\t/w\tchild\t"
+    f"route_id={self.route_id},route_file={self.route_file},route_node=execute,"
+    "attempt_id=att-child-remounted,parent=owner,"
+    "parent_attempt_id=att-owner-remounted,pid=7,pid_start=42,"
+    f"pid_scope=namespace-local,pid_observer_ns={inner},"
+    f"pid_host={unrelated.pid},pid_host_start={start},pid_host_ns={inner},"
+    "pid_host_proof=nspid-procfs-root-v1",
+   ]
+   self.jobs.write_text("\n".join(rows)+"\n")
+   applied=json.loads(self.invoke(
+    "reconcile","--attempt","att-owner-remounted","--apply").stdout)
+   cascade=applied["decisions"][0]["cascade"]
+   self.assertEqual(cascade[0]["status"],"scope-unverifiable")
+   self.assertIn("\topen\t/r\t/w\tchild\t",self.jobs.read_text())
+   self.assertIsNone(unrelated.poll())
+  finally:
+   if unrelated.poll() is None:unrelated.kill()
+   unrelated.wait()
  def test_claude_result_failure_outranks_parent_death_note(self):
   self.mark("plan")
   log=self.base/"child.claude.jsonl"

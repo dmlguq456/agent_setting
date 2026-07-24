@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import errno
 import fcntl
 import hashlib
 import json
@@ -14,8 +15,15 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 from typing import Callable
+
+from replica_batch_contract import (
+    DIGEST,
+    ReplicaBatchContractError,
+    verify_manifest,
+)
 
 
 ELIGIBILITY = {"supported", "unsupported", "unknown"}
@@ -43,20 +51,66 @@ ATTEMPT_MUTABLE_METADATA = {
     "pid_scope",
     "pid_host",
     "pid_host_start",
+    "pid_host_ns",
+    "pid_ns",
+    "pid_observer_ns",
+    "pid_host_proof",
     "pgid",
+    "pgid_host",
+    "group_reap_proof",
+    "group_reap_pgid",
     "launch_lifecycle",
+    "launch_started",
+    "launch_outcome",
     "updated_at",
     "note",
     "completion_marker",
     "completion_marker_history",
     "watchdog",
     "heartbeat",
+    "teardown_claim",
+    "teardown_claimed_at",
+    "teardown_claim_pid",
+    "teardown_claim_pid_start",
+}
+ATTEMPT_TERMINAL_EVIDENCE_KEYS = {
+    "capacity_log",
+    "classifier_source",
+    "detected_by",
+    "failure_class",
+    "reconcile_reason",
+    "reset",
+    "terminal_event",
+    "watchdog_windows",
 }
 _MODULE_ROOT = Path(__file__).resolve().parents[1]
 _CAPACITY_TERMINAL_RE = re.compile(
     r"(?:error\s*[:\-]\s*)?(?:selected\s+)?model(?:\s+[A-Za-z0-9._:/-]+)?\s+"
     r"(?:is\s+)?at\s+capacity[.!]?",
     re.I,
+)
+GOVERNOR_RESERVATION_ENV = "AGENT_MODEL_GOVERNOR_RESERVATION_TOKEN"
+PID_HOST_NAMESPACE_PROOF = "nspid-procfs-root-v1"
+GROUP_REAP_PROOF = "pgid-empty-v1"
+REPLICA_RESERVATION_ROW_KEYS = (
+    "reservation_kind",
+    "batch_declared_size",
+    "batch_admission_count",
+    "batch_group",
+    "batch_route_id",
+    "batch_parent_attempt_id",
+    "batch_attempt_id",
+    "batch_route_node",
+    "batch_harness",
+    "batch_fallback_hop",
+    "batch_fallback_ordinal",
+    "batch_independence",
+    "batch_assignment_sha256",
+    "batch_peer_attempt_id",
+    "batch_peer_state",
+    "batch_peer_proof_sha256",
+    "batch_manifest_sha256",
+    "batch_leg_sha256",
 )
 
 
@@ -121,6 +175,29 @@ def resolve_agent_home() -> Path:
     return _MODULE_ROOT
 
 
+def resolve_model_governor_root(
+    artifact_root: str | Path,
+    environ: dict[str, str] | os._Environ[str] | None = None,
+) -> Path:
+    """Resolve one canonical governor root and reject ambient split-brain roots."""
+
+    env = os.environ if environ is None else environ
+    expected = (
+        Path(artifact_root).expanduser().resolve(strict=False)
+        / ".runtime"
+        / "model-worker-governor"
+    )
+    explicit = env.get("AGENT_MODEL_GOVERNOR_ROOT", "")
+    if explicit:
+        selected = Path(explicit).expanduser().resolve(strict=False)
+        if selected != expected:
+            raise DispatchContractError(
+                "noncanonical-model-governor-root",
+                f"expected={expected} actual={selected}",
+            )
+    return expected
+
+
 class DispatchContractError(ValueError):
     """Structured dispatch-contract failure."""
 
@@ -158,6 +235,46 @@ class ParentAttemptBinding:
     pid_host_start: str
     observed_pid: int
     observed_pid_start: str
+    harness: str
+    transport: str
+    runtime_sandbox: str
+
+
+@dataclass(frozen=True)
+class ProcessQuiescence:
+    """Exact governed-process state used by every readiness consumer."""
+
+    state: str
+    reason: str
+    pid: int | None = None
+    identity: AuthoritativeProcessIdentity | None = None
+
+
+@dataclass(frozen=True)
+class AuthoritativeProcessIdentity:
+    """One exact PID/start identity valid in the current observer namespace."""
+
+    source: str
+    pid: int
+    expected_start: str
+
+
+@dataclass(frozen=True)
+class ProcessGroupObservation:
+    """One complete, populated, or unverifiable process-group observation."""
+
+    state: str
+    members: tuple[tuple[int, str, str], ...] = ()
+    reason: str = ""
+
+
+@dataclass(frozen=True)
+class AttemptReadiness:
+    """Semantic-terminal plus governed-process readiness for one attempt."""
+
+    state: str
+    reason: str
+    attempt_id: str = ""
 
 
 def parse_registry_metadata(pipe: str) -> dict[str, str]:
@@ -179,6 +296,15 @@ def process_start_ticks(pid: int) -> str | None:
         return None
 
 
+def process_namespace_identity(pid: int | str = "self") -> str | None:
+    """Return the PID namespace inode without treating an unreadable link as absence."""
+
+    try:
+        return os.readlink(f"/proc/{pid}/ns/pid")
+    except OSError:
+        return None
+
+
 def process_state(pid: int) -> str | None:
     """Return the one-letter proc state; zombies are not live workers."""
 
@@ -193,10 +319,12 @@ def process_state(pid: int) -> str | None:
 
 
 def process_identity_is_live(pid: int, expected_start: str) -> bool:
+    visibility, actual_start, state = _proc_observation(pid)
     return (
         bool(expected_start)
-        and process_start_ticks(pid) == expected_start
-        and process_state(pid) != "Z"
+        and visibility == "present"
+        and actual_start == expected_start
+        and state != "Z"
     )
 
 
@@ -219,23 +347,924 @@ def process_namespace_pids(pid: int) -> tuple[int, ...]:
     return ()
 
 
+def authoritative_process_identities(
+    metadata: dict[str, str],
+) -> tuple[AuthoritativeProcessIdentity, ...]:
+    """Resolve only PID identities whose namespace provenance is authoritative.
+
+    ``NSpid[0]`` is relative to the PID namespace of the procfs mount, not
+    necessarily the host namespace.  A cross-namespace identity is therefore
+    usable only when launch recorded that procfs-root namespace and the current
+    observer is in that exact namespace.  Legacy host-visible local identities
+    remain usable, while namespace-local or namespace-mismatched evidence fails
+    closed.
+    """
+
+    current_namespace = process_namespace_identity()
+    recorded_observer = metadata.get("pid_observer_ns", "")
+    recorded_pid_namespace = metadata.get("pid_ns", "")
+    pid_scope = metadata.get("pid_scope", "host-visible")
+    candidates: list[AuthoritativeProcessIdentity] = []
+
+    raw_pid = metadata.get("pid", "")
+    local_start = metadata.get("pid_start", "")
+    local_authoritative = (
+        bool(
+            recorded_observer
+            and current_namespace == recorded_observer
+            and (
+                not recorded_pid_namespace
+                or recorded_pid_namespace == recorded_observer
+            )
+        )
+        or (not recorded_observer and pid_scope != "namespace-local")
+    )
+    if raw_pid.isdigit() and local_start and local_authoritative:
+        candidates.append(
+            AuthoritativeProcessIdentity("local", int(raw_pid), local_start)
+        )
+
+    raw_host = metadata.get("pid_host", "")
+    host_start = metadata.get("pid_host_start", "") or local_start
+    recorded_host_namespace = metadata.get("pid_host_ns", "")
+    host_authoritative = (
+        raw_host.isdigit()
+        and bool(host_start)
+        and (not local_start or host_start == local_start)
+        and metadata.get("pid_host_proof") == PID_HOST_NAMESPACE_PROOF
+        and bool(current_namespace)
+        and current_namespace == recorded_host_namespace
+    )
+    if host_authoritative:
+        candidate = AuthoritativeProcessIdentity("host", int(raw_host), host_start)
+        if not any(
+            (item.pid, item.expected_start)
+            == (candidate.pid, candidate.expected_start)
+            for item in candidates
+        ):
+            candidates.append(candidate)
+
+    # Two distinct identities cannot both name the same process from one
+    # observer namespace. Treat internally inconsistent metadata as having no
+    # signal/readiness authority instead of choosing a preferred numeric PID.
+    if len(candidates) > 1:
+        return ()
+    return tuple(candidates)
+
+
 def process_launch_identity(pid: int) -> dict[str, str]:
-    """Capture local and outer PID evidence for one new-session leader."""
+    """Capture local and namespace-bound procfs PID evidence for a new leader."""
 
     values = {"pid": str(pid)}
-    start = process_start_ticks(pid)
+    observer_namespace = process_namespace_identity()
+    child_namespace = process_namespace_identity(pid)
+    if observer_namespace:
+        values["pid_observer_ns"] = observer_namespace
+    if child_namespace:
+        values["pid_ns"] = child_namespace
+    procfs_pid_aligned = bool(
+        observer_namespace
+        and child_namespace
+        and observer_namespace == child_namespace
+    )
+    start = process_start_ticks(pid) if procfs_pid_aligned else None
     if start:
         values["pid_start"] = start
-    namespace_pids = process_namespace_pids(pid)
-    if namespace_pids:
+    namespace_pids = process_namespace_pids(pid) if procfs_pid_aligned else ()
+    procfs_root_namespace = (
+        process_namespace_identity(1) if procfs_pid_aligned else None
+    )
+    # Some sandboxes hide /proc/1/ns/pid.  A one-element vector is still
+    # safely bound to the launch observer: the new child has no PID-namespace
+    # ancestor between that observer and this procfs view.  For a multi-level
+    # vector, absence of /proc/1 namespace evidence must remain unverifiable.
+    if (
+        not procfs_root_namespace
+        and len(namespace_pids) == 1
+        and observer_namespace
+        and child_namespace == observer_namespace
+    ):
+        procfs_root_namespace = observer_namespace
+    if (
+        namespace_pids
+        and namespace_pids[-1] == pid
+        and procfs_root_namespace
+    ):
         values["pid_host"] = str(namespace_pids[0])
         if start:
             values["pid_host_start"] = start
+        values["pid_host_ns"] = procfs_root_namespace
+        values["pid_host_proof"] = PID_HOST_NAMESPACE_PROOF
     try:
-        values["pgid"] = str(os.getpgid(pid))
+        pgid = os.getpgid(pid)
+        values["pgid"] = str(pgid)
+        if pgid == pid and values.get("pid_host"):
+            values["pgid_host"] = values["pid_host"]
     except (OSError, ProcessLookupError):
         pass
     return values
+
+
+def _proc_observation(pid: int) -> tuple[str, str, str]:
+    """Return (visibility,start,state) while distinguishing absence from denial."""
+
+    try:
+        raw = (Path("/proc") / str(pid) / "stat").read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return "missing", "", ""
+    except PermissionError:
+        return "inaccessible", "", ""
+    except OSError as exc:
+        if exc.errno in {errno.ENOENT, errno.ESRCH}:
+            return "missing", "", ""
+        return "inaccessible", "", ""
+    try:
+        tail = raw[raw.rfind(")") + 2 :].split()
+        return "present", tail[19], tail[0]
+    except IndexError:
+        return "inaccessible", "", ""
+
+
+def process_observation(pid: int) -> tuple[str, str, str]:
+    """Public exact-PID observation used by lifecycle and signal paths."""
+
+    return _proc_observation(pid)
+
+
+def exact_process_group_signal_authority(pid: int, expected_start: str) -> str:
+    """Return signal authority only for a current exact process-group leader."""
+
+    visibility, actual_start, state = _proc_observation(pid)
+    if visibility == "missing":
+        return "leader-gone"
+    if visibility != "present":
+        return "identity-unverifiable"
+    if actual_start != expected_start:
+        return "pid-reused"
+    if state == "Z":
+        return "leader-gone"
+    try:
+        return "authoritative" if os.getpgid(pid) == pid else "non-group-leader"
+    except ProcessLookupError:
+        return "leader-gone"
+    except OSError:
+        return "signal-error"
+
+
+def signal_exact_process_group(pid: int, expected_start: str, signum: int) -> str:
+    """Signal only after two adjacent exact leader/start/PGID validations."""
+
+    authority = exact_process_group_signal_authority(pid, expected_start)
+    if authority != "authoritative":
+        return authority
+    authority = exact_process_group_signal_authority(pid, expected_start)
+    if authority != "authoritative":
+        return authority
+    try:
+        os.killpg(pid, signum)
+    except ProcessLookupError:
+        return "leader-gone"
+    except OSError:
+        return "signal-error"
+    return "signalled"
+
+
+def process_group_observation(pgid: int) -> ProcessGroupObservation:
+    """Observe a group without collapsing inaccessible procfs into emptiness.
+
+    A known non-zombie member proves population even if another proc entry was
+    concurrently inaccessible. Emptiness is returned only after a complete
+    scan; otherwise the result is explicitly unverifiable.
+    """
+
+    if pgid <= 0:
+        return ProcessGroupObservation("unverifiable", reason="invalid-pgid")
+    members: list[tuple[int, str, str]] = []
+    incomplete_reason = ""
+    try:
+        entries = tuple(Path("/proc").iterdir())
+    except OSError as exc:
+        return ProcessGroupObservation(
+            "unverifiable", reason=f"procfs-enumeration:{exc.errno or 'error'}"
+        )
+    for entry in entries:
+        if not entry.name.isdigit():
+            continue
+        try:
+            raw = (entry / "stat").read_text(encoding="utf-8")
+            tail = raw[raw.rfind(")") + 2 :].split()
+            if int(tail[2]) != pgid:
+                continue
+            members.append((int(entry.name), tail[19], tail[0]))
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            if exc.errno in {errno.ENOENT, errno.ESRCH}:
+                continue
+            incomplete_reason = f"procfs-member:{entry.name}:{exc.errno or 'error'}"
+        except (IndexError, ValueError):
+            incomplete_reason = f"procfs-member:{entry.name}:malformed"
+    ordered = tuple(sorted(members, key=lambda member: member[0]))
+    if any(state != "Z" for _pid, _start, state in ordered):
+        return ProcessGroupObservation("populated", ordered, incomplete_reason)
+    if incomplete_reason:
+        return ProcessGroupObservation("unverifiable", ordered, incomplete_reason)
+    return ProcessGroupObservation("empty", ordered)
+
+
+def process_group_members(pgid: int) -> tuple[tuple[int, str, str], ...]:
+    """Compatibility view of known members; emptiness requires the typed API."""
+
+    return process_group_observation(pgid).members
+
+
+def _foreground_reap_receipt(metadata: dict[str, str]) -> bool:
+    raw_pid = metadata.get("pid", "")
+    raw_group = metadata.get("pgid", "")
+    observer_namespace = metadata.get("pid_observer_ns", "")
+    process_namespace = metadata.get("pid_ns", "")
+    return bool(
+        raw_pid.isdigit()
+        and metadata.get("pid_start")
+        and raw_group == raw_pid
+        and observer_namespace
+        and process_namespace == observer_namespace
+        and metadata.get("launch_lifecycle") == "foreground-scoped"
+        and metadata.get("launch_outcome") == "governed-process-reaped"
+        and metadata.get("group_reap_proof") == GROUP_REAP_PROOF
+        and metadata.get("group_reap_pgid") == raw_group
+    )
+
+
+def attempt_process_quiescence(metadata: dict[str, str]) -> ProcessQuiescence:
+    """Classify the exact governed process without PID-namespace guessing.
+
+    A candidate PID is authoritative only in the namespace that observed it, or
+    when a namespace-bound ``NSpid`` mapping is checked from that same namespace.
+    Missing identity is never synthesized into success unless the atomic launch
+    path explicitly recorded that no governed process remains.
+    """
+
+    launch_outcome = metadata.get("launch_outcome", "")
+
+    raw_pid = metadata.get("pid", "")
+    if not raw_pid:
+        if launch_outcome in {
+            "never-launched",
+            "reaped-before-publish",
+        }:
+            return ProcessQuiescence("quiescent", launch_outcome)
+        return ProcessQuiescence("unverifiable", "process-identity-missing")
+    if not raw_pid.isdigit() or not metadata.get("pid_start"):
+        return ProcessQuiescence("unverifiable", "process-identity-invalid")
+
+    candidates = authoritative_process_identities(metadata)
+    reap_receipt = _foreground_reap_receipt(metadata)
+
+    if not candidates:
+        if reap_receipt:
+            return ProcessQuiescence("quiescent", "governed-process-group-reaped")
+        return ProcessQuiescence("unverifiable", "process-namespace-unverifiable")
+
+    terminal: list[ProcessQuiescence] = []
+    unresolved: list[str] = []
+    for candidate in candidates:
+        source, pid, expected_start = (
+            candidate.source,
+            candidate.pid,
+            candidate.expected_start,
+        )
+        visibility, actual_start, state = _proc_observation(pid)
+        if visibility == "inaccessible":
+            unresolved.append(f"{source}-process-identity-inaccessible")
+            continue
+        group_field = "pgid_host" if source == "host" else "pgid"
+        raw_group = metadata.get(group_field, "")
+        group_id = int(raw_group) if raw_group.isdigit() else None
+        group_is_owned = group_id == pid
+        if visibility == "missing":
+            if not group_is_owned:
+                unresolved.append(f"{source}-process-group-identity-unverifiable")
+                continue
+            group = process_group_observation(group_id)
+            live_members = [member for member in group.members if member[2] != "Z"]
+            if live_members:
+                return ProcessQuiescence(
+                    "live",
+                    f"{source}-process-group-live",
+                    live_members[0][0],
+                    candidate,
+                )
+            if group.state != "empty":
+                unresolved.append(f"{source}-process-group-unverifiable")
+                continue
+            terminal_reason = f"{source}-pid-gone"
+            if reap_receipt:
+                terminal_reason = "governed-process-group-reaped"
+            terminal.append(
+                ProcessQuiescence("quiescent", terminal_reason, pid, candidate)
+            )
+            continue
+        if actual_start != expected_start:
+            terminal.append(
+                ProcessQuiescence(
+                    "quiescent", f"{source}-pid-reused", pid, candidate
+                )
+            )
+            continue
+        if state == "Z":
+            if not group_is_owned:
+                unresolved.append(f"{source}-process-group-identity-unverifiable")
+                continue
+            group = process_group_observation(group_id)
+            live_members = [
+                member
+                for member in group.members
+                if member[0] != pid and member[2] != "Z"
+            ]
+            if live_members:
+                return ProcessQuiescence(
+                    "live",
+                    f"{source}-process-group-live",
+                    live_members[0][0],
+                    candidate,
+                )
+            if group.state != "empty":
+                unresolved.append(f"{source}-process-group-unverifiable")
+                continue
+            terminal.append(
+                ProcessQuiescence(
+                    "quiescent", f"{source}-pid-zombie", pid, candidate
+                )
+            )
+            continue
+        return ProcessQuiescence("live", f"{source}-pid-live", pid, candidate)
+    if reap_receipt:
+        return ProcessQuiescence("quiescent", "governed-process-group-reaped")
+    if unresolved:
+        return ProcessQuiescence("unverifiable", unresolved[0])
+    if terminal:
+        return terminal[0]
+    return ProcessQuiescence("unverifiable", "process-identity-unverifiable")
+
+
+def _governor_json(
+    command: list[str],
+    *,
+    env: dict[str, str] | None = None,
+    allow_absent: bool = False,
+) -> dict[str, object]:
+    result = subprocess.run(
+        command,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    try:
+        payload = json.loads(result.stdout)
+    except (TypeError, ValueError):
+        payload = {}
+    if (
+        result.returncode != 0
+        and not (allow_absent and isinstance(payload, dict) and payload.get("state") == "absent")
+    ) or not isinstance(payload, dict):
+        detail = (result.stderr or result.stdout).strip()[:512] or f"exit-{result.returncode}"
+        raise DispatchContractError("model-worker-governor-denied", detail)
+    return payload
+
+
+def replica_batch_expectation(
+    route_file: str | Path | None,
+    route_node: str | None,
+    action: str,
+    *,
+    attempt_id: str = "",
+    parent_attempt_id: str = "",
+    harness: str = "",
+    fallback_hop: str = "",
+    fallback_ordinal: int | str | None = None,
+    assignment_sha256: str = "",
+) -> dict[str, object] | None:
+    """Return the exact governor binding required by a replicated route leg.
+
+    A replica row has no standalone registered form. ``start`` is authorized
+    only by a live opaque governor reservation whose immutable provenance was
+    created from the complete two-leg manifest by ``dispatch-batch``.
+    """
+
+    if not route_file or not route_node:
+        return None
+    try:
+        route = json.loads(Path(route_file).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise DispatchContractError("route-record-unreadable", str(exc)) from exc
+    if not isinstance(route, dict) or not isinstance(route.get("nodes"), list):
+        raise DispatchContractError("route-record-invalid", "route nodes must be an array")
+    matches = [
+        node for node in route["nodes"]
+        if isinstance(node, dict) and node.get("id") == route_node
+    ]
+    if len(matches) != 1:
+        raise DispatchContractError("route-node-not-unique", str(route_node))
+    node = matches[0]
+    group = node.get("replica_group")
+    if not group:
+        return None
+    members = [
+        candidate for candidate in route["nodes"]
+        if isinstance(candidate, dict) and candidate.get("replica_group") == group
+    ]
+    if len(members) != 2 or any(candidate.get("dispatch_depth") != 2 for candidate in members):
+        raise DispatchContractError(
+            "replica-group-contract-invalid", f"group={group} count={len(members)}"
+        )
+    if action != "start":
+        raise DispatchContractError(
+            "replica-group-batch-required",
+            f"group={group} action={action}; use dispatch-batch --action start",
+        )
+    values = {
+        "attempt_id": attempt_id,
+        "parent_attempt_id": parent_attempt_id,
+        "harness": harness,
+        "fallback_hop": fallback_hop,
+        "fallback_ordinal": str(fallback_ordinal or ""),
+    }
+    missing = [key for key, value in values.items() if not value]
+    if missing:
+        raise DispatchContractError(
+            "replica-group-batch-binding-missing", ",".join(missing)
+        )
+    try:
+        ordinal = int(str(fallback_ordinal))
+    except (TypeError, ValueError) as exc:
+        raise DispatchContractError(
+            "replica-group-batch-binding-invalid",
+            f"fallback_ordinal={fallback_ordinal}",
+        ) from exc
+    if ordinal < 1:
+        raise DispatchContractError(
+            "replica-group-batch-binding-invalid",
+            f"fallback_ordinal={fallback_ordinal}",
+        )
+    allowed_members: dict[str, list[dict[str, object]]] = {}
+    for member in members:
+        member_id = str(member.get("id", ""))
+        allowed: list[dict[str, object]] = []
+        for entry in member.get("fallback_hops", []):
+            if not isinstance(entry, dict):
+                continue
+            hop = entry.get("fallback_hop")
+            hop_ordinal = entry.get("ordinal")
+            if not isinstance(hop, str) or isinstance(hop_ordinal, bool) or not isinstance(hop_ordinal, int):
+                continue
+            for candidate in entry.get("candidates", []):
+                if not isinstance(candidate, dict) or candidate.get("status") != "supported":
+                    continue
+                child_harness = candidate.get("child_harness")
+                if child_harness not in {"codex", "claude"}:
+                    continue
+                allowed.append({
+                    "harness": child_harness,
+                    "fallback_hop": hop,
+                    "fallback_ordinal": hop_ordinal,
+                })
+        if not allowed:
+            raise DispatchContractError(
+                "replica-group-route-binding-invalid", f"node={member_id}"
+            )
+        allowed_members[member_id] = allowed
+    expected = {
+        "reservation_kind": "replica-batch",
+        "batch_declared_size": 2,
+        "batch_group": str(group),
+        "batch_route_id": str(route.get("route_id", "")),
+        "batch_parent_attempt_id": parent_attempt_id,
+        "batch_attempt_id": attempt_id,
+        "batch_route_node": str(route_node),
+        "batch_harness": harness,
+        "batch_fallback_hop": fallback_hop,
+        "batch_fallback_ordinal": ordinal,
+        "_batch_route_nodes": sorted(str(member.get("id", "")) for member in members),
+        "_batch_allowed_members": allowed_members,
+    }
+    if assignment_sha256:
+        if not DIGEST.fullmatch(assignment_sha256):
+            raise DispatchContractError(
+                "replica-group-assignment-invalid", assignment_sha256
+            )
+        expected["batch_assignment_sha256"] = assignment_sha256
+    return expected
+
+
+def _validate_replica_reservation(
+    payload: dict[str, object], expected: dict[str, object] | None
+) -> None:
+    if expected is None:
+        if payload.get("reservation_kind") == "replica-batch":
+            raise DispatchContractError(
+                "replica-group-reservation-mismatch",
+                "replica batch token cannot authorize a non-replica start",
+            )
+        return
+    public_expected = {
+        key: value for key, value in expected.items() if not key.startswith("_")
+    }
+    mismatches = {
+        key: (value, payload.get(key))
+        for key, value in public_expected.items()
+        if payload.get(key) != value
+    }
+    for key in ("batch_manifest_sha256", "batch_leg_sha256"):
+        value = payload.get(key)
+        if not isinstance(value, str) or not DIGEST.fullmatch(value):
+            mismatches[key] = ("sha256:<64 lowercase hex>", value)
+    manifest = payload.get("batch_manifest")
+    try:
+        verified, manifest_digest, leg_digests = verify_manifest(manifest)
+    except ReplicaBatchContractError as exc:
+        mismatches["batch_manifest"] = ("valid canonical manifest", str(exc))
+        verified, manifest_digest, leg_digests = {}, "", {}
+    if manifest_digest and payload.get("batch_manifest_sha256") != manifest_digest:
+        mismatches["batch_manifest_sha256"] = (
+            manifest_digest,
+            payload.get("batch_manifest_sha256"),
+        )
+    if verified:
+        common = {
+            "replica_group": public_expected.get("batch_group"),
+            "route_id": public_expected.get("batch_route_id"),
+            "parent_attempt_id": public_expected.get("batch_parent_attempt_id"),
+        }
+        for key, value in common.items():
+            if verified.get(key) != value:
+                mismatches[f"manifest.{key}"] = (value, verified.get(key))
+        route_nodes = sorted(str(member.get("route_node", "")) for member in verified["members"])
+        if route_nodes != expected.get("_batch_route_nodes"):
+            mismatches["manifest.route_nodes"] = (
+                expected.get("_batch_route_nodes"), route_nodes
+            )
+        allowed = expected.get("_batch_allowed_members", {})
+        for manifest_member in verified["members"]:
+            member_node = str(manifest_member.get("route_node", ""))
+            allowed_for_member = (
+                allowed.get(member_node, []) if isinstance(allowed, dict) else []
+            )
+            member_tuple = {
+                "harness": manifest_member.get("harness"),
+                "fallback_hop": manifest_member.get("fallback_hop"),
+                "fallback_ordinal": manifest_member.get("fallback_ordinal"),
+            }
+            if member_tuple not in allowed_for_member:
+                mismatches[f"manifest.member.{member_node}.route_binding"] = (
+                    allowed_for_member, member_tuple
+                )
+        selected = [
+            member for member in verified["members"]
+            if member.get("attempt_id") == public_expected.get("batch_attempt_id")
+        ]
+        if len(selected) != 1:
+            mismatches["manifest.selected_member"] = (
+                public_expected.get("batch_attempt_id"), len(selected)
+            )
+        else:
+            member = selected[0]
+            member_expected = {
+                "route_node": public_expected.get("batch_route_node"),
+                "harness": public_expected.get("batch_harness"),
+                "fallback_hop": public_expected.get("batch_fallback_hop"),
+                "fallback_ordinal": public_expected.get("batch_fallback_ordinal"),
+            }
+            for key, value in member_expected.items():
+                if member.get(key) != value:
+                    mismatches[f"manifest.member.{key}"] = (value, member.get(key))
+            expected_assignment = public_expected.get("batch_assignment_sha256")
+            if expected_assignment and member.get("assignment_sha256") != expected_assignment:
+                mismatches["manifest.member.assignment_sha256"] = (
+                    expected_assignment, member.get("assignment_sha256")
+                )
+            attempt = str(member.get("attempt_id", ""))
+            if payload.get("batch_leg_sha256") != leg_digests.get(attempt):
+                mismatches["batch_leg_sha256"] = (
+                    leg_digests.get(attempt), payload.get("batch_leg_sha256")
+                )
+        if payload.get("batch_independence") != verified.get("independence"):
+            mismatches["batch_independence"] = (
+                verified.get("independence"), payload.get("batch_independence")
+            )
+    admission = payload.get("batch_admission_count")
+    if isinstance(admission, bool) or admission not in {1, 2}:
+        mismatches["batch_admission_count"] = ("1|2", admission)
+    elif admission == 1:
+        selected_attempt = str(public_expected.get("batch_attempt_id", ""))
+        peer_members = (
+            [
+                member for member in verified.get("members", [])
+                if str(member.get("attempt_id", "")) != selected_attempt
+            ]
+            if verified
+            else []
+        )
+        expected_peer = (
+            str(peer_members[0].get("attempt_id", ""))
+            if len(peer_members) == 1
+            else ""
+        )
+        if not expected_peer or payload.get("batch_peer_attempt_id") != expected_peer:
+            mismatches["batch_peer_attempt_id"] = (
+                expected_peer or "exact non-selected manifest member",
+                payload.get("batch_peer_attempt_id"),
+            )
+        peer_state = payload.get("batch_peer_state")
+        if peer_state not in {"active", "completed"}:
+            mismatches["batch_peer_state"] = ("active|completed", peer_state)
+        proof = payload.get("batch_peer_proof")
+        proof_keys = {
+            "agent_home", "attempt_id", "jobs", "manifest_sha256",
+            "reason", "route", "state",
+        }
+        if not isinstance(proof, dict) or set(proof) != proof_keys:
+            mismatches["batch_peer_proof"] = (
+                "exact canonical peer proof", proof
+            )
+        else:
+            proof_expected = {
+                "attempt_id": expected_peer,
+                "manifest_sha256": manifest_digest,
+                "state": peer_state,
+            }
+            for key, value in proof_expected.items():
+                if proof.get(key) != value:
+                    mismatches[f"batch_peer_proof.{key}"] = (
+                        value, proof.get(key)
+                    )
+            for key in ("agent_home", "jobs", "route"):
+                value = proof.get(key)
+                if not isinstance(value, str) or not Path(value).is_absolute():
+                    mismatches[f"batch_peer_proof.{key}"] = (
+                        "absolute path", value
+                    )
+            if not isinstance(proof.get("reason"), str) or not proof.get("reason"):
+                mismatches["batch_peer_proof.reason"] = (
+                    "non-empty observation reason", proof.get("reason")
+                )
+            encoded = json.dumps(
+                proof, separators=(",", ":"), sort_keys=True
+            ).encode("utf-8")
+            proof_digest = "sha256:" + hashlib.sha256(encoded).hexdigest()
+            if payload.get("batch_peer_proof_sha256") != proof_digest:
+                mismatches["batch_peer_proof_sha256"] = (
+                    proof_digest, payload.get("batch_peer_proof_sha256")
+                )
+    elif admission == 2:
+        for key in (
+            "batch_peer_attempt_id", "batch_peer_state",
+            "batch_peer_proof", "batch_peer_proof_sha256",
+        ):
+            if key in payload:
+                mismatches[key] = ("absent for full batch", payload.get(key))
+    if mismatches:
+        detail = ";".join(
+            f"{key}:expected={wanted}:actual={actual}"
+            for key, (wanted, actual) in sorted(mismatches.items())
+        )
+        raise DispatchContractError("replica-group-reservation-mismatch", detail)
+
+
+def reserve_governor_token(
+    governor: Path,
+    root: Path,
+    worker_class: str,
+    *,
+    provided_token: str = "",
+    expected_reservation: dict[str, object] | None = None,
+) -> tuple[str, dict[str, object]]:
+    """Reserve one slot, or validate a token atomically reserved by a batch."""
+
+    if provided_token:
+        payload = _governor_json(
+            [
+                sys.executable,
+                str(governor),
+                "--root",
+                str(root),
+                "reservation-check",
+                "--token",
+                provided_token,
+                "--class",
+                worker_class,
+            ],
+            allow_absent=True,
+        )
+        if payload.get("state") != "unclaimed":
+            raise DispatchContractError(
+                "model-worker-reservation-unavailable", str(payload.get("state", "invalid"))
+            )
+        _validate_replica_reservation(payload, expected_reservation)
+        return provided_token, payload
+    if expected_reservation is not None:
+        raise DispatchContractError(
+            "replica-group-batch-required",
+            "replica start requires an exact bound batch reservation",
+        )
+    payload = _governor_json(
+        [
+            sys.executable,
+            str(governor),
+            "--root",
+            str(root),
+            "reserve",
+            "--class",
+            worker_class,
+            "--count",
+            "1",
+            "--pid",
+            str(os.getpid()),
+        ]
+    )
+    tokens = payload.get("tokens")
+    if not isinstance(tokens, list) or len(tokens) != 1 or not isinstance(tokens[0], str):
+        raise DispatchContractError("model-worker-reservation-invalid", "expected one token")
+    return tokens[0], {}
+
+
+def cancel_governor_reservation(governor: Path, root: Path, token: str) -> None:
+    """Cancel only an unclaimed token; a claimed runner retains its lease."""
+
+    if not token:
+        return
+    try:
+        payload = _governor_json(
+            [
+                sys.executable,
+                str(governor),
+                "--root",
+                str(root),
+                "reservation-check",
+                "--token",
+                token,
+            ]
+        )
+    except DispatchContractError:
+        return
+    if payload.get("state") != "unclaimed":
+        return
+    subprocess.run(
+        [
+            sys.executable,
+            str(governor),
+            "--root",
+            str(root),
+            "cancel",
+            "--token",
+            token,
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+
+
+def wait_governor_reservation_claim(
+    governor: Path,
+    root: Path,
+    token: str,
+    proc: subprocess.Popen,
+    *,
+    timeout: float = 5.0,
+    expected_reservation: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Observe reserve→runner transfer before the reserving process may exit."""
+
+    deadline = time.monotonic() + max(0.1, timeout)
+    while True:
+        payload = _governor_json(
+            [
+                sys.executable,
+                str(governor),
+                "--root",
+                str(root),
+                "reservation-check",
+                "--token",
+                token,
+                "--class",
+                "dispatch",
+            ],
+            allow_absent=True,
+        )
+        if payload.get("state") == "claimed":
+            _validate_replica_reservation(payload, expected_reservation)
+            if (
+                str(payload.get("claimant_pid", "")) != str(proc.pid)
+                or str(payload.get("claimant_starttime", ""))
+                != str(process_start_ticks(proc.pid) or payload.get("claimant_starttime", ""))
+            ):
+                raise DispatchContractError(
+                    "model-worker-reservation-claim-mismatch",
+                    f"expected_pid={proc.pid} claimant_pid={payload.get('claimant_pid', '-')}",
+                )
+            return payload
+        if payload.get("state") == "absent":
+            raise DispatchContractError(
+                "model-worker-reservation-lost",
+                "reservation disappeared before the governed runner claimed it",
+            )
+        if proc.poll() is not None or time.monotonic() >= deadline:
+            raise DispatchContractError(
+                "model-worker-reservation-claim-timeout",
+                f"state={payload.get('state', 'unknown')} exit={proc.returncode}",
+            )
+        time.sleep(0.02)
+
+
+_PROCESS_IDENTITY_METADATA_KEYS = {
+    "pid",
+    "pid_start",
+    "pid_host",
+    "pid_host_start",
+    "pid_host_ns",
+    "pid_ns",
+    "pid_observer_ns",
+    "pid_host_proof",
+    "pgid",
+    "pgid_host",
+}
+
+
+def _launch_identity_complete(pid: int, identity: dict[str, str]) -> bool:
+    observer_namespace = identity.get("pid_observer_ns", "")
+    expected_start = identity.get("pid_start", "")
+    if not (
+        identity.get("pid") == str(pid)
+        and expected_start
+        and observer_namespace
+        and identity.get("pid_ns") == observer_namespace
+        and identity.get("pgid") == str(pid)
+    ):
+        return False
+    visibility, actual_start, state = _proc_observation(pid)
+    if not (
+        visibility == "present"
+        and actual_start == expected_start
+        and state != "Z"
+        and exact_process_group_signal_authority(pid, expected_start)
+        == "authoritative"
+    ):
+        return False
+
+    host_keys = {
+        "pid_host",
+        "pid_host_start",
+        "pid_host_ns",
+        "pid_host_proof",
+        "pgid_host",
+    }
+    if any(identity.get(key) for key in host_keys):
+        raw_host = identity.get("pid_host", "")
+        if not (
+            raw_host.isdigit()
+            and identity.get("pid_host_start") == expected_start
+            and identity.get("pid_host_ns")
+            and identity.get("pid_host_proof") == PID_HOST_NAMESPACE_PROOF
+            and identity.get("pgid_host") == raw_host
+        ):
+            return False
+    return True
+
+
+def _abort_fenced_launch(
+    proc: subprocess.Popen,
+    gate_write: int,
+    expected_start: str,
+) -> bool:
+    """Close an unreleased gate and verify that its exact group is empty."""
+
+    try:
+        os.close(gate_write)
+    except OSError:
+        pass
+    try:
+        proc.wait(timeout=0.75)
+    except (OSError, subprocess.TimeoutExpired):
+        status = (
+            signal_exact_process_group(proc.pid, expected_start, signal.SIGKILL)
+            if expected_start
+            else "identity-unverifiable"
+        )
+        if status != "signalled":
+            try:
+                proc.kill()
+            except (OSError, ProcessLookupError):
+                pass
+        try:
+            proc.wait(timeout=0.75)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    group = process_group_observation(proc.pid)
+    return proc.poll() is not None and group.state == "empty"
 
 
 def spawn_claimed_attempt(
@@ -243,15 +1272,17 @@ def spawn_claimed_attempt(
     attempt_id: str,
     *,
     parent_binding: ParentAttemptBinding | None,
-    spawn: Callable[[], subprocess.Popen],
+    spawn: Callable[[int], subprocess.Popen],
     launch_metadata: dict[str, str] | None = None,
+    preclaim: Callable[[list[str]], None] | None = None,
 ) -> tuple[subprocess.Popen, dict[str, str]]:
-    """Spawn one claimed attempt and publish its process identity atomically.
+    """Claim one registered attempt while publishing its fenced process.
 
-    The registry lock closes the parent-death gap between the final live-parent
-    check and publication of the child PID.  A parent watcher can therefore
-    observe either no spawned child or a fully identified process group, never
-    a launch-claimed row whose process was created but not yet attributable.
+    The row stays ``launch_claimed=0`` until a complete fenced PID identity is
+    ready. The same registry replacement publishes the identity and transitions
+    the claim to 1. A launcher killed before spawn therefore leaves a retryable
+    registered row, while a launcher killed after spawn leaves either a blocked
+    fence or a fully attributable process group.
     """
 
     if not attempt_id:
@@ -274,8 +1305,10 @@ def spawn_claimed_attempt(
         validate_attempt_metadata(child_meta)
         if child_fields[1] not in {"open", "running"}:
             raise DispatchContractError("attempt-not-open", attempt_id)
-        if child_meta.get("launch_claimed") != "1":
-            raise DispatchContractError("attempt-launch-not-claimed", attempt_id)
+        if child_meta.get("launch_claimed") == "1":
+            raise DispatchContractError("attempt-launch-already-claimed", attempt_id)
+        if child_meta.get("launch_claimed") != "0":
+            raise DispatchContractError("attempt-launch-claim-invalid", attempt_id)
 
         if parent_binding is not None:
             parent_matches = []
@@ -306,6 +1339,9 @@ def spawn_claimed_attempt(
                 and child_meta.get("parent_attempt_id") == parent_binding.attempt_id
                 and parent_meta.get("pid") == str(parent_binding.pid)
                 and parent_meta.get("pid_start") == parent_binding.pid_start
+                and (parent_meta.get("harness") or "") == parent_binding.harness
+                and (parent_meta.get("transport") or "") == parent_binding.transport
+                and (parent_meta.get("runtime_sandbox") or "") == parent_binding.runtime_sandbox
             )
             if parent_binding.pid_host is not None:
                 same_identity = same_identity and (
@@ -324,39 +1360,107 @@ def spawn_claimed_attempt(
                     "parent-attempt-not-live", parent_binding.attempt_id
                 )
 
-        proc = spawn()
+        if preclaim is not None:
+            preclaim(lines)
+
+        gate_read, gate_write = os.pipe()
+        try:
+            proc = spawn(gate_read)
+        except BaseException:
+            os.close(gate_read)
+            os.close(gate_write)
+            raise
+        os.close(gate_read)
         identity = process_launch_identity(proc.pid)
+        provided_metadata = {
+            key: str(value)
+            for key, value in (launch_metadata or {}).items()
+            if value not in (None, "")
+        }
+        conflicting_identity = sorted(
+            _PROCESS_IDENTITY_METADATA_KEYS.intersection(provided_metadata)
+        )
+        if conflicting_identity:
+            cleanup_verified = _abort_fenced_launch(
+                proc, gate_write, identity.get("pid_start", "")
+            )
+            raise DispatchContractError(
+                (
+                    "attempt-launch-identity-metadata-conflict"
+                    if cleanup_verified
+                    else "attempt-launch-cleanup-unverified"
+                ),
+                ",".join(conflicting_identity),
+            )
+        if not _launch_identity_complete(proc.pid, identity):
+            cleanup_verified = _abort_fenced_launch(
+                proc, gate_write, identity.get("pid_start", "")
+            )
+            raise DispatchContractError(
+                (
+                    "attempt-launch-identity-incomplete"
+                    if cleanup_verified
+                    else "attempt-launch-cleanup-unverified"
+                ),
+                f"pid={proc.pid}",
+            )
         identity.update(
-            {
-                key: str(value)
-                for key, value in (launch_metadata or {}).items()
-                if value not in (None, "")
-            }
+            provided_metadata
         )
         try:
-            replace_keys = set(identity)
+            replace_keys = {*identity, "launch_claimed"}
             parts = [
                 part
                 for part in child_fields[5].split(",")
                 if part.split("=", 1)[0] not in replace_keys
             ]
             parts.extend(f"{key}={value}" for key, value in sorted(identity.items()))
+            parts.append("launch_claimed=1")
             child_fields[5] = ",".join(parts)
             lines[child_index] = "\t".join(child_fields)
             _atomic_registry_replace(jobs, lines)
         except OSError as exc:
-            try:
-                os.killpg(proc.pid, signal.SIGTERM)
-                proc.wait(timeout=0.5)
-            except (OSError, subprocess.TimeoutExpired):
-                try:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                    proc.wait(timeout=0.5)
-                except (OSError, subprocess.TimeoutExpired):
-                    pass
+            cleanup_verified = _abort_fenced_launch(
+                proc, gate_write, identity.get("pid_start", "")
+            )
             raise DispatchContractError(
-                "attempt-launch-identity-record-failed", str(exc)
+                (
+                    "attempt-launch-identity-record-failed"
+                    if cleanup_verified
+                    else "attempt-launch-cleanup-unverified"
+                ),
+                str(exc),
             ) from exc
+        if parent_binding is not None and not process_identity_is_live(
+            parent_binding.observed_pid, parent_binding.observed_pid_start
+        ):
+            cleanup_verified = _abort_fenced_launch(
+                proc, gate_write, identity["pid_start"]
+            )
+            raise DispatchContractError(
+                (
+                    "parent-attempt-not-live-after-spawn"
+                    if cleanup_verified
+                    else "attempt-launch-cleanup-unverified"
+                ),
+                parent_binding.attempt_id,
+            )
+        try:
+            os.write(gate_write, b"1")
+        except OSError as exc:
+            cleanup_verified = _abort_fenced_launch(
+                proc, gate_write, identity["pid_start"]
+            )
+            raise DispatchContractError(
+                (
+                    "attempt-launch-fence-release-failed"
+                    if cleanup_verified
+                    else "attempt-launch-cleanup-unverified"
+                ),
+                str(exc),
+            ) from exc
+        else:
+            os.close(gate_write)
         return proc, identity
 
 
@@ -367,6 +1471,9 @@ def resolve_live_parent_attempt(
     repo: str,
     worktree: str,
     expected_attempt_id: str | None = None,
+    expected_harness: str | None = None,
+    expected_transport: str | None = None,
+    expected_sandbox: str | None = None,
 ) -> ParentAttemptBinding:
     """Resolve exactly one open, live depth-1 owner before a depth-2 claim.
 
@@ -397,6 +1504,16 @@ def resolve_live_parent_attempt(
                 continue
             if expected_attempt_id and metadata.get("attempt_id") != expected_attempt_id:
                 continue
+            expected_runtime = {
+                "harness": expected_harness,
+                "transport": expected_transport,
+                "runtime_sandbox": expected_sandbox,
+            }
+            if any(
+                value is not None and metadata.get(key) != value
+                for key, value in expected_runtime.items()
+            ):
+                continue
             candidates.append(metadata)
 
         if not candidates:
@@ -417,19 +1534,9 @@ def resolve_live_parent_attempt(
             raise DispatchContractError("parent-process-identity-missing", attempt_id or parent_slug)
         pid = int(raw_pid)
         host_pid = int(raw_host) if raw_host.isdigit() else None
-        identities: list[tuple[int, str]] = []
-        if host_pid is not None and host_start:
-            identities.append((host_pid, host_start))
-        identities.append((pid, pid_start))
-        observed = next(
-            (
-                identity
-                for identity in dict.fromkeys(identities)
-                if process_identity_is_live(identity[0], identity[1])
-            ),
-            None,
-        )
-        if observed is None:
+        process = attempt_process_quiescence(metadata)
+        observed = process.identity
+        if process.state != "live" or observed is None:
             raise DispatchContractError("parent-attempt-not-live", attempt_id)
         return ParentAttemptBinding(
             attempt_id=attempt_id,
@@ -438,8 +1545,11 @@ def resolve_live_parent_attempt(
             pid_scope=metadata.get("pid_scope", "host-visible"),
             pid_host=host_pid,
             pid_host_start=host_start,
-            observed_pid=observed[0],
-            observed_pid_start=observed[1],
+            observed_pid=observed.pid,
+            observed_pid_start=observed.expected_start,
+            harness=metadata.get("harness", ""),
+            transport=metadata.get("transport", ""),
+            runtime_sandbox=metadata.get("runtime_sandbox", ""),
         )
 
 
@@ -798,6 +1908,9 @@ def completion_marker_gate(
     route_node: str | None,
     action: str,
     agent_home: Path,
+    jobs: Path | None = None,
+    *,
+    registry_lines: list[str] | None = None,
 ) -> None:
     """SD-56 decision gate: a record-bound ``--start`` must not spawn a node
     whose ``depends_on`` predecessors have no completion marker.
@@ -823,6 +1936,7 @@ def completion_marker_gate(
     if node is None:
         return
     missing = []
+    blocked: list[tuple[str, AttemptReadiness]] = []
     for dep in node.get("depends_on", []):
         marker_path = Path(agent_home) / ".dispatch" / "completion" / route["route_id"] / f"{dep}.json"
         if not marker_path.is_file():
@@ -836,8 +1950,28 @@ def completion_marker_gate(
         dep_node = next((row for row in route.get("nodes", []) if row.get("id") == dep), None)
         if dep_node is None or not completion_marker_is_current(route, dep_node, marker_path, marker):
             missing.append(dep)
+            continue
+        readiness = completion_attempt_readiness(
+            route,
+            dep_node,
+            marker,
+            jobs or (Path(agent_home) / ".dispatch" / "jobs.log"),
+            registry_lines=registry_lines,
+        )
+        if readiness.state != "ready":
+            blocked.append((dep, readiness))
     if missing:
         raise DispatchContractError("completion-marker-missing", ",".join(missing))
+    if blocked:
+        reason = (
+            "predecessor-process-draining"
+            if any(item.state == "draining" for _, item in blocked)
+            else "predecessor-process-unverifiable"
+        )
+        detail = ",".join(
+            f"{dep}:{item.attempt_id or '-'}:{item.reason}" for dep, item in blocked
+        )
+        raise DispatchContractError(reason, detail)
 
 
 def completion_marker_is_current(
@@ -927,6 +2061,66 @@ def completion_marker_is_current(
         return False
 
 
+def completion_attempt_readiness(
+    route: dict[str, object],
+    node: dict[str, object],
+    marker: dict[str, object],
+    jobs: Path,
+    *,
+    registry_lines: list[str] | None = None,
+) -> AttemptReadiness:
+    """Combine a current semantic marker with its exact governed process state."""
+
+    if node.get("kind") == "resource-runner" or marker.get("registered_worker") is False:
+        return AttemptReadiness("ready", "semantic-terminal-no-registered-process")
+    attempt_id = marker.get("attempt_id")
+    if not isinstance(attempt_id, str) or not attempt_id:
+        return AttemptReadiness("unverifiable", "marker-attempt-id-missing")
+    if registry_lines is None:
+        try:
+            lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return AttemptReadiness("unverifiable", "registry-unreadable", attempt_id)
+    else:
+        lines = registry_lines
+
+    exact: list[tuple[list[str], dict[str, str]]] = []
+    conflicting_active: list[str] = []
+    for line in lines:
+        fields = line.split("\t")
+        if len(fields) != 6:
+            continue
+        metadata = parse_registry_metadata(fields[5])
+        if (
+            metadata.get("route_id") != route.get("route_id")
+            or metadata.get("route_node") != node.get("id")
+        ):
+            continue
+        if metadata.get("attempt_id") == attempt_id:
+            exact.append((fields, metadata))
+        elif fields[1] in {"open", "running"} and metadata.get("attempt_id"):
+            conflicting_active.append(metadata["attempt_id"])
+    if len(exact) != 1:
+        return AttemptReadiness(
+            "unverifiable", f"marker-attempt-row-count-{len(exact)}", attempt_id
+        )
+    fields, metadata = exact[0]
+    try:
+        validate_attempt_metadata(metadata)
+    except DispatchContractError as exc:
+        return AttemptReadiness("unverifiable", exc.reason, attempt_id)
+    if fields[1] != "done" or metadata.get("note") != "completed-marker":
+        return AttemptReadiness("unverifiable", "marker-attempt-not-terminal", attempt_id)
+    if conflicting_active:
+        return AttemptReadiness("draining", "conflicting-active-retry", attempt_id)
+    process = attempt_process_quiescence(metadata)
+    if process.state == "quiescent":
+        return AttemptReadiness("ready", process.reason, attempt_id)
+    if process.state == "live":
+        return AttemptReadiness("draining", process.reason, attempt_id)
+    return AttemptReadiness("unverifiable", process.reason, attempt_id)
+
+
 def new_attempt_id(value: str | None = None) -> str:
     if value:
         if not value.startswith("att-") or len(value) < 12:
@@ -976,6 +2170,123 @@ def _atomic_registry_replace(jobs: Path, lines: list[str]) -> None:
             pass
 
 
+def attempt_launch_is_available(jobs: Path, attempt_id: str) -> bool:
+    """Return true only for one exact current open registered-only row."""
+
+    ensure_global_registry_writable(jobs)
+    with Path(f"{jobs}.lock").open("a", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        matches = []
+        for line in jobs.read_text(encoding="utf-8", errors="replace").splitlines():
+            fields = line.split("\t")
+            if len(fields) != 6:
+                continue
+            metadata = parse_registry_metadata(fields[5])
+            if metadata.get("attempt_id") == attempt_id:
+                matches.append((fields, metadata))
+        if len(matches) != 1:
+            return False
+        fields, metadata = matches[0]
+        try:
+            validate_attempt_metadata(metadata)
+        except DispatchContractError:
+            return False
+        return fields[1] == "open" and metadata.get("launch_claimed") == "0"
+
+
+def mark_attempt_launch_started(jobs: Path, attempt_id: str, pid: int) -> None:
+    """Let the exact launch fence durably attest before it executes payload."""
+
+    ensure_global_registry_writable(jobs)
+    with Path(f"{jobs}.lock").open("a", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
+        matches = []
+        for index, line in enumerate(lines):
+            fields = line.split("\t")
+            if len(fields) != 6:
+                continue
+            metadata = parse_registry_metadata(fields[5])
+            if metadata.get("attempt_id") == attempt_id:
+                matches.append((index, fields, metadata))
+        if len(matches) != 1:
+            raise DispatchContractError(
+                "attempt-row-not-unique", f"attempt_id={attempt_id} rows={len(matches)}"
+            )
+        index, fields, metadata = matches[0]
+        validate_attempt_metadata(metadata)
+        expected_start = metadata.get("pid_start", "")
+        if (
+            fields[1] not in {"open", "running"}
+            or metadata.get("launch_claimed") != "1"
+            or metadata.get("launch_fence") != "registry-v1"
+            or metadata.get("pid") != str(pid)
+            or metadata.get("pgid") != str(pid)
+            or not expected_start
+            or not process_identity_is_live(pid, expected_start)
+            or exact_process_group_signal_authority(pid, expected_start)
+            != "authoritative"
+        ):
+            raise DispatchContractError(
+                "attempt-launch-fence-identity-mismatch", attempt_id
+            )
+        fields[5] = _updated_attempt_metadata(
+            fields[5], {"launch_started": "1"}
+        )
+        lines[index] = "\t".join(fields)
+        _atomic_registry_replace(jobs, lines)
+
+
+def recover_unstarted_attempt(jobs: Path, attempt_id: str) -> bool:
+    """Reset only a dead registry-v1 fence that never authorized payload exec."""
+
+    ensure_global_registry_writable(jobs)
+    with Path(f"{jobs}.lock").open("a", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
+        matches = []
+        for index, line in enumerate(lines):
+            fields = line.split("\t")
+            if len(fields) != 6:
+                continue
+            metadata = parse_registry_metadata(fields[5])
+            if metadata.get("attempt_id") == attempt_id:
+                matches.append((index, fields, metadata))
+        if len(matches) != 1:
+            return False
+        index, fields, metadata = matches[0]
+        try:
+            validate_attempt_metadata(metadata)
+        except DispatchContractError:
+            return False
+        if (
+            fields[1] != "open"
+            or metadata.get("launch_claimed") != "1"
+            or metadata.get("launch_fence") != "registry-v1"
+            or metadata.get("launch_started") == "1"
+            or metadata.get("launch_outcome")
+        ):
+            return False
+        process = attempt_process_quiescence(metadata)
+        if process.state != "quiescent":
+            return False
+        remove = {
+            *_PROCESS_IDENTITY_METADATA_KEYS,
+            "launch_claimed",
+            "launch_lifecycle",
+            "launch_started",
+        }
+        parts = [
+            part for part in fields[5].split(",")
+            if part.split("=", 1)[0] not in remove
+        ]
+        parts.append("launch_claimed=0")
+        fields[5] = ",".join(parts)
+        lines[index] = "\t".join(fields)
+        _atomic_registry_replace(jobs, lines)
+        return True
+
+
 def claim_attempt_row(
     jobs: Path,
     attempt_id: str,
@@ -985,6 +2296,7 @@ def claim_attempt_row(
     exclusive_metadata: dict[str, str] | None = None,
     exclusive_live_metadata: dict[str, str] | None = None,
     terminal_attempt_limit: int | None = None,
+    preclaim: Callable[[list[str]], None] | None = None,
 ) -> bool:
     """Atomically register ``attempt_id`` and claim its launch at most once.
 
@@ -1019,6 +2331,8 @@ def claim_attempt_row(
                     )
                 if not launch or metadata.get("launch_claimed") == "1" or fields[1] != "open":
                     return False
+                if preclaim is not None:
+                    preclaim(lines)
                 pipe = ",".join(part for part in fields[5].split(",") if not part.startswith("launch_claimed="))
                 fields[5] = pipe + ",launch_claimed=1"
                 lines[index] = "\t".join(fields)
@@ -1057,6 +2371,8 @@ def claim_attempt_row(
                     "quick-registered-headless-exhausted",
                     f"terminal_attempts={len(matching_terminal_attempts)} limit={terminal_attempt_limit}",
                 )
+        if launch and preclaim is not None:
+            preclaim(lines)
         row_fields[5] += f",launch_claimed={1 if launch else 0}"
         with jobs.open("a", encoding="utf-8") as registry:
             registry.write("\t".join(row_fields) + "\n")
@@ -1077,6 +2393,53 @@ def _row_identity(fields: list[str]) -> tuple[str, ...] | None:
     if route_id and route_node and parent:
         return ("legacy", route_id, route_node, parent, fields[4])
     return None
+
+
+def _updated_attempt_metadata(
+    pipe: str,
+    values: dict[str, str],
+    *,
+    terminal: bool = False,
+) -> str:
+    """Replace only explicitly mutable keys; never append last-wins identity."""
+
+    raw_parts = [part for part in pipe.split(",") if "=" in part]
+    keys = [part.split("=", 1)[0] for part in raw_parts]
+    immutable_duplicates = {
+        key for key in keys
+        if keys.count(key) > 1 and key not in ATTEMPT_MUTABLE_METADATA
+    }
+    if immutable_duplicates:
+        raise DispatchContractError(
+            "attempt-immutable-metadata-duplicate",
+            ",".join(sorted(immutable_duplicates)),
+        )
+    metadata = parse_registry_metadata(pipe)
+    allowed_new = ATTEMPT_TERMINAL_EVIDENCE_KEYS if terminal else set()
+    replace: dict[str, str] = {}
+    for key, raw_value in values.items():
+        value = str(raw_value).replace(",", ";")
+        if not key or "=" in key or "," in key:
+            raise DispatchContractError("attempt-metadata-key-invalid", key)
+        if key not in ATTEMPT_MUTABLE_METADATA and key not in allowed_new:
+            if metadata.get(key) == value:
+                continue
+            raise DispatchContractError("attempt-immutable-metadata-mutation", key)
+        if (
+            key == "launch_outcome"
+            and metadata.get(key)
+            and metadata.get(key) != value
+        ):
+            raise DispatchContractError(
+                "attempt-launch-outcome-conflict",
+                f"existing={metadata.get(key)} requested={value}",
+            )
+        replace[key] = value
+    retained = [
+        part for part in raw_parts if part.split("=", 1)[0] not in replace
+    ]
+    retained.extend(f"{key}={value}" for key, value in sorted(replace.items()))
+    return ",".join(retained)
 
 
 def close_attempt_row(
@@ -1102,12 +2465,20 @@ def close_attempt_row(
             if metadata.get("attempt_id") != attempt_id:
                 continue
             validate_attempt_metadata(metadata)
+            if metadata.get("teardown_claim"):
+                return False
             fields[1] = "done"
-            additions = [f"note={note}"]
-            for key, value in sorted((evidence or {}).items()):
-                if value not in (None, ""):
-                    additions.append(f"{key}={str(value).replace(',', ';')}")
-            fields[5] += "," + ",".join(additions)
+            values = {"note": note}
+            values.update({
+                key: value for key, value in (evidence or {}).items()
+                if value not in (None, "")
+            })
+            try:
+                fields[5] = _updated_attempt_metadata(
+                    fields[5], values, terminal=True
+                )
+            except DispatchContractError:
+                return False
             lines[index] = "\t".join(fields)
             _atomic_registry_replace(jobs, lines)
             return True
@@ -1161,6 +2532,7 @@ def close_attempt_row_if(
     predicate: Callable[[list[str]], bool],
     *,
     evidence: dict[str, str] | None = None,
+    teardown_claim: str | None = None,
 ) -> bool:
     """Revalidate and close one exact attempt inside the SD-49 lock.
 
@@ -1184,14 +2556,33 @@ def close_attempt_row_if(
             if metadata.get("attempt_id") != attempt_id:
                 continue
             validate_attempt_metadata(metadata)
+            recorded_claim = metadata.get("teardown_claim", "")
+            if recorded_claim:
+                if not teardown_claim or recorded_claim != teardown_claim:
+                    return False
+            elif teardown_claim:
+                return False
             if not predicate(fields.copy()):
                 continue
             fields[1] = "done"
-            additions = [f"note={note}"]
-            for key, value in sorted((evidence or {}).items()):
-                if value not in (None, ""):
-                    additions.append(f"{key}={str(value).replace(',', ';')}")
-            fields[5] += "," + ",".join(additions)
+            values = {"note": note}
+            if teardown_claim:
+                values.update(
+                    teardown_claim="",
+                    teardown_claimed_at="",
+                    teardown_claim_pid="",
+                    teardown_claim_pid_start="",
+                )
+            values.update({
+                key: value for key, value in (evidence or {}).items()
+                if value not in (None, "")
+            })
+            try:
+                fields[5] = _updated_attempt_metadata(
+                    fields[5], values, terminal=True
+                )
+            except DispatchContractError:
+                return False
             lines[index] = "\t".join(fields)
             _atomic_registry_replace(jobs, lines)
             return True
@@ -1199,7 +2590,7 @@ def close_attempt_row_if(
 
 
 def annotate_attempt_row(jobs: Path, attempt_id: str, values: dict[str, str]) -> bool:
-    """Append bounded metadata to one exact attempt under the SD-49 lock."""
+    """Replace only mutable metadata on one exact attempt under the lock."""
     ensure_global_registry_writable(jobs)
     with Path(f"{jobs}.lock").open("a", encoding="utf-8") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
@@ -1212,8 +2603,38 @@ def annotate_attempt_row(jobs: Path, attempt_id: str, values: dict[str, str]) ->
             if metadata.get("attempt_id") != attempt_id:
                 continue
             validate_attempt_metadata(metadata)
-            additions = [f"{key}={str(value).replace(',', ';')}" for key, value in sorted(values.items())]
-            fields[5] += "," + ",".join(additions)
+            fields[5] = _updated_attempt_metadata(fields[5], values)
+            lines[index] = "\t".join(fields)
+            _atomic_registry_replace(jobs, lines)
+            return True
+    return False
+
+
+def annotate_attempt_row_if(
+    jobs: Path,
+    attempt_id: str,
+    values: dict[str, str],
+    predicate: Callable[[list[str]], bool],
+) -> bool:
+    """Compare-and-set mutable metadata on one exact open attempt row."""
+
+    if not attempt_id:
+        raise DispatchContractError("attempt-id-required")
+    ensure_global_registry_writable(jobs)
+    with Path(f"{jobs}.lock").open("a", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
+        for index, line in enumerate(lines):
+            fields = line.split("\t")
+            if len(fields) != 6 or fields[1] not in {"open", "running"}:
+                continue
+            metadata = parse_registry_metadata(fields[5])
+            if metadata.get("attempt_id") != attempt_id:
+                continue
+            validate_attempt_metadata(metadata)
+            if not predicate(fields.copy()):
+                return False
+            fields[5] = _updated_attempt_metadata(fields[5], values)
             lines[index] = "\t".join(fields)
             _atomic_registry_replace(jobs, lines)
             return True

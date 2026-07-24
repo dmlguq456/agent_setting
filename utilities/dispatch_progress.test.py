@@ -20,6 +20,8 @@ class ProgressTest(unittest.TestCase):
         self.jobs = self.base / "jobs.log"; self.home = self.base / "home"
         self.proc = subprocess.Popen(["sleep", "60"], start_new_session=True)
         start = (Path("/proc") / str(self.proc.pid) / "stat").read_text().split()[21]
+        self.proc_start = start
+        self.pid_namespace = os.readlink("/proc/self/ns/pid")
         self.attempt = "att-0123456789abcdef"
         self.scope=self.base/"scope";self.scope.mkdir()
         pipe = (
@@ -27,7 +29,8 @@ class ProgressTest(unittest.TestCase):
             "execution_surface=registered-headless,registered_worker=1,"
             "fallback_hop=same-harness-headless,"
             f"capability=code-test,route_id=rt-1,route_node=test,attempt_id={self.attempt},"
-            f"pid={self.proc.pid},pid_start={start},write_scope={self.scope}"
+            f"pid={self.proc.pid},pid_start={start},pgid={self.proc.pid},"
+            f"pid_observer_ns={self.pid_namespace},write_scope={self.scope}"
         )
         self.jobs.write_text(f"2026-07-16T00:00:00Z\topen\t/repo\t{self.base}\tstage\t{pipe}\n")
 
@@ -77,6 +80,62 @@ class ProgressTest(unittest.TestCase):
         row = self.jobs.read_text(encoding="utf-8")
         self.assertIn("\topen\t", row)
         self.assertNotIn("note=dead-no-progress", row)
+
+    def test_namespace_local_pid_collision_heartbeat_never_grants_signal_authority(self):
+        self.jobs.write_text(self.jobs.read_text().replace(
+            (
+                f"pid={self.proc.pid},pid_start={self.proc_start},pgid={self.proc.pid},"
+                f"pid_observer_ns={self.pid_namespace},"
+            ),
+            (
+                f"pid={self.proc.pid},pid_start={self.proc_start},"
+                "pid_scope=namespace-local,pid_observer_ns=pid:[inner],"
+            ),
+        ))
+        P.heartbeat(self.args(), 1)
+        first = P.watchdog(self.args(), 11)
+        self.assertEqual(first["verdict"], "working")
+        with mock.patch.object(P.os, "killpg") as killpg:
+            state = P.watchdog(self.args(apply=True), 21)
+        killpg.assert_not_called()
+        self.assertEqual(state["action"], "fail-closed-identity")
+        self.assertIsNone(self.proc.poll())
+        self.assertIn("\topen\t", self.jobs.read_text())
+
+    def test_namespace_bound_outer_identity_can_interrupt_exact_group(self):
+        self.jobs.write_text(self.jobs.read_text().replace(
+            (
+                f"pid={self.proc.pid},pid_start={self.proc_start},pgid={self.proc.pid},"
+                f"pid_observer_ns={self.pid_namespace},"
+            ),
+            (
+                f"pid=7,pid_start={self.proc_start},pid_scope=namespace-local,"
+                "pid_observer_ns=pid:[inner],"
+                f"pid_host={self.proc.pid},pid_host_start={self.proc_start},"
+                f"pid_host_ns={self.pid_namespace},pid_host_proof=nspid-procfs-root-v1,"
+                f"pgid={self.proc.pid},pgid_host={self.proc.pid},"
+            ),
+        ))
+        P.heartbeat(self.args(), 0)
+        P.watchdog(self.args(), 10)
+        state = P.watchdog(self.args(apply=True), 20)
+        self.proc.wait(timeout=3)
+        self.assertEqual(state["action"], "interrupted")
+        self.assertEqual(state["signalled_pid"], self.proc.pid)
+        self.assertIn("note=dead-no-progress", self.jobs.read_text())
+
+    def test_pgid_change_during_adjacent_revalidation_sends_no_signal(self):
+        P.heartbeat(self.args(), 0)
+        P.watchdog(self.args(), 10)
+        with mock.patch.object(
+            P.os, "getpgid", side_effect=[self.proc.pid, self.proc.pid + 1]
+        ), mock.patch.object(P.os, "killpg") as killpg:
+            state = P.watchdog(self.args(apply=True), 20)
+        killpg.assert_not_called()
+        self.assertEqual(state["action"], "fail-closed-identity")
+        self.assertEqual(state["process_reason"], "progress-signal-group-unverifiable")
+        self.assertIsNone(self.proc.poll())
+        self.assertIn("\topen\t", self.jobs.read_text())
 
     def test_scoped_file_change_resets_quiet_counter(self):
         P.heartbeat(self.args(), 0)
@@ -133,6 +192,17 @@ class ProgressTest(unittest.TestCase):
         state=P.watchdog(self.args(),10)
         self.assertEqual(state["terminal_action"],"process-exited")
         self.assertNotIn("fail-closed",state["action"])
+
+    def test_registry_terminal_is_cached_but_withheld_while_process_drains(self):
+        text = self.jobs.read_text().replace("\topen\t", "\tdone\t")
+        self.jobs.write_text(text.rstrip("\n") + ",note=completed-marker\n")
+        draining = P.watchdog(self.args(), 1)
+        self.assertEqual(draining["action"], "draining")
+        self.assertEqual(draining["semantic_terminal_action"], "registry-terminal")
+        self.assertEqual(draining["terminal_action"], "")
+        self.proc.terminate(); self.proc.wait(timeout=3)
+        ready = P.watchdog(self.args(), 2)
+        self.assertEqual(ready["terminal_action"], "registry-terminal")
 
     def test_exit_zero_blocked_sandbox_init_closes_exact_attempt(self):
         log = self.base / "stage.attempt.codex.jsonl"

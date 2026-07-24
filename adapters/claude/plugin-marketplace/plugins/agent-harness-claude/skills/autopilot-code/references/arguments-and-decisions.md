@@ -24,9 +24,9 @@ Intensity selects the stage graph; see [CONVENTIONS §1](../../../core/CONVENTIO
 
 - `direct`: intake → produce → sanity/report; no code-plan, plan-check, or durable plan.
 - `quick`: intake → orient-lite → micro-plan → plan-check-lite → produce → verify-lite → report; no independent QA after every stage.
-- `standard`: durable code-plan → plan-check → optional bounded verifier → synthesis → code-execute → code-test → code-report.
-- `strong`: standard plus a cross-harness 2-way independent replicate-and-merge at the riskiest review point — the compiled route adds `impl-review-replica` and the conductor merges both verdicts (CONVENTIONS §3.12).
-- `thorough` and `adversarial`: the strong replica pair remains, and a dispatch-depth-1 owner expands bounded dispatch-depth-2 planning, verification, and adversarial workers, then synthesizes short reports.
+- `standard`: exact cross-harness 2-way framing (`frame` + `frame-replica`) → direction synthesis → durable code-plan → plan-check → optional bounded non-replica verifier → code-execute → impl-review → code-test → code-report.
+- `strong`: standard's exact 2-way framing plus a separate exact 2-way plan group (`plan` + `plan-replica`) arbitrated by plan-check and a separate exact 2-way implementation-review group (`impl-review` + `impl-review-replica`) merged at verdict level (CONVENTIONS §3.12).
+- `thorough` and `adversarial`: retain all three exact 2-way anchor groups. Additional independent non-replica planning, verification, or adversarial perspectives run only as explicitly declared compose-on-demand nodes; the base recipe does not auto-add them, and no replica group widens to N-way.
 
 Every non-direct graph has a plan-check, but expensive independent QA does not repeat after every substage.
 

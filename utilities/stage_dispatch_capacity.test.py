@@ -86,7 +86,7 @@ class CapacityTest(unittest.TestCase):
   self.jobs.write_text(
    "2026-07-20T00:00:00Z\tdone\t/r\t/w\ts\t"
    "route_id=r,route_node=test,attempt_id=att-completed-race,"
-   "note=completed-marker\n")
+   "note=completed-marker,launch_outcome=reaped-before-publish\n")
   self.args.action="start";self.args.progress_window_seconds=10
   with mock.patch.object(F.subprocess,"run",return_value=seed) as run:
    state,fields=F.watch_launched_attempt(

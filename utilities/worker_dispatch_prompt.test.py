@@ -69,9 +69,27 @@ class WorkerDispatchPromptTest(unittest.TestCase):
                         "attempt_schema_version=2,dispatch_depth=1,transport=headless,"
                         "execution_surface=registered-headless,registered_worker=1,"
                         "fallback_hop=same-harness-headless,worker_type=owner,"
+                        f"harness={harness},runtime_sandbox=workspace-write,"
                         f"attempt_id=att-prompt-parent,pid={parent.pid},pid_start={start}\n"
                     )
                 slug = f"{harness}-typed"
+                if harness == "opencode":
+                    topology = [
+                        "--dispatch-depth", "1",
+                        "--worker-type", "owner",
+                        "--assigned-contract", "autopilot-code",
+                    ]
+                    expected_worker_type = "Owner"
+                    expected_contract = "autopilot-code"
+                else:
+                    topology = [
+                        "--dispatch-depth", "2",
+                        "--parent", "owner",
+                        "--worker-type", "stage",
+                        "--assigned-contract", "code-test",
+                    ]
+                    expected_worker_type = "Stage"
+                    expected_contract = "code-test"
                 command = [
                     sys.executable,
                     str(wrapper),
@@ -86,14 +104,18 @@ class WorkerDispatchPromptTest(unittest.TestCase):
                     "dev/backend",
                     "--intensity",
                     "standard",
-                    "--dispatch-depth",
-                    "2",
-                    "--parent",
-                    "owner",
-                    "--worker-type",
-                    "stage",
-                    "--assigned-contract",
-                    "code-test",
+                    *topology,
+                    *(
+                        [
+                            "--parent-harness", harness,
+                            "--parent-transport", "headless",
+                            "--parent-sandbox", "workspace-write",
+                            "--nested-eligibility", "supported",
+                            "--eligibility-source", "fixture",
+                        ]
+                        if harness in {"codex", "claude"}
+                        else []
+                    ),
                     "--prompt-text",
                     "CUSTOM ASSIGNMENT",
                     "--jobs",
@@ -113,11 +135,13 @@ class WorkerDispatchPromptTest(unittest.TestCase):
                     env["AGENT_DISPATCH_ATTEMPT_ID"] = "att-prompt-parent"
                 result = subprocess.run(command, text=True, capture_output=True, env=env)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                prompt = (logs / f"{slug}.{suffix}").read_text(encoding="utf-8")
+                prompts = list(logs.glob(f"{slug}.*.{suffix}"))
+                self.assertEqual(len(prompts), 1, prompts)
+                prompt = prompts[0].read_text(encoding="utf-8")
                 self.assertEqual(prompt.count("# Portable Worker Kernel"), 1)
                 self.assertEqual(prompt.count("# Worker Type:"), 1)
-                self.assertIn("# Worker Type: Stage", prompt)
-                self.assertIn("- assigned_contract: code-test", prompt)
+                self.assertIn(f"# Worker Type: {expected_worker_type}", prompt)
+                self.assertIn(f"- assigned_contract: {expected_contract}", prompt)
                 self.assertNotIn("- worker_role:", prompt)
                 self.assertIn("CUSTOM ASSIGNMENT", prompt)
                 self.assertIn("artifact: <canonical path | ->", prompt)

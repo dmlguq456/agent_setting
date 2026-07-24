@@ -68,6 +68,21 @@ class NestedEligibilityTest(unittest.TestCase):
         self.assertEqual(row["failure_class"], "noncanonical-parent-transport")
         checked.assert_not_called()
 
+    def test_opencode_depth2_child_fails_closed_before_runtime_probe(self):
+        with tempfile.TemporaryDirectory() as worktree, \
+             mock.patch.dict(os.environ, {"AGENT_NESTED_HEADLESS_NETWORK": "1"}, clear=True), \
+             mock.patch.object(N, "command_check") as checked:
+            args = self.args(worktree)
+            args.child_harness = "opencode"
+            row = N.evaluate(args)
+        self.assertEqual(row["status"], "unsupported")
+        self.assertEqual(row["probe_source"], "dispatch-contract-v3")
+        self.assertEqual(
+            row["failure_class"],
+            "opencode-standard-depth2-unsupported",
+        )
+        checked.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

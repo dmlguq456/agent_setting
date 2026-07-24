@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-import os, subprocess, sys, tempfile, unittest
+import os, subprocess, sys, tempfile, time, unittest
 from unittest import mock
 from pathlib import Path
 
 P=Path(__file__).with_name("dispatch_contract.py")
 sys.path.insert(0,str(P.parent))
 import dispatch_contract as D
+from replica_batch_contract import build_manifest
 
 CURRENT="attempt_schema_version=2,dispatch_depth=2,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless"
 
@@ -57,9 +58,342 @@ class DispatchContractTest(unittest.TestCase):
    self.assertEqual(identity["pid_start"],D.process_start_ticks(proc.pid))
    self.assertEqual(identity.get("pid_host"),str(proc.pid))
    self.assertEqual(identity.get("pid_host_start"),identity["pid_start"])
+   expected_host_ns=D.process_namespace_identity(1) or identity.get("pid_observer_ns")
+   self.assertEqual(identity.get("pid_host_ns"),expected_host_ns)
+   self.assertEqual(identity.get("pid_host_proof"),D.PID_HOST_NAMESPACE_PROOF)
    self.assertEqual(identity.get("pgid"),str(proc.pid))
   finally:
    proc.kill();proc.wait()
+
+ def test_remounted_proc_nspid_is_bound_to_inner_namespace(self):
+  inner_namespace="pid:[inner-remounted]"
+  def namespace_identity(pid="self"):
+   return None if pid == 1 else inner_namespace
+  with mock.patch.object(D,"process_namespace_identity",side_effect=namespace_identity), \
+       mock.patch.object(D,"process_start_ticks",return_value="42"), \
+       mock.patch.object(D,"process_namespace_pids",return_value=(7,)), \
+       mock.patch.object(D.os,"getpgid",return_value=7):
+   identity=D.process_launch_identity(7)
+  self.assertEqual(identity["pid_host"],"7")
+  self.assertEqual(identity["pid_host_ns"],inner_namespace)
+  self.assertEqual(identity["pid_host_proof"],D.PID_HOST_NAMESPACE_PROOF)
+  with mock.patch.object(D,"process_namespace_identity",return_value="pid:[outer]"), \
+       mock.patch.object(D,"_proc_observation") as observation:
+   result=D.attempt_process_quiescence({**identity,"pid_scope":"namespace-local"})
+  self.assertEqual((result.state,result.reason),
+                   ("unverifiable","process-namespace-unverifiable"))
+  observation.assert_not_called()
+
+ def test_exact_process_quiescence_is_live_then_ready_only_after_reap(self):
+  proc=subprocess.Popen(
+   [sys.executable,"-c","import time; time.sleep(30)"],
+   start_new_session=True)
+  try:
+   metadata=D.process_launch_identity(proc.pid)
+   live=D.attempt_process_quiescence(metadata)
+   self.assertEqual(live.state,"live")
+   self.assertEqual(live.pid,proc.pid)
+   proc.terminate();proc.wait(timeout=5)
+   gone=D.attempt_process_quiescence(metadata)
+   self.assertEqual(gone.state,"quiescent")
+   self.assertIn("pid-gone",gone.reason)
+  finally:
+   if proc.poll() is None:proc.kill()
+   proc.wait()
+
+ def test_process_quiescence_fail_closed_and_terminal_edge_matrix(self):
+  self.assertEqual(
+   D.attempt_process_quiescence({}).state,"unverifiable")
+  self.assertEqual(
+   D.attempt_process_quiescence({"launch_outcome":"never-launched"}).state,
+   "quiescent")
+  with mock.patch.object(D,"process_namespace_identity",return_value="pid:[other]"):
+   mismatch=D.attempt_process_quiescence({
+    "pid":str(os.getpid()),"pid_start":D.process_start_ticks(os.getpid()),
+    "pid_scope":"namespace-local","pid_observer_ns":"pid:[source]",
+   })
+  self.assertEqual((mismatch.state,mismatch.reason),
+                   ("unverifiable","process-namespace-unverifiable"))
+  host_metadata={
+   "pid":"437","pid_start":"20","pid_scope":"namespace-local",
+   "pid_observer_ns":"pid:[source]","pid_host":"1437","pid_host_start":"20",
+   "pid_host_ns":"pid:[observer]",
+  }
+  with mock.patch.object(D,"process_namespace_identity",return_value="pid:[observer]"), \
+       mock.patch.object(D,"_proc_observation",return_value=("present","20","S")):
+   no_proof=D.attempt_process_quiescence(host_metadata)
+   legacy_proof=D.attempt_process_quiescence({
+    **host_metadata,"pid_host_proof":"nspid-outermost"})
+   proven=D.attempt_process_quiescence({
+    **host_metadata,"pid_host_proof":D.PID_HOST_NAMESPACE_PROOF})
+  self.assertEqual(no_proof.state,"unverifiable")
+  self.assertEqual(legacy_proof.state,"unverifiable")
+  self.assertEqual((proven.state,proven.pid),("live",1437))
+  with mock.patch.object(D,"_proc_observation",return_value=("present","different","S")):
+   reused=D.attempt_process_quiescence({
+    "pid":str(os.getpid()),"pid_start":"original","pid_scope":"host-visible",
+   })
+  self.assertEqual((reused.state,reused.reason),("quiescent","local-pid-reused"))
+
+ def test_foreground_reap_note_cannot_override_a_live_recorded_process(self):
+  metadata={
+   "pid":str(os.getpid()),
+   "pid_start":D.process_start_ticks(os.getpid()),
+   "launch_outcome":"governed-process-reaped",
+  }
+  result=D.attempt_process_quiescence(metadata)
+  self.assertEqual(result.state,"live")
+
+ def test_process_identity_and_group_observation_fail_closed_on_unknown(self):
+  with mock.patch.object(
+      D,"_proc_observation",return_value=("inaccessible","", "")):
+   self.assertFalse(D.process_identity_is_live(123,"42"))
+  with mock.patch.object(
+      D,"_proc_observation",return_value=("missing","", "")):
+   self.assertFalse(D.process_identity_is_live(123,"42"))
+  with mock.patch.object(D.Path,"iterdir",side_effect=PermissionError(13,"denied")):
+   observation=D.process_group_observation(77)
+  self.assertEqual(observation.state,"unverifiable")
+  self.assertIn("procfs-enumeration",observation.reason)
+
+ def test_known_group_member_outranks_partial_procfs_scan_failure(self):
+  entries=(Path("/proc/101"),Path("/proc/102"))
+  stat="101 (worker) "+" ".join(["S","1","77"]+["0"]*16+["42"])
+  original_read_text=D.Path.read_text
+  def read_text(path,*args,**kwargs):
+   if str(path)=="/proc/101/stat": return stat
+   if str(path)=="/proc/102/stat": raise PermissionError(13,"denied")
+   return original_read_text(path,*args,**kwargs)
+  with mock.patch.object(D.Path,"iterdir",return_value=entries), \
+       mock.patch.object(D.Path,"read_text",new=read_text):
+   observation=D.process_group_observation(77)
+  self.assertEqual(observation.state,"populated")
+  self.assertEqual(observation.members,((101,"42","S"),))
+  self.assertIn("procfs-member:102",observation.reason)
+
+ def test_foreground_reap_receipt_is_namespace_portable_but_never_hides_live(self):
+  receipt={
+   "pid":"437","pid_start":"42","pgid":"437",
+   "pid_scope":"namespace-local","pid_observer_ns":"pid:[source]",
+   "pid_ns":"pid:[source]","launch_lifecycle":"foreground-scoped",
+   "launch_outcome":"governed-process-reaped",
+   "group_reap_proof":D.GROUP_REAP_PROOF,"group_reap_pgid":"437",
+  }
+  with mock.patch.object(D,"process_namespace_identity",return_value="pid:[other]"):
+   reaped=D.attempt_process_quiescence(receipt)
+  self.assertEqual(
+   (reaped.state,reaped.reason),
+   ("quiescent","governed-process-group-reaped"))
+  with mock.patch.object(D,"process_namespace_identity",return_value="pid:[source]"), \
+       mock.patch.object(D,"_proc_observation",return_value=("present","42","S")):
+   live=D.attempt_process_quiescence(receipt)
+  self.assertEqual((live.state,live.reason),("live","local-pid-live"))
+
+ def test_missing_leader_requires_complete_owned_group_observation(self):
+  metadata={"pid":"437","pid_start":"42","pgid":"437"}
+  unknown=D.ProcessGroupObservation("unverifiable",reason="denied")
+  with mock.patch.object(D,"_proc_observation",return_value=("missing","", "")), \
+       mock.patch.object(D,"process_group_observation",return_value=unknown):
+   result=D.attempt_process_quiescence(metadata)
+  self.assertEqual(
+   (result.state,result.reason),
+   ("unverifiable","local-process-group-unverifiable"))
+  with mock.patch.object(D,"_proc_observation",return_value=("missing","", "")):
+   no_group=D.attempt_process_quiescence({"pid":"437","pid_start":"42"})
+  self.assertEqual(no_group.state,"unverifiable")
+  with mock.patch.object(D,"_proc_observation",return_value=("missing","", "")), \
+       mock.patch.object(D.os,"killpg") as killpg:
+   authority=D.signal_exact_process_group(437,"42",__import__("signal").SIGTERM)
+  self.assertEqual(authority,"leader-gone")
+  killpg.assert_not_called()
+
+ def test_launch_identity_rejects_procfs_pid_namespace_mismatch(self):
+  def namespace(pid="self"):
+   return "pid:[inner]" if pid==437 else "pid:[observer]"
+  with mock.patch.object(D,"process_namespace_identity",side_effect=namespace), \
+       mock.patch.object(D,"process_start_ticks",return_value="42") as start, \
+       mock.patch.object(D,"process_namespace_pids",return_value=(1437,437)) as nspid, \
+       mock.patch.object(D.os,"getpgid",return_value=437):
+   identity=D.process_launch_identity(437)
+  self.assertNotIn("pid_start",identity)
+  self.assertNotIn("pid_host",identity)
+  start.assert_not_called();nspid.assert_not_called()
+
+ def test_conflicting_local_and_host_identity_proofs_have_no_authority(self):
+  metadata={
+   "pid":"437","pid_start":"42","pgid":"437",
+   "pid_observer_ns":"pid:[observer]","pid_ns":"pid:[observer]",
+   "pid_host":"1437","pid_host_start":"42","pgid_host":"1437",
+   "pid_host_ns":"pid:[observer]","pid_host_proof":D.PID_HOST_NAMESPACE_PROOF,
+  }
+  with mock.patch.object(D,"process_namespace_identity",return_value="pid:[observer]"), \
+       mock.patch.object(D,"_proc_observation") as observation:
+   self.assertEqual(D.authoritative_process_identities(metadata),())
+   result=D.attempt_process_quiescence(metadata)
+  self.assertEqual(result.state,"unverifiable")
+  observation.assert_not_called()
+
+ def test_replica_expectation_rejects_register_and_binds_exact_start(self):
+  with tempfile.TemporaryDirectory() as td:
+   route_path=Path(td)/"route.json"
+   fallback=[{"fallback_hop":"same-harness-headless","ordinal":1,
+              "candidates":[{"child_harness":"codex","status":"supported"}]},
+             {"fallback_hop":"cross-harness-headless","ordinal":2,
+              "candidates":[{"child_harness":"claude","status":"supported"}]}]
+   route={"route_id":"rt-replica","nodes":[
+    {"id":"plan","dispatch_depth":2,"replica_group":"plan","fallback_hops":fallback},
+    {"id":"plan-replica","dispatch_depth":2,"replica_group":"plan","fallback_hops":fallback},
+   ]}
+   route_path.write_text(__import__("json").dumps(route))
+   with self.assertRaises(D.DispatchContractError) as caught:
+    D.replica_batch_expectation(route_path,"plan","register")
+   self.assertEqual(caught.exception.reason,"replica-group-batch-required")
+   expected=D.replica_batch_expectation(
+    route_path,"plan","start",attempt_id="att-replica-start",
+    parent_attempt_id="att-parent",harness="codex",
+    fallback_hop="same-harness-headless",fallback_ordinal=1)
+   self.assertEqual(expected["batch_group"],"plan")
+   self.assertEqual(expected["batch_attempt_id"],"att-replica-start")
+   self.assertEqual(expected["batch_parent_attempt_id"],"att-parent")
+
+   manifest,manifest_digest,leg_digests=build_manifest(
+    replica_group="plan",route_id="rt-replica",parent_attempt_id="att-parent",
+    independence="cross-harness",members=[
+     {"assignment_sha256":"sha256:"+"a"*64,"attempt_id":"att-replica-start",
+      "route_node":"plan","harness":"codex",
+      "fallback_hop":"same-harness-headless","fallback_ordinal":1},
+     {"assignment_sha256":"sha256:"+"a"*64,"attempt_id":"att-replica-peer",
+      "route_node":"plan-replica","harness":"claude",
+      "fallback_hop":"cross-harness-headless","fallback_ordinal":2},
+    ])
+   expected=D.replica_batch_expectation(
+    route_path,"plan","start",attempt_id="att-replica-start",
+    parent_attempt_id="att-parent",harness="codex",
+    fallback_hop="same-harness-headless",fallback_ordinal=1,
+    assignment_sha256="sha256:"+"a"*64)
+   payload={**{key:value for key,value in expected.items() if not key.startswith("_")},
+            "batch_admission_count":2,"batch_independence":"cross-harness",
+            "batch_manifest":manifest,"batch_manifest_sha256":manifest_digest,
+            "batch_leg_sha256":leg_digests["att-replica-start"]}
+   D._validate_replica_reservation(payload,expected)
+   tampered={**payload,"batch_assignment_sha256":"sha256:"+"b"*64}
+   with self.assertRaises(D.DispatchContractError):
+    D._validate_replica_reservation(tampered,expected)
+
+   proof={
+    "agent_home":"/agent-home","attempt_id":"att-replica-peer",
+    "jobs":"/agent-home/.dispatch/jobs.log",
+    "manifest_sha256":manifest_digest,"reason":"host-pid-live",
+    "route":"/route.json","state":"active",
+   }
+   proof_digest="sha256:"+__import__("hashlib").sha256(
+    __import__("json").dumps(
+     proof,separators=(",",":"),sort_keys=True).encode()).hexdigest()
+   partial={
+    **payload,"batch_admission_count":1,
+    "batch_peer_attempt_id":"att-replica-peer",
+    "batch_peer_state":"active","batch_peer_proof":proof,
+    "batch_peer_proof_sha256":proof_digest,
+   }
+   D._validate_replica_reservation(partial,expected)
+   for mutation in (
+    lambda value:value.pop("batch_peer_proof"),
+    lambda value:value.update(batch_peer_attempt_id="att-wrong-peer"),
+    lambda value:value["batch_peer_proof"].update(reason="tampered"),
+   ):
+    broken=__import__("copy").deepcopy(partial)
+    mutation(broken)
+    with self.assertRaises(D.DispatchContractError):
+     D._validate_replica_reservation(broken,expected)
+
+ def test_replica_token_cannot_authorize_non_replica_start(self):
+  with self.assertRaises(D.DispatchContractError) as caught:
+   D._validate_replica_reservation({"reservation_kind":"replica-batch"},None)
+  self.assertEqual(caught.exception.reason,"replica-group-reservation-mismatch")
+
+ def test_replica_reservation_mismatch_is_rejected_before_claim(self):
+  expected={
+   "reservation_kind":"replica-batch","batch_declared_size":2,
+   "batch_group":"plan","batch_route_id":"rt-replica",
+   "batch_parent_attempt_id":"att-parent","batch_attempt_id":"att-leg",
+   "batch_route_node":"plan","batch_harness":"codex",
+   "batch_fallback_hop":"same-harness-headless","batch_fallback_ordinal":1,
+  }
+  payload={
+   **expected,"state":"unclaimed",
+   "batch_route_node":"plan-replica",
+   "batch_manifest_sha256":"sha256:"+"a"*64,
+   "batch_leg_sha256":"sha256:"+"b"*64,
+  }
+  with mock.patch.object(D,"_governor_json",return_value=payload):
+   with self.assertRaises(D.DispatchContractError) as caught:
+    D.reserve_governor_token(
+     Path("/governor"),Path("/root"),"dispatch",
+     provided_token="a"*32,expected_reservation=expected)
+  self.assertEqual(caught.exception.reason,"replica-group-reservation-mismatch")
+
+ def test_process_group_descendant_keeps_attempt_live_after_leader_exit(self):
+  proc=subprocess.Popen(
+   [sys.executable,"-c",
+    "import subprocess,time; subprocess.Popen(['sleep','0.6']); time.sleep(0.1)"],
+   start_new_session=True)
+  identity=D.process_launch_identity(proc.pid)
+  proc.wait(timeout=5)
+  draining=D.attempt_process_quiescence(identity)
+  self.assertEqual((draining.state,draining.reason),
+                   ("live","local-process-group-live"))
+  __import__("time").sleep(0.7)
+  self.assertEqual(D.attempt_process_quiescence(identity).state,"quiescent")
+
+ def test_mutation_api_rejects_immutable_identity_and_conflicting_outcome(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log"
+   jobs.write_text(
+    "2026-07-24T00:00:00Z\topen\t/repo\t/wt\tworker\t"+CURRENT+
+    ",attempt_id=att-mutation-test,launch_claimed=1\n",encoding="utf-8")
+   with self.assertRaises(D.DispatchContractError) as caught:
+    D.annotate_attempt_row(jobs,"att-mutation-test",{"attempt_id":"att-forged"})
+   self.assertEqual(caught.exception.reason,"attempt-immutable-metadata-mutation")
+   self.assertTrue(D.annotate_attempt_row(
+    jobs,"att-mutation-test",{"launch_outcome":"never-launched"}))
+   with self.assertRaises(D.DispatchContractError) as caught:
+    D.annotate_attempt_row(
+     jobs,"att-mutation-test",{"launch_outcome":"governed-process-reaped"})
+   self.assertEqual(caught.exception.reason,"attempt-launch-outcome-conflict")
+
+ def test_semantic_completion_readiness_blocks_live_process_and_conflicting_retry(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log"
+   proc=subprocess.Popen(
+    [sys.executable,"-c","import time; time.sleep(30)"],
+    start_new_session=True)
+   try:
+    identity=D.process_launch_identity(proc.pid)
+    metadata=(
+     f"{CURRENT},route_id=rt-ready,route_node=plan,attempt_id=att-ready-main,"
+     "note=completed-marker,"+
+     ",".join(f"{key}={value}" for key,value in identity.items())
+    )
+    jobs.write_text(
+     f"2026-07-24T00:00:00Z\tdone\t/repo\t/wt\tplan\t{metadata}\n",
+     encoding="utf-8")
+    route={"route_id":"rt-ready"}; node={"id":"plan","kind":"pipeline-stage"}
+    marker={"attempt_id":"att-ready-main","registered_worker":True}
+    draining=D.completion_attempt_readiness(route,node,marker,jobs)
+    self.assertEqual(draining.state,"draining")
+    proc.terminate();proc.wait(timeout=5)
+    ready=D.completion_attempt_readiness(route,node,marker,jobs)
+    self.assertEqual(ready.state,"ready")
+    with jobs.open("a",encoding="utf-8") as handle:
+     handle.write(
+      f"2026-07-24T00:00:01Z\topen\t/repo\t/wt\tplan-retry\t{CURRENT},"
+      "route_id=rt-ready,route_node=plan,attempt_id=att-ready-retry\n")
+    conflict=D.completion_attempt_readiness(route,node,marker,jobs)
+    self.assertEqual((conflict.state,conflict.reason),
+                     ("draining","conflicting-active-retry"))
+   finally:
+    if proc.poll() is None:proc.kill()
+    proc.wait()
 
  def test_claimed_spawn_rechecks_parent_and_publishes_identity_under_lock(self):
   with tempfile.TemporaryDirectory() as td:
@@ -76,10 +410,14 @@ class DispatchContractTest(unittest.TestCase):
     binding=D.resolve_live_parent_attempt(
      jobs,parent_slug="owner",repo="/repo",worktree="/wt",
      expected_attempt_id="att-parent-atomic")
-    self.assertTrue(D.claim_attempt_row(jobs,"att-child-atomic",child_row,launch=True))
+    self.assertTrue(D.claim_attempt_row(jobs,"att-child-atomic",child_row,launch=False))
     child,identity=D.spawn_claimed_attempt(
      jobs,"att-child-atomic",parent_binding=binding,
-     spawn=lambda: subprocess.Popen(["sleep","60"],start_new_session=True),
+     spawn=lambda gate_fd: subprocess.Popen(
+      [sys.executable, str(Path(__file__).with_name("launch-fence.py")),
+       "--parent-pid", str(os.getpid()), "--gate-fd", str(gate_fd), "--",
+       "sleep", "60"],
+      pass_fds=(gate_fd,), start_new_session=True),
      launch_metadata={"launch_lifecycle":"detached"})
     meta=D.parse_registry_metadata(jobs.read_text().splitlines()[1].split("\t")[5])
     self.assertEqual(meta["pid"],str(child.pid))
@@ -103,15 +441,146 @@ class DispatchContractTest(unittest.TestCase):
    child_row=("2026-07-23T00:00:01Z\topen\t/repo\t/wt\tchild\t"
               f"{CURRENT},worker_type=stage,parent=owner,"
               "parent_attempt_id=att-parent-race,attempt_id=att-child-race")
-   self.assertTrue(D.claim_attempt_row(jobs,"att-child-race",child_row,launch=True))
+   self.assertTrue(D.claim_attempt_row(jobs,"att-child-race",child_row,launch=False))
    parent.kill();parent.wait()
    spawned=[]
    with self.assertRaises(D.DispatchContractError) as caught:
     D.spawn_claimed_attempt(
      jobs,"att-child-race",parent_binding=binding,
-     spawn=lambda: spawned.append(True))
+     spawn=lambda gate_fd: spawned.append(True))
    self.assertEqual(caught.exception.reason,"parent-attempt-not-live")
    self.assertEqual(spawned,[])
+
+ def test_incomplete_launch_identity_never_releases_fence(self):
+  with tempfile.TemporaryDirectory() as td:
+   base=Path(td);jobs=base/"jobs.log";marker=base/"marker"
+   attempt="att-incomplete-launch"
+   row=(f"2026-07-23T00:00:01Z\topen\t/repo\t/wt\tchild\t{CURRENT},"
+        f"attempt_id={attempt}")
+   self.assertTrue(D.claim_attempt_row(jobs,attempt,row,launch=False))
+   child=[]
+   def spawn(gate_fd):
+    proc=subprocess.Popen(
+     [sys.executable,str(Path(__file__).with_name("launch-fence.py")),
+      "--parent-pid",str(os.getpid()),"--gate-fd",str(gate_fd),"--",
+      sys.executable,"-c",f"from pathlib import Path;Path({str(marker)!r}).write_text('bad')"],
+     pass_fds=(gate_fd,),start_new_session=True)
+    child.append(proc);return proc
+   with mock.patch.object(D,"process_launch_identity",side_effect=lambda pid:{"pid":str(pid)}):
+    with self.assertRaises(D.DispatchContractError) as caught:
+     D.spawn_claimed_attempt(
+      jobs,attempt,parent_binding=None,spawn=spawn,
+      launch_metadata={"launch_lifecycle":"detached"})
+   self.assertEqual(caught.exception.reason,"attempt-launch-identity-incomplete")
+   self.assertFalse(marker.exists())
+   self.assertIsNotNone(child[0].poll())
+
+ def test_parent_death_after_spawn_prevents_fence_release(self):
+  with tempfile.TemporaryDirectory() as td:
+   base=Path(td);jobs=base/"jobs.log";marker=base/"marker"
+   parent=subprocess.Popen(["sleep","60"]);child=[]
+   try:
+    start=D.process_start_ticks(parent.pid)
+    jobs.write_text(self.owner_row("att-parent-post-spawn",parent.pid,start)+"\n")
+    binding=D.resolve_live_parent_attempt(
+     jobs,parent_slug="owner",repo="/repo",worktree="/wt",
+     expected_attempt_id="att-parent-post-spawn")
+    attempt="att-child-post-spawn"
+    row=(f"2026-07-23T00:00:01Z\topen\t/repo\t/wt\tchild\t{CURRENT},"
+         "worker_type=stage,parent=owner,parent_attempt_id=att-parent-post-spawn,"
+         f"attempt_id={attempt}")
+    self.assertTrue(D.claim_attempt_row(jobs,attempt,row,launch=False))
+    def spawn(gate_fd):
+     proc=subprocess.Popen(
+      [sys.executable,str(Path(__file__).with_name("launch-fence.py")),
+       "--parent-pid",str(os.getpid()),"--gate-fd",str(gate_fd),"--",
+       sys.executable,"-c",f"from pathlib import Path;Path({str(marker)!r}).write_text('bad')"],
+      pass_fds=(gate_fd,),start_new_session=True)
+     child.append(proc);return proc
+    with mock.patch.object(
+        D,"process_identity_is_live",side_effect=(True,False)):
+     with self.assertRaises(D.DispatchContractError) as caught:
+      D.spawn_claimed_attempt(
+       jobs,attempt,parent_binding=binding,spawn=spawn,
+       launch_metadata={"launch_lifecycle":"detached"})
+    self.assertEqual(caught.exception.reason,"parent-attempt-not-live-after-spawn")
+    self.assertFalse(marker.exists())
+    self.assertIsNotNone(child[0].poll())
+   finally:
+    if parent.poll() is None:parent.kill()
+    parent.wait()
+    for proc in child:
+     if proc.poll() is None:proc.kill()
+     proc.wait()
+
+ def test_dead_unstarted_registry_fence_is_atomically_retryable(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log";attempt="att-unstarted-recovery"
+   proc=subprocess.Popen(["sleep","0.05"],start_new_session=True)
+   identity=D.process_launch_identity(proc.pid)
+   metadata=(
+    f"{CURRENT},attempt_id={attempt},launch_claimed=1,"
+    "launch_fence=registry-v1,launch_lifecycle=detached,"+
+    ",".join(f"{key}={value}" for key,value in identity.items())
+   )
+   jobs.write_text(
+    f"2026-07-24T00:00:00Z\topen\t/repo\t/wt\tworker\t{metadata}\n",
+    encoding="utf-8")
+   proc.wait(timeout=5)
+   self.assertTrue(D.recover_unstarted_attempt(jobs,attempt))
+   recovered=D.parse_registry_metadata(
+    jobs.read_text(encoding="utf-8").strip().split("\t",5)[5])
+   self.assertEqual(recovered["launch_claimed"],"0")
+   self.assertNotIn("pid",recovered)
+   self.assertTrue(D.attempt_launch_is_available(jobs,attempt))
+
+ def test_launcher_sigkill_after_registration_leaves_retryable_unclaimed_row(self):
+  with tempfile.TemporaryDirectory() as td:
+   base=Path(td);jobs=base/"jobs.log";ready=base/"ready"
+   attempt="att-register-crash-retry"
+   row=(
+    f"2026-07-24T00:00:00Z\topen\t/repo\t/wt\tworker\t{CURRENT},"
+    f"attempt_id={attempt},launch_fence=registry-v1"
+   )
+   launcher=subprocess.Popen([
+    sys.executable,"-c",
+    (
+     "import time;from pathlib import Path;"
+     "from dispatch_contract import claim_attempt_row;"
+     f"claim_attempt_row(Path({str(jobs)!r}),{attempt!r},{row!r},launch=False);"
+     f"Path({str(ready)!r}).write_text('ready');time.sleep(60)"
+    )],env={**os.environ,"PYTHONPATH":str(P.parent)})
+   try:
+    deadline=time.monotonic()+5
+    while not ready.exists() and time.monotonic()<deadline:
+     time.sleep(0.01)
+    self.assertTrue(ready.exists())
+    launcher.kill();launcher.wait(timeout=5)
+    metadata=D.parse_registry_metadata(
+     jobs.read_text(encoding="utf-8").strip().split("\t",5)[5])
+    self.assertEqual(metadata["launch_claimed"],"0")
+    self.assertNotIn("pid",metadata)
+    self.assertTrue(D.attempt_launch_is_available(jobs,attempt))
+   finally:
+    if launcher.poll() is None:launcher.kill()
+    launcher.wait()
+
+ def test_started_registry_fence_can_never_be_reset_for_retry(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log";attempt="att-started-no-recovery"
+   proc=subprocess.Popen(["sleep","0.05"],start_new_session=True)
+   identity=D.process_launch_identity(proc.pid)
+   metadata=(
+    f"{CURRENT},attempt_id={attempt},launch_claimed=1,"
+    "launch_fence=registry-v1,launch_started=1,launch_lifecycle=detached,"+
+    ",".join(f"{key}={value}" for key,value in identity.items())
+   )
+   jobs.write_text(
+    f"2026-07-24T00:00:00Z\topen\t/repo\t/wt\tworker\t{metadata}\n",
+    encoding="utf-8")
+   proc.wait(timeout=5)
+   self.assertFalse(D.recover_unstarted_attempt(jobs,attempt))
+   self.assertIn("launch_claimed=1",jobs.read_text(encoding="utf-8"))
 
  def test_nested_registry_is_inherited_and_immutable(self):
   with tempfile.TemporaryDirectory() as td:
@@ -193,6 +662,22 @@ class DispatchContractTest(unittest.TestCase):
    self.assertFalse(D.claim_attempt_row(jobs,attempt,exact,launch=True))
    self.assertIn("launch_claimed=1",jobs.read_text())
    self.assertEqual(len(jobs.read_text().splitlines()),2)
+ def test_preclaim_gate_and_launch_claim_share_registry_lock(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log"; attempt="att-preclaim00001"
+   row=f"2026-07-16T00:00:00Z\topen\t/repo\t/wt\tstage\t{CURRENT},capability=code-plan,attempt_id={attempt}"
+   self.assertTrue(D.claim_attempt_row(jobs,attempt,row))
+   before=jobs.read_bytes()
+   observed=[]
+   def reject(lines):
+    observed.extend(lines)
+    raise D.DispatchContractError("predecessor-process-draining","fixture")
+   with self.assertRaises(D.DispatchContractError) as caught:
+    D.claim_attempt_row(jobs,attempt,row,launch=True,preclaim=reject)
+   self.assertEqual(caught.exception.reason,"predecessor-process-draining")
+   self.assertEqual(observed,before.decode().splitlines())
+   self.assertEqual(jobs.read_bytes(),before)
+   self.assertNotIn("launch_claimed=1",jobs.read_text())
  def test_existing_attempt_id_rejects_conflicting_immutable_identity_without_mutation(self):
   with tempfile.TemporaryDirectory() as td:
    jobs=Path(td)/"jobs.log"; attempt="att-conflict00001"
@@ -269,6 +754,29 @@ class DispatchContractTest(unittest.TestCase):
    self.assertIn("\topen\t",jobs.read_text())
    self.assertTrue(D.close_attempt_row_if(jobs,attempt,"dead-test",lambda _fields:True))
    self.assertIn("note=dead-test",jobs.read_text())
+
+ def test_teardown_claim_excludes_ordinary_close_and_owner_closes_atomically(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log";attempt="att-teardown-cas01"
+   row=f"2026-07-16T00:00:00Z\topen\t/r\t/w\ts\t{CURRENT},attempt_id={attempt}"
+   self.assertTrue(D.claim_attempt_row(jobs,attempt,row))
+   self.assertTrue(D.annotate_attempt_row_if(
+    jobs,attempt,{"teardown_claim":"claim-1","teardown_claimed_at":"now",
+                  "teardown_claim_pid":str(os.getpid()),
+                  "teardown_claim_pid_start":D.process_start_ticks(os.getpid())},
+    lambda _fields:True))
+   self.assertFalse(D.close_attempt_row(jobs,attempt,"ordinary-completion"))
+   self.assertFalse(D.close_attempt_row_if(
+    jobs,attempt,"ordinary-reconcile",lambda _fields:True))
+   self.assertFalse(D.close_attempt_row_if(
+    jobs,attempt,"wrong-owner",lambda _fields:True,teardown_claim="claim-2"))
+   self.assertTrue(D.close_attempt_row_if(
+    jobs,attempt,"dead-parent-terminated",lambda _fields:True,
+    teardown_claim="claim-1"))
+   metadata=D.parse_registry_metadata(jobs.read_text().split("\t")[5])
+   self.assertEqual(metadata.get("teardown_claim"),"")
+   self.assertEqual(metadata.get("teardown_claim_pid"),"")
+   self.assertEqual(metadata["note"],"dead-parent-terminated")
  def test_quick_attempts_are_serial_and_exhaust_exactly(self):
   with tempfile.TemporaryDirectory() as td:
    jobs=Path(td)/"jobs.log"

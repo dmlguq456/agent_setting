@@ -427,20 +427,29 @@ their runtimes exit on limit.) Patterns are conservative per 2026-07 issue evide
 (#8203·#34886·#15890) and kept in sync with the shared list. Conformance (incl. the hang case):
 `adapters/opencode/bin/dispatch-headless.sd15.test.sh`.
 
-### SD-48~50 nested dispatch recovery — realized
+### SD-48~50 nested dispatch recovery — parity: partial (fail-closed)
 
-OpenCode independently enforces checked dispatch-depth-2 tuple evidence and the
-inherited canonical global attempt registry. Its preflight exposes
-`nested-headless` and the portable ordered `dispatch-chain`; unsupported or
-unknown tuples remain explicit rather than borrowing another adapter's PASS.
+OpenCode participates in the inherited canonical global attempt registry for
+quick and registered dispatch-depth-1 work. It does not yet satisfy the
+registered standard+ dispatch-depth-2 contract: exact parent binding,
+foreground lifecycle, and supervisor snapshot parity are missing. The shared
+eligibility probe therefore returns
+`opencode-standard-depth2-unsupported` before any OpenCode runtime probe, and
+the OpenCode wrapper starts zero dispatch-depth-2 children. A standard+ owner must select
+a checked Codex or Claude target; otherwise it records an inline/quick fallback.
+The adapter's `nested-headless` diagnostic does not establish dispatch-depth-2 parity.
 
 ### SD-62 direct headless delegation — realized
 
-OpenCode consumes the v3 direct `dispatch-chain` contract. A conductor invokes
-the checked target adapter itself, while the canonical registry atomically
-claims the stable attempt identity. The retired broker exposes diagnostic
-`status`/`stop` only; v1/v2 broker routes remain inspectable but cannot register
-or start new workers. OpenCode remains an independently checked target tuple.
+OpenCode consumes the v3 direct `dispatch-chain` contract for its supported
+dispatch-depth-1 target surface. A conductor invokes the checked target adapter itself,
+while the canonical registry first records the stable attempt as registered-only;
+the shared launch fence publishes complete process identity with the claim and
+records payload start before exec. This does not establish standard+
+dispatch-depth-2 parity.
+The retired broker exposes diagnostic `status`/`stop` only; v1/v2 broker routes
+remain inspectable but cannot register or start new workers. Registered
+standard+ dispatch-depth-2 requests remain explicitly unsupported as described above.
 
 ## Distillation Boundary
 
