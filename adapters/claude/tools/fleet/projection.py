@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import glob
 import os
+import re
 import time
 from typing import Iterable, Optional
 
@@ -449,6 +450,67 @@ def _spec_stage_parts(root, slug):
     return topic, phase
 
 
+# Spec pipeline_state.yaml phase status vocabulary -> breadcrumb node state (2026-07-24).
+_SPEC_PHASE_STATE = {
+    "done": "done", "completed": "done", "complete": "done",
+    "in_progress": "active", "in-progress": "active", "active": "active", "wip": "active",
+    "pending": "pending", "todo": "pending", "planned": "pending", "not_started": "pending",
+    "deferred": "skipped", "n/a": "skipped", "na": "skipped",
+    "skip": "skipped", "skipped": "skipped",
+}
+_SPEC_PHASE_NUM = re.compile(r"^phase[\s_-]?(\d+)", re.I)
+
+
+def _spec_phase_state(raw):
+    return _SPEC_PHASE_STATE.get(_strip_comment(raw).strip().strip("'\"").lower(), "pending")
+
+
+def _spec_phase_display(name, index):
+    """Short breadcrumb label. Standard autopilot-spec phases (spec/scaffolding/design/dev)
+    stay verbatim; a long custom name collapses to ``Phase<N>`` (user 2026-07-24: keep the
+    breadcrumb bounded but readable — ``Phase1``, not ``p1``). The number comes from an
+    explicit ``phase_<N>_...`` prefix when present, else the 1-based position."""
+    m = _SPEC_PHASE_NUM.match(name)
+    if m:
+        return "Phase" + m.group(1)
+    if len(name) <= 12:
+        return name
+    return "Phase%d" % (index + 1)
+
+
+def _spec_phase_sequence(root, slug):
+    """Ordered ``[(display, state), ...]`` of the spec's declared phases for a lit breadcrumb.
+    Reads the same ``pipeline_state.yaml`` as ``_spec_stage_parts``; every IO/shape failure
+    yields ``[]`` (the caller falls back to the flat topic label). Zero-dep line parser — the
+    ``phases:`` block's indented ``key: status`` entries, in file order."""
+    path = _spec_pipeline_state_path(root, slug)
+    if not path:
+        return []
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.readlines()
+    except (OSError, UnicodeDecodeError):
+        return []
+    phases = []
+    in_phases = False
+    for raw in lines:
+        line = raw.rstrip("\n")
+        stripped = line.strip()
+        if not stripped:
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if in_phases and indent == 0:
+            in_phases = False
+        if indent == 0 and stripped.startswith("phases:"):
+            in_phases = True
+            continue
+        if in_phases and indent > 0 and not stripped.startswith("#"):
+            key, sep, value = stripped.partition(":")
+            if sep and key.strip():
+                phases.append((key.strip(), _spec_phase_state(value)))
+    return [(_spec_phase_display(name, i), state) for i, (name, state) in enumerate(phases)]
+
+
 def _artifact_latest_mtime(path):
     """Latest content mtime under an inferred plan dir (2-level glob covers
     ``plan/plan.md``, ``dev_logs/*``); falls back to the dir's own mtime."""
@@ -493,7 +555,14 @@ def _spec_marker_projection(entity, spec_markers, artifact_root=None, now=None):
         label += " %s" % topic
     if phase:
         label += " ·%s" % phase
-    return WorkProjection(source="artifact-inferred", stage_label=label), None, mtime
+    # Attach the ordered phase sequence so the row can render a lit breadcrumb
+    # (Phase✓ › … › dev●) instead of only the flat topic label; the topic rides the
+    # breadcrumb's own lead-in. `_route_view` is the same carrier route-exact uses.
+    phases = _spec_phase_sequence(root, slug)
+    route_view = {"spec_phases": phases, "spec_topic": topic} if phases else None
+    return (WorkProjection(source="artifact-inferred", stage_label=label,
+                           _route_view=route_view),
+            None, mtime)
 
 
 def _explicit(entity):

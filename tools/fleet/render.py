@@ -788,6 +788,9 @@ def _route_stage_segs(route_seq, working, max_width):
             items.append((i, nid + "✓", "stg%d_off" % (i % 5)))
         elif st == "active":
             items.append((i, nid, _cur_key(i)))
+        elif st == "skipped":
+            # deferred / n·a spec phase — present but deliberately not run (2026-07-24).
+            items.append((i, nid + "⊘", "dim"))
         else:
             items.append((i, nid, "stg%d_off" % (i % 5)))
     if max_width is not None:
@@ -956,6 +959,35 @@ def _projection_stage_text(entity, max_width=24):
     return _clip_w("stage %s%s" % (label, suffix), max_width)
 
 
+def _spec_phase_seq(entity):
+    """``[(display, state), ...]`` for a spec-grounding projection's lit phase breadcrumb, else
+    None. The sequence is attached by ``projection._spec_marker_projection`` in ``_route_view``."""
+    projection = getattr(entity, "work_projection", None)
+    if not projection or getattr(projection, "source", None) != "artifact-inferred":
+        return None
+    backing = getattr(projection, "_route_view", None) or {}
+    seq = backing.get("spec_phases")
+    if not seq:
+        return None
+    return [(str(a), str(b)) for a, b in seq]
+
+
+def _session_stage_segs(entity, working, max_width):
+    """Stage-zone segments for a session row. A spec-grounding projection with a parsed phase
+    sequence renders a lit breadcrumb (``spec <topic>: Phase✓ › … › dev●``) in the SAME syntax
+    as a dispatch conductor's route (user 2026-07-24 "분사 세션의 문법에 따라서 pipeline을 보여주고
+    해당 단계를 점멸"); everything else keeps the flat clipped label. Always returns a non-empty
+    seg list."""
+    seq = _spec_phase_seq(entity)
+    if seq:
+        topic = (getattr(entity.work_projection, "_route_view", None) or {}).get("spec_topic")
+        lead = ("spec %s: " % topic) if topic else "spec: "
+        body = _route_stage_segs(seq, working, max(4, max_width - _dw(lead)))
+        return [(lead, "name_dim")] + body
+    text = _projection_stage_text(entity, max_width=max_width)
+    return [(text or "-", "g_work" if text and working else "dim")]
+
+
 def _collapse_replica_nodes(nodes):
     """Fold replica legs (shared ``replica_group``) into one ``<group>(N-way)`` node.
 
@@ -1066,7 +1098,7 @@ def _unused_badge(s, compact=False):
 
 
 def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx_width=None,
-                 show_projection_stage=True):
+                 show_projection_stage=True, stage_zone=None):
     live = s.liveness
     slug = s.slug or (s.cwd.rsplit("/", 1)[-1] if s.cwd else "?")
     dim_tel = live in ("stale", "dead") or s.app_server or s.detached
@@ -1139,10 +1171,15 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx
     if used < session_width:
         segs.append((" " * (session_width - used), None))
 
-    projection_stage = _projection_stage_text(s) if show_projection_stage else ""
     segs.append((" " * _WIDE_STAGE_GAP, None))
-    segs.append((projection_stage or "-",
-                 "g_work" if projection_stage and live == "working" else "dim"))
+    if show_projection_stage:
+        # Responsive stage zone (2026-07-24): the old flat label was hard-clipped at 24 cells and
+        # truncated to `…` even on a wide terminal with a mostly-empty zone (user "stage 폭 엄청
+        # 길잖아 근데 왜 금방 … 표시로 줄이는지"). Use the same terminal-aware budget the conductor
+        # breadcrumb got, so a spec phase breadcrumb / long label fills the real space first.
+        segs += _session_stage_segs(s, live == "working", stage_zone or _STAGE_ZONE_MAX)
+    else:
+        segs.append(("-", "dim"))
     if dead_stale:
         # F-13: a stale/dead row has no live model/effort/ctx to show — a wall of "—" placeholders
         # read as broken telemetry rather than "this session stopped". One `last seen <age>` cell
@@ -3468,7 +3505,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                                           child_count=nested_n,
                                           name_width=wide_name_width,
                                           ctx_width=wide_ctx_width,
-                                          show_projection_stage=not visible_route_owner))
+                                          show_projection_stage=not visible_route_owner,
+                                          stage_zone=wide_route_zone))
             if not (s.liveness in ("stale", "dead") or s.app_server or s.detached):
                 _sess_bold_ids.update(range(_n0, len(lines)))
             detail = _context_detail_row(s, term_width=term_width)
