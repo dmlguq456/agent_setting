@@ -1,0 +1,1 @@
+../../../hooks/capability-grounding-marker.sh

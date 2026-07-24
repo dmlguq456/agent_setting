@@ -980,6 +980,8 @@ def _session_stage_segs(entity, working, max_width):
     a dim paren group joined by ``·`` exactly as ``_opts_segs`` does, then the dim ` : `
     breadcrumb lead-in (``_stage_zone_segs``). Deferred / n·a phases are dropped (not part of this
     project's flow; also avoids a skip glyph absent from many fonts). Otherwise the flat label."""
+    cap = getattr(entity, "cap_grounding", None) or {}
+    cap_intensity = _short_level(cap.get("intensity"))
     seq = _spec_phase_seq(entity)
     if seq:
         backing = getattr(entity.work_projection, "_route_view", None) or {}
@@ -988,9 +990,8 @@ def _session_stage_segs(entity, working, max_width):
         knob_items = []
         if mode:
             knob_items.append(mode.replace(",", "·"))   # multiple modes ride the same axis
-        intensity = _short_level(backing.get("spec_intensity"))
-        if intensity:
-            knob_items.append(intensity)
+        if cap_intensity:                                # intensity from the grounding marker
+            knob_items.append(cap_intensity)
         prefix = [("spec", "name_dim")]
         if knob_items:
             prefix += [("(", "dim"), ("·".join(knob_items), "dim"), (")", "dim")]
@@ -998,6 +999,20 @@ def _session_stage_segs(entity, working, max_width):
         used = sum(_dw(text) for text, _key in prefix)
         body = _route_stage_segs(shown, working, max(4, max_width - used))
         return prefix + body
+    if cap.get("capability"):
+        # Inline entry work with no route/dispatch/spec projection: `capability(mode·intensity)`,
+        # the same syntax the dispatch options column uses (user 2026-07-24 "다른 인라인도 메인
+        # 세션에 떠야"). A known inferred stage, when present, trails after the dim ` : ` lead-in.
+        name = cap["capability"].replace("autopilot-", "")
+        knob_items = [k for k in (cap.get("mode"), cap_intensity) if k]
+        segs = [(name, "name_dim")]
+        if knob_items:
+            segs += [("(", "dim"), ("·".join(knob_items), "dim"), (")", "dim")]
+        stage = getattr(getattr(entity, "work_projection", None), "stage_label", None)
+        if stage:
+            segs += [(" : ", "dim"), (_clip_w(str(stage), max(4, max_width - sum(_dw(t) for t, _k in segs) - 3)),
+                                      "g_work" if working else "dim")]
+        return segs
     text = _projection_stage_text(entity, max_width=max_width)
     return [(text or "-", "g_work" if text and working else "dim")]
 

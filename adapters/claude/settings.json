@@ -159,6 +159,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$HOME/.claude/hooks/capability-grounding-marker.sh\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "SessionEnd": [

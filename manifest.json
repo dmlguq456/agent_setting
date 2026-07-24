@@ -1038,6 +1038,13 @@
       "hard_block": false
     },
     {
+      "slug": "hook__capability-grounding-marker__PostToolUse",
+      "name": "capability-grounding-marker",
+      "mono": "capability-grounding-marker",
+      "event": "PostToolUse",
+      "hard_block": false
+    },
+    {
       "slug": "hook__core-read-marker__PostToolUse",
       "name": "core-read-marker",
       "mono": "core-read-marker",
