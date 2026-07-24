@@ -1,12 +1,5 @@
 # dispatch-profiles — pipeline summary
 
-## 2026-07-24 · v3 mode-axis amendment
-
-typed bootstrap tuple에 `capability_mode`와 non-owner `worker_mode/unit`의
-독립성을 추가했다. owner는 `_kernel/owner`와 capability contract만 받고 stage
-persona를 받지 않는다. 모순 tuple은 prompt, registry row, child process를 만들기
-전에 세 adapter가 동일하게 거부한다.
-
 ## 2026-07-16 · v2 GREEN
 
 v1의 masked config-home과 expose subset은 유지하되 모든 worker가 네 core

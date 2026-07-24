@@ -1,12 +1,5 @@
 # agent-fleet-dashboard — Spec Pipeline Summary
 
-## 2026-07-24 · v23 mode-axis projection
-
-Fleet가 current jobs/env의 `capability_mode`와 `worker_mode`를 분리 수집한다.
-owner는 capability mode만 표시하고 legacy slash mode를 owner 행동으로 승격하지
-않는다. depth-2 worker mode는 exact unit과 함께 JSON evidence로 보존하되 기존
-contract/unit 라벨과 중복 표시하지 않는다.
-
 - **Date**: 2026-07-01 (v1) · 2026-07-10 (v2) · 2026-07-12 (v3) · 2026-07-13 (v4/v5) · 2026-07-14 (v6) · 2026-07-15 (v7/v8/v9/v10) · 2026-07-17 (v11) · 2026-07-20 (v12) · 2026-07-21 (v13) · 2026-07-22 (v14/v15/v16) · 2026-07-23 (v17/v18/v19/v20/v21/v22)
 - **Mode**: cli (터미널 TUI 도구)
 - **Status**: spec **v22 done** / dev **done** — attempt-owned dispatch subagent 연결, context는 계속 미수집·미표시

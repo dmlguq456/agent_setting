@@ -1,13 +1,5 @@
 # stage-dispatch — Spec Pipeline Summary
 
-## v28 update (2026-07-24) — owner mode-axis separation
-
-`capability_mode`와 depth-2 worker unit/persona를 분리한다. owner는
-`_kernel/owner`와 capability contract만 받고 worker mode를 받지 않는다. route-bound
-worker mode는 exact non-reserved unit에서 파생하며 model role 기반 mode 추측과
-legacy `mode=` 신규 기록을 폐기한다. owner+stage-mode, catalog mismatch, route/unit
-mismatch는 prompt·registry·spawn 전에 fail-closed한다.
-
 - **Date**: 2026-07-10
 - **Mode**: library + cli (autopilot 파이프 디스패치 토폴로지 개정 인프라)
 - **Status**: v27 implementation in progress — completion-delivery-scoped parent park·terminal-unverifiable interactive recovery(SD-83)

@@ -8,11 +8,8 @@ inputs:
   - spec/stage-dispatch/prd.md   # v2: SD-3·§9-13 스테이지 row 관제 parity
   - spec/prd.md                  # v3/F-19: Unified Memory System v15 Cluster J (write-events 저널 = F-19 소스)
 phases:
-  spec: done            # PRD v23: dispatch capability/worker mode-axis projection
+  spec: done            # PRD v22: attempt-owned dispatch subagents; no dispatch context
   scaffolding: deferred # lean — skeleton 은 autopilot-code 로 이월 (module 구조만 §9 확정)
   design: n/a           # 시각 UI 아님 (터미널 TUI 레이아웃은 PRD §4)
-  dev: in_progress      # F-40 collector/model/render + mirror parity
-last_updated: 2026-07-24
-spec_version: v23
-decisions_locked:
-  - 'F-40(v23): capability_mode, worker_mode, unit은 독립 필드다. owner는 capability mode만 표시하고 legacy slash mode는 conflict이며, depth-2 worker mode는 JSON evidence로 보존하되 contract/unit과 중복 렌더하지 않는다'
+  dev: done             # v22 scope: subagents linked to dispatch job; context still absent
+last_updated: 2026-07-23

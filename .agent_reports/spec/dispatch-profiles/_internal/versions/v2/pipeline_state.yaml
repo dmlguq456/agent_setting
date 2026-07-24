@@ -13,12 +13,10 @@ phases:
   design: n/a             # 터미널 도구 — 시각 UI 없음
   dev: done               # typed dispatcher/profile realization
   verification: done     # profile checks + three dispatchers + boundary + footprint PASS
-spec_version: v3
+spec_version: v2
 result: GREEN
 last_updated: 2026-07-16
 decisions_locked:
-  - 'DP-19: owner bootstrap = kernel + owner type + capability contract + _kernel/owner, worker specialization absent; stage/dev/qa persona injection is invalid'
-  - 'DP-18: capability_mode and non-owner worker_mode/unit are independent registry, environment, and prompt axes'
   - DP-1: 마스킹 = 심링크 부분 투영, 내용 fork 금지 (조립 bootstrap 만 생성 파일)
   - DP-2 (v1, superseded by DP-13): L0(core+guards) 하드 포함 — 선언 표면에 미노출
   - DP-3: profiles/ = top-level harness-scoped 선언 (portable 경계 의도된 예외, model_role XOR model)
