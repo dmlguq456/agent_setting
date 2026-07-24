@@ -37,3 +37,13 @@ SD-85~87을 확정한 뒤 구현한다.
 - exact attempt 외 row를 slug/cwd로 breadth-close하지 않는다.
 - unrelated primary worktree 변경과 기존 open job은 보존한다.
 - Fable 관측용 statusline/Fleet 표시는 유지하고 실행 자격만 제한한다.
+
+## Completion
+
+- stage-dispatch v29와 구현이 통합되어 Claude `deep=opus/xhigh`, Fable
+  interactive depth-0 main-only 정책이 wrapper, fallback, native spawn에 적용됐다.
+- exact terminal reconciliation, canonical parent identity, shared observed liveness,
+  Fleet read-only `reconcile-needed` projection이 구현됐다.
+- portable guards 358개와 Fleet 872개가 전부 통과했고, g9/g10 정식 static drill은
+  모두 0-token PASS했다.
+- `origin/main` push 후 checked worktree cleanup이 `status=removed`로 완료됐다.
