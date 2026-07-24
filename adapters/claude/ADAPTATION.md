@@ -3,9 +3,9 @@
 ## Dispatch model realization
 
 `deep maker`, `deep reviewer`, `deep editor`, and `deep orchestrator` map to
-`opus`/high. Retained `orchestrator` is the balanced mechanical role and maps to
-`sonnet`/medium; it is not an alias for the standard+ dispatch-depth-1 conductor. Fast
-portable roles map to `sonnet`/medium. The adapter mapper normalizes case,
+`opus`/xhigh. Retained `orchestrator` is the balanced mechanical role and maps to
+`sonnet`/high; it is not an alias for the standard+ dispatch-depth-1 conductor. Fast
+portable roles map to `sonnet`/high. The adapter mapper normalizes case,
 hyphens, and underscores but accepts no undocumented role aliases.
 
 This adapter preserves the previous Claude Code setting behavior while moving
@@ -127,9 +127,10 @@ main/orchestrator chooses per job and the wrapper only reflects that choice:
   settings object applies only to the spawned command and never edits the user's
   Claude settings.
 - The headless wrapper does not choose a default model. The main/orchestrator
-  selects `--model-role <portable-role>`, `--model <model> --effort <level>`,
-  or explicit `--inherit-model-settings` per job; that is where simple jobs
-  are downshifted and complex jobs are escalated.
+  selects `--model-role <portable-role>` or `--model <model> --effort <level>`
+  per job; that is where simple jobs are downshifted and complex jobs are
+  escalated. Headless inheritance is rejected because it cannot prove that an
+  interactive-main-only model will not leak into a registered worker.
 - Dispatch prompts and jobs.log rows must spell out capability, mode, QA,
   intensity, depth, parent slug/session, worker role, owner capability, and owner
   harness. Cross-harness launches from Codex pass `CODEX_THREAD_ID` through
@@ -267,13 +268,11 @@ output. The injected value derives from `adapters/claude/config/models.conf`
 (`CFG_NATIVE_SUBAGENT` names a tier; the tier resolves through
 `CFG_TIER_<TIER>_MODEL`), so no concrete model ID lives in the hook.
 
-Injection is skipped — the existing choice or inheritance preserved — when any
-of the following holds: the call already sets a per-invocation model;
-`subagent_type` is `fork` (intentional parent-model inheritance); the resolved
-agent definition file (project `.claude/agents/`, `~/.claude/agents/`, or the
-plugin cache/marketplace agent trees; a namespaced `plugin:agent` type resolves
-to its last segment) pins a model in frontmatter; or the hook cannot decide
-(parse or filesystem error → fail-open, silent exit 0).
+An explicit eligible per-invocation model or eligible agent-definition pin is
+preserved. A config-declared interactive-main-only model, explicit `inherit`,
+fork inheritance, or a missing eligibility policy returns a typed PreToolUse
+deny before spawn. Malformed or non-Agent payloads remain silent because they
+do not identify an actionable native-worker launch.
 
 Rejected realization — global `CLAUDE_CODE_SUBAGENT_MODEL` env: the official
 subagent model precedence is env > per-invocation `model` param > definition
@@ -283,13 +282,12 @@ hard override that would kill the `memory-scout` frontmatter pin and per-call
 escalation. The PreToolUse injection sits at the per-invocation level instead
 and yields to frontmatter pins through its own skip logic.
 
-Runtime limits and escape hatch: Claude Code exposes no global subagent
+Runtime limits: Claude Code exposes no global subagent
 reasoning-effort knob and the Agent tool input has no effort field, so this
 realization controls the model tier only; per-agent effort remains a
-custom-agent frontmatter concern. `CLAUDE_NATIVE_SUBAGENT_MODEL=<alias>` forces
-a different injected model at runtime, and
-`CLAUDE_NATIVE_SUBAGENT_MODEL=inherit` disables injection (session inheritance
-restored) without touching config.
+custom-agent frontmatter concern. `CLAUDE_NATIVE_SUBAGENT_MODEL=<eligible-alias>`
+forces a different injected model at runtime; `inherit` and main-only aliases
+are rejected without touching config.
 
 ## Reproduction Contract
 

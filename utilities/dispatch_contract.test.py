@@ -50,6 +50,71 @@ class DispatchContractTest(unittest.TestCase):
      expected_attempt_id="att-parent-dead")
    self.assertEqual(caught.exception.reason,"parent-attempt-not-live")
 
+ def test_parent_repo_identity_canonicalizes_primary_and_linked_but_keeps_worktree_exact(self):
+  with tempfile.TemporaryDirectory() as td:
+   base=Path(td);primary=base/"primary";linked=base/"linked"
+   subprocess.run(["git","init","-q",str(primary)],check=True)
+   subprocess.run(["git","-C",str(primary),"config","user.name","test"],check=True)
+   subprocess.run(["git","-C",str(primary),"config","user.email","test@example.com"],check=True)
+   (primary/"seed").write_text("seed\n")
+   subprocess.run(["git","-C",str(primary),"add","seed"],check=True)
+   subprocess.run(["git","-C",str(primary),"commit","-qm","seed"],check=True)
+   subprocess.run(["git","-C",str(primary),"worktree","add","-q","-b","linked",str(linked)],check=True)
+   proc=subprocess.Popen(["sleep","60"],start_new_session=True)
+   try:
+    start=D.process_start_ticks(proc.pid);jobs=base/"jobs.log"
+    row=self.owner_row("att-parent-canonical",proc.pid,start)
+    row=row.replace("\t/repo\t/wt\t",f"\t{primary}\t{linked}\t")
+    jobs.write_text(row+"\n")
+    binding=D.resolve_live_parent_attempt(
+     jobs,parent_slug="owner",repo=str(linked),worktree=str(linked),
+     expected_attempt_id="att-parent-canonical")
+    self.assertEqual(binding.repository_identity,
+                     D.canonical_repository_identity(primary))
+    with self.assertRaises(D.DispatchContractError) as wrong_worktree:
+     D.resolve_live_parent_attempt(
+      jobs,parent_slug="owner",repo=str(linked),worktree=str(primary),
+      expected_attempt_id="att-parent-canonical")
+    self.assertEqual(wrong_worktree.exception.reason,"parent-attempt-not-found")
+    foreign=base/"foreign";subprocess.run(["git","init","-q",str(foreign)],check=True)
+    with self.assertRaises(D.DispatchContractError) as wrong_repo:
+     D.resolve_live_parent_attempt(
+      jobs,parent_slug="owner",repo=str(foreign),worktree=str(linked),
+      expected_attempt_id="att-parent-canonical")
+    self.assertEqual(wrong_repo.exception.reason,"parent-attempt-not-found")
+   finally:
+    if proc.poll() is None:proc.kill()
+    proc.wait()
+
+ def test_observed_liveness_and_terminal_reconcile_are_exact_and_idempotent(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log"
+   meta=("attempt_schema_version=2,dispatch_depth=1,transport=headless,"
+         "execution_surface=registered-headless,registered_worker=1,"
+         "fallback_hop=same-harness-headless,worker_type=owner,"
+         "attempt_id=att-reconcile,launch_outcome=reaped-before-publish")
+   jobs.write_text("2026-07-24T00:00:00Z\topen\t/r\t/w\towner\t"+meta+"\n")
+   parsed=D.parse_registry_metadata(meta)
+   without=D.observed_attempt_liveness("open",parsed)
+   with_envelope=D.observed_attempt_liveness(
+    "open",parsed,terminal_envelope=True)
+   self.assertEqual((without.state,without.reason),
+                    ("reconcile-needed","process-exited"))
+   self.assertEqual((with_envelope.state,with_envelope.reason),
+                    ("reconcile-needed","terminal-observed"))
+   self.assertEqual(
+    D.reconcile_attempt_terminal(
+     jobs,"att-reconcile","dead-capacity",
+     evidence={"failure_class":"capacity","terminal_event":"claude-result"}),
+    "closed")
+   self.assertEqual(
+    D.reconcile_attempt_terminal(jobs,"att-reconcile","dead-runtime-exit"),
+    "already-terminal")
+   text=jobs.read_text()
+   self.assertIn("\tdone\t/r\t/w\towner\t",text)
+   self.assertIn("note=dead-capacity",text)
+   self.assertIn("failure_class=capacity",text)
+
  def test_launch_identity_records_outer_pid_start_and_group(self):
   proc=subprocess.Popen(["sleep","60"],start_new_session=True)
   try:

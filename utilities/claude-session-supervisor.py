@@ -19,10 +19,15 @@ from dispatch_completion_join import (
     remove_supervisor_state,
     write_supervisor_state,
 )
+from dispatch_supervisor_terminal import (
+    SupervisorTerminal,
+    classify_claude_result,
+    classify_supervisor_error,
+    reconcile_supervisor_terminal,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HANDOFF_PREFIXES = ("artifact: ", "verdict: ", "blocker: ")
 
 
 class SupervisorError(RuntimeError):
@@ -33,13 +38,20 @@ def emit(value: dict[str, Any]) -> None:
     print(json.dumps(value, separators=(",", ":"), ensure_ascii=False), flush=True)
 
 
-def exact_handoff(text: object) -> bool:
-    if not isinstance(text, str):
+def reconcile(args: argparse.Namespace, terminal: SupervisorTerminal) -> bool:
+    try:
+        reconcile_supervisor_terminal(
+            args.jobs, args.parent_attempt_id, terminal
+        )
+        return True
+    except Exception as exc:
+        emit(
+            {
+                "type": "dispatch.supervisor.error",
+                "reason": f"terminal-reconcile-failed-{type(exc).__name__}",
+            }
+        )
         return False
-    lines = text.strip().splitlines()
-    return len(lines) == 3 and all(
-        line.startswith(prefix) for line, prefix in zip(lines, HANDOFF_PREFIXES)
-    )
 
 
 def typed_receipt(value: object, parent_attempt_id: str, attempts: set[str]) -> dict[str, Any]:
@@ -257,6 +269,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     initial_prompt = sys.stdin.read()
     if not initial_prompt.strip():
+        terminal = classify_supervisor_error("claude", "initial-prompt-empty", 64)
+        if not reconcile(args, terminal):
+            return 70
         emit({"type": "dispatch.supervisor.error", "reason": "initial-prompt-empty"})
         return 64
     session_id = str(uuid.uuid4())
@@ -277,6 +292,9 @@ def main(argv: list[str] | None = None) -> int:
                 or result.get("is_error") is True
                 or result.get("subtype") not in {None, "success"}
             ):
+                terminal = classify_claude_result(result, process_rc)
+                if not reconcile(args, terminal):
+                    return 70
                 emit(result)
                 return process_rc or 3
             rows = current_children(Path(args.jobs), args.parent_attempt_id)
@@ -322,14 +340,23 @@ def main(argv: list[str] | None = None) -> int:
                 resume = True
                 continue
 
+            terminal = classify_claude_result(result, process_rc)
+            if not reconcile(args, terminal):
+                return 70
             emit(result)
-            if process_rc != 0 or result.get("is_error") is True:
-                return process_rc or 3
-            return 0 if exact_handoff(result.get("result")) else 3
+            return 0 if terminal.failure_class == "pass" else 3
     except (JoinContractError, SupervisorError) as exc:
+        terminal = classify_supervisor_error("claude", str(exc))
+        if not reconcile(args, terminal):
+            return 70
         emit({"type": "dispatch.supervisor.error", "reason": str(exc)})
         return 70
     except Exception as exc:  # fail closed without leaking protocol/model content
+        terminal = classify_supervisor_error(
+            "claude", f"supervisor-internal-{type(exc).__name__}"
+        )
+        if not reconcile(args, terminal):
+            return 70
         emit(
             {
                 "type": "dispatch.supervisor.error",

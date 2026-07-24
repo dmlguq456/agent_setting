@@ -17,10 +17,14 @@ sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import (  # noqa: E402
     anchored_capacity_failure,
     authoritative_process_identities,
+    observed_attempt_liveness,
     process_start_ticks,
     process_state,
 )
-from codex_dispatch_terminal import inspect_terminal_attempt  # noqa: E402
+from codex_dispatch_terminal import (  # noqa: E402
+    inspect_terminal_attempt,
+    terminal_envelope_observed,
+)
 from tools.fleet.model import (  # noqa: E402
     ATTEMPT_CLASSIFIER_SOURCE,
     classify_attempt_evidence,
@@ -360,18 +364,34 @@ def main(argv: list[str]) -> int:
                     worktree=worktree,
                     artifact_root_metadata=metadata.get("artifact_root"),
                 )
+            common = observed_attempt_liveness(
+                status,
+                metadata,
+                terminal_envelope=terminal_envelope_observed(
+                    metadata.get("log_file")
+                ),
+            )
             exact = recorded_attempt_state(metadata, now, agent_home)
             # SD-64/71 post-exit owner-orphan reconciliation retains precedence
             # over a PASS observation.  Failure handoffs keep their existing
             # registry precedence because dispatch-registry classifies them as
             # terminal failures before orphan repair.
-            if exact and exact["state"] == "dead":
+            if common.state == "reconcile-needed" or (
+                exact and exact["state"] == "dead"
+            ):
                 orphan = orphan_status(agent_home, jobs, metadata.get("attempt_id", ""))
                 if orphan is not None:
                     print(f"ORPHANED {label} - pipeline orphaned; route={orphan['route_id']}; "
                           f"resume boundary={orphan['resume_boundary']}; dispatch-depth-0 decision [open: {ts}]")
                     suspect += 1
                     continue
+            if common.state == "alive":
+                print(
+                    f"ALIVE    {label} ({common.process_reason}; "
+                    f"classifier={ATTEMPT_CLASSIFIER_SOURCE})"
+                )
+                alive += 1
+                continue
             if terminal and terminal.get("state") == "valid":
                 verdict = terminal["verdict"]
                 artifact_state = terminal["artifact_state"]
@@ -408,6 +428,13 @@ def main(argv: list[str]) -> int:
                     f"(artifact_state={terminal['artifact_state']}; "
                     "blocker_reason=contract-violation) "
                     f"[open: {ts}]"
+                )
+                suspect += 1
+                continue
+            if common.state == "reconcile-needed":
+                print(
+                    f"RECONCILE {label} - terminal-observed/reconcile-needed "
+                    f"({common.process_reason}) [open: {ts}]"
                 )
                 suspect += 1
                 continue

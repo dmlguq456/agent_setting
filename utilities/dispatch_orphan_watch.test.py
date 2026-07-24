@@ -110,6 +110,54 @@ class OrphanWatchTest(unittest.TestCase):
         self.assertEqual(self.jobs.read_text(), before)
         self.assertFalse(self.supervisor_state.exists())
 
+    def test_non_orphan_429_exit_is_reconciled_as_capacity(self):
+        log = self.base / "owner.claude.jsonl"
+        log.write_text(json.dumps({
+            "type": "result",
+            "subtype": "error_during_execution",
+            "is_error": True,
+            "api_error_status": 429,
+            "result": "You've reached your Fable 5 limit",
+        }) + "\n", encoding="utf-8")
+        current = (
+            "attempt_schema_version=2,dispatch_depth=1,transport=headless,"
+            "execution_surface=registered-headless,registered_worker=1,"
+            "fallback_hop=same-harness-headless,worker_type=owner,"
+            "harness=claude"
+        )
+        self.jobs.write_text(
+            "2026-07-19T00:00:00Z\topen\t/r\t/w\towner\t"
+            f"{current},attempt_id=att-watch,pid={self.owner.pid},"
+            f"pid_start={self.owner_start},log_file={log}\n"
+        )
+        watcher = self.watcher()
+        time.sleep(0.05)
+        self.owner.kill(); self.owner.wait()
+        self.assertEqual(watcher.wait(timeout=5), 0)
+        registry = self.jobs.read_text(encoding="utf-8")
+        self.assertIn("\tdone\t/r\t/w\towner\t", registry)
+        self.assertIn("note=dead-capacity", registry)
+        self.assertIn("failure_class=capacity", registry)
+
+    def test_non_orphan_signal_exit_without_envelope_is_still_closed(self):
+        current = (
+            "attempt_schema_version=2,dispatch_depth=1,transport=headless,"
+            "execution_surface=registered-headless,registered_worker=1,"
+            "fallback_hop=same-harness-headless,worker_type=owner,harness=codex"
+        )
+        self.jobs.write_text(
+            "2026-07-19T00:00:00Z\topen\t/r\t/w\towner\t"
+            f"{current},attempt_id=att-watch,pid={self.owner.pid},"
+            f"pid_start={self.owner_start}\n"
+        )
+        watcher = self.watcher()
+        time.sleep(0.05)
+        self.owner.kill(); self.owner.wait()
+        self.assertEqual(watcher.wait(timeout=5), 0)
+        registry = self.jobs.read_text(encoding="utf-8")
+        self.assertIn("\tdone\t/r\t/w\towner\t", registry)
+        self.assertIn("note=dead-protocol", registry)
+
 
 if __name__ == "__main__":
     unittest.main()

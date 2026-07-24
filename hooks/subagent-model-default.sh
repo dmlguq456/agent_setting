@@ -2,18 +2,18 @@
 # PreToolUse(Agent|Task): give native Claude subagent spawns the config-declared
 # default model tier instead of silently inheriting the interactive session
 # model (core/ADAPTATION.md §3). Injection re-emits the FULL tool_input with a
-# `model` field added; it is skipped whenever the caller already chose a model,
-# the spawn is an intentional parent-inherit surface (subagent_type=fork), or
-# the resolved agent definition frontmatter pins a model. Tier resolution
+# `model` field added. Explicit eligible pins remain untouched; inherited/fork
+# selection and config-declared main-session-only models are denied because a
+# native worker must never inherit an interactive-only main model. Tier resolution
 # (CFG_NATIVE_SUBAGENT -> CFG_TIER_<T>_MODEL) reads the Claude adapter
 # models.conf relative to this script's realpath — <hookdir>/../config/ for an
 # adapter-local or fixture layout, <hookdir>/../adapters/claude/config/ for the
 # canonical shared hooks/ layer; no concrete model ID is hardcoded here
 # (tools/check-model-config.py).
-# Runtime override: CLAUDE_NATIVE_SUBAGENT_MODEL=<alias> forces the injected
-# model; CLAUDE_NATIVE_SUBAGENT_MODEL=inherit disables injection entirely.
-# Fail-open: on any parse/filesystem doubt emit nothing and exit 0 (inheritance
-# preserved). This hook never exits non-zero and never writes stderr.
+# Runtime override: CLAUDE_NATIVE_SUBAGENT_MODEL=<eligible-alias> forces the
+# injected model. `inherit` and config-declared main-session-only aliases are
+# typed denials. Malformed non-actionable input remains silent; a valid Agent
+# request fails closed when its model policy cannot be loaded.
 ''''exec python3 "$0" "$@" # '''
 import glob
 import json
@@ -78,45 +78,73 @@ def agent_definition(name):
     return None
 
 
-def main():
-    payload = json.loads(sys.stdin.read())
-    if payload.get("tool_name") not in ("Agent", "Task"):
+def deny(reason):
+    print(json.dumps({"hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "deny",
+        "permissionDecisionReason": reason,
+    }}))
+
+
+def restricted_model(model, restricted):
+    tokens = set(re.split(r"[^a-z0-9]+", str(model).lower()))
+    return any(alias.lower() in tokens for alias in restricted)
+
+
+def apply_policy(tool_input):
+    hook_dir = os.path.dirname(os.path.realpath(__file__))
+    conf_path = None
+    for candidate in (
+        os.path.join(hook_dir, "..", "config", "models.conf"),
+        os.path.join(hook_dir, "..", "adapters", "claude", "config", "models.conf"),
+    ):
+        if os.path.isfile(candidate):
+            conf_path = candidate
+            break
+    if conf_path is None:
+        deny("native-subagent-model-policy-unavailable")
         return
-    tool_input = payload.get("tool_input")
-    if not isinstance(tool_input, dict):
+    conf = parse_conf(conf_path)
+    if "CFG_MAIN_SESSION_ONLY_MODELS" not in conf:
+        deny("native-subagent-model-policy-unavailable")
         return
-    if tool_input.get("model"):
-        return  # explicit per-invocation choice (including explicit inherit)
+    restricted = conf.get("CFG_MAIN_SESSION_ONLY_MODELS", "").split()
+
+    explicit = str(tool_input.get("model") or "").strip()
+    if explicit:
+        if explicit.lower() == "inherit":
+            deny("native-subagent-model-inheritance-ineligible")
+        elif restricted_model(explicit, restricted):
+            deny("native-subagent-main-session-only-model")
+        return
     subagent_type = str(tool_input.get("subagent_type") or "")
     if subagent_type == "fork":
-        return  # fork intentionally inherits the parent model
+        deny("native-subagent-model-inheritance-ineligible")
+        return
     # Namespaced plugin types (`plugin:agent`) resolve to the last segment.
     name = subagent_type.rsplit(":", 1)[-1]
     if name:
         definition = agent_definition(name)
-        if definition and frontmatter_model(definition):
-            return  # agent definition owns its model pin
+        if definition:
+            pinned = frontmatter_model(definition)
+            if pinned:
+                if restricted_model(pinned, restricted):
+                    deny("native-subagent-main-session-only-model")
+                return
     override = os.environ.get("CLAUDE_NATIVE_SUBAGENT_MODEL", "").strip()
-    if override == "inherit":
-        return  # runtime escape hatch: keep session inheritance
+    if override.lower() == "inherit":
+        deny("native-subagent-model-inheritance-ineligible")
+        return
     if override:
+        if restricted_model(override, restricted):
+            deny("native-subagent-main-session-only-model")
+            return
         target = override
     else:
-        hook_dir = os.path.dirname(os.path.realpath(__file__))
-        conf_path = None
-        for candidate in (
-            os.path.join(hook_dir, "..", "config", "models.conf"),
-            os.path.join(hook_dir, "..", "adapters", "claude", "config", "models.conf"),
-        ):
-            if os.path.isfile(candidate):
-                conf_path = candidate
-                break
-        if conf_path is None:
-            return
-        conf = parse_conf(conf_path)
         tier = conf.get("CFG_NATIVE_SUBAGENT", "").strip()
         target = conf.get("CFG_TIER_%s_MODEL" % tier.upper(), "").strip() if tier else ""
-    if not target:
+    if not target or restricted_model(target, restricted):
+        deny("native-subagent-eligible-model-unavailable")
         return
     updated = dict(tool_input)
     updated["model"] = target
@@ -126,9 +154,24 @@ def main():
     }}))
 
 
-if __name__ == "__main__":
+def main():
     try:
-        main()
+        payload = json.loads(sys.stdin.read())
     except Exception:
-        pass
+        return
+    if not isinstance(payload, dict):
+        return
+    if payload.get("tool_name") not in ("Agent", "Task"):
+        return
+    tool_input = payload.get("tool_input")
+    if not isinstance(tool_input, dict):
+        return
+    try:
+        apply_policy(tool_input)
+    except Exception:
+        deny("native-subagent-model-policy-unavailable")
+
+
+if __name__ == "__main__":
+    main()
     sys.exit(0)

@@ -139,10 +139,14 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--qa", default=None)  # optional/derived from --intensity (CONVENTIONS §1.1)
     p.add_argument("--intensity", default="standard")
     p.add_argument("--dispatch-depth", dest="dispatch_depth", type=int, default=1)
-    p.add_argument("--parent", dest="parent_slug")
+    p.add_argument(
+        "--parent", dest="parent_slug",
+        help="logical parent slug (never an attempt id)",
+    )
     p.add_argument(
         "--parent-attempt-id",
         default=os.environ.get("AGENT_DISPATCH_ATTEMPT_ID") or None,
+        help="exact parent attempt id (never a slug)",
     )
     p.add_argument(
         "--parent-session-id",
@@ -209,7 +213,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--inherit-model-settings",
         action="store_true",
-        help="do not override model/effort; inherit the explicitly selected profile or active Claude config",
+        help="legacy input retained for typed rejection; registered headless Claude dispatch requires an explicit eligible role/model",
     )
     p.add_argument(
         "--early-exit-watch",
@@ -251,6 +255,51 @@ def role_map(role: str) -> dict[str, str]:
     return {"model": fields["exact_model_id"], "effort": fields["reasoning"]}
 
 
+def _model_policy() -> dict[str, str]:
+    path = ROOT / "adapters" / "claude" / "config" / "models.conf"
+    values: dict[str, str] = {}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise ModelSelectionError(
+            "dispatch-model-policy-unavailable", str(exc)
+        ) from exc
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        value = value.strip()
+        if value[:1] in {'"', "'"}:
+            quote = value[0]
+            end = value.find(quote, 1)
+            value = value[1:end] if end != -1 else value[1:]
+        else:
+            value = value.split("#", 1)[0].strip()
+        values[key.strip()] = value
+    return values
+
+
+def _main_session_only_model(model: str) -> bool:
+    tokens = set(re.split(r"[^a-z0-9]+", model.lower()))
+    policy = _model_policy()
+    if "CFG_MAIN_SESSION_ONLY_MODELS" not in policy:
+        raise ModelSelectionError(
+            "dispatch-model-policy-unavailable",
+            "CFG_MAIN_SESSION_ONLY_MODELS is not declared",
+        )
+    restricted = policy["CFG_MAIN_SESSION_ONLY_MODELS"].split()
+    return any(alias.lower() in tokens for alias in restricted)
+
+
+def _require_headless_model(model: str, source: str) -> None:
+    if _main_session_only_model(model):
+        raise ModelSelectionError(
+            "headless-main-session-only-model",
+            f"model selected by {source} is interactive depth-0 main-session only",
+        )
+
+
 def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
     if args.inherit_model_settings:
         if args.model_role or args.model or args.effort:
@@ -258,7 +307,10 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
                 "invalid-dispatch-model-selection",
                 "--inherit-model-settings is mutually exclusive with --model-role, --model, and --effort",
             )
-        return {"source": "inherit", "role": "inherit", "model": "inherit", "effort": "inherit"}
+        raise ModelSelectionError(
+            "headless-model-inheritance-ineligible",
+            "registered headless Claude dispatch cannot prove that inherited main-session settings exclude a main-only model; select --model-role or --model with --effort",
+        )
     if args.model_role and args.model:
         raise ModelSelectionError(
             "invalid-dispatch-model-selection",
@@ -269,6 +321,7 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
         # 2026-07-22 사용자 원칙: 역할의 티어(모델)는 고정, 상황별 조절은 effort만.
         # --model-role + --effort = the sanctioned situational-tuning surface.
         fields = role_map(args.model_role)
+        _require_headless_model(fields["model"], f"role:{args.model_role}")
         effort = args.effort or fields["effort"]
         source = "role+effort" if args.effort else "role"
         if args.model_role.startswith("deep ") and effort in ("medium", "low"):
@@ -283,13 +336,14 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
     if not args.model and not args.effort:
         raise ModelSelectionError(
             "missing-dispatch-model-selection",
-            "main dispatch must choose --model-role, --model with --effort, or --inherit-model-settings",
+            "main dispatch must choose --model-role or --model with --effort",
         )
     if not args.model or not args.effort:
         raise ModelSelectionError(
             "invalid-dispatch-model-selection",
             "--model and --effort must be provided together",
         )
+    _require_headless_model(args.model, "explicit")
     return {"source": "explicit", "role": "-", "model": args.model, "effort": args.effort}
 
 
@@ -1141,7 +1195,7 @@ def main(argv: list[str]) -> int:
     try:
         args.resolved_model_settings = resolve_model_settings(args)
     except ModelSelectionError as e:
-        fields = {"detail": str(e)}
+        fields = {"detail": str(e), "child_spawned": "0"}
         if args.model_role:
             fields["model_role"] = args.model_role
         return fail(e.reason, 64, **fields)

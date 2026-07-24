@@ -33,7 +33,7 @@ OUTPUT=$(PATH="$FAKE_BIN:$PATH" \
   --parent-harness codex --parent-transport headless \
   --parent-sandbox workspace-write --launch-authority conductor \
   --nested-eligibility supported --eligibility-source drill-fixture \
-  --inherit-model-settings 2>&1)
+  --model-role 'fast implementer' 2>&1)
 RC=$?
 set -e
 

@@ -147,10 +147,14 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--qa", default=None)  # optional/derived from --intensity (CONVENTIONS §1.1)
     p.add_argument("--intensity", default="standard")
     p.add_argument("--dispatch-depth", dest="dispatch_depth", type=int, default=1)
-    p.add_argument("--parent", dest="parent_slug")
+    p.add_argument(
+        "--parent", dest="parent_slug",
+        help="logical parent slug (never an attempt id)",
+    )
     p.add_argument(
         "--parent-attempt-id",
         default=os.environ.get("AGENT_DISPATCH_ATTEMPT_ID") or None,
+        help="exact parent attempt id (never a slug)",
     )
     p.add_argument(
         "--parent-session-id",

@@ -17,15 +17,22 @@ trap 'rm -rf "$TMP"' EXIT
 # Fixture layout: the hook resolves <its-realpath-dir>/../config/models.conf, so
 # a copied hook next to a fixture conf verifies tier resolution deterministically.
 mkdir -p "$TMP/hooks" "$TMP/config" "$TMP/home" "$TMP/noconf/hooks" \
+  "$TMP/nopolicy/hooks" "$TMP/nopolicy/config" \
   "$TMP/proj/.claude/agents"
 cp "$HOOK_SRC" "$TMP/hooks/subagent-model-default.sh"
 cp "$HOOK_SRC" "$TMP/noconf/hooks/subagent-model-default.sh"
+cp "$HOOK_SRC" "$TMP/nopolicy/hooks/subagent-model-default.sh"
 HOOK="$TMP/hooks/subagent-model-default.sh"
 cat > "$TMP/config/models.conf" <<'EOF'
 # fixture conf
 CFG_TIER_LIGHT_MODEL=sonnet
 CFG_TIER_LIGHT_EFFORT=high
 CFG_NATIVE_SUBAGENT=light   # tier reference, not a concrete ID
+CFG_MAIN_SESSION_ONLY_MODELS="fable"
+EOF
+cat > "$TMP/nopolicy/config/models.conf" <<'EOF'
+CFG_TIER_LIGHT_MODEL=sonnet
+CFG_NATIVE_SUBAGENT=light
 EOF
 cat > "$TMP/proj/.claude/agents/zz-pinned-team.md" <<'EOF'
 ---
@@ -40,6 +47,13 @@ name: zz-unpinned-team
 color: gray
 ---
 Unpinned fixture agent.
+EOF
+cat > "$TMP/proj/.claude/agents/zz-main-only-team.md" <<'EOF'
+---
+name: zz-main-only-team
+model: claude-fable-5
+---
+Ineligible pinned fixture agent.
 EOF
 
 run_hook() { # run_hook <out> <err> [ENV=VAL ...]
@@ -56,6 +70,16 @@ assert o["hookEventName"] == "PreToolUse", o
 u = o["updatedInput"]
 assert u["model"] == sys.argv[2], u
 assert u["description"] == "x" and u["prompt"] == "y", u
+' "$1" "$2"
+}
+
+assert_denied() { # assert_denied <out-file> <expected-reason>
+  python3 -c '
+import json, sys
+d = json.load(open(sys.argv[1]))["hookSpecificOutput"]
+assert d["hookEventName"] == "PreToolUse", d
+assert d["permissionDecision"] == "deny", d
+assert d["permissionDecisionReason"] == sys.argv[2], d
 ' "$1" "$2"
 }
 
@@ -82,12 +106,13 @@ printf '%s' '{"tool_name":"Agent","tool_input":{"description":"x","prompt":"y","
   && ok "explicit model param is preserved (no output)" \
   || bad "explicit model param was overridden"
 
-# (c) fork inherits the parent model on purpose
+# (c) fork inheritance is ineligible because the main may be Fable
 printf '%s' '{"tool_name":"Agent","tool_input":{"description":"x","prompt":"y","subagent_type":"fork"}}' \
   | run_hook "$TMP/c.out" "$TMP/c.err"
-[ $? = 0 ] && [ ! -s "$TMP/c.out" ] && [ ! -s "$TMP/c.err" ] \
-  && ok "fork spawn stays inherited (no output)" \
-  || bad "fork spawn was injected"
+[ $? = 0 ] && [ ! -s "$TMP/c.err" ] \
+  && assert_denied "$TMP/c.out" native-subagent-model-inheritance-ineligible \
+  && ok "fork inheritance is denied" \
+  || bad "fork inheritance was not denied"
 
 # (d) agent definition with a frontmatter model pin -> untouched
 printf '%s' '{"tool_name":"Agent","tool_input":{"description":"x","prompt":"y","subagent_type":"zz-pinned-team"}}' \
@@ -109,12 +134,13 @@ printf 'not json' | run_hook "$TMP/e.out" "$TMP/e.err"
   && ok "malformed input fails open" \
   || bad "malformed input did not fail open"
 
-# (f) CLAUDE_NATIVE_SUBAGENT_MODEL=inherit -> hook disabled
+# (f) CLAUDE_NATIVE_SUBAGENT_MODEL=inherit -> typed denial
 printf '%s' '{"tool_name":"Agent","tool_input":{"description":"x","prompt":"y"}}' \
-  | run_hook "$TMP/f.out" "$TMP/f.err" CLAUDE_NATIVE_SUBAGENT_MODEL=inherit
-[ $? = 0 ] && [ ! -s "$TMP/f.out" ] && [ ! -s "$TMP/f.err" ] \
-  && ok "override=inherit disables injection" \
-  || bad "override=inherit still injected"
+  | run_hook "$TMP/f.out" "$TMP/f.err" CLAUDE_NATIVE_SUBAGENT_MODEL=INHERIT
+[ $? = 0 ] && [ ! -s "$TMP/f.err" ] \
+  && assert_denied "$TMP/f.out" native-subagent-model-inheritance-ineligible \
+  && ok "override=inherit is denied" \
+  || bad "override=inherit was not denied"
 
 # (g) CLAUDE_NATIVE_SUBAGENT_MODEL=<alias> -> that alias wins over conf
 printf '%s' '{"tool_name":"Agent","tool_input":{"description":"x","prompt":"y"}}' \
@@ -130,13 +156,47 @@ printf '%s' '{"tool_name":"Bash","tool_input":{"command":"true"}}' \
   && ok "non-Agent tool is ignored" \
   || bad "non-Agent tool produced output"
 
-# (i) missing models.conf -> silent success (fail-open, inheritance kept)
+# (i) missing models.conf -> valid Agent request fails closed
 printf '%s' '{"tool_name":"Agent","tool_input":{"description":"x","prompt":"y"}}' \
   | env -i HOME="$TMP/home" PATH="$PATH" bash "$TMP/noconf/hooks/subagent-model-default.sh" \
     >"$TMP/i.out" 2>"$TMP/i.err"
-[ $? = 0 ] && [ ! -s "$TMP/i.out" ] && [ ! -s "$TMP/i.err" ] \
-  && ok "missing conf fails open" \
-  || bad "missing conf did not fail open"
+[ $? = 0 ] && [ ! -s "$TMP/i.err" ] \
+  && assert_denied "$TMP/i.out" native-subagent-model-policy-unavailable \
+  && ok "missing conf fails closed" \
+  || bad "missing conf did not fail closed"
+
+# (j) explicit main-session-only model -> typed denial
+printf '%s' '{"tool_name":"Agent","tool_input":{"description":"x","prompt":"y","model":"claude-fable-5"}}' \
+  | run_hook "$TMP/j.out" "$TMP/j.err"
+[ $? = 0 ] && [ ! -s "$TMP/j.err" ] \
+  && assert_denied "$TMP/j.out" native-subagent-main-session-only-model \
+  && ok "explicit main-session-only model is denied" \
+  || bad "explicit main-session-only model was not denied"
+
+# (k) frontmatter cannot smuggle a main-session-only model into a worker
+printf '%s' '{"tool_name":"Agent","tool_input":{"description":"x","prompt":"y","subagent_type":"zz-main-only-team"}}' \
+  | run_hook "$TMP/k.out" "$TMP/k.err" CLAUDE_PROJECT_DIR="$TMP/proj"
+[ $? = 0 ] && [ ! -s "$TMP/k.err" ] \
+  && assert_denied "$TMP/k.out" native-subagent-main-session-only-model \
+  && ok "frontmatter main-session-only model is denied" \
+  || bad "frontmatter main-session-only model was not denied"
+
+# (l) runtime override cannot smuggle a main-session-only model either
+printf '%s' '{"tool_name":"Agent","tool_input":{"description":"x","prompt":"y"}}' \
+  | run_hook "$TMP/l.out" "$TMP/l.err" CLAUDE_NATIVE_SUBAGENT_MODEL=claude-fable-5
+[ $? = 0 ] && [ ! -s "$TMP/l.err" ] \
+  && assert_denied "$TMP/l.out" native-subagent-main-session-only-model \
+  && ok "override main-session-only model is denied" \
+  || bad "override main-session-only model was not denied"
+
+# (m) an existing config without the eligibility declaration also fails closed
+printf '%s' '{"tool_name":"Agent","tool_input":{"description":"x","prompt":"y"}}' \
+  | env -i HOME="$TMP/home" PATH="$PATH" bash "$TMP/nopolicy/hooks/subagent-model-default.sh" \
+    >"$TMP/m.out" 2>"$TMP/m.err"
+[ $? = 0 ] && [ ! -s "$TMP/m.err" ] \
+  && assert_denied "$TMP/m.out" native-subagent-model-policy-unavailable \
+  && ok "missing eligibility declaration fails closed" \
+  || bad "missing eligibility declaration did not fail closed"
 
 echo
 echo "RESULT: PASS=$PASS FAIL=$FAIL"

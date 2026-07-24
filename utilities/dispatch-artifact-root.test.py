@@ -125,7 +125,6 @@ class DispatchArtifactRootTests(unittest.TestCase):
             "dev/refactor",
             "--intensity",
             "quick",
-            "--inherit-model-settings",
             "--route-file",
             str(self.route_file),
             "--route-id",
@@ -147,6 +146,10 @@ class DispatchArtifactRootTests(unittest.TestCase):
             "--log-dir",
             str(self.logs),
         ]
+        if adapter == "claude":
+            args.extend(["--model-role", "fast implementer"])
+        else:
+            args.append("--inherit-model-settings")
         return args
 
     def assert_registered(self, adapter: str, extra_command: str | None = None):

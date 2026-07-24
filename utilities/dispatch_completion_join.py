@@ -22,7 +22,10 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "utilities"))
-from dispatch_contract import attempt_process_quiescence  # noqa: E402
+from dispatch_contract import (  # noqa: E402
+    observed_attempt_liveness,
+)
+from codex_dispatch_terminal import terminal_envelope_observed  # noqa: E402
 OPEN_STATES = frozenset({"open", "running"})
 SCHEMA_VERSION = 1
 STATE_SCHEMA_VERSION = 1
@@ -744,10 +747,14 @@ def pending_attempt_ids(rows: list[ChildRow]) -> set[str]:
 
     pending: set[str] = set()
     for row in rows:
-        if row.status in OPEN_STATES:
-            pending.add(row.attempt_id)
-            continue
-        if row.status == "done" and attempt_process_quiescence(row.metadata).state != "quiescent":
+        observed = observed_attempt_liveness(
+            row.status,
+            row.metadata,
+            terminal_envelope=terminal_envelope_observed(
+                row.metadata.get("log_file")
+            ),
+        )
+        if observed.state in {"alive", "unverifiable"}:
             pending.add(row.attempt_id)
     return pending
 
@@ -817,32 +824,34 @@ def join_batch(
         children: list[dict[str, str]] = []
         pending = False
         for row in rows:
-            process = attempt_process_quiescence(row.metadata)
+            observed = observed_attempt_liveness(
+                row.status,
+                row.metadata,
+                terminal_envelope=terminal_envelope_observed(
+                    row.metadata.get("log_file")
+                ),
+            )
             if row.status == "done":
-                if process.state == "quiescent":
+                if observed.state == "terminal":
                     readiness, reason = "ready", "registry-closed"
                 else:
                     readiness = "pending"
                     reason = (
                         "process-alive"
-                        if process.state == "live"
+                        if observed.state == "alive"
                         else "process-unverifiable"
                     )
                     pending = True
             elif row.status in OPEN_STATES:
-                observed = _liveness_state(row, command, runtime_env)
-                if observed == "alive":
+                if observed.state == "alive":
                     readiness, reason = "pending", "process-alive"
                     pending = True
-                elif process.state == "quiescent":
+                elif observed.state == "reconcile-needed":
                     readiness, reason = "ready", "terminal-observed"
                 else:
+                    _liveness_state(row, command, runtime_env)
                     readiness = "pending"
-                    reason = (
-                        "process-alive"
-                        if process.state == "live"
-                        else "process-unverifiable"
-                    )
+                    reason = "process-unverifiable"
                     pending = True
             else:
                 raise JoinContractError("owned-row-status-invalid")

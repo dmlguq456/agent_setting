@@ -32,7 +32,7 @@ bad() { FAIL=$((FAIL+1)); printf '  BAD %s\n' "$1"; }
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 export AGENT_HOME="$TMP/agent_home"
-export AGENT_MODEL_GOVERNOR_ROOT="$TMP/model-worker-governor"
+export AGENT_MODEL_GOVERNOR_ROOT="$TMP/repo/.agent_reports/.runtime/model-worker-governor"
 unset AGENT_DISPATCH_PARENT_SESSION_ID AGENT_DISPATCH_OWNER_HARNESS CODEX_THREAD_ID
 # D-42 hermeticity: a live main or worker session must not leak session identity
 # or worker markers into fixtures — every case sets its own markers inline.
@@ -796,8 +796,10 @@ fi
 if CODEX_THREAD_ID=codex-current-thread CODEX_DISPATCH_PARENT_CURRENT_FORCE=1 \
   "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-current-parent --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model gpt-test --reasoning low --dispatch-depth 1 --parent invented-parent --parent-session-id invented-session --jobs "$TMP/codex-current-parent.log" --log-dir "$TMP/current-parent-logs" >/tmp/codex_current_parent.out 2>/tmp/codex_current_parent.err \
   && grep -q '^parent_session_id=codex-current-thread$' /tmp/codex_current_parent.out \
-  && grep -q -- '- parent: -' "$TMP/current-parent-logs/codex-current-parent.codex.prompt.txt" \
-  && grep -q -- '- parent_session_id: codex-current-thread' "$TMP/current-parent-logs/codex-current-parent.codex.prompt.txt" \
+  && codex_current_parent_prompt=$(sed -n 's/^prompt_file=//p' /tmp/codex_current_parent.out) \
+  && [ -f "$codex_current_parent_prompt" ] \
+  && grep -q -- '- parent: -' "$codex_current_parent_prompt" \
+  && grep -q -- '- parent_session_id: codex-current-thread' "$codex_current_parent_prompt" \
   && grep -q 'parent_sid=codex-current-thread' "$TMP/codex-current-parent.log" \
   && ! grep -q 'parent=invented-parent' "$TMP/codex-current-parent.log"; then
   ok "codex drill dispatch ancestry follows the current runtime thread"
@@ -928,16 +930,17 @@ if PATH="$TMP/codex-stubbin:$PATH" CODEX_HOME="$TMP/codex_headless_home" CODEX_S
   && grep -q '^started=1$' /tmp/codex_dispatch_start.out \
   && [ "$(readlink "$TMP/repo/.dispatch/codex-home")" = "$TMP/codex_headless_home" ] \
   && grep -Fxq "runtime_home_projection=$TMP/repo/.dispatch/codex-home" /tmp/codex_dispatch_start.out \
-  && [ -f "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" ] \
-  && grep -q '^# Portable Worker Kernel$' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q '^# Worker Type: Owner$' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'worker_type: owner' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'assigned_contract: autopilot-code' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'route_state: validated dispatch metadata' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'adapters/codex/skills/autopilot-code/SKILL.md' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'preflight.sh qa-policy standard code' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'dispatch registered dispatch-depth-2 stages by invoking the' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt" \
-  && grep -q 'nested work' "$TMP/codex-logs/nested/codex-start.codex.prompt.txt"; then
+  && codex_start_prompt=$(sed -n 's/^prompt_file=//p' /tmp/codex_dispatch_start.out) \
+  && [ -f "$codex_start_prompt" ] \
+  && grep -q '^# Portable Worker Kernel$' "$codex_start_prompt" \
+  && grep -q '^# Worker Type: Owner$' "$codex_start_prompt" \
+  && grep -q 'worker_type: owner' "$codex_start_prompt" \
+  && grep -q 'assigned_contract: autopilot-code' "$codex_start_prompt" \
+  && grep -q 'route_state: validated dispatch metadata' "$codex_start_prompt" \
+  && grep -q 'adapters/codex/skills/autopilot-code/SKILL.md' "$codex_start_prompt" \
+  && grep -q 'preflight.sh qa-policy standard code' "$codex_start_prompt" \
+  && grep -q 'dispatch registered dispatch-depth-2 stages by invoking the' "$codex_start_prompt" \
+  && grep -q 'nested work' "$codex_start_prompt"; then
   for _ in $(seq 1 20); do
     [ -f "$TMP/codex-start.argv" ] && break
     sleep 0.1
@@ -973,10 +976,11 @@ if "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-dispatch --c
   && grep -q '^registered=1$' /tmp/codex_dispatch.out \
   && grep -q '^started=0$' /tmp/codex_dispatch.out \
   && grep -q '^registry_lock=.*/codex-dispatch.log.lock$' /tmp/codex_dispatch.out \
-  && grep -q '^prompt_file=.*/codex-register-logs/codex-dispatch.codex.prompt.txt$' /tmp/codex_dispatch.out \
+  && grep -Eq '^prompt_file=.*/codex-register-logs/codex-dispatch\.att-[A-Za-z0-9._-]+\.codex\.prompt\.txt$' /tmp/codex_dispatch.out \
+  && codex_dispatch_prompt=$(sed -n 's/^prompt_file=//p' /tmp/codex_dispatch.out) \
   && [ -f "$TMP/codex-dispatch.log.lock" ] \
-  && [ -f "$TMP/codex-register-logs/codex-dispatch.codex.prompt.txt" ] \
-  && grep -q '^# Worker Type: Owner$' "$TMP/codex-register-logs/codex-dispatch.codex.prompt.txt" \
+  && [ -f "$codex_dispatch_prompt" ] \
+  && grep -q '^# Worker Type: Owner$' "$codex_dispatch_prompt" \
   && grep -q $'open\t.*/repo\t.*/repo\tcodex-dispatch\t' "$TMP/codex-dispatch.log" \
   && grep -q 'worker_type=owner' "$TMP/codex-dispatch.log" \
   && grep -q 'assigned_contract=autopilot-code' "$TMP/codex-dispatch.log"; then
@@ -1046,18 +1050,20 @@ if python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --dry-run --worktree
 else
   bad "claude dispatch wrapper should support explicit model/effort selection"
 fi
-if python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --dry-run --worktree "$TMP/repo" --slug claude-inherit-model --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --inherit-model-settings --jobs "$TMP/claude-inherit-model.log" >/tmp/claude_inherit_model.out 2>/tmp/claude_inherit_model.err \
-  && grep -q '^model_source=inherit$' /tmp/claude_inherit_model.out \
-  && grep -q '^model=inherit$' /tmp/claude_inherit_model.out \
-  && grep -q '^effort=inherit$' /tmp/claude_inherit_model.out \
-  && ! grep -q -- '--model ' /tmp/claude_inherit_model.out \
-  && [ ! -e "$TMP/claude-inherit-model.log" ]; then
-  ok "claude dispatch wrapper can explicitly inherit model settings"
+if python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --dry-run --worktree "$TMP/repo" --slug claude-inherit-model --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --inherit-model-settings --jobs "$TMP/claude-inherit-model.log" >/tmp/claude_inherit_model.out 2>/tmp/claude_inherit_model.err; then
+  bad "claude dispatch wrapper should reject unprovable model inheritance"
 else
-  bad "claude dispatch wrapper should inherit model settings only on request"
+  rc=$?
+  if [ "$rc" -eq 64 ] \
+    && grep -q '^reason=headless-model-inheritance-ineligible$' /tmp/claude_inherit_model.out \
+    && [ ! -e "$TMP/claude-inherit-model.log" ]; then
+    ok "claude dispatch wrapper rejects unprovable model inheritance"
+  else
+    bad "claude dispatch wrapper should reject unprovable model inheritance cleanly"
+  fi
 fi
 if AGENT_DISPATCH_JOBS="$TMP/claude-env-jobs.log" \
-  python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --register --worktree "$TMP/repo" --slug claude-env-jobs --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --inherit-model-settings --log-dir "$TMP/claude-env-logs" >/tmp/claude_env_jobs.out 2>/tmp/claude_env_jobs.err \
+  python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --register --worktree "$TMP/repo" --slug claude-env-jobs --capability autopilot-code --mode dev/backend --qa standard --prompt-text "do work" --model-role "fast implementer" --log-dir "$TMP/claude-env-logs" >/tmp/claude_env_jobs.out 2>/tmp/claude_env_jobs.err \
   && grep -q "^job_registry=$TMP/claude-env-jobs.log$" /tmp/claude_env_jobs.out \
   && grep -q $'open\t.*/repo\t.*/repo\tclaude-env-jobs\t' "$TMP/claude-env-jobs.log"; then
   ok "claude dispatch wrapper uses the selected shared registry"
@@ -1072,8 +1078,12 @@ if CODEX_THREAD_ID=codex-parent python3 "$ROOT/adapters/claude/bin/dispatch-head
   && grep -q '^owner=audit$' /tmp/claude_owned.out \
   && grep -q '^owner_harness=codex$' /tmp/claude_owned.out \
   && grep -q $'open\t.*/repo\t.*/repo\tclaude-owned\t' "$TMP/claude-owned.log" \
-  && grep -q 'worker_role=verifier,worker_type=owner,assigned_contract=audit' "$TMP/claude-owned.log" \
-  && grep -q 'parent_session_id: codex-parent' "$TMP/claude-owned-logs/claude-owned.claude.prompt.txt"; then
+  && grep -q 'worker_role=verifier' "$TMP/claude-owned.log" \
+  && grep -q 'worker_type=owner' "$TMP/claude-owned.log" \
+  && grep -q 'assigned_contract=audit' "$TMP/claude-owned.log" \
+  && claude_owned_prompt=$(sed -n 's/^prompt_file=//p' /tmp/claude_owned.out) \
+  && [ -f "$claude_owned_prompt" ] \
+  && grep -q 'parent_session_id: codex-parent' "$claude_owned_prompt"; then
   ok "claude dispatch wrapper records cross-harness ownership metadata"
 else
   bad "claude dispatch wrapper should record cross-harness ownership metadata"
@@ -3065,7 +3075,8 @@ if PATH="$TMP/opencode-stubbin:$PATH" OPENCODE_STUB_ARGV="$TMP/opencode-start.ar
   && grep -q '^status=start$' /tmp/opencode_dispatch_start.out \
   && grep -q '^started=1$' /tmp/opencode_dispatch_start.out \
   && grep -q 'cat -- ' /tmp/opencode_dispatch_start.out \
-  && [ -f "$TMP/opencode-logs/nested/opencode-start.opencode.prompt.txt" ]; then
+  && opencode_start_prompt=$(sed -n 's/^prompt_file=//p' /tmp/opencode_dispatch_start.out) \
+  && [ -f "$opencode_start_prompt" ]; then
   for _ in $(seq 1 20); do
     [ -f "$TMP/opencode-start.argv" ] && break
     sleep 0.1
@@ -3147,12 +3158,13 @@ if "$OPENCODE" dispatch --register --worktree "$TMP/repo" --slug opencode-genera
   && grep -q '^status=register$' /tmp/opencode_generated_dispatch.out \
   && grep -q '^registered=1$' /tmp/opencode_generated_dispatch.out \
   && grep -q '^prompt_source=generated$' /tmp/opencode_generated_dispatch.out \
-  && [ -f "$TMP/opencode-generated-logs/opencode-generated.opencode.prompt.txt" ] \
-  && grep -q 'qa-policy thorough code' "$TMP/opencode-generated-logs/opencode-generated.opencode.prompt.txt" \
-  && grep -q '^# Portable Worker Kernel$' "$TMP/opencode-generated-logs/opencode-generated.opencode.prompt.txt" \
-  && grep -q '^# Worker Type: Owner$' "$TMP/opencode-generated-logs/opencode-generated.opencode.prompt.txt" \
-  && grep -q 'assigned_contract: autopilot-code' "$TMP/opencode-generated-logs/opencode-generated.opencode.prompt.txt" \
-  && grep -q 'launch checked adapter wrappers directly' "$TMP/opencode-generated-logs/opencode-generated.opencode.prompt.txt"; then
+  && opencode_generated_prompt=$(sed -n 's/^prompt_file=//p' /tmp/opencode_generated_dispatch.out) \
+  && [ -f "$opencode_generated_prompt" ] \
+  && grep -q 'qa-policy thorough code' "$opencode_generated_prompt" \
+  && grep -q '^# Portable Worker Kernel$' "$opencode_generated_prompt" \
+  && grep -q '^# Worker Type: Owner$' "$opencode_generated_prompt" \
+  && grep -q 'assigned_contract: autopilot-code' "$opencode_generated_prompt" \
+  && grep -q 'launch checked adapter wrappers directly' "$opencode_generated_prompt"; then
   ok "opencode dispatch wrapper materializes generated register prompt with QA policy"
 else
   bad "opencode dispatch wrapper should materialize generated register prompt with QA policy"

@@ -10,7 +10,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "utilities"))
-from dispatch_contract import attempt_process_quiescence, parse_registry_metadata  # noqa: E402
+from dispatch_contract import observed_attempt_liveness, parse_registry_metadata  # noqa: E402
+from codex_dispatch_terminal import terminal_envelope_observed  # noqa: E402
 
 
 def selected_rows(
@@ -57,8 +58,18 @@ def classify(rows: list[tuple[list[str], dict[str, str]]]) -> dict[str, object]:
             and metadata.get("execution_surface") == "registered-headless"
             and metadata.get("registered_worker", "").lower() in {"1", "true"}
         )
-        process = attempt_process_quiescence(metadata) if registered_process else None
-        if registered_process and process.state != "quiescent":
+        observed = (
+            observed_attempt_liveness(
+                status,
+                metadata,
+                terminal_envelope=terminal_envelope_observed(
+                    metadata.get("log_file")
+                ),
+            )
+            if registered_process
+            else None
+        )
+        if registered_process and observed.state in {"alive", "unverifiable"}:
             readiness = "pending"
             pending = True
         elif status in {"open", "running"}:
@@ -66,7 +77,7 @@ def classify(rows: list[tuple[list[str], dict[str, str]]]) -> dict[str, object]:
             # They remain pending while open; guessing terminal from transcript
             # age would reintroduce the semantic/process conflation this helper
             # exists to remove.
-            if registered_process:
+            if registered_process and observed.state == "reconcile-needed":
                 readiness = "terminal-unclosed"
                 terminal_failure = True
             else:
@@ -89,8 +100,10 @@ def classify(rows: list[tuple[list[str], dict[str, str]]]) -> dict[str, object]:
                 "slug": fields[4],
                 "status": status,
                 "note": note or "-",
-                "process_state": process.state if process else "not-applicable",
-                "process_reason": process.reason if process else "unregistered-or-legacy",
+                "process_state": observed.process_state if observed else "not-applicable",
+                "process_reason": observed.process_reason if observed else "unregistered-or-legacy",
+                "observed_liveness": observed.state if observed else "not-applicable",
+                "observed_reason": observed.reason if observed else "unregistered-or-legacy",
                 "readiness": readiness,
             }
         )

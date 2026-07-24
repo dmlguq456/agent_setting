@@ -1265,6 +1265,7 @@ check_codex_utility_projection() {
   # leak window where a newly added utility silently has no projection decision).
   UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh worktree-cleanup.py dispatch-route.sh dispatch-defaults.py token-budget.py token-budget-experiment.py worker_bootstrap.py"
   UTILITY_DEFERRED="artifact-root.test.sh dispatch-artifact-root.test.py worktree-cleanup.test.py dispatch-liveness.sh dispatch-liveness.test.sh dispatch_liveness_matrix.test.py dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py capability-route.py capability_route.test.py compose-route.py compose_route.test.py dispatch-broker.py dispatch_broker.test.py dispatch-node.py dispatch_node.test.py dispatch-progress.py dispatch_progress.test.py dispatch-registry.py dispatch_registry.test.py dispatch-orphan-watch.py dispatch_orphan_watch.test.py dispatch_adapters_v11.test.py dispatch_contract.py dispatch_contract.test.py dispatch_completion_marker.test.py dispatch_harvest.test.py dispatch_v20.test.py dispatch_lifecycle.py dispatch_lifecycle.test.py dispatch-attempt-ready.py dispatch-batch.py launch-fence.py replica_batch_contract.py nested-dispatch-eligibility.py nested_dispatch_eligibility.test.py stage-dispatch-fallback.py stage_dispatch_fallback.test.py stage_dispatch_capacity.test.py spec-transaction.py spec_transaction.test.py worker-route-guard.py worker_route_guard.test.py model-worker-governor.py model_worker_governor.test.py resource-runner.py resource_runner.test.py worker_bootstrap.test.py worker_dispatch_prompt.test.py verify-files.sh verify-files.test.sh worktree-residue.py worktree_residue.test.py dispatch_codex_nocommit_fixture.test.py codex_dispatch_terminal.py codex_dispatch_terminal.test.py claude-session-supervisor.py claude_session_supervisor.test.py codex-app-server-supervisor.py codex_app_server_supervisor.test.py dispatch_completion_join.py dispatch_completion_join.test.py registered_parent_park.test.py capability-grounding.sh"
+  UTILITY_SHARED_DEFERRED="dispatch-observed-liveness.py dispatch_supervisor_terminal.py"
   utility_count=0
   for f in utilities/*; do
     [ -f "$f" ] || continue
@@ -1286,7 +1287,7 @@ check_codex_utility_projection() {
     case "$bn" in
       *.test.py|*.test.sh) continue ;;
     esac
-    case " $UTILITY_PROJECTED $UTILITY_DEFERRED " in
+    case " $UTILITY_PROJECTED $UTILITY_DEFERRED $UTILITY_SHARED_DEFERRED " in
       *" $bn "*) ;;
       *) fail_msg "no projection decision for utilities/$bn (must be classified projected or deferred)" ;;
     esac
@@ -2282,6 +2283,7 @@ check_opencode_utility_projection() {
   # leak window where a newly added utility silently has no projection decision).
   UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh worktree-cleanup.py dispatch-route.sh dispatch-defaults.py worker_bootstrap.py"
   UTILITY_DEFERRED="artifact-root.test.sh dispatch-artifact-root.test.py worktree-cleanup.test.py dispatch-liveness.sh dispatch-liveness.test.sh dispatch_liveness_matrix.test.py dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py token-budget.py token-budget-experiment.py capability-route.py capability_route.test.py compose-route.py compose_route.test.py dispatch-broker.py dispatch_broker.test.py dispatch-node.py dispatch_node.test.py dispatch-progress.py dispatch_progress.test.py dispatch-registry.py dispatch_registry.test.py dispatch-orphan-watch.py dispatch_orphan_watch.test.py dispatch_adapters_v11.test.py dispatch_contract.py dispatch_contract.test.py dispatch_completion_marker.test.py dispatch_harvest.test.py dispatch_v20.test.py dispatch_lifecycle.py dispatch_lifecycle.test.py dispatch-attempt-ready.py dispatch-batch.py launch-fence.py replica_batch_contract.py nested-dispatch-eligibility.py nested_dispatch_eligibility.test.py stage-dispatch-fallback.py stage_dispatch_fallback.test.py stage_dispatch_capacity.test.py spec-transaction.py spec_transaction.test.py worker-route-guard.py worker_route_guard.test.py model-worker-governor.py model_worker_governor.test.py resource-runner.py resource_runner.test.py worker_bootstrap.test.py worker_dispatch_prompt.test.py verify-files.sh verify-files.test.sh worktree-residue.py worktree_residue.test.py dispatch_codex_nocommit_fixture.test.py codex_dispatch_terminal.py codex_dispatch_terminal.test.py claude-session-supervisor.py claude_session_supervisor.test.py codex-app-server-supervisor.py codex_app_server_supervisor.test.py dispatch_completion_join.py dispatch_completion_join.test.py registered_parent_park.test.py capability-grounding.sh"
+  UTILITY_SHARED_DEFERRED="dispatch-observed-liveness.py dispatch_supervisor_terminal.py"
   utility_count=0
   for f in utilities/*; do
     [ -f "$f" ] || continue
@@ -2303,7 +2305,7 @@ check_opencode_utility_projection() {
     case "$bn" in
       *.test.py|*.test.sh) continue ;;
     esac
-    case " $UTILITY_PROJECTED $UTILITY_DEFERRED " in
+    case " $UTILITY_PROJECTED $UTILITY_DEFERRED $UTILITY_SHARED_DEFERRED " in
       *" $bn "*) ;;
       *) fail_msg "no projection decision for utilities/$bn (must be classified projected or deferred)" ;;
     esac

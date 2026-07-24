@@ -13,6 +13,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 # Make `tools/` importable so `from fleet.collectors import ...` resolves regardless of
@@ -855,6 +856,49 @@ class CodexAttemptIdentityTest(unittest.TestCase):
         self.assertEqual(state, "dead")
         self.assertEqual(job.state_evidence["attempt"]["source"], "terminal-observation")
         self.assertIn("process-exited", job.state_evidence["attempt"]["rule"])
+
+    def test_pid_gone_open_row_is_visible_reconcile_needed_without_mutation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs_log = os.path.join(tmp, "jobs.log")
+            log_file = os.path.join(tmp, "owner.claude.jsonl")
+            with open(log_file, "w", encoding="utf-8") as out:
+                out.write(json.dumps({
+                    "type": "result",
+                    "subtype": "error_during_execution",
+                    "is_error": True,
+                    "api_error_status": 429,
+                    "result": "You've reached your Fable 5 limit",
+                }) + "\n")
+            with open(jobs_log, "w", encoding="utf-8") as out:
+                out.write(
+                    "2026-07-24T00:00:00Z\topen\t/repo\t/wt\tstale-owner\t"
+                    "capability=autopilot-code,harness=claude,"
+                    "attempt_schema_version=2,dispatch_depth=1,transport=headless,"
+                    "execution_surface=registered-headless,registered_worker=1,"
+                    "fallback_hop=same-harness-headless,worker_type=owner,"
+                    "attempt_id=att-stale-owner,route_id=rt-stale,route_node=owner,"
+                    f"launch_outcome=reaped-before-publish,log_file={log_file}\n"
+                )
+            before = Path(jobs_log).read_bytes()
+            rows, malformed = dispatch._scan_jobs_log(jobs_log, set())
+            self.assertEqual(malformed, 0)
+            with mock.patch.object(dispatch, "_job_transcript_signal", return_value="working"):
+                state = dispatch._dispatch_liveness(rows[0], now=1000.0, track=False)
+            self.assertEqual(state, "stale")
+            self.assertEqual(rows[0].stage, "reconcile-needed")
+            self.assertEqual(
+                rows[0].state_evidence["attempt"]["rule"],
+                "terminal-observed/reconcile-needed",
+            )
+            self.assertEqual(Path(jobs_log).read_bytes(), before)
+            render.set_show_all(False)
+            lines = render._build_lines(
+                [], rows, section="dispatch", narrow=False, malformed=0, layout="wide"
+            )
+            text = "\n".join(
+                "".join(part for part, _key in line) for line in lines if line
+            )
+            self.assertIn("stale-owner", text)
 
     def test_legacy_row_without_process_identity_keeps_rollout_fallback(self):
         job = DispatchJob(key="code-test", slug="legacy", cwd="/work/wt",

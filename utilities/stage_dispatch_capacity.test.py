@@ -110,12 +110,19 @@ class CapacityTest(unittest.TestCase):
   codex=F.capacity_cascade("codex")
   self.assertEqual(F.capacity_cascade_next("codex",codex[0][0]),codex[1])
   claude=F.capacity_cascade("claude")
+  self.assertEqual(claude[0],("opus","xhigh"))
+  self.assertEqual(F.capacity_cascade_next("claude","fable"),claude[0])
+  self.assertEqual(F.capacity_cascade_next("claude","claude-fable-5"),claude[0])
   self.assertEqual(F.capacity_cascade_next("claude",claude[0][0]),claude[1])
+  self.assertEqual(F.capacity_cascade_next("claude","claude-opus-4-8"),claude[1])
   self.assertIsNone(F.capacity_cascade_next("claude",claude[-1][0]))  # end of cascade
   # failover-only model (opus) is proved by cascade declaration, not model-map.
   models=[m for m,_ in claude]
   self.assertIn("opus",models)
+  self.assertNotIn("fable",models)
   self.assertTrue(F.allowed_capacity_settings("claude",*claude[models.index("opus")]))
+  self.assertFalse(F.allowed_capacity_settings("claude","fable","xhigh"))
+  self.assertFalse(F.allowed_capacity_settings("claude","claude-fable-5","xhigh"))
   self.assertFalse(F.allowed_capacity_settings("claude","opus","not-a-real-effort"))
  def test_unset_capacity_model_derives_alternative_from_cascade(self):
   self.args.capacity_model=None  # no explicit alternative -> derive from config cascade
@@ -123,4 +130,17 @@ class CapacityTest(unittest.TestCase):
        mock.patch.object(F.subprocess,"run",side_effect=self.fake_retry()):
    state,fields,_=F.capacity_retry(self.args,self.route,self.node,self.row,1,self.failed,[])
   self.assertEqual(state,"success");self.assertEqual(fields["model"],"gpt-5.6-luna")
+ def test_legacy_fable_capacity_retry_launches_first_eligible_opus_candidate(self):
+  self.args.capacity_model=None;self.args.capacity_effort=None
+  self.row={**self.row,"child_harness":"claude"}
+  self.failed={"attempt_id":"att-initial0001","model":"claude-fable-5"}
+  self.jobs.write_text("2026-07-16T00:00:00Z\tdone\t/r\t/w\ts\t"
+   "route_id=r,route_node=test,attempt_id=att-initial0001,model=claude-fable-5,"
+   "child_harness=claude,note=dead-capacity\n")
+  completed=subprocess.CompletedProcess([],0,stdout="check=ok\nmodel=opus\nearly_death=-\nduplicate_attempt=0\n",stderr="")
+  with mock.patch.object(F,"wrapper_command",return_value=["fake"]) as command,\
+       mock.patch.object(F.subprocess,"run",return_value=completed):
+   state,fields,_=F.capacity_retry(self.args,self.route,self.node,self.row,1,self.failed,[])
+  self.assertEqual((state,fields["model"]),("success","opus"))
+  self.assertEqual(command.call_args.args[6],("opus","xhigh"))
 if __name__=="__main__":unittest.main()

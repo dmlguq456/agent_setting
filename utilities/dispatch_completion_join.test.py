@@ -116,6 +116,12 @@ class DispatchCompletionJoinTest(unittest.TestCase):
         )
         self.assertEqual(receipt["state"], "ready")
         self.assertEqual(receipt["children"][0]["reason"], "terminal-observed")
+        self.assertEqual(
+            JOIN.pending_attempt_ids(
+                JOIN.current_children(self.jobs, "att-parent")
+            ),
+            set(),
+        )
 
     def test_running_registry_state_is_probed_as_open(self):
         probe = self.root / "probe.sh"

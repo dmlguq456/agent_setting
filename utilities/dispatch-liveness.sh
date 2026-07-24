@@ -39,6 +39,7 @@ LOG_DIR="$AGENT_HOME/.dispatch/logs"
 LIMIT_RE='operation not permitted|network is unreachable|network access denied|hit your (session|usage) limit|session limit reached|usage limit reached|weekly limit|rate limit|[^0-9]429[^0-9]|invalid api key|authentication_error|not logged in|please run /login|unauthorized|[^0-9]401[^0-9]|credit balance is too low|insufficient (credit|quota|funds)'
 CAPACITY_RE='^(error[[:space:]]*[:\-][[:space:]]*)?(selected[[:space:]]+)?model([[:space:]]+[A-Za-z0-9._:/-]+)?[[:space:]]+(is[[:space:]]+)?at[[:space:]]+capacity[.!]?$'
 CODEX_TERMINAL_INSPECTOR="${CODEX_TERMINAL_INSPECTOR:-$SCRIPT_DIR/codex_dispatch_terminal.py}"
+OBSERVED_LIVENESS="${OBSERVED_LIVENESS:-$SCRIPT_DIR/dispatch-observed-liveness.py}"
 
 # SD-15b: anchor log-pattern death detection to a few short trailing lines.
 # Scanning a large tail caused false DEAD verdicts when a successful report only
@@ -82,6 +83,13 @@ while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
   log_file=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^log_file=//p' | head -1)
   artifact_root=$(printf '%s' "$pipe" | tr ',' '\n' | sed -n 's/^artifact_root=//p' | head -1)
   [ -n "$harness" ] || harness="claude"
+  observed_state=""; observed_reason=""; observed_process_reason=""
+  if [ -n "$attempt_id" ]; then
+    observed_out=$(python3 "$OBSERVED_LIVENESS" --jobs "$SOURCE_JOBS" --attempt-id "$attempt_id" 2>/dev/null || true)
+    observed_state=$(printf '%s\n' "$observed_out" | sed -n 's/^state=//p' | head -1)
+    observed_reason=$(printf '%s\n' "$observed_out" | sed -n 's/^reason=//p' | head -1)
+    observed_process_reason=$(printf '%s\n' "$observed_out" | sed -n 's/^process_reason=//p' | head -1)
+  fi
   terminal_state=""; terminal_source=""; terminal_verdict=""; terminal_artifact=""; terminal_blocker=""
   if { [ "$harness" = "codex" ] || [ "$harness" = "claude" ]; } && [ -n "$log_file" ]; then
     wire_out=$(python3 "$CODEX_TERMINAL_INSPECTOR" \
@@ -130,6 +138,20 @@ while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
     fi
   fi
 
+  if [ "$observed_state" = "reconcile-needed" ] && [ -n "$attempt_id" ]; then
+    orphan_info=$(python3 "$SCRIPT_DIR/dispatch-registry.py" orphan-status --attempt "$attempt_id" --jobs "$SOURCE_JOBS" --agent-home "$AGENT_HOME" 2>/dev/null || true)
+    if printf '%s\n' "$orphan_info" | grep -q '^orphan=1$'; then
+      orphan_route=$(printf '%s\n' "$orphan_info" | sed -n 's/^route_id=//p')
+      orphan_boundary=$(printf '%s\n' "$orphan_info" | sed -n 's/^resume_boundary=//p')
+      echo "⚠️ ORPHANED ${slug:-?}  — pipeline orphaned; route=$orphan_route; resume boundary=$orphan_boundary; dispatch-depth-0 decision  [open: $ts]"
+      suspect=$((suspect + 1)); continue
+    fi
+  fi
+  if [ "$observed_state" = "alive" ]; then
+    echo "ALIVE      ${slug:-?}  ($observed_process_reason; shared observed-liveness)"
+    alive=$((alive + 1)); continue
+  fi
+
   # A dead depth-1 owner with unfinished dependents is still an orphan even if
   # its exact log contains PASS.  Ask the canonical registry classifier before
   # rendering the terminal observation; this is the SD-64/71 post-exit seam.
@@ -172,6 +194,10 @@ while IFS=$'\t' read -r ts status repo wt slug pipe || [ -n "${ts:-}" ]; do
       echo "⚠️ EXITED   ${slug:-?}  — inspector-wire-invalid (blocker_reason=contract-violation)  [open: $ts]"
       suspect=$((suspect + 1)); continue ;;
   esac
+  if [ "$observed_state" = "reconcile-needed" ]; then
+    echo "⚠️ RECONCILE ${slug:-?}  — terminal-observed/reconcile-needed ($observed_reason; $observed_process_reason)  [open: $ts]"
+    suspect=$((suspect + 1)); continue
+  fi
   [ -d /proc ] || pid=""   # Fall back to transcript mtime without /proc.
   if [ -n "$pid" ] && [ -n "$pid_start" ]; then
     exact_args=(attempt-state --pid "$pid" --pid-start "$pid_start")

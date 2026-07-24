@@ -17,6 +17,16 @@ SUPERVISOR = ROOT / "utilities" / "codex-app-server-supervisor.py"
 PARENT = "att-parent"
 
 
+def owner_row(status: str = "open") -> str:
+    return (
+        f"2026-07-23T00:00:00Z\t{status}\t/repo\t/wt\towner\t"
+        "attempt_schema_version=2,dispatch_depth=1,transport=headless,"
+        "execution_surface=registered-headless,registered_worker=1,"
+        "fallback_hop=same-harness-headless,worker_type=owner,harness=codex,"
+        f"attempt_id={PARENT}\n"
+    )
+
+
 def child_row(attempt: str = "att-child", slug: str = "child", status: str = "open") -> str:
     return (
         f"2026-07-23T00:00:00Z\t{status}\t/repo\t/wt\t{slug}\t"
@@ -138,7 +148,8 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
 
     def test_runtime_wait_has_no_model_activity_until_exact_join_is_ready(self):
         self.jobs.write_text(
-            child_row("att-child-a", "child-a")
+            owner_row()
+            + child_row("att-child-a", "child-a")
             + child_row("att-child-b", "child-b"),
             encoding="utf-8",
         )
@@ -175,6 +186,9 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
         self.assertIn("verdict: PASS", rows[terminal - 1]["item"]["text"])
         self.assertNotIn("RAW_CHILD_SENTINEL", result.stdout)
         self.assertFalse(self.state.exists())
+        registry = self.jobs.read_text(encoding="utf-8")
+        self.assertIn("\tdone\t/repo\t/wt\towner\t", registry)
+        self.assertIn("note=completed-supervisor", registry)
         log = self.base / "attempt.codex.jsonl"
         log.write_text(result.stdout, encoding="utf-8")
         inspected = subprocess.run(
@@ -193,7 +207,7 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
         self.assertIn("\tvalid\texact-turn-completed\tPASS\tnone\tnone", inspected.stdout)
 
     def test_no_child_finishes_in_one_turn(self):
-        self.jobs.write_text("", encoding="utf-8")
+        self.jobs.write_text(owner_row(), encoding="utf-8")
         result = self.run_supervisor(FAKE_NO_CHILD="1")
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         trace = [json.loads(line) for line in self.trace.read_text().splitlines()]
@@ -214,7 +228,7 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
             "print(json.dumps({'id':v['id'],'result':{'ok':1}}),flush=True)\n",
             encoding="utf-8",
         )
-        self.jobs.write_text("", encoding="utf-8")
+        self.jobs.write_text(owner_row(), encoding="utf-8")
         env = {**os.environ, "FAKE_TRACE": str(self.trace)}
         result = subprocess.run(
             self.command(broken_app=broken),
@@ -227,6 +241,9 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn('"type":"turn.completed"', result.stdout)
         self.assertFalse(self.state.exists())
+        registry = self.jobs.read_text(encoding="utf-8")
+        self.assertIn("\tdone\t/repo\t/wt\towner\t", registry)
+        self.assertIn("note=dead-protocol", registry)
 
 
 if __name__ == "__main__":

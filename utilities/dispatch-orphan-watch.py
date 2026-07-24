@@ -10,8 +10,12 @@ import subprocess
 import sys
 import time
 
-from dispatch_contract import process_start_ticks
+from dispatch_contract import parse_registry_metadata, process_start_ticks
 from dispatch_completion_join import remove_supervisor_state
+from dispatch_supervisor_terminal import (
+    classify_supervisor_log,
+    reconcile_supervisor_terminal,
+)
 
 
 OPEN = {"open", "running"}
@@ -21,23 +25,29 @@ def process_start(pid: int) -> str | None:
     return process_start_ticks(pid)
 
 
-def attempt_status(jobs: Path, attempt_id: str) -> str | None:
+def attempt_record(
+    jobs: Path, attempt_id: str
+) -> tuple[str | None, dict[str, str]]:
     try:
         lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError:
-        return None
+        return None, {}
     for line in lines:
         fields = line.split("\t")
         if len(fields) != 6:
             continue
-        meta = dict(part.split("=", 1) for part in fields[5].split(",") if "=" in part)
+        meta = parse_registry_metadata(fields[5])
         if meta.get("attempt_id") == attempt_id:
-            return fields[1]
-    return None
+            return fields[1], meta
+    return None, {}
+
+
+def attempt_status(jobs: Path, attempt_id: str) -> str | None:
+    return attempt_record(jobs, attempt_id)[0]
 
 
 def reconcile(args) -> int:
-    result = subprocess.run(
+    subprocess.run(
         [
             sys.executable,
             str(Path(__file__).resolve().with_name("dispatch-registry.py")),
@@ -51,6 +61,16 @@ def reconcile(args) -> int:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+    status, metadata = attempt_record(args.jobs, args.attempt_id)
+    if status in OPEN:
+        terminal = classify_supervisor_log(
+            metadata.get("log_file"), metadata.get("harness", "unknown")
+        )
+        try:
+            reconcile_supervisor_terminal(args.jobs, args.attempt_id, terminal)
+        except Exception:
+            return 70
+        status = attempt_status(args.jobs, args.attempt_id)
     if re.fullmatch(r"att-[A-Za-z0-9._-]{1,240}", args.attempt_id):
         remove_supervisor_state(
             args.agent_home
@@ -58,7 +78,7 @@ def reconcile(args) -> int:
             / "supervisor-state"
             / f"{args.attempt_id}.json"
         )
-    return result.returncode
+    return 0 if status not in OPEN else 70
 
 
 def watch(args) -> int:

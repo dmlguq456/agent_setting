@@ -17,6 +17,16 @@ SUPERVISOR = ROOT / "utilities" / "claude-session-supervisor.py"
 PARENT = "att-parent"
 
 
+def owner_row(status: str = "open") -> str:
+    return (
+        f"2026-07-23T00:00:00Z\t{status}\t/repo\t/wt\towner\t"
+        "attempt_schema_version=2,dispatch_depth=1,transport=headless,"
+        "execution_surface=registered-headless,registered_worker=1,"
+        "fallback_hop=same-harness-headless,worker_type=owner,harness=claude,"
+        f"attempt_id={PARENT}\n"
+    )
+
+
 def child_row(status: str = "open") -> str:
     return (
         f"2026-07-23T00:00:00Z\t{status}\t/repo\t/wt\tchild\t"
@@ -120,7 +130,7 @@ class ClaudeSessionSupervisorTest(unittest.TestCase):
         )
 
     def test_resume_uses_same_session_once_after_join(self):
-        self.jobs.write_text(child_row(), encoding="utf-8")
+        self.jobs.write_text(owner_row() + child_row(), encoding="utf-8")
         result = self.run_supervisor()
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         trace = [json.loads(line) for line in self.trace.read_text().splitlines()]
@@ -151,6 +161,9 @@ class ClaudeSessionSupervisorTest(unittest.TestCase):
         self.assertNotIn("RAW_CLAUDE_SENTINEL", result.stdout)
         self.assertNotIn("RAW_PARENT_CONTEXT_SENTINEL", result.stdout)
         self.assertFalse(self.state.exists())
+        registry = self.jobs.read_text(encoding="utf-8")
+        self.assertIn("\tdone\t/repo\t/wt\towner\t", registry)
+        self.assertIn("note=completed-supervisor", registry)
         log = self.base / "attempt.claude.jsonl"
         log.write_text(result.stdout, encoding="utf-8")
         inspected = subprocess.run(
@@ -169,7 +182,7 @@ class ClaudeSessionSupervisorTest(unittest.TestCase):
         self.assertIn("\tvalid\texact-claude-result\tPASS\tnone\tnone", inspected.stdout)
 
     def test_no_child_finishes_without_resume(self):
-        self.jobs.write_text("", encoding="utf-8")
+        self.jobs.write_text(owner_row(), encoding="utf-8")
         result = self.run_supervisor(FAKE_NO_CHILD="1")
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         trace = [json.loads(line) for line in self.trace.read_text().splitlines()]
@@ -180,7 +193,7 @@ class ClaudeSessionSupervisorTest(unittest.TestCase):
     def test_missing_result_has_no_false_terminal(self):
         broken = self.base / "broken.py"
         broken.write_text("print('not-json')\n", encoding="utf-8")
-        self.jobs.write_text("", encoding="utf-8")
+        self.jobs.write_text(owner_row(), encoding="utf-8")
         result = subprocess.run(
             self.command(broken),
             input="initial assignment",
@@ -192,6 +205,58 @@ class ClaudeSessionSupervisorTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn('"type":"result"', result.stdout)
         self.assertFalse(self.state.exists())
+        registry = self.jobs.read_text(encoding="utf-8")
+        self.assertIn("\tdone\t/repo\t/wt\towner\t", registry)
+        self.assertIn("note=dead-protocol", registry)
+
+    def test_fable_429_is_exact_dead_capacity_and_never_stays_open(self):
+        limited = self.base / "limited.py"
+        limited.write_text(
+            "import json\n"
+            "print(json.dumps({'type':'result','subtype':'error_during_execution',"
+            "'is_error':True,'terminal_reason':'api_error','api_error_status':429,"
+            "'result':\"You've reached your Fable 5 limit; resets later\"}))\n",
+            encoding="utf-8",
+        )
+        self.jobs.write_text(owner_row(), encoding="utf-8")
+        result = subprocess.run(
+            self.command(limited),
+            input="initial assignment",
+            text=True,
+            capture_output=True,
+            env={**os.environ, "FAKE_TRACE": str(self.trace)},
+            timeout=10,
+        )
+        self.assertEqual(result.returncode, 3, result.stderr + result.stdout)
+        registry = self.jobs.read_text(encoding="utf-8")
+        self.assertNotIn("\topen\t/repo\t/wt\towner\t", registry)
+        self.assertIn("note=dead-capacity", registry)
+        self.assertIn("failure_class=capacity", registry)
+        self.assertIn("api_status=429", registry)
+
+    def test_http_auth_status_wins_over_incidental_capacity_words(self):
+        denied = self.base / "denied.py"
+        denied.write_text(
+            "import json\n"
+            "print(json.dumps({'type':'result','subtype':'error_during_execution',"
+            "'is_error':True,'api_error_status':401,"
+            "'result':'Unauthorized after rate limit check'}))\n",
+            encoding="utf-8",
+        )
+        self.jobs.write_text(owner_row(), encoding="utf-8")
+        result = subprocess.run(
+            self.command(denied),
+            input="initial assignment",
+            text=True,
+            capture_output=True,
+            env={**os.environ, "FAKE_TRACE": str(self.trace)},
+            timeout=10,
+        )
+        self.assertEqual(result.returncode, 3, result.stderr + result.stdout)
+        registry = self.jobs.read_text(encoding="utf-8")
+        self.assertIn("note=dead-auth", registry)
+        self.assertIn("failure_class=auth", registry)
+        self.assertIn("api_status=401", registry)
 
 
 if __name__ == "__main__":

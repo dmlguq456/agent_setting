@@ -495,6 +495,29 @@ def inspect_terminal_log(path: str | Path | None) -> dict[str, str] | None:
     }
 
 
+def terminal_envelope_observed(path: str | Path | None) -> bool:
+    """Return whether an exact log contains a final runtime/supervisor envelope."""
+
+    if not path:
+        return False
+    try:
+        lines = _tail_lines(Path(path))
+    except (OSError, UnicodeDecodeError):
+        return False
+    for line in reversed(lines):
+        try:
+            value = json.loads(line)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(value, dict) and value.get("type") in {
+            "turn.completed",
+            "result",
+            "dispatch.supervisor.error",
+        }:
+            return True
+    return False
+
+
 def wire_record(result: dict[str, object]) -> str:
     row = (
         int(result["exit_code"]),

@@ -74,10 +74,12 @@ ATTEMPT_MUTABLE_METADATA = {
     "teardown_claim_pid_start",
 }
 ATTEMPT_TERMINAL_EVIDENCE_KEYS = {
+    "api_status",
     "capacity_log",
     "classifier_source",
     "detected_by",
     "failure_class",
+    "process_exit",
     "reconcile_reason",
     "reset",
     "terminal_event",
@@ -238,6 +240,7 @@ class ParentAttemptBinding:
     harness: str
     transport: str
     runtime_sandbox: str
+    repository_identity: str
 
 
 @dataclass(frozen=True)
@@ -277,10 +280,49 @@ class AttemptReadiness:
     attempt_id: str = ""
 
 
+@dataclass(frozen=True)
+class ObservedAttemptLiveness:
+    """Pure registry/process verdict shared by dispatch observation surfaces."""
+
+    state: str
+    reason: str
+    process_state: str
+    process_reason: str
+
+
 def parse_registry_metadata(pipe: str) -> dict[str, str]:
     """Parse the stable six-column registry's comma-delimited metadata."""
 
     return dict(part.split("=", 1) for part in pipe.split(",") if "=" in part)
+
+
+def canonical_repository_identity(path: str | Path) -> str:
+    """Return one physical Git-repository identity for primary/linked worktrees.
+
+    Git's common directory is shared by every linked worktree.  Non-Git or
+    unavailable paths retain a physical-path identity so fixtures and explicit
+    foreign repositories still fail closed instead of collapsing together.
+    """
+
+    candidate = Path(path).expanduser().resolve(strict=False)
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(candidate), "rev-parse", "--git-common-dir"],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return str(candidate)
+    raw = result.stdout.strip()
+    if result.returncode or not raw or "\n" in raw:
+        return str(candidate)
+    common = Path(raw)
+    if not common.is_absolute():
+        common = candidate / common
+    return str(common.resolve(strict=False))
 
 
 def process_start_ticks(pid: int) -> str | None:
@@ -706,6 +748,46 @@ def attempt_process_quiescence(metadata: dict[str, str]) -> ProcessQuiescence:
     if terminal:
         return terminal[0]
     return ProcessQuiescence("unverifiable", "process-identity-unverifiable")
+
+
+def observed_attempt_liveness(
+    status: str,
+    metadata: dict[str, str],
+    *,
+    terminal_envelope: bool = False,
+) -> ObservedAttemptLiveness:
+    """Combine registry state and exact process evidence without mutation.
+
+    Consumers may supply only whether an exact final runtime envelope exists;
+    its content remains private to the terminal classifier.  An open row whose
+    governed process is gone is never synthesized back to alive.  It becomes a
+    visible reconciliation obligation, whether or not the envelope survived.
+    """
+
+    process = attempt_process_quiescence(metadata)
+    if status in {"open", "running"}:
+        if process.state == "live":
+            state, reason = "alive", process.reason
+        elif process.state == "quiescent":
+            state = "reconcile-needed"
+            reason = "terminal-observed" if terminal_envelope else "process-exited"
+        else:
+            state, reason = "unverifiable", process.reason
+    elif status in {"done", "killed", "cancelled"}:
+        if process.state == "quiescent":
+            state, reason = "terminal", "registry-closed"
+        elif process.state == "live":
+            state, reason = "alive", "registry-terminal-process-live"
+        else:
+            state, reason = "unverifiable", process.reason
+    else:
+        state, reason = "unverifiable", "registry-status-invalid"
+    return ObservedAttemptLiveness(
+        state=state,
+        reason=reason,
+        process_state=process.state,
+        process_reason=process.reason,
+    )
 
 
 def _governor_json(
@@ -1333,7 +1415,10 @@ def spawn_claimed_attempt(
             same_identity = (
                 parent_meta.get("dispatch_depth") == "1"
                 and parent_meta.get("worker_type") == "owner"
-                and parent_fields[2] == child_fields[2]
+                and canonical_repository_identity(parent_fields[2])
+                == parent_binding.repository_identity
+                and canonical_repository_identity(child_fields[2])
+                == parent_binding.repository_identity
                 and parent_fields[3] == child_fields[3]
                 and parent_fields[4] == child_meta.get("parent")
                 and child_meta.get("parent_attempt_id") == parent_binding.attempt_id
@@ -1484,6 +1569,7 @@ def resolve_live_parent_attempt(
 
     if not parent_slug:
         raise DispatchContractError("parent-slug-required", "depth-2 parent is required")
+    requested_repository = canonical_repository_identity(repo)
     ensure_global_registry_writable(jobs)
     with Path(f"{jobs}.lock").open("a", encoding="utf-8") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
@@ -1493,7 +1579,11 @@ def resolve_live_parent_attempt(
             fields = line.split("\t")
             if len(fields) != 6 or fields[1] not in {"open", "running"}:
                 continue
-            if fields[2] != repo or fields[3] != worktree or fields[4] != parent_slug:
+            if (
+                canonical_repository_identity(fields[2]) != requested_repository
+                or fields[3] != worktree
+                or fields[4] != parent_slug
+            ):
                 continue
             metadata = parse_registry_metadata(fields[5])
             try:
@@ -1550,6 +1640,7 @@ def resolve_live_parent_attempt(
             harness=metadata.get("harness", ""),
             transport=metadata.get("transport", ""),
             runtime_sandbox=metadata.get("runtime_sandbox", ""),
+            repository_identity=requested_repository,
         )
 
 
@@ -2483,6 +2574,69 @@ def close_attempt_row(
             _atomic_registry_replace(jobs, lines)
             return True
     return False
+
+
+def reconcile_attempt_terminal(
+    jobs: Path,
+    attempt_id: str,
+    note: str,
+    *,
+    evidence: dict[str, str] | None = None,
+) -> str:
+    """Atomically close one supervisor-owned attempt or prove it already closed.
+
+    Unlike a best-effort close, a missing/duplicate exact row is a typed
+    contract failure.  This lets supervisors avoid reporting successful
+    completion while their canonical row remains open.
+    """
+
+    if not attempt_id or not note:
+        raise DispatchContractError(
+            "attempt-terminal-reconcile-invalid",
+            "attempt_id and note are required",
+        )
+    ensure_global_registry_writable(jobs)
+    with Path(f"{jobs}.lock").open("a", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
+        matches: list[tuple[int, list[str], dict[str, str]]] = []
+        for index, line in enumerate(lines):
+            fields = line.split("\t")
+            if len(fields) != 6:
+                continue
+            metadata = parse_registry_metadata(fields[5])
+            if metadata.get("attempt_id") == attempt_id:
+                matches.append((index, fields, metadata))
+        if len(matches) != 1:
+            raise DispatchContractError(
+                "attempt-terminal-row-not-unique",
+                f"attempt_id={attempt_id} rows={len(matches)}",
+            )
+        index, fields, metadata = matches[0]
+        validate_attempt_metadata(metadata)
+        if fields[1] in {"done", "killed", "cancelled"}:
+            return "already-terminal"
+        if fields[1] not in {"open", "running"}:
+            raise DispatchContractError(
+                "attempt-terminal-status-invalid", fields[1]
+            )
+        if metadata.get("teardown_claim"):
+            raise DispatchContractError(
+                "attempt-terminal-teardown-claimed", attempt_id
+            )
+        values = {"note": note}
+        values.update(
+            {
+                key: value
+                for key, value in (evidence or {}).items()
+                if value not in (None, "")
+            }
+        )
+        fields[1] = "done"
+        fields[5] = _updated_attempt_metadata(fields[5], values, terminal=True)
+        lines[index] = "\t".join(fields)
+        _atomic_registry_replace(jobs, lines)
+        return "closed"
 
 
 def launch_orphan_watch(

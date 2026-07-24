@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -327,11 +328,13 @@ def _adapter_models_conf(harness: str) -> dict[str, str]:
 
 def capacity_cascade(harness: str) -> list[tuple[str, str]]:
     """Ordered (model, paired) capacity-failover candidates from the adapter config."""
-    raw = _adapter_models_conf(harness).get("CFG_TIER_DEEP_FAILOVER_CASCADE", "")
+    config = _adapter_models_conf(harness)
+    raw = config.get("CFG_TIER_DEEP_FAILOVER_CASCADE", "")
+    restricted = config.get("CFG_MAIN_SESSION_ONLY_MODELS", "").split()
     out: list[tuple[str, str]] = []
     for entry in raw.split():
         model, sep, paired = entry.partition(":")
-        if model and sep and paired:
+        if model and sep and paired and not _restricted_model(model, restricted):
             out.append((model, paired))
     return out
 
@@ -340,16 +343,46 @@ def capacity_cascade_next(harness: str, failed_model: str) -> tuple[str, str] | 
     """Next (model, paired) after failed_model in the config cascade, else None.
 
     Capacity failover switches MODEL (a rate-limited model does not recover by
-    lowering effort), so the cascade is model-granularity: e.g. fable -> opus.
+    lowering effort), so the cascade is model-granularity: e.g. opus -> sonnet.
     """
     cascade = capacity_cascade(harness)
+    restricted = _adapter_models_conf(harness).get(
+        "CFG_MAIN_SESSION_ONLY_MODELS", ""
+    ).split()
+    # Migration-only recovery: an already-running legacy job may have recorded
+    # a model that is no longer delegation-eligible.  Resume at the first
+    # eligible candidate without ever admitting that model into the cascade.
+    if _restricted_model(failed_model, restricted):
+        return cascade[0] if cascade else None
     for i, (model, _paired) in enumerate(cascade):
-        if model == failed_model and i + 1 < len(cascade):
+        if _declared_model_matches(model, failed_model) and i + 1 < len(cascade):
             return cascade[i + 1]
     return None
 
 
+def _restricted_model(model: str, restricted: list[str]) -> bool:
+    tokens = set(re.split(r"[^a-z0-9]+", model.lower()))
+    return any(alias.lower() in tokens for alias in restricted)
+
+
+def _declared_model_matches(declared: str, actual: str) -> bool:
+    declared_lower = declared.lower()
+    if declared_lower == actual.lower():
+        return True
+    return bool(
+        re.fullmatch(r"[a-z0-9]+", declared_lower)
+        and declared_lower in set(re.split(r"[^a-z0-9]+", actual.lower()))
+    )
+
+
 def allowed_capacity_settings(harness: str, model: str, paired: str) -> bool:
+    restricted = (
+        _adapter_models_conf(harness).get(
+            "CFG_MAIN_SESSION_ONLY_MODELS", ""
+        ).split()
+    )
+    if _restricted_model(model, restricted):
+        return False
     # A model declared in the adapter capacity cascade is proved by declaration
     # (failover-only models such as Opus are intentionally not primary tiers).
     if (model, paired) in capacity_cascade(harness):
@@ -572,7 +605,7 @@ def capacity_retry(
     failed_model = failed.get("model", "")
     # The alternative comes from an explicit --capacity-model, else the adapter
     # config capacity cascade (SD-59): a rate-limited model is switched, not
-    # re-tried at lower effort. Fable exhausted -> opus, SOL -> LUNA, etc.
+    # re-tried at lower effort. Opus exhausted -> sonnet, SOL -> LUNA, etc.
     alt_model = args.capacity_model
     alt_paired = capacity_pair(args, harness)
     if not alt_model:

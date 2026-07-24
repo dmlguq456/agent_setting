@@ -18,10 +18,15 @@ from dispatch_completion_join import (
     remove_supervisor_state,
     write_supervisor_state,
 )
+from dispatch_supervisor_terminal import (
+    SupervisorTerminal,
+    classify_codex_result,
+    classify_supervisor_error,
+    reconcile_supervisor_terminal,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HANDOFF_PREFIXES = ("artifact: ", "verdict: ", "blocker: ")
 ALLOWED_JOIN_STATES = frozenset({"ready", "timeout"})
 
 
@@ -33,13 +38,20 @@ def emit(value: dict[str, Any]) -> None:
     print(json.dumps(value, separators=(",", ":"), ensure_ascii=False), flush=True)
 
 
-def exact_handoff(text: str | None) -> bool:
-    if not isinstance(text, str):
+def reconcile(args: argparse.Namespace, terminal: SupervisorTerminal) -> bool:
+    try:
+        reconcile_supervisor_terminal(
+            args.jobs, args.parent_attempt_id, terminal
+        )
+        return True
+    except Exception as exc:
+        emit(
+            {
+                "type": "dispatch.supervisor.error",
+                "reason": f"terminal-reconcile-failed-{type(exc).__name__}",
+            }
+        )
         return False
-    lines = text.strip().splitlines()
-    return len(lines) == 3 and all(
-        line.startswith(prefix) for line, prefix in zip(lines, HANDOFF_PREFIXES)
-    )
 
 
 def normalize_item(item: dict[str, Any]) -> dict[str, Any]:
@@ -339,6 +351,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     prompt = sys.stdin.read()
     if not prompt.strip():
+        terminal = classify_supervisor_error("codex", "initial-prompt-empty", 64)
+        if not reconcile(args, terminal):
+            return 70
         emit({"type": "dispatch.supervisor.error", "reason": "initial-prompt-empty"})
         return 64
     command = shlex.split(args.app_server_command) if args.app_server_command else [
@@ -428,12 +443,23 @@ def main(argv: list[str] | None = None) -> int:
                 continuations += 1
                 continue
 
+            terminal = classify_codex_result(final_text)
+            if not reconcile(args, terminal):
+                return 70
             emit({"type": "turn.completed", "thread_id": thread_id})
-            return 0 if exact_handoff(final_text) else 3
+            return 0 if terminal.failure_class == "pass" else 3
     except (JoinContractError, SupervisorError) as exc:
+        terminal = classify_supervisor_error("codex", str(exc))
+        if not reconcile(args, terminal):
+            return 70
         emit({"type": "dispatch.supervisor.error", "reason": str(exc)})
         return 70
     except Exception as exc:  # fail closed without leaking protocol/model content
+        terminal = classify_supervisor_error(
+            "codex", f"supervisor-internal-{type(exc).__name__}"
+        )
+        if not reconcile(args, terminal):
+            return 70
         emit(
             {
                 "type": "dispatch.supervisor.error",
