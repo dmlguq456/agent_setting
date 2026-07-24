@@ -126,9 +126,10 @@ class ParentContextConformance(unittest.TestCase):
         command = [
             sys.executable, str(HEADLESS), "--start",
             "--worktree", str(self.repo), "--slug", slug,
-            "--capability", "autopilot-code", "--mode", "dev/refactor",
+            "--capability", "autopilot-code", "--capability-mode", "dev",
             "--qa", "standard", "--intensity", "standard",
             "--dispatch-depth", "1", "--worker-type", "owner",
+            "--unit", "_kernel/owner",
             "--assigned-contract", "autopilot-code", "--owner", "autopilot-code",
             "--model", "gpt-test", "--reasoning", "low",
             "--jobs", str(jobs), "--log-dir", str(self.logs),

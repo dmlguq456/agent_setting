@@ -6,7 +6,6 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import GOVERNOR_RESERVATION_ENV
 from worker_bootstrap import assigned_contract, worker_type_for_kind
-ROLE_MODE={"deep maker":"dev/refactor","fast implementer":"dev/backend","deep reviewer":"qa/test","fast reviewer":"qa/review","fast writer":"docs/writing","deep orchestrator":"ops/orchestration","orchestrator":"ops/orchestration"}
 
 # SD-66 fix-forward: deterministic dispatch_evidence -> wrapper-argument binding
 # for dispatch-depth-2 route nodes (PRD §13.7.6, acceptance ③). Only same/cross-harness
@@ -32,7 +31,8 @@ CURRENT_PARENT_ENV = {
     "parent_sandbox": "AGENT_DISPATCH_CURRENT_SANDBOX",
 }
 PROTECTED_ADAPTER_FLAGS = frozenset({
-    "--worktree", "--slug", "--capability", "--mode", "--qa", "--intensity",
+    "--worktree", "--slug", "--capability", "--capability-mode",
+    "--worker-mode", "--mode", "--qa", "--intensity",
     "--dispatch-depth", "--worker-type", "--unit", "--assigned-contract",
     "--owner", "--route-file", "--route-id", "--route-hash", "--route-node",
     "--registry-digest", "--write-scope", "--completion-gate", "--prompt-text",
@@ -257,7 +257,10 @@ def main():
  except ValueError as e:
   raise SystemExit(str(e))
  contract=assigned_contract(capability=route["capability"],worker_type=worker_type,route_node=node["id"],completion_gate=node.get("completion_gate"),root=ROOT)
- argv=[sys.executable,str(wrapper),"--"+a.action,"--worktree",route["cwd"],"--slug",a.slug,"--capability",route["capability"],"--mode",ROLE_MODE.get(node.get("role"),"ops/orchestration"),"--qa",a.qa,"--intensity",route["effective_intensity"],"--dispatch-depth",str(node.get("dispatch_depth",1)),"--worker-type",worker_type,"--unit",node.get("unit",""),"--assigned-contract",contract,"--owner",route["capability"],"--route-file",str(Path(a.route).resolve()),"--route-id",route["route_id"],"--route-hash",route["route_hash"],"--route-node",node["id"],"--registry-digest",route["registry_digest"],"--write-scope",";".join(node["write_scope"]),"--completion-gate",node["completion_gate"],"--prompt-text",a.prompt_text]
+ argv=[sys.executable,str(wrapper),"--"+a.action,"--worktree",route["cwd"],"--slug",a.slug,"--capability",route["capability"],"--capability-mode",route["capability_mode"],"--qa",a.qa,"--intensity",route["effective_intensity"],"--dispatch-depth",str(node.get("dispatch_depth",1)),"--worker-type",worker_type,"--unit",node.get("unit",""),"--assigned-contract",contract,"--owner",route["capability"],"--route-file",str(Path(a.route).resolve()),"--route-id",route["route_id"],"--route-hash",route["route_hash"],"--route-node",node["id"],"--registry-digest",route["registry_digest"],"--write-scope",";".join(node["write_scope"]),"--completion-gate",node["completion_gate"],"--prompt-text",a.prompt_text]
+ unit=node.get("unit","")
+ if unit and not unit.startswith("_kernel/"):
+  argv += ["--worker-mode",unit]
  affinity=node.get("harness_affinity")
  if affinity: argv += ["--harness-affinity",affinity]
  if node.get("dispatch_depth")==2:

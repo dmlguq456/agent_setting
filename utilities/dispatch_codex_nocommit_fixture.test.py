@@ -105,7 +105,8 @@ class CodexNoCommitFixtureTest(unittest.TestCase):
         args = [
             sys.executable, str(ROOT / "adapters/codex/bin/dispatch-headless.py"),
             "--register", "--worktree", str(self.linked), "--slug", "codex-nocommit-fixture",
-            "--capability", "autopilot-code", "--mode", "dev/backend", "--qa", "standard",
+            "--capability", "autopilot-code", "--capability-mode", route["capability_mode"],
+            "--worker-mode", node["unit"], "--qa", "standard",
             "--intensity", "strong", "--dispatch-depth", "2", "--parent", "owner",
             "--parent-harness", "codex", "--parent-transport", "headless",
             "--parent-sandbox", "fixture", "--nested-eligibility", "supported",

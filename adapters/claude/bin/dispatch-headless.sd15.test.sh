@@ -57,8 +57,10 @@ launch() { # $1=fake-claude-body $2=slug $3=watch
     "$wt" "$wt" "$parent_attempt" "$parent_pid" "$parent_start" >> "$AH/.dispatch/jobs.log"
   AGENT_HOME="$AH" AGENT_DISPATCH_JOBS="$AH/.dispatch/jobs.log" \
     AGENT_DISPATCH_ATTEMPT_ID="$parent_attempt" PATH="$bin:$PATH" python3 "$WRAP" --start \
-    --worktree "$wt" --slug "$2" --capability code-plan --mode dev --qa standard \
-    --intensity standard --dispatch-depth 2 --parent cx --worker-role code-plan --owner autopilot-code \
+    --worktree "$wt" --slug "$2" --capability autopilot-code --capability-mode dev \
+    --worker-mode dev/backend --unit dev/backend --qa standard \
+    --intensity standard --dispatch-depth 2 --parent cx --worker-type stage \
+    --assigned-contract code-plan --owner autopilot-code \
     --parent-harness claude --parent-transport headless --parent-sandbox fixture \
     --launch-authority conductor --nested-eligibility supported --eligibility-source sd15-fixture \
     --model sonnet --effort medium --early-exit-watch "$3" 2>&1

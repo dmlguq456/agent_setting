@@ -54,6 +54,13 @@ from dispatch_lifecycle import (  # noqa: E402
     pid_namespace_scoped,
     wait_foreground,
 )
+from dispatch_mode_contract import (  # noqa: E402
+    capability_mode_from_route_file,
+    DispatchModeContractError,
+    normalize_dispatch_modes,
+    validate_capability_mode,
+    validate_route_mode_axes,
+)
 from worker_bootstrap import (  # noqa: E402
     assigned_contract,
     profile_worker_type,
@@ -143,7 +150,9 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--worktree", required=True)
     p.add_argument("--slug", required=True)
     p.add_argument("--capability", required=True)
-    p.add_argument("--mode", required=True)
+    p.add_argument("--capability-mode", help="entry capability mode (for example dev)")
+    p.add_argument("--worker-mode", help="non-owner unit/persona compatibility path")
+    p.add_argument("--mode", help="legacy compatibility input; scalar=capability, slash=worker")
     p.add_argument("--qa", default=None)  # optional/derived from --intensity (CONVENTIONS §1.1)
     p.add_argument("--intensity", default="standard")
     p.add_argument("--dispatch-depth", dest="dispatch_depth", type=int, default=1)
@@ -305,7 +314,8 @@ def task_prompt(args: argparse.Namespace) -> tuple[str, str]:
         return args.prompt_text, "inline"
     return (
         "Run the requested portable harness work.\n"
-        f"capability={args.capability}\nmode={args.mode}\nqa={args.qa}\n"
+        f"capability={args.capability}\ncapability_mode={args.capability_mode}\n"
+        f"worker_mode={args.worker_mode or '-'}\nqa={args.qa}\n"
         f"intensity={args.intensity}\ndispatch_depth={args.dispatch_depth}\nparent={args.parent_slug or '-'}\n"
         f"worktree={args.worktree}\n",
         "generated",
@@ -551,7 +561,8 @@ def dispatch_prompt(
         f"{bootstrap}\n"
         "Dispatch metadata:\n"
         f"- capability: {args.capability}\n"
-        f"- mode: {args.mode}\n"
+        f"- capability_mode: {args.capability_mode}\n"
+        f"- worker_mode: {args.worker_mode or '-'}\n"
         f"- qa: {args.qa}\n"
         f"- intensity: {args.intensity}\n"
         f"- dispatch_depth: {args.dispatch_depth}\n"
@@ -567,9 +578,10 @@ def dispatch_prompt(
         f"- artifact_root: {args.artifact_root}\n"
         f"- route_state: {route_state}\n\n"
         "Codex realization:\n"
-        f"- Read only $AGENT_HOME/adapters/codex/skills/{args.assigned_contract}/SKILL.md and the native mode path reported for {args.mode}.\n"
+        f"- Read only $AGENT_HOME/adapters/codex/skills/{args.assigned_contract}/SKILL.md; the typed bootstrap above already contains the exact portable unit persona.\n"
+        "- An owner has no worker mode and must not load any unit persona path.\n"
         f"- Run $AGENT_HOME/adapters/codex/bin/preflight.sh qa-policy {args.qa} {qa_track(args.capability)} and keep its required assurance in the artifact.\n"
-        "- The wrapper already validated capability, mode, QA, artifact root, and any route record. Re-run worker-route only for a safety recheck.\n"
+        "- The wrapper already validated capability mode, worker unit/mode, QA, artifact root, and any route record. Re-run worker-route only for a safety recheck.\n"
         "- Before each edit run $AGENT_HOME/adapters/codex/bin/preflight.sh write <file> codex-headless; preserve required test and tool-contract checks in the artifact.\n"
         "- Codex may still auto-discover project AGENTS.md; do not explicitly load the full harness adapter bootstrap or another runtime's adapter.\n\n"
         f"{heartbeat}"
@@ -808,7 +820,7 @@ def _effective_parent_cwd(args):
 def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     repo = subprocess.check_output(["git", "-C", args.worktree, "rev-parse", "--show-toplevel"], text=True).strip()
     pipe = (
-        f"capability={args.capability},mode={args.mode},qa={args.qa},"
+        f"capability={args.capability},capability_mode={args.capability_mode},qa={args.qa},"
         f"intensity={args.intensity},attempt_schema_version=2,"
         f"dispatch_depth={args.dispatch_depth},transport=headless,"
         f"execution_surface={args.execution_surface},"
@@ -838,6 +850,8 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         pipe += f",parent_cwd={_effective_parent_cwd(args)}"
     if args.worker_role:
         pipe += f",worker_role={args.worker_role}"
+    if args.worker_mode:
+        pipe += f",worker_mode={args.worker_mode}"
     pipe += f",worker_type={args.worker_type}"
     pipe += f",assigned_contract={args.assigned_contract}"
     if args.unit:
@@ -1201,9 +1215,24 @@ def validate_dispatch_inputs(args: argparse.Namespace) -> int:
     rc = validate_preflight("capability", "capability-info", args.capability, "invalid-dispatch-capability")
     if rc != 0:
         return rc
-    rc = validate_preflight("mode", "mode-info", args.mode, "invalid-dispatch-mode")
-    if rc != 0:
-        return rc
+    capability_info = subprocess.run(
+        [str(ROOT / "adapters" / "codex" / "bin" / "preflight.sh"), "capability-info", args.capability],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    try:
+        validate_capability_mode(args.capability, args.capability_mode, capability_info.stdout)
+    except DispatchModeContractError as exc:
+        return fail(exc.reason, 64, **exc.fields)
+    if args.worker_mode:
+        rc = validate_preflight(
+            "worker_mode", "mode-info", args.worker_mode, "invalid-dispatch-worker-mode"
+        )
+        if rc != 0:
+            return rc
     if args.qa is None:
         args.qa = QA_FROM_INTENSITY.get(args.intensity, "standard")
     if args.qa not in QA_LEVELS:
@@ -1309,6 +1338,10 @@ def validate_route_record(args: argparse.Namespace) -> int:
         route_record = {}
     if route_record.get("schema_version") != 2 or "broker_contract_version" in route_record:
         return fail("legacy-broker-route-read-only", 65, route_file=args.route_file, child_spawned="0")
+    try:
+        validate_route_mode_axes(args, route_record)
+    except DispatchModeContractError as exc:
+        return fail(exc.reason, 65, **exc.fields, child_spawned="0")
     command = [sys.executable, str(ROOT / "utilities" / "worker-route-guard.py"), "validate",
         "--route", args.route_file, "--node", args.route_node, "--cwd", args.worktree,
         "--artifact-root", args.artifact_root, "--capability", args.capability,
@@ -1387,6 +1420,20 @@ def main(argv: list[str]) -> int:
         args.artifact_root = resolve_artifact_root(args.worktree)
     except ValueError as e:
         return fail("artifact-root-resolution-failed", 64, detail=str(e), worktree=args.worktree)
+    args.worker_type = resolve_worker_type(
+        explicit=args.worker_type,
+        dispatch_depth=args.dispatch_depth,
+        worker_role=args.worker_role,
+        route_node=args.route_node,
+        profile_type=profile_worker_type(ROOT, args.profile),
+    )
+    try:
+        normalize_dispatch_modes(
+            args,
+            default_capability_mode=capability_mode_from_route_file(args.route_file),
+        )
+    except DispatchModeContractError as exc:
+        return fail(exc.reason, 64, **exc.fields, child_spawned="0")
     rc = validate_dispatch_inputs(args)
     if rc != 0:
         return rc
@@ -1688,6 +1735,7 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_REGISTERED_WORKER": str(int(bool(args.registered_worker))),
             "AGENT_DISPATCH_FALLBACK_HOP": args.fallback_hop,
             "AGENT_DISPATCH_INTENSITY": args.intensity,
+            "AGENT_DISPATCH_CAPABILITY_MODE": args.capability_mode,
             "AGENT_DISPATCH_SELF_SLUG": args.slug,
             "AGENT_DISPATCH_PARENT_SLUG": args.parent_slug or "",
             "AGENT_DISPATCH_ATTEMPT_ID": args.attempt_id,
@@ -1718,6 +1766,10 @@ def main(argv: list[str]) -> int:
             dispatch_env["AGENT_DISPATCH_WORKER_ROLE"] = args.worker_role
         else:
             dispatch_env.pop("AGENT_DISPATCH_WORKER_ROLE", None)
+        if args.worker_mode:
+            dispatch_env["AGENT_DISPATCH_WORKER_MODE"] = args.worker_mode
+        else:
+            dispatch_env.pop("AGENT_DISPATCH_WORKER_MODE", None)
         if args.unit:
             dispatch_env["AGENT_DISPATCH_UNIT"] = args.unit
         else:
@@ -1956,7 +2008,8 @@ def main(argv: list[str]) -> int:
     print("artifact_write_scope=canonical-only")
     print(f"slug={args.slug}")
     print(f"capability={args.capability}")
-    print(f"mode={args.mode}")
+    print(f"capability_mode={args.capability_mode}")
+    print(f"worker_mode={args.worker_mode or '-'}")
     print(f"qa={args.qa}")
     print(f"intensity={args.intensity}")
     print(f"dispatch_depth={args.dispatch_depth}")

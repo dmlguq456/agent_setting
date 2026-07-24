@@ -76,20 +76,17 @@ tool to claim Codex parity.
 
 ## Dispatch
 
-Select the primary capability semantically per `core/WORKFLOW.md §0.2` and use
-its §0.3 pre-execution gate when applicable. Before material work, propose the
-route with the completed five-field card in §0.4 and wait for approval unless
-the same route and scope are already approved. Route from compact generated
-metadata before approval; load full capability detail in the acting owner or
-worker after approval.
+Route by `core/WORKFLOW.md §0.2`, apply its §0.3 gate, and obtain the §0.4
+five-field approval before material work unless scope and route are already
+approved. Load full capability detail only in the acting owner or worker.
 
 Check `preflight.sh headless [--check] [--require-hook-trust] <worktree>`.
-Launch only registered jobs through
-`preflight.sh dispatch --dry-run|--register|--start [--require-hook-trust]`
-with explicit worktree, slug, capability, assigned contract/route node, mode,
-QA, intensity, depth, parent, worker type, owner, and model
-choice/inheritance. `worker_role` is legacy read-only metadata, not bootstrap
-or Skill identity. Monitor with
+Launch registered jobs only through `preflight.sh dispatch
+--dry-run|--register|--start [--require-hook-trust]` with the complete tuple in
+`core/OPERATIONS.md`. Keep `capability_mode` separate from a non-owner
+`worker_mode`, which must equal its portable `unit`; a dispatch-depth-1 owner is
+`_kernel/owner` with no worker mode. `worker_role` and legacy `mode` are
+read-only metadata, not bootstrap identity. Monitor with
 `preflight.sh liveness [jobs.log]`; harvest with `preflight.sh harvest`.
 Conductors use `dispatch-chain` to invoke checked same/cross-harness dispatch-depth-2
 adapter wrappers directly. A two-way `replica_group` uses one `dispatch-batch`

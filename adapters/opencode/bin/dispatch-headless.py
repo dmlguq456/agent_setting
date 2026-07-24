@@ -42,6 +42,13 @@ from dispatch_contract import (  # noqa: E402
     validate_nested_eligibility,
     wait_governor_reservation_claim,
 )
+from dispatch_mode_contract import (  # noqa: E402
+    capability_mode_from_route_file,
+    DispatchModeContractError,
+    normalize_dispatch_modes,
+    validate_capability_mode,
+    validate_route_mode_axes,
+)
 from worker_bootstrap import (  # noqa: E402
     assigned_contract,
     render_worker_bootstrap,
@@ -138,7 +145,9 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--worktree", required=True)
     p.add_argument("--slug", required=True)
     p.add_argument("--capability", required=True)
-    p.add_argument("--mode", required=True)
+    p.add_argument("--capability-mode", help="entry capability mode (for example dev)")
+    p.add_argument("--worker-mode", help="non-owner unit/persona compatibility path")
+    p.add_argument("--mode", help="legacy compatibility input; scalar=capability, slash=worker")
     p.add_argument("--qa", default=None)  # optional/derived from --intensity (CONVENTIONS §1.1)
     p.add_argument("--intensity", default="standard")
     p.add_argument("--dispatch-depth", dest="dispatch_depth", type=int, default=1)
@@ -399,7 +408,8 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
         f"{bootstrap}\n"
         "Dispatch metadata:\n"
         f"- capability: {args.capability}\n"
-        f"- mode: {args.mode}\n"
+        f"- capability_mode: {args.capability_mode}\n"
+        f"- worker_mode: {args.worker_mode or '-'}\n"
         f"- qa: {args.qa}\n"
         f"- intensity: {args.intensity}\n"
         f"- dispatch_depth: {args.dispatch_depth}\n"
@@ -415,7 +425,8 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
         f"- artifact_root: {args.artifact_root}\n"
         f"- route_state: {'consume the immutable record already validated by the wrapper' if args.route_file else 'validated dispatch metadata'}\n\n"
         "OpenCode realization:\n"
-        "- The wrapper already validated capability, mode, QA, artifact-root access, and any route record. Use worker-route only for a safety recheck.\n"
+        "- The wrapper already validated capability mode, optional worker mode, QA, artifact-root access, and any route record. Use worker-route only for a safety recheck.\n"
+        "- The typed bootstrap contains the portable unit. A dispatch-depth-1 capability owner must not load any worker mode.\n"
         f"- Run adapters/opencode/bin/preflight.sh qa-policy {args.qa} {qa_track(args.capability)} and keep its required assurance in the artifact.\n"
         f"- Read only the assigned {args.assigned_contract} Skill/mode and named artifact inputs. Project instruction auto-load is not treated as physically masked; do not manually load a full harness bootstrap.\n"
         "- Preserve the reported QA/tool contracts in the artifact; owner workers launch checked adapter wrappers directly.\n\n"
@@ -481,13 +492,15 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     jobs.parent.mkdir(parents=True, exist_ok=True)
     repo = subprocess.check_output(["git", "-C", args.worktree, "rev-parse", "--show-toplevel"], text=True).strip()
     pipe = (
-        f"capability={args.capability},mode={args.mode},qa={args.qa},"
+        f"capability={args.capability},capability_mode={args.capability_mode},qa={args.qa},"
         f"intensity={args.intensity},attempt_schema_version=2,"
         f"dispatch_depth={args.dispatch_depth},transport=headless,"
         f"execution_surface={args.execution_surface},"
         f"registered_worker={int(bool(args.registered_worker))},"
         f"fallback_hop={args.fallback_hop},harness=opencode"
     )
+    if args.worker_mode:
+        pipe += f",worker_mode={args.worker_mode}"
     if args.parent_slug:
         pipe += f",parent={args.parent_slug}"
     if args.parent_session_id:
@@ -759,9 +772,24 @@ def validate_dispatch_metadata(args: argparse.Namespace) -> int:
     rc = validate_preflight("capability", "capability-info", args.capability, "invalid-dispatch-capability")
     if rc != 0:
         return rc
-    rc = validate_preflight("mode", "mode-info", args.mode, "invalid-dispatch-mode")
-    if rc != 0:
-        return rc
+    capability_info = subprocess.run(
+        [str(ROOT / "adapters" / "opencode" / "bin" / "preflight.sh"), "capability-info", args.capability],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    try:
+        validate_capability_mode(args.capability, args.capability_mode, capability_info.stdout)
+    except DispatchModeContractError as exc:
+        return fail(exc.reason, 64, **exc.fields)
+    if args.worker_mode:
+        rc = validate_preflight(
+            "worker_mode", "mode-info", args.worker_mode, "invalid-dispatch-worker-mode"
+        )
+        if rc != 0:
+            return rc
     if args.qa is None:
         args.qa = QA_FROM_INTENSITY.get(args.intensity, "standard")
     if args.qa not in QA_LEVELS:
@@ -864,6 +892,10 @@ def validate_route_record(args: argparse.Namespace) -> int:
         route_record={}
     if route_record.get("schema_version") != 2 or "broker_contract_version" in route_record:
         return fail("legacy-broker-route-read-only",65,route_file=args.route_file,child_spawned="0")
+    try:
+        validate_route_mode_axes(args, route_record)
+    except DispatchModeContractError as exc:
+        return fail(exc.reason, 65, **exc.fields, child_spawned="0")
     command=[sys.executable,str(ROOT/"utilities"/"worker-route-guard.py"),"validate",
         "--route",args.route_file,"--node",args.route_node,"--cwd",args.worktree,
         "--artifact-root",args.artifact_root,"--capability",args.capability,
@@ -924,6 +956,20 @@ def main(argv: list[str]) -> int:
         args.opencode_config_content = scoped_external_directory_config(args.artifact_root)
     except ValueError as e:
         return fail("artifact-root-access-config-failed", 64, detail=str(e), worktree=args.worktree)
+    args.worker_type = resolve_worker_type(
+        explicit=args.worker_type,
+        dispatch_depth=args.dispatch_depth,
+        worker_role=args.worker_role,
+        route_node=args.route_node,
+        profile_type=None,
+    )
+    try:
+        normalize_dispatch_modes(
+            args,
+            default_capability_mode=capability_mode_from_route_file(args.route_file),
+        )
+    except DispatchModeContractError as exc:
+        return fail(exc.reason, 64, **exc.fields, child_spawned="0")
     rc = validate_dispatch_metadata(args)
     if rc != 0:
         return rc
@@ -1084,6 +1130,8 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_REGISTERED_WORKER": str(int(bool(args.registered_worker))),
             "AGENT_DISPATCH_FALLBACK_HOP": args.fallback_hop,
             "AGENT_DISPATCH_INTENSITY": args.intensity,
+            "AGENT_DISPATCH_CAPABILITY_MODE": args.capability_mode,
+            "AGENT_DISPATCH_WORKER_MODE": args.worker_mode or "",
             "AGENT_DISPATCH_SELF_SLUG": args.slug,
             "AGENT_DISPATCH_PARENT_SLUG": args.parent_slug or "",
             "AGENT_DISPATCH_ATTEMPT_ID": args.attempt_id,
@@ -1244,7 +1292,8 @@ def main(argv: list[str]) -> int:
     print("external_directory_permission=scoped-allow")
     print(f"slug={args.slug}")
     print(f"capability={args.capability}")
-    print(f"mode={args.mode}")
+    print(f"capability_mode={args.capability_mode}")
+    print(f"worker_mode={args.worker_mode or '-'}")
     print(f"qa={args.qa}")
     print(f"intensity={args.intensity}")
     print(f"dispatch_depth={args.dispatch_depth}")

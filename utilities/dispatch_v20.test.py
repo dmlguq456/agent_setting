@@ -65,7 +65,10 @@ class DispatchV20ConformanceTest(unittest.TestCase):
             "--worktree", str(self.repo),
             "--slug", f"{adapter}-{intensity}",
             "--capability", "autopilot-code",
-            "--mode", "dev/backend",
+            "--capability-mode", "dev",
+            "--worker-type", "owner",
+            "--unit", "_kernel/owner",
+            "--assigned-contract", "autopilot-code",
             "--intensity", intensity,
             "--jobs", str(jobs),
             "--log-dir", str(logs),
@@ -135,6 +138,7 @@ class DispatchV20ConformanceTest(unittest.TestCase):
         self.assertEqual(len(route["nodes"]), 1)
         node = route["nodes"][0]
         self.assertEqual(node["dispatch_depth"], 1)
+        self.assertEqual(node["unit"], "_kernel/owner")
         self.assertEqual(node["execution_surface"], "registered-headless")
         self.assertIs(node["registered_worker"], True)
         self.assertNotIn("fallback_hops", node)
@@ -177,6 +181,9 @@ class DispatchV20ConformanceTest(unittest.TestCase):
                     for item in fields[5].split(",") if "=" in item
                 )
                 self.assertEqual(metadata["attempt_schema_version"], "2")
+                self.assertEqual(metadata["capability_mode"], "dev")
+                self.assertNotIn("worker_mode", metadata)
+                self.assertNotIn("mode", metadata)
                 self.assertEqual(metadata["dispatch_depth"], "1")
                 self.assertEqual(metadata["transport"], "headless")
                 self.assertEqual(

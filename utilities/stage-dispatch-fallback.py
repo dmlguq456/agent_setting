@@ -44,6 +44,11 @@ from dispatch_contract import (  # noqa: E402
     attempt_process_quiescence,
     validate_attempt_metadata,
 )
+from dispatch_mode_contract import (  # noqa: E402
+    DispatchModeContractError,
+    normalize_dispatch_modes,
+    validate_route_mode_axes,
+)
 from worker_bootstrap import assigned_contract, worker_type_for_kind  # noqa: E402
 
 ORDER = ["same-harness-headless", "cross-harness-headless", "native-subagent", "inline"]
@@ -400,7 +405,7 @@ def wrapper_command(
         "--worktree", route["cwd"],
         "--slug", args.slug,
         "--capability", route["capability"],
-        "--mode", args.mode,
+        "--capability-mode", route["capability_mode"],
         "--qa", args.qa,
         "--intensity", route["effective_intensity"],
         "--dispatch-depth", "2",
@@ -431,6 +436,9 @@ def wrapper_command(
         "--execution-surface", "registered-headless",
         "--registered-worker", "1",
     ]
+    unit = node.get("unit") or ""
+    if unit and not unit.startswith("_kernel/"):
+        command += ["--worker-mode", unit]
     # Backward-compatible explicit metadata only. Canonical route dispatch
     # never synthesizes a worker_role from topology kind, node, or model role.
     if args.worker_role:
@@ -648,7 +656,9 @@ def main() -> int:
     p.add_argument("--node", required=True)
     p.add_argument("--slug", required=True)
     p.add_argument("--parent")
-    p.add_argument("--mode", required=True)
+    p.add_argument("--capability-mode")
+    p.add_argument("--worker-mode")
+    p.add_argument("--mode", help="legacy scalar capability mode or family/mode worker projection")
     p.add_argument("--qa", default="standard")
     p.add_argument("--worker-role")
     p.add_argument("--model-role")
@@ -698,6 +708,29 @@ def main() -> int:
     contract = route.get("dispatch_contract_version") or route.get("broker_contract_version")
     if contract != 3:
         return fail("legacy-broker-route-read-only", 76, contract_version=str(contract or 1), child_spawned="0")
+    mode_args = argparse.Namespace(
+        capability=route.get("capability") or "",
+        capability_mode=args.capability_mode,
+        worker_mode=args.worker_mode,
+        mode=args.mode,
+        worker_type=worker_type_for_kind(node["kind"]),
+        unit=node.get("unit") or "",
+        assigned_contract=None,
+        dispatch_depth=2,
+        route_node=node["id"],
+    )
+    try:
+        normalize_dispatch_modes(
+            mode_args,
+            default_capability_mode=route.get("capability_mode"),
+        )
+        validate_route_mode_axes(mode_args, route)
+    except (DispatchModeContractError, ValueError) as exc:
+        if isinstance(exc, DispatchModeContractError):
+            return fail(exc.reason, 64, **exc.fields, child_spawned="0")
+        return fail("invalid-dispatch-worker-type", 64, detail=str(exc), child_spawned="0")
+    args.capability_mode = mode_args.capability_mode
+    args.worker_mode = mode_args.worker_mode
     if args.broker_root is not None or args.broker_timeout is not None:
         return fail("retired-broker-option", 64, child_spawned="0")
     if node.get("replica_group") and args.action in {"register", "start"}:
