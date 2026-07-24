@@ -299,6 +299,8 @@ class Session:
     model_role: Optional[str] = None
     context: Optional[ContextProjection] = None
     work_projection: Optional[WorkProjection] = None
+    cap_grounding: Optional[dict] = None   # {capability, mode?, intensity?} for an inline entry
+                                            # session (capability-grounding marker); None otherwise.
     association_ambiguity: Optional[str] = None
     _context_evidence: Optional[ContextEvidence] = field(default=None, repr=False, compare=False)
     _refresh_source: Optional[dict] = field(default=None, repr=False, compare=False)
@@ -409,6 +411,8 @@ class DispatchJob:
                                         # alongside note == "dead-parent-orphaned"
     context: Optional[ContextProjection] = None
     work_projection: Optional[WorkProjection] = None
+    cap_grounding: Optional[dict] = None   # {capability, mode?, intensity?} for an inline entry
+                                            # session (capability-grounding marker); None otherwise.
     association_ambiguity: Optional[str] = None
     _context_evidence: Optional[ContextEvidence] = field(default=None, repr=False, compare=False)
     _refresh_source: Optional[dict] = field(default=None, repr=False, compare=False)

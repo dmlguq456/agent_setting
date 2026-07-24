@@ -309,6 +309,55 @@ def _grounding_home():
     return os.path.expanduser("~/.claude")
 
 
+_ENTRY_CAPABILITIES = frozenset((
+    "autopilot-apply", "autopilot-code", "autopilot-design", "autopilot-draft",
+    "autopilot-lab", "autopilot-note", "autopilot-refine", "autopilot-research",
+    "autopilot-ship", "autopilot-spec",
+))
+
+
+def _capability_grounding_index(home):
+    """Scan ``<home>/.capability-grounding`` into ``{sid: (mtime, {k:v})}``. Each file is a KV
+    body (``capability=…``) named by session id. Missing dir / OSError -> empty index."""
+    index = {}
+    try:
+        entries = list(os.scandir(os.path.join(home, ".capability-grounding")))
+    except OSError:
+        return {}
+    for entry in entries:
+        if entry.name.startswith("."):
+            continue
+        try:
+            mtime = entry.stat().st_mtime
+            with open(entry.path, encoding="utf-8") as handle:
+                body = handle.read()
+        except OSError:
+            continue
+        fields = {}
+        for line in body.splitlines():
+            key, sep, value = line.partition("=")
+            if sep and key.strip():
+                fields[key.strip()] = value.strip()
+        if fields.get("capability") in _ENTRY_CAPABILITIES:
+            index[entry.name] = (mtime, fields)
+    return index
+
+
+def _capability_grounding_for(entity, index, now=None):
+    """The freshest capability-grounding record for this session's exact sid, or None. Freshness
+    mirrors the spec marker (marker must postdate the session's estimated start), so a reused sid
+    never inherits a prior process's tag."""
+    sid = _field(entity, "session_id")
+    if not sid or sid not in index:
+        return None
+    mtime, fields = index[sid]
+    now = time.time() if now is None else now
+    elapsed_min = _field(entity, "elapsed_min") or 0
+    if mtime < now - elapsed_min * 60 - _SPEC_MARKER_FRESHNESS_SLACK_S:
+        return None
+    return fields
+
+
 def _spec_marker_index(home):
     """Scan ``<home>/.spec-grounding`` once into ``{name: mtime}``. Missing dir or
     OSError degrades to an empty index rather than raising."""
@@ -791,8 +840,10 @@ def attach_projections(sessions: Iterable[Session], jobs: Iterable[DispatchJob],
     """Attach work to every row and context only to interactive session rows."""
     sessions, jobs = list(sessions), list(jobs)
     route_records = _load_evidence_records(node_evidence, route_records)
+    home = spec_marker_home or _grounding_home()
     if spec_markers is None:
-        spec_markers = _spec_marker_index(spec_marker_home or _grounding_home())
+        spec_markers = _spec_marker_index(home)
+    cap_index = _capability_grounding_index(home)
     all_entities = sessions + jobs
     for session in sessions:
         public, private = normalize_context(_evidence(session), now=now)
@@ -809,6 +860,11 @@ def attach_projections(sessions: Iterable[Session], jobs: Iterable[DispatchJob],
             node_evidence=node_evidence, artifact_root=artifact_root, now=now,
             spec_markers=spec_markers)
         entity.stage = entity.work_projection.stage_label if isinstance(entity, DispatchJob) else getattr(entity, "stage", None)
+    # Capability grounding is a Session-only inline tag (dispatched work carries capability/mode/
+    # intensity in its own jobs.log row).  Attach after work resolution so the render layer can
+    # show `capability(mode·intensity)` for inline entry work that leaves no dispatch row.
+    for session in sessions:
+        session.cap_grounding = _capability_grounding_for(session, cap_index, now=now)
     return sessions, jobs
 
 

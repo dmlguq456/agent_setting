@@ -421,5 +421,50 @@ class RouteStageSkippedGlyphTest(unittest.TestCase):
         self.assertNotIn("⊘", rendered)
 
 
+class CapabilityGroundingTest(unittest.TestCase):
+    """2026-07-24: inline entry work (no route/dispatch row) shows `capability(mode·intensity)`
+    on the main session row from a `.capability-grounding/<sid>` marker."""
+
+    def _write(self, home, sid, body):
+        d = os.path.join(home, ".capability-grounding")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, sid), "w", encoding="utf-8") as handle:
+            handle.write(body)
+
+    def test_inline_code_session_shows_capability_mode_intensity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write(tmp, "sid-c", "capability=autopilot-code\nmode=dev\nintensity=standard\n")
+            s = _session(sid="sid-c", cwd="/x")
+            projection.attach_projections([s], [], now=NOW, spec_marker_home=tmp)
+            self.assertEqual(s.cap_grounding,
+                             {"capability": "autopilot-code", "mode": "dev", "intensity": "standard"})
+            text = "".join(t for t, _k in render._session_stage_segs(s, True, 80))
+            self.assertIn("code(dev·std)", text)   # short intensity, dispatch-options syntax
+
+    def test_spec_session_intensity_comes_from_grounding_marker(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_pipeline_state(tmp, "topic-a", "mode: [cli]\nphases:\n  spec: done\n  dev: in_progress\n")
+            markers = {_marker_name("sid-s", tmp, "topic-a"): NOW}
+            self._write(tmp, "sid-s", "capability=autopilot-spec\nintensity=strong\n")
+            s = _session(sid="sid-s", cwd=tmp)
+            projection.attach_projections([s], [], artifact_root=tmp, now=NOW,
+                                          spec_markers=markers, spec_marker_home=tmp)
+            text = "".join(t for t, _k in render._session_stage_segs(s, True, 80))
+            self.assertIn("spec(cli·strong) : ", text)   # intensity from the grounding marker
+
+    def test_non_entry_and_stale_markers_are_ignored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            # a non-entry capability is never written by the util, but if present the index drops it
+            self._write(tmp, "sid-x", "capability=dataviz\nintensity=standard\n")
+            index = projection._capability_grounding_index(tmp)
+            self.assertNotIn("sid-x", index)
+            # a marker predating the session start (sid reuse) is rejected
+            self._write(tmp, "sid-old", "capability=autopilot-code\n")
+            os.utime(os.path.join(tmp, ".capability-grounding", "sid-old"), (NOW - 99999, NOW - 99999))
+            s = _session(sid="sid-old", cwd="/x", elapsed_min=1)
+            self.assertIsNone(projection._capability_grounding_for(
+                s, projection._capability_grounding_index(tmp), now=NOW))
+
+
 if __name__ == "__main__":
     unittest.main()
