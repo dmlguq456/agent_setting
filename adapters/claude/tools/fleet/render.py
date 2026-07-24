@@ -735,6 +735,21 @@ _ROUTE_STAGE_ZONE_MAX = 42     # user 2026-07-21 ("전부 표시해줘"): a disp
                                # over _STAGE_ZONE_MAX, so plan was silently folded by
                                # _drop_past_stages; this wider bound is CONDUCTOR-only (route_seq
                                # path, ~:851) so dispatch-depth-2 / narrow-card zones keep the tuned 30.
+                               # 42 is the 168-col zero-overflow bound — real terminals wider than
+                               # that lend their slack to the breadcrumb via _route_zone_width.
+
+
+def _route_zone_width(term_width, name_width=None):
+    """CONDUCTOR breadcrumb budget for the WIDE layout: the tuned 168-col bound plus
+    whatever real terminal slack remains after the responsive name column took its
+    growth (one ledger — never double-spend the same cells). A longer strong+ route
+    (plan-check, review replicas) folds its early stages at 42; on an actually-wide
+    terminal the whole pipeline stays visible (user 2026-07-24: "앞쪽에 pre, plan,
+    execute 쪽은 없어지네?")."""
+    if not term_width:
+        return _ROUTE_STAGE_ZONE_MAX
+    name_growth = max(0, (name_width or _NW_S) - _NW_S)
+    return _ROUTE_STAGE_ZONE_MAX + max(0, int(term_width) - 168 - name_growth)
 
 
 def _drop_past_stages(items, cur_i, max_width):
@@ -854,7 +869,8 @@ def _stage_segs(key, stage, working=False, max_width=None, route_seq=None):
     return [("-", "dim")]
 
 
-def _dispatch_stage_segs(j, key, stage, slug_name, working=False, route_seq=None):
+def _dispatch_stage_segs(j, key, stage, slug_name, working=False, route_seq=None,
+                         route_zone=None):
     depth = max(1, int(getattr(j, "depth", 1) or 1))
     intensity = getattr(j, "intensity", None) or ""
     projection = getattr(j, "work_projection", None)
@@ -875,7 +891,8 @@ def _dispatch_stage_segs(j, key, stage, slug_name, working=False, route_seq=None
         # real pipeline shape, not a role-label prefix over the hardcoded 3-stage table.
         # user 2026-07-21: CONDUCTOR breadcrumb shows the whole pipeline (wider bound than the
         # shared stage zone) so no stage — plan especially — is silently dropped.
-        return _stage_segs(key, stage, working=working, max_width=_ROUTE_STAGE_ZONE_MAX,
+        return _stage_segs(key, stage, working=working,
+                           max_width=route_zone or _ROUTE_STAGE_ZONE_MAX,
                            route_seq=route_seq)
     if depth == 1 and intensity == "quick":
         return [("quick/exec", "stg0_on" if working and _BLINK_ON else "stg0_off")]
@@ -939,6 +956,77 @@ def _projection_stage_text(entity, max_width=24):
     return _clip_w("stage %s%s" % (label, suffix), max_width)
 
 
+def _collapse_replica_nodes(nodes):
+    """Fold replica legs (shared ``replica_group``) into one ``<group>(N-way)`` node.
+
+    The individual legs already render as their own dispatch rows under the
+    conductor (user 2026-07-24: "병렬 leg를 굳이 표현을 안해도 되잖아"), so every
+    route-projection surface names the group once. State is the group's strictest
+    liveness (failed > any-live > all-done > all-pending); downstream
+    ``depends_on`` references to a member are rewritten to the merged id."""
+    nodes = list(nodes or ())
+    groups = {}
+    for node in nodes:
+        group = node.get("replica_group")
+        if isinstance(group, str) and group:
+            groups.setdefault(group, []).append(node)
+    groups = {gid: members for gid, members in groups.items() if len(members) > 1}
+    if not groups:
+        return nodes
+    merged_by_group, merged_id_of = {}, {}
+    for gid, members in groups.items():
+        states = [m.get("state") for m in members]
+        if "failed" in states:
+            state = "failed"
+        elif all(s == "done" for s in states):
+            state = "done"
+        elif all(s == "pending" for s in states):
+            state = "pending"
+        else:
+            state = "active"
+        member_ids = {m.get("id") for m in members}
+        deps = []
+        for m in members:
+            for parent in m.get("depends_on") or ():
+                if parent not in member_ids and parent not in deps:
+                    deps.append(parent)
+        elapsed = [m.get("elapsed_min") for m in members
+                   if m.get("elapsed_min") is not None]
+        merged = dict(members[0])
+        merged.update({
+            "id": "%s(%d-way)" % (gid, len(members)), "state": state,
+            "depends_on": deps,
+            "level": min(m.get("level") or 0 for m in members),
+            # Legs may sit on different harnesses/models by design — no single
+            # unit/model represents the group.
+            "unit": None, "unit_choices": [], "model": None, "effort": None,
+            "elapsed_min": max(elapsed) if elapsed else None,
+            "gate_passed": True if all(m.get("gate_passed") for m in members) else None,
+        })
+        merged_by_group[gid] = merged
+        for m in members:
+            if m.get("id"):
+                merged_id_of[m["id"]] = merged["id"]
+    out, emitted = [], set()
+    for node in nodes:
+        group = node.get("replica_group")
+        if group in merged_by_group:
+            if group not in emitted:
+                emitted.add(group)
+                out.append(merged_by_group[group])
+            continue
+        deps = []
+        for parent in node.get("depends_on") or ():
+            renamed = merged_id_of.get(parent, parent)
+            if renamed not in deps:
+                deps.append(renamed)
+        if deps != list(node.get("depends_on") or ()):
+            node = dict(node)
+            node["depends_on"] = deps
+        out.append(node)
+    return out
+
+
 def _projection_route_seq(entity):
     """Return the attached route's record-order node sequence, if validated."""
     projection = getattr(entity, "work_projection", None)
@@ -946,7 +1034,8 @@ def _projection_route_seq(entity):
         return None
     backing = getattr(projection, "_route_view", None) or {}
     view = backing.get("view") or {}
-    return [(node.get("id"), node.get("state")) for node in view.get("nodes") or ()]
+    return [(node.get("id"), node.get("state"))
+            for node in _collapse_replica_nodes(view.get("nodes") or ())]
 
 
 def _projection_stage_for_dispatch(entity):
@@ -1328,7 +1417,8 @@ def _opts_segs(j):
 
 
 def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_last=True,
-                  parent_effort=None, stage_override=None, name_width=None, route_seq=None):
+                  parent_effort=None, stage_override=None, name_width=None, route_seq=None,
+                  route_zone=None):
     """A dispatch job rendered as a session-ANALOGUE, mirroring the session columns 1:1:
       harness (model · effort)  |  [stage label] session (branch)  |  stage breadcrumb  |  time
     F-33 (v11): model/effort fold into the harness field (no more separate model column).
@@ -1417,7 +1507,7 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
 
         segs += _stage_zone_segs(
             _dispatch_stage_segs(j, key, stage, slug_name, working=(j.liveness == "working"),
-                                 route_seq=route_seq))
+                                 route_seq=route_seq, route_zone=route_zone))
 
     segs += [(" " * _WIDE_TIME_GAP, None), (_RFLUSH, None)]
     segs += [(_CLOCK, "dim"), ("%6s" % fmt_min(j.elapsed_min), "dim")]
@@ -2143,10 +2233,12 @@ def _stage_detail_rows(nodes, depth=0, term_width=None, indent=None):
 
 
 def _projection_stage_detail_rows(entity, depth=0, term_width=None):
-    """Dedicated full-route rows for one validated projection owner."""
+    """Dedicated full-route rows for one validated projection owner.
+
+    SESSION cards only since 2026-07-24 ("depth=1,2도 메인 세션처럼 두번째 줄에서는
+    로그 요약해서 띄우는걸로 통일") — dispatch cards keep their second line for the
+    live log summary and carry the pipeline on the row's own breadcrumb."""
     if getattr(entity, "liveness", None) in ("stale", "dead"):
-        return []
-    if hasattr(entity, "depth") and max(1, int(getattr(entity, "depth", 1) or 1)) >= 2:
         return []
     projection = getattr(entity, "work_projection", None)
     if not projection or getattr(projection, "ambiguity", None):
@@ -2173,22 +2265,7 @@ def _projection_stage_detail_rows(entity, depth=0, term_width=None):
         return []
     backing = getattr(projection, "_route_view", None) or {}
     view = backing.get("view") or {}
-    nodes = view.get("nodes") or ()
-    if hasattr(entity, "depth") and max(1, int(getattr(entity, "depth", 1) or 1)) == 1:
-        prior = None
-        linear = bool(nodes)
-        seen = set()
-        for index, node in enumerate(nodes):
-            node_id = node.get("id")
-            parents = list(node.get("depends_on") or ())
-            expected = [] if index == 0 else [prior]
-            if not node_id or node_id in seen or parents != expected:
-                linear = False
-                break
-            seen.add(node_id)
-            prior = node_id
-        if linear:
-            return []
+    nodes = _collapse_replica_nodes(view.get("nodes") or ())
     return _stage_detail_rows(nodes, depth=depth, term_width=term_width)
 
 
@@ -2877,6 +2954,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     # session list, before is_child/mem filtering, so folded/mem-only groups still surface a
     # total in the legend even when no group header badge fires.
     wide_name_width = _wide_name_width(term_width) if layout == "wide" else None
+    wide_route_zone = (_route_zone_width(term_width, wide_name_width)
+                       if layout == "wide" else None)
     wide_ctx_width = _wide_ctx_width(term_width) if layout == "wide" else None
     n_mem_total = sum(1 for s in sessions if getattr(s, "mem_worker", False))
     mem_by_group = {}
@@ -3277,15 +3356,16 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                                            parent_harness=parent_harness,
                                            parent_effort=row_parent_effort, is_last=is_last,
                                            stage_override=stage_override,
-                                           name_width=wide_name_width, route_seq=route_seq))
+                                           name_width=wide_name_width, route_seq=route_seq,
+                                           route_zone=wide_route_zone))
+            # 2026-07-24: a dispatch card's second line is its live log summary ONLY —
+            # the same "identity row + fresh NOW" shape as a main-session card. The
+            # pipeline rides the row's own breadcrumb; dedicated stage rows are a
+            # session-card surface.
             detail = _dispatch_summary_detail_row(
                 job, depth=max(1, int(getattr(job, "depth", 1) or 1)), term_width=term_width)
             if detail:
                 lines.extend(detail)
-            stage_rows = _projection_stage_detail_rows(
-                job, depth=max(1, int(getattr(job, "depth", 1) or 1)), term_width=term_width)
-            if stage_rows:
-                lines.extend(stage_rows)
             # F-29 — the child session's own sub-agents, one strip directly under the
             # dispatch row that represents it (depth-indented; active always, completed
             # only with `a` — the same convention as session-owned strips above).

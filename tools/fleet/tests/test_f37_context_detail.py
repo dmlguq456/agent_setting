@@ -160,6 +160,48 @@ class ContextDetailTruthTableTest(unittest.TestCase):
             self.assertNotIn("←{", visible)
             self.assertIn("plan › execute › test › report", visible)
 
+    def test_replica_route_collapses_and_second_line_stays_log_summary(self):
+        # 2026-07-24: the conductor breadcrumb names a replica group ONCE
+        # (`impl-review(2-way)`), never leg-by-leg, and a dispatch card's second
+        # line is its live log summary — no dedicated stage row even for a
+        # non-linear (replica-branched) route.
+        nodes = [
+            {"id": "plan", "state": "done", "level": 0, "depends_on": []},
+            {"id": "execute", "state": "done", "level": 1, "depends_on": ["plan"]},
+            {"id": "impl-review", "state": "active", "level": 2,
+             "depends_on": ["execute"], "replica_group": "impl-review"},
+            {"id": "impl-review-replica", "state": "active", "level": 2,
+             "depends_on": ["execute"], "replica_group": "impl-review"},
+            {"id": "test", "state": "pending", "level": 3,
+             "depends_on": ["impl-review", "impl-review-replica"]},
+        ]
+        work = WorkProjection(
+            source="route-exact", route_id="rt-replica",
+            stage_label="impl-review(2-way)", node_state="active",
+            progress=ProgressProjection(2, 5),
+            _route_view={"view": {"nodes": nodes}},
+        )
+        session = Session(harness="claude", pid=230, proc_start="root", cwd="/root",
+                          session_id="sid-rep", slug="root", liveness="working")
+        owner = DispatchJob(key="code", slug="conductor", parent_sid="sid-rep",
+                            depth=1, cwd="/root", harness="claude", is_child=True,
+                            liveness="working", work_projection=work,
+                            summary="review merge")
+        for width, layout in ((256, "wide"), (168, "wide"), (100, "narrow"),
+                              (60, "stack")):
+            visible = text(render._build_lines([session], [owner], "both", False, 0,
+                                               layout=layout, term_width=width))
+            with self.subTest(width=width):
+                self.assertIn("impl-review(2-way)", visible)
+                self.assertNotIn("impl-review-replica", visible)
+                self.assertNotIn("←{", visible)
+                self.assertIn("review merge", visible)
+        # A genuinely wide terminal lends its slack to the breadcrumb: the whole
+        # collapsed route stays visible instead of folding its early stages.
+        wide = text(render._build_lines([session], [owner], "both", False, 0,
+                                        layout="wide", term_width=256))
+        self.assertIn("plan✓ › execute✓ › impl-review(2-way) › test", wide)
+
     def test_quick_one_shot_is_rendered_once_on_owner_not_parent_or_detail(self):
         node = {"id": "one-shot", "state": "active", "level": 0, "depends_on": []}
         work = WorkProjection(

@@ -143,6 +143,7 @@ class ActiveNodeProjection:
     write_scope: Optional[str] = None
     state: Optional[str] = None
     progress: Optional[dict] = None
+    replica_group: Optional[str] = None
 
     def to_dict(self):
         return _public_value(self)

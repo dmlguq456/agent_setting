@@ -154,8 +154,27 @@ def _active_stage_label(active_nodes):
     Leaf projections may use their validated assigned contract, but an owner row
     represents the whole active route level.  Keeping this derivation here makes
     the owner projection independent of collector/job iteration order.
+
+    Replica legs (shared ``replica_group``) collapse into one ``<group>(N-way)``
+    label — the individual legs already surface as their own dispatch rows
+    (user 2026-07-24), so the owner label names the group once.
     """
-    ids = [node.id for node in active_nodes if node.id]
+    ids = []
+    seen_groups = set()
+    for node in active_nodes:
+        if not node.id:
+            continue
+        group = getattr(node, "replica_group", None)
+        if not group:
+            ids.append(node.id)
+            continue
+        if group in seen_groups:
+            continue
+        seen_groups.add(group)
+        members = [n for n in active_nodes
+                   if getattr(n, "replica_group", None) == group and n.id]
+        ids.append("%s(%d-way)" % (group, len(members)) if len(members) > 1
+                   else node.id)
     if not ids:
         return None
     if len(ids) == 1:
@@ -204,6 +223,7 @@ def _projection_from_record(entity, record, route_id, jobs, node_evidence=None, 
         level=node.get("level"), unit=node.get("unit"),
         unit_choices=tuple(node.get("unit_choices") or ()), gate=node.get("gate"),
         write_scope=node.get("write_scope"), state=node.get("state"), progress=None,
+        replica_group=node.get("replica_group"),
     ) for node in nodes)
     selected = next((node for node in projections if node.id == route_node), None)
     contract = _field(entity, "assigned_contract")

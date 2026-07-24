@@ -163,5 +163,70 @@ class RouteBreadcrumbTest(unittest.TestCase):
         self.assertNotIn("pre › plan › exec › test", text)
 
 
+class ReplicaCollapseTest(unittest.TestCase):
+    """2026-07-24: replica legs (shared replica_group) fold into one `<group>(N-way)`
+    token on every route-projection surface — the legs keep their own dispatch rows."""
+
+    @staticmethod
+    def _nodes(primary_state="active", replica_state="active"):
+        return [
+            {"id": "execute", "state": "done", "level": 0, "depends_on": [],
+             "replica_group": None},
+            {"id": "impl-review", "state": primary_state, "level": 1,
+             "depends_on": ["execute"], "replica_group": "impl-review"},
+            {"id": "impl-review-replica", "state": replica_state, "level": 1,
+             "depends_on": ["execute"], "replica_group": "impl-review"},
+            {"id": "test", "state": "pending", "level": 2,
+             "depends_on": ["impl-review", "impl-review-replica"],
+             "replica_group": None},
+        ]
+
+    def test_record_view_carries_replica_group(self):
+        record = {"nodes": [
+            {"id": "execute", "depends_on": []},
+            {"id": "impl-review", "depends_on": ["execute"],
+             "replica_group": "impl-review"},
+            {"id": "impl-review-replica", "depends_on": ["execute"],
+             "replica_group": "impl-review"},
+        ]}
+        view = route._record_view(record, "rt-x", [], {}, 100.0)
+        groups = {n["id"]: n.get("replica_group") for n in view["nodes"]}
+        self.assertEqual(groups["impl-review"], "impl-review")
+        self.assertEqual(groups["impl-review-replica"], "impl-review")
+        self.assertIsNone(groups["execute"])
+
+    def test_collapse_merges_legs_and_rewrites_downstream_deps(self):
+        collapsed = render._collapse_replica_nodes(self._nodes())
+        ids = [n["id"] for n in collapsed]
+        self.assertEqual(ids, ["execute", "impl-review(2-way)", "test"])
+        merged = collapsed[1]
+        self.assertEqual(merged["state"], "active")
+        self.assertEqual(merged["depends_on"], ["execute"])
+        self.assertEqual(collapsed[2]["depends_on"], ["impl-review(2-way)"])
+
+    def test_collapse_state_is_strictest_of_the_group(self):
+        cases = (
+            (("failed", "active"), "failed"),
+            (("done", "done"), "done"),
+            (("pending", "pending"), "pending"),
+            (("done", "active"), "active"),
+            (("done", "pending"), "active"),
+        )
+        for (primary, replica), expected in cases:
+            collapsed = render._collapse_replica_nodes(
+                self._nodes(primary_state=primary, replica_state=replica))
+            with self.subTest(primary=primary, replica=replica):
+                self.assertEqual(collapsed[1]["state"], expected)
+
+    def test_singleton_group_and_plain_nodes_pass_through(self):
+        nodes = [
+            {"id": "impl-review", "state": "active", "level": 0, "depends_on": [],
+             "replica_group": "impl-review"},
+            {"id": "test", "state": "pending", "level": 1,
+             "depends_on": ["impl-review"], "replica_group": None},
+        ]
+        self.assertEqual(render._collapse_replica_nodes(nodes), nodes)
+
+
 if __name__ == "__main__":
     unittest.main()
