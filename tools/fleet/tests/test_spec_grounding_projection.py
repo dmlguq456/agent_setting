@@ -286,15 +286,15 @@ class SpecGroundingRenderTest(unittest.TestCase):
             source="artifact-inferred", stage_label="spec topic-a ·dev")
         self.assertEqual(render._projection_stage_detail_rows(entity), [])
 
-    def test_code_label_track_regression_unchanged(self):
+    def test_code_label_no_longer_renders_a_detail_track(self):
+        # 2026-07-24: an INFERRED inline code stage carries no dedicated `plan › exec › test`
+        # detail row — the stage rides the row's own column only (user "main 세션에 여전히 stage
+        # 뜨는 케이스"). Parity with the spec-grounding label, which was already row-less.
         entity = _session(sid="sid-a", cwd="/tmp/whatever")
         entity.liveness = "working"
         entity.work_projection = projection.WorkProjection(
             source="artifact-inferred", stage_label="exec")
-        rows = render._projection_stage_detail_rows(entity)
-        self.assertTrue(rows)
-        text = "".join(token for row in rows for token, _kind in row)
-        self.assertIn("exec", text)
+        self.assertEqual(render._projection_stage_detail_rows(entity), [])
 
     def test_long_topic_label_clips_safely_within_available_width(self):
         entity = _session(sid="sid-a", cwd="/tmp/whatever")
