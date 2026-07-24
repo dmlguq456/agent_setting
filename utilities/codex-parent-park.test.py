@@ -146,6 +146,8 @@ class ParentParkGuardTest(unittest.TestCase):
             payload["tool_input"] = {"command": command}
         env = {**os.environ, "AGENT_DISPATCH_JOBS": str(self.jobs), "AGENT_HOME": str(ROOT)}
         env.pop("AGENT_DISPATCH_ATTEMPT_ID", None)
+        env.pop("AGENT_DISPATCH_COMPLETION_MODE", None)
+        env.pop("AGENT_DISPATCH_COMPLETION_STATE_FILE", None)
         env.pop("AGENT_PARENT_PARK_BYPASS", None)
         if extra_env:
             env.update(extra_env)
@@ -210,12 +212,13 @@ class ParentParkGuardTest(unittest.TestCase):
             f"adapters/codex/bin/preflight.sh harvest --attempt-id {ATTEMPT} --status done",
         )
 
-    def test_foreign_and_terminal_rows_do_not_park(self) -> None:
+    def test_foreign_and_terminal_quiescent_rows_do_not_park(self) -> None:
         self.assertIsNone(self.invoke("Bash", "git status --short", session="different-session"))
+        self.assertIsNone(self.invoke("Read", session="native-subagent-only-session"))
         self.write_row("done", ATTEMPT, parent_sid=SESSION, append=True)
         self.assertIsNone(self.invoke("Bash", "git status --short"))
 
-    def test_terminal_row_still_parks_until_exact_process_is_reaped(self) -> None:
+    def test_interactive_terminal_live_row_does_not_globally_park(self) -> None:
         proc = subprocess.Popen(["sleep", "30"], start_new_session=True)
         try:
             raw = Path(f"/proc/{proc.pid}/stat").read_text(encoding="utf-8")
@@ -232,14 +235,81 @@ class ParentParkGuardTest(unittest.TestCase):
                     "pid_observer_ns": os.readlink("/proc/self/ns/pid"),
                 },
             )
-            self.assert_parked("Bash", "git status --short")
-            proc.terminate()
-            proc.wait(timeout=5)
             self.assertIsNone(self.invoke("Bash", "git status --short"))
+            self.assertIsNone(proc.poll())
         finally:
             if proc.poll() is None:
                 proc.kill()
             proc.wait()
+
+    def test_poll_terminal_live_row_parks_until_exact_process_is_reaped(self) -> None:
+        proc = subprocess.Popen(["sleep", "30"], start_new_session=True)
+        try:
+            raw = Path(f"/proc/{proc.pid}/stat").read_text(encoding="utf-8")
+            start = raw[raw.rfind(")") + 2 :].split()[19]
+            self.write_row(
+                "done",
+                ATTEMPT,
+                parent_sid=SESSION,
+                append=True,
+                process_metadata={
+                    "pid": str(proc.pid),
+                    "pid_start": start,
+                    "pgid": str(proc.pid),
+                    "pid_observer_ns": os.readlink("/proc/self/ns/pid"),
+                },
+            )
+            self.assert_parked(
+                "Bash",
+                "git status --short",
+                extra_env={"AGENT_DISPATCH_COMPLETION_MODE": "poll"},
+            )
+            proc.terminate()
+            proc.wait(timeout=5)
+            self.assertIsNone(
+                self.invoke(
+                    "Bash",
+                    "git status --short",
+                    extra_env={"AGENT_DISPATCH_COMPLETION_MODE": "poll"},
+                )
+            )
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+            proc.wait()
+
+    def test_terminal_unverifiable_row_is_scoped_to_completion_mode(self) -> None:
+        self.write_row(
+            "done",
+            ATTEMPT,
+            parent_sid=SESSION,
+            append=True,
+            process_metadata={"pid_scope": "namespace-local"},
+        )
+        registry_before = self.jobs.read_bytes()
+        self.assertIsNone(self.invoke("Bash", "git status --short"))
+        self.assertEqual(self.jobs.read_bytes(), registry_before)
+        self.assert_parked(
+            "Bash",
+            "git status --short",
+            extra_env={"AGENT_DISPATCH_COMPLETION_MODE": "poll"},
+        )
+
+        self.write_row(
+            "done",
+            ATTEMPT,
+            parent_attempt_id=OWNER_ATTEMPT,
+            process_metadata={"pid_scope": "namespace-local"},
+        )
+        supervised = self.supervised_env([ATTEMPT])
+        blocked = self.invoke(
+            "Bash",
+            "git status --short",
+            session="worker-session",
+            extra_env=supervised,
+        )
+        self.assertEqual(blocked["decision"], "block")
+        self.assertIn("runtime-supervised-parent", blocked["reason"])
 
     def test_depth_one_owner_is_bound_by_exact_parent_attempt(self) -> None:
         owner_attempt = "att-owner-exact"

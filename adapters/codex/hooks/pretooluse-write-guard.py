@@ -23,6 +23,8 @@ from dispatch_completion_join import (  # noqa: E402
 from dispatch_contract import attempt_process_quiescence  # noqa: E402
 
 OPEN_DISPATCH_STATES = {"open", "running"}
+# Wrappers project the user-facing ``poll-fallback`` label as internal ``poll``.
+STRICT_TERMINAL_PARK_MODES = {"supervised", "poll"}
 MIN_PARK_WAIT_SECONDS = 300
 
 
@@ -160,8 +162,8 @@ def dispatch_metadata(raw: str) -> dict[str, str]:
     return dict(part.split("=", 1) for part in raw.split(",") if "=" in part)
 
 
-def open_child_attempts(session_id: str) -> dict[str, str]:
-    """Return exact open attempts owned by this parent session/conductor."""
+def parent_park_attempts(session_id: str) -> dict[str, str]:
+    """Return exact attempts that park this completion-delivery surface."""
 
     if os.environ.get("AGENT_PARENT_PARK_BYPASS") == "1":
         return {}
@@ -191,11 +193,19 @@ def open_child_attempts(session_id: str) -> dict[str, str]:
         owned_by_attempt = bool(parent_attempt_id) and metadata.get("parent_attempt_id") == parent_attempt_id
         if owned_by_session or owned_by_attempt:
             latest[attempt_id] = (fields[1], fields[4], metadata)
+    strict_terminal_park = (
+        os.environ.get("AGENT_DISPATCH_COMPLETION_MODE", "")
+        in STRICT_TERMINAL_PARK_MODES
+    )
     return {
         attempt_id: slug
         for attempt_id, (state, slug, metadata) in latest.items()
         if state in OPEN_DISPATCH_STATES
-        or (state == "done" and attempt_process_quiescence(metadata).state != "quiescent")
+        or (
+            strict_terminal_park
+            and state == "done"
+            and attempt_process_quiescence(metadata).state != "quiescent"
+        )
     }
 
 
@@ -493,19 +503,25 @@ def main() -> int:
             "runtime-supervised-parent: canonical child registry is unavailable"
         )
 
-    attempts = open_child_attempts(session_id)
+    attempts = parent_park_attempts(session_id)
     if attempts and not park_control_allowed(name, payload, args, attempts):
         attempt_list = ",".join(sorted(attempts))
         if os.environ.get("AGENT_DISPATCH_COMPLETION_MODE") == "supervised":
             return hook_block(
-                "runtime-supervised-parent: open registered child attempt(s) "
+                "runtime-supervised-parent: pending registered child attempt(s) "
                 f"{attempt_list}; the runtime owns all waiting. An undelivered batch "
                 "admits only another exact parent-bound dispatch-node start or "
                 "checked dispatch-batch start; after the "
                 "typed resume receipt, only exact preflight harvest/closure is allowed"
             )
+        park_state = (
+            "pending"
+            if os.environ.get("AGENT_DISPATCH_COMPLETION_MODE", "")
+            in STRICT_TERMINAL_PARK_MODES
+            else "open"
+        )
         return hook_block(
-            "parent-parked: open registered child attempt(s) "
+            f"parent-parked: {park_state} registered child attempt(s) "
             f"{attempt_list}; only exact dispatch-wait --attempt-id with --max 300..600 "
             "or exact preflight harvest is allowed; raw logs, source, artifacts, git, and other tools are blocked"
         )
