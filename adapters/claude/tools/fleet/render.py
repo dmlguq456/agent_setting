@@ -972,26 +972,29 @@ def _spec_phase_seq(entity):
     return [(str(a), str(b)) for a, b in seq]
 
 
-_SPEC_MODE_ABBR = {"library": "lib"}   # user 2026-07-24: spec-cli / spec-lib / spec-app.
-
-
 def _session_stage_segs(entity, working, max_width):
     """Stage-zone segments for a session row. A spec-grounding projection renders a lit phase
-    breadcrumb led by a mode-tagged capability name — the spec's application target rides the
-    name itself as ``spec-cli`` / ``spec-lib`` / ``spec-app`` (user 2026-07-24: the mode is a
-    classification, so hyphenate it into the entry, no parens/brackets), followed by the dim
-    ` : ` breadcrumb lead-in the dispatch rows use (``_stage_zone_segs``). Deferred / n·a phases
-    are dropped (not part of this project's flow; also avoids a skip glyph absent from many
-    fonts). Everything else keeps the flat clipped label."""
+    breadcrumb in the EXACT dispatch-row syntax (user 2026-07-24 "code에 맞춰서 소괄호에 넣는
+    걸로"): ``spec(mode·intensity) : spec✓ › dev●`` — entry ``spec`` in the dim name_dim hue, the
+    behaviour knobs (mode; intensity when the spec recorded one — inline specs usually do not) in
+    a dim paren group joined by ``·`` exactly as ``_opts_segs`` does, then the dim ` : `
+    breadcrumb lead-in (``_stage_zone_segs``). Deferred / n·a phases are dropped (not part of this
+    project's flow; also avoids a skip glyph absent from many fonts). Otherwise the flat label."""
     seq = _spec_phase_seq(entity)
     if seq:
         backing = getattr(entity.work_projection, "_route_view", None) or {}
         shown = [(n, st) for n, st in seq if st != "skipped"] or seq
         mode = backing.get("spec_mode")
-        entry = "spec"
+        knob_items = []
         if mode:
-            entry += "-" + "-".join(_SPEC_MODE_ABBR.get(m, m) for m in mode.split(","))
-        prefix = [(entry, "name_dim"), (" : ", "dim")]
+            knob_items.append(mode.replace(",", "·"))   # multiple modes ride the same axis
+        intensity = _short_level(backing.get("spec_intensity"))
+        if intensity:
+            knob_items.append(intensity)
+        prefix = [("spec", "name_dim")]
+        if knob_items:
+            prefix += [("(", "dim"), ("·".join(knob_items), "dim"), (")", "dim")]
+        prefix += [(" : ", "dim")]
         used = sum(_dw(text) for text, _key in prefix)
         body = _route_stage_segs(shown, working, max(4, max_width - used))
         return prefix + body
