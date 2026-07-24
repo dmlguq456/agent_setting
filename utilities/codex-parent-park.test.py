@@ -24,6 +24,46 @@ class ParentParkGuardTest(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.base = Path(self.temp.name)
         self.jobs = self.base / "jobs.log"
+        self.route_id = "rt-parent-park-fixture"
+        self.route = self.base / "route.json"
+        self.route.write_text(
+            json.dumps(
+                {
+                    "route_id": self.route_id,
+                    "nodes": [
+                        {"id": "owner", "dispatch_depth": 1},
+                        {"id": "implement", "dispatch_depth": 2},
+                        {"id": "test", "dispatch_depth": 2},
+                        {
+                            "id": "plan-a",
+                            "dispatch_depth": 2,
+                            "replica_group": "plan",
+                        },
+                        {
+                            "id": "plan-b",
+                            "dispatch_depth": 2,
+                            "replica_group": "plan",
+                        },
+                        {
+                            "id": "other-a",
+                            "dispatch_depth": 2,
+                            "replica_group": "other",
+                        },
+                        {
+                            "id": "other-b",
+                            "dispatch_depth": 2,
+                            "replica_group": "other",
+                        },
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.foreign_route = self.base / "foreign-route.json"
+        self.foreign_route.write_text(
+            json.dumps({"route_id": "rt-foreign", "nodes": []}),
+            encoding="utf-8",
+        )
         self.write_row("open", ATTEMPT, parent_sid=SESSION)
 
     def tearDown(self) -> None:
@@ -37,6 +77,9 @@ class ParentParkGuardTest(unittest.TestCase):
         parent_sid: str = "",
         parent_attempt_id: str = "",
         append: bool = False,
+        process_metadata: dict[str, str] | None = None,
+        route_node: str = "",
+        replica_group: str = "",
     ) -> None:
         metadata = [
             "attempt_schema_version=2",
@@ -50,6 +93,32 @@ class ParentParkGuardTest(unittest.TestCase):
             metadata.append("parent_sid=" + parent_sid)
         if parent_attempt_id:
             metadata.append("parent_attempt_id=" + parent_attempt_id)
+        if route_node:
+            metadata.extend(
+                [
+                    "route_id=" + self.route_id,
+                    "route_file=" + str(self.route),
+                    "route_node=" + route_node,
+                ]
+            )
+        if replica_group:
+            metadata.extend(
+                [
+                    "replica_group=" + replica_group,
+                    "reservation_kind=replica-batch",
+                    "batch_declared_size=2",
+                    "batch_group=" + replica_group,
+                    "batch_route_id=" + self.route_id,
+                    "batch_parent_attempt_id=" + parent_attempt_id,
+                    "batch_attempt_id=" + attempt,
+                    "batch_route_node=" + route_node,
+                ]
+            )
+        if state == "done" and not process_metadata:
+            metadata.append("launch_outcome=never-launched")
+        metadata.extend(
+            f"{key}={value}" for key, value in (process_metadata or {}).items()
+        )
         row = "\t".join(
             ["2026-07-23T00:00:00Z", state, "/repo", "/repo-wt/child", "child", ",".join(metadata)]
         ) + "\n"
@@ -146,6 +215,32 @@ class ParentParkGuardTest(unittest.TestCase):
         self.write_row("done", ATTEMPT, parent_sid=SESSION, append=True)
         self.assertIsNone(self.invoke("Bash", "git status --short"))
 
+    def test_terminal_row_still_parks_until_exact_process_is_reaped(self) -> None:
+        proc = subprocess.Popen(["sleep", "30"], start_new_session=True)
+        try:
+            raw = Path(f"/proc/{proc.pid}/stat").read_text(encoding="utf-8")
+            start = raw[raw.rfind(")") + 2 :].split()[19]
+            self.write_row(
+                "done",
+                ATTEMPT,
+                parent_sid=SESSION,
+                append=True,
+                process_metadata={
+                    "pid": str(proc.pid),
+                    "pid_start": start,
+                    "pgid": str(proc.pid),
+                    "pid_observer_ns": os.readlink("/proc/self/ns/pid"),
+                },
+            )
+            self.assert_parked("Bash", "git status --short")
+            proc.terminate()
+            proc.wait(timeout=5)
+            self.assertIsNone(self.invoke("Bash", "git status --short"))
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+            proc.wait()
+
     def test_depth_one_owner_is_bound_by_exact_parent_attempt(self) -> None:
         owner_attempt = "att-owner-exact"
         self.write_row("open", ATTEMPT, parent_attempt_id=owner_attempt)
@@ -181,6 +276,9 @@ class ParentParkGuardTest(unittest.TestCase):
             "AGENT_DISPATCH_ATTEMPT_ID": OWNER_ATTEMPT,
             "AGENT_DISPATCH_COMPLETION_STATE_FILE": str(state),
             "AGENT_DISPATCH_SELF_SLUG": OWNER_SLUG,
+            "AGENT_DISPATCH_JOBS": str(self.jobs),
+            "AGENT_ROUTE_FILE": str(self.route),
+            "AGENT_ROUTE_ID": self.route_id,
         }
 
     def test_supervised_delivered_batch_denies_model_wait_and_allows_only_harvest(self) -> None:
@@ -218,12 +316,18 @@ class ParentParkGuardTest(unittest.TestCase):
         self.assertEqual(dispatch["decision"], "block")
 
     def test_supervised_undelivered_batch_allows_second_sibling_dispatch_only(self) -> None:
-        self.write_row("open", ATTEMPT, parent_attempt_id=OWNER_ATTEMPT)
+        self.write_row(
+            "open",
+            ATTEMPT,
+            parent_attempt_id=OWNER_ATTEMPT,
+            route_node="implement",
+        )
         supervised = self.supervised_env([])
         exact_dispatch = (
-            "python3 utilities/dispatch-node.py --route /tmp/route.json "
+            f"python3 utilities/dispatch-node.py --route {self.route} "
             "--node test --adapter claude --action start --slug sibling-b "
-            "--parent owner -- --jobs /tmp/jobs.log"
+            f"--parent owner -- --jobs {self.jobs} "
+            f"--parent-attempt-id {OWNER_ATTEMPT}"
         )
         self.assertIsNone(
             self.invoke(
@@ -233,6 +337,8 @@ class ParentParkGuardTest(unittest.TestCase):
                 extra_env=supervised,
             )
         )
+        foreign_jobs = self.base / "direct-foreign-jobs.log"
+        foreign_jobs.write_text("", encoding="utf-8")
         for name, command in (
             ("Read", None),
             ("Bash", "git status --short"),
@@ -245,6 +351,18 @@ class ParentParkGuardTest(unittest.TestCase):
                 "Bash",
                 exact_dispatch.replace("--parent owner", "--parent foreign"),
             ),
+            (
+                "Bash",
+                exact_dispatch.replace(str(self.route), str(self.foreign_route)),
+            ),
+            (
+                "Bash",
+                exact_dispatch.replace(str(self.jobs), str(foreign_jobs)),
+            ),
+            (
+                "Bash",
+                exact_dispatch.replace(OWNER_ATTEMPT, "att-foreign-owner"),
+            ),
         ):
             with self.subTest(name=name, command=command):
                 blocked = self.invoke(
@@ -255,6 +373,75 @@ class ParentParkGuardTest(unittest.TestCase):
                 )
                 self.assertEqual(blocked["decision"], "block")
                 self.assertIn("runtime-supervised-parent", blocked["reason"])
+
+    def test_supervised_batch_binds_route_group_jobs_parent_and_one_leg_state(self) -> None:
+        self.write_row(
+            "open",
+            ATTEMPT,
+            parent_sid="worker-session",
+            parent_attempt_id=OWNER_ATTEMPT,
+            route_node="plan-a",
+            replica_group="plan",
+        )
+        supervised = self.supervised_env([])
+
+        def batch(route: Path, group: str, jobs: Path) -> str:
+            return (
+                "adapters/codex/bin/preflight.sh dispatch-batch "
+                f"--route {route} --replica-group {group} --action start "
+                f"--slug-prefix owner --parent owner --jobs {jobs}"
+            )
+
+        exact = batch(self.route, "plan", self.jobs)
+        self.assertIsNone(
+            self.invoke(
+                "Bash",
+                exact,
+                session="worker-session",
+                extra_env=supervised,
+            )
+        )
+
+        foreign_jobs = self.base / "foreign-jobs.log"
+        foreign_jobs.write_text("", encoding="utf-8")
+        cases = (
+            (batch(self.foreign_route, "plan", self.jobs), supervised),
+            (batch(self.route, "other", self.jobs), supervised),
+            (batch(self.route, "plan", foreign_jobs), supervised),
+            (
+                exact,
+                {**supervised, "AGENT_DISPATCH_ATTEMPT_ID": "att-foreign-owner"},
+            ),
+            (exact, {**supervised, "AGENT_ROUTE_ID": "rt-foreign"}),
+        )
+        for command, env in cases:
+            with self.subTest(command=command, parent=env["AGENT_DISPATCH_ATTEMPT_ID"]):
+                blocked = self.invoke(
+                    "Bash",
+                    command,
+                    session="worker-session",
+                    extra_env=env,
+                )
+                self.assertEqual(blocked["decision"], "block")
+                self.assertIn("runtime-supervised-parent", blocked["reason"])
+
+        self.write_row(
+            "open",
+            "att-fixture-plan-b",
+            parent_sid="worker-session",
+            parent_attempt_id=OWNER_ATTEMPT,
+            route_node="plan-b",
+            replica_group="plan",
+            append=True,
+        )
+        repeated = self.invoke(
+            "Bash",
+            exact,
+            session="worker-session",
+            extra_env=supervised,
+        )
+        self.assertEqual(repeated["decision"], "block")
+        self.assertIn("runtime-supervised-parent", repeated["reason"])
 
 
 if __name__ == "__main__":

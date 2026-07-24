@@ -367,9 +367,11 @@ class DispatchV20ConformanceTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         for required in (
             "utilities/dispatch-node.py",
+            "utilities/dispatch-batch.py",
             '--route "$ROUTE_FILE"',
             '--node "$NODE_ID"',
             '-- --jobs "$CANONICAL_JOBS"',
+            '--jobs "$CANONICAL_JOBS" --prompt-text "$STAGE_PROMPT"',
             "ATTEMPT_ID=",
             "--attempt-id <exact-attempt-id>",
         ):
@@ -393,16 +395,25 @@ class DispatchV20ConformanceTest(unittest.TestCase):
         self.assertIn("worker_type=owner,assigned_contract=drill", runner)
         self.assertNotIn("worker_role=", runner)
 
-        for case in (
-            "g9_cross_harness_depth2_dispatch",
-            "g10_claude_opencode_depth2_start",
-            "g11_nested_sandbox_lifetime",
-        ):
-            assertion = (
-                ROOT / "loops/drill/cases_growing" / case / "assert.sh"
-            ).read_text(encoding="utf-8")
-            self.assertIn("attempt_id", assertion, case)
-            self.assertIn("fallback_hop", assertion, case)
+        g9 = (
+            ROOT / "loops/drill/cases_growing/g9_cross_harness_depth2_dispatch/assert.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("SUPPORTED_BATCH_HARNESSES", g9)
+        self.assertIn("model_worker_governor.test.py", g9)
+        self.assertIn("concurrent_launch", g9)
+
+        g10 = (
+            ROOT / "loops/drill/cases_growing/g10_claude_opencode_depth2_start/assert.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("opencode-standard-depth2-unsupported", g10)
+        self.assertIn("child_spawned=0", g10)
+        self.assertIn("zero registry/governor/runtime/prompt/log/Fleet child", g10)
+
+        g11 = (
+            ROOT / "loops/drill/cases_growing/g11_nested_sandbox_lifetime/assert.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("attempt_id", g11)
+        self.assertIn("fallback_hop", g11)
 
 
 if __name__ == "__main__":

@@ -25,13 +25,36 @@ from tools.fleet.model import (  # noqa: E402
 from dispatch_contract import (  # noqa: E402
     DispatchContractError,
     anchored_capacity_failure,
+    attempt_process_quiescence,
+    authoritative_process_identities,
     close_attempt_row_if,
+    process_start_ticks,
+    process_state,
     resolve_agent_home,
     validate_attempt_metadata,
 )
 from codex_dispatch_terminal import inspect_terminal_log  # noqa: E402
 
 KINDS = {"registry", "tool", "file", "artifact", "test", "terminal"}
+
+
+def defer_terminal_until_quiescent(state, metadata):
+    """Keep semantic terminal evidence cached while withholding fallback readiness."""
+
+    if not state.get("terminal_action"):
+        return state
+    process = attempt_process_quiescence(metadata)
+    if process.state == "quiescent":
+        return state
+    visible = dict(state)
+    visible["semantic_terminal_action"] = state["terminal_action"]
+    visible["terminal_action"] = ""
+    visible["process_state"] = process.state
+    visible["process_reason"] = process.reason
+    visible["action"] = (
+        "draining" if process.state == "live" else "fail-closed-process-unverifiable"
+    )
+    return visible
 
 
 def meta(pipe):
@@ -98,16 +121,97 @@ def require_row(args):
 
 
 def proc_evidence(metadata):
-    raw = metadata.get("pid", "")
-    pid = int(raw) if raw.isdigit() else None
-    expected, actual, alive = metadata.get("pid_start", ""), "", False
-    if pid is not None:
+    candidates = authoritative_process_identities(metadata)
+    selected = None
+    fallback = None
+    for identity in candidates:
+        actual = process_start_ticks(identity.pid) or ""
+        alive = bool(actual) and process_state(identity.pid) != "Z"
+        evidence = (identity, actual, alive, bool(alive and actual == identity.expected_start))
+        if fallback is None:
+            fallback = evidence
+        if evidence[3]:
+            selected = evidence
+            break
+    selected = selected or fallback
+    if selected is None:
+        pid, expected, actual, alive, start_match, source = None, "", "", None, None, None
+    else:
+        identity, actual, alive, start_match = selected
+        pid, expected, source = identity.pid, identity.expected_start, identity.source
+    raw_local = metadata.get("pid", "")
+    raw_host = metadata.get("pid_host", "")
+    return {
+        "pid": pid,
+        "proc_start": expected,
+        "actual_proc_start": actual,
+        "pid_alive": alive,
+        "proc_start_match": start_match,
+        "pid_scope": metadata.get("pid_scope"),
+        "pid_authoritative": selected is not None,
+        "pid_identity_source": source,
+        "pid_local": int(raw_local) if raw_local.isdigit() else None,
+        "pid_local_start": metadata.get("pid_start"),
+        "pid_host": int(raw_host) if raw_host.isdigit() else None,
+        "pid_host_start": metadata.get("pid_host_start"),
+        "pid_host_ns": metadata.get("pid_host_ns"),
+        "pid_ns": metadata.get("pid_ns"),
+        "pid_observer_ns": metadata.get("pid_observer_ns"),
+        "pid_host_proof": metadata.get("pid_host_proof"),
+        "pgid": metadata.get("pgid"),
+    }
+
+
+_SIGNAL_IDENTITY_KEYS = (
+    "pid", "pid_start", "pid_scope", "pid_host", "pid_host_start",
+    "pid_host_ns", "pid_ns", "pid_observer_ns", "pid_host_proof", "pgid",
+)
+
+
+def _same_signal_identity(current, signalled):
+    return all(current.get(key, "") == signalled.get(key, "") for key in _SIGNAL_IDENTITY_KEYS)
+
+
+def signal_authoritative_process_group(args, sig):
+    """Revalidate the exact row, PID/start and group leader immediately before killpg.
+
+    Heartbeat state is intentionally absent from this path.  It can keep a
+    namespace-local attempt visible in UI, but only namespace-bound process
+    evidence grants signal authority.
+    """
+    fields, metadata = require_row(args)
+    if fields[1] not in {"open", "running"}:
+        raise DispatchContractError("progress-signal-row-terminal", args.attempt_id)
+    process = attempt_process_quiescence(metadata)
+    if process.state == "quiescent":
+        raise ProcessLookupError(process.reason)
+    if process.state != "live":
+        raise DispatchContractError("progress-signal-identity-unverifiable", process.reason)
+
+    for identity in authoritative_process_identities(metadata):
+        pid = identity.pid
+        if process_start_ticks(pid) != identity.expected_start or process_state(pid) == "Z":
+            continue
         try:
-            actual = (Path("/proc") / str(pid) / "stat").read_text(encoding="utf-8").split()[21]
-            alive = True
-        except (OSError, IndexError): pass
-    return {"pid": pid, "proc_start": expected, "actual_proc_start": actual,
-            "pid_alive": alive, "proc_start_match": bool(alive and expected == actual)}
+            pgid = os.getpgid(pid)
+        except ProcessLookupError:
+            continue
+        if pgid != pid:
+            continue
+        recorded_pgid = metadata.get("pgid", "")
+        if identity.source == "local" and recorded_pgid:
+            if not recorded_pgid.isdigit() or int(recorded_pgid) != pgid:
+                continue
+        # Final adjacent check closes the gap between candidate selection and signal.
+        if (
+            process_start_ticks(pid) != identity.expected_start
+            or process_state(pid) == "Z"
+            or os.getpgid(pid) != pid
+        ):
+            continue
+        os.killpg(pid, sig)
+        return pid, metadata
+    raise DispatchContractError("progress-signal-group-unverifiable", args.attempt_id)
 
 
 def scoped_file_signature(metadata, worktree=""):
@@ -272,13 +376,20 @@ def watchdog(args, now):
                               "capacity_log": str(capacity_path or ""), "observed_at": now})
                 write_json(wd_path, state)
                 return state
-            if not closed and exact["state"] == "working" and exact.get("pid"):
+            signalled_metadata = metadata
+            if not closed:
                 try:
-                    os.killpg(int(exact["pid"]), signal.SIGINT)
+                    _, signalled_metadata = signal_authoritative_process_group(args, signal.SIGINT)
                 except ProcessLookupError:
                     pass
                 except PermissionError:
                     state.update({"action": "fail-closed-capacity-signal-denied",
+                                  "observed_at": now})
+                    write_json(wd_path, state)
+                    return state
+                except DispatchContractError as error:
+                    state.update({"action": "fail-closed-capacity-identity",
+                                  "process_reason": error.reason,
                                   "observed_at": now})
                     write_json(wd_path, state)
                     return state
@@ -290,8 +401,7 @@ def watchdog(args, now):
                         row_fields[1] in {"open", "running"}
                         and row_meta.get("route_id") == args.route_id
                         and row_meta.get("route_node") == args.route_node
-                        and row_meta.get("pid") == metadata.get("pid")
-                        and row_meta.get("pid_start") == metadata.get("pid_start")
+                        and _same_signal_identity(row_meta, signalled_metadata)
                     )
 
                 closed = close_attempt_row_if(
@@ -316,9 +426,9 @@ def watchdog(args, now):
                           "capacity_log": str(capacity_path or ""), "observed_at": now,
                           "fingerprint": fingerprint})
             write_json(wd_path, state)
-            return state
+            return defer_terminal_until_quiescent(state, metadata)
         if state.get("terminal_action"):
-            return state
+            return defer_terminal_until_quiescent(state, metadata)
         previous = state.get("fingerprint", "")
         last_progress = float(state.get("last_progress_at", hb.get("updated_at", now)))
         quiet = int(state.get("quiet_windows", 0))
@@ -329,7 +439,7 @@ def watchdog(args, now):
             state.update({"action": "registry-terminal", "terminal_action": "registry-terminal",
                           "observed_at": now, "verdict": verdict["state"]})
             write_json(wd_path, state)
-            return state
+            return defer_terminal_until_quiescent(state, metadata)
         if verdict["state"] == "dead":
             terminal = inspect_terminal_log(metadata.get("log_file"))
             terminal_note = terminal.get("failure_note") if terminal else ""
@@ -377,7 +487,7 @@ def watchdog(args, now):
                     "fingerprint": fingerprint,
                 })
                 write_json(wd_path, state)
-                return state
+                return defer_terminal_until_quiescent(state, metadata)
             # Natural child exit is a terminal observation, not a watchdog
             # identity failure. Harvest owns the success/failure verdict.
             state.update({"action": "process-exited", "terminal_action": "process-exited",
@@ -385,7 +495,7 @@ def watchdog(args, now):
                           "classifier_source": ATTEMPT_CLASSIFIER_SOURCE,
                           "fingerprint": fingerprint})
             write_json(wd_path, state)
-            return state
+            return defer_terminal_until_quiescent(state, metadata)
         if now - float(state.get("last_window_at", last_progress)) >= args.progress_window_seconds:
             quiet += 1; state["last_window_at"] = now
         state.update({"schema_version": 1, "attempt_id": args.attempt_id,
@@ -396,13 +506,15 @@ def watchdog(args, now):
                       "observed_at": now, "verdict": verdict["state"]})
         if quiet >= args.watchdog_max_windows:
             exact = inspect(args, now)  # immediate identity revalidation
-            if exact["state"] != "working" or not exact.get("pid"):
+            if exact["state"] != "working" or exact.get("pid_authoritative") is not True:
                 state["action"] = "fail-closed-identity"
             elif not args.apply:
                 state["action"] = "would-interrupt"
             else:
                 try:
-                    os.killpg(int(exact["pid"]), signal.SIGINT)
+                    signalled_pid, signalled_metadata = signal_authoritative_process_group(
+                        args, signal.SIGINT
+                    )
                 except ProcessLookupError:
                     state.update({"action": "process-exited",
                                   "terminal_action": "process-exited"})
@@ -412,6 +524,11 @@ def watchdog(args, now):
                     state["action"] = "fail-closed-signal-denied"
                     write_json(wd_path, state)
                     return state
+                except DispatchContractError as error:
+                    state["action"] = "fail-closed-identity"
+                    state["process_reason"] = error.reason
+                    write_json(wd_path, state)
+                    return state
 
                 def still_exact(row_fields):
                     row_meta = meta(row_fields[5])
@@ -419,8 +536,7 @@ def watchdog(args, now):
                         row_fields[1] in {"open", "running"}
                         and row_meta.get("route_id") == args.route_id
                         and row_meta.get("route_node") == args.route_node
-                        and row_meta.get("pid") == str(exact["pid"])
-                        and row_meta.get("pid_start") == exact.get("proc_start")
+                        and _same_signal_identity(row_meta, signalled_metadata)
                     )
 
                 closed = close_attempt_row_if(
@@ -433,10 +549,11 @@ def watchdog(args, now):
                 else:
                     state["action"] = "interrupted"
                     state["terminal_action"] = "dead-no-progress"
+                    state["signalled_pid"] = signalled_pid
         else:
             state["action"] = "warning" if quiet else "observe"
         write_json(wd_path, state)
-        return state
+        return defer_terminal_until_quiescent(state, metadata)
 
 
 def main(argv):

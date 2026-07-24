@@ -58,6 +58,7 @@ class OrphanWatchTest(unittest.TestCase):
         status = "done" if completed_owner else "open"
         child_pid = child.pid if child is not None else 99999999
         child_start = self.proc_start(child.pid) if child is not None else "1"
+        child_group = f",pgid={child.pid}" if child is not None else ""
         current = (
             "attempt_schema_version=2,transport=headless,"
             "execution_surface=registered-headless,registered_worker=1,"
@@ -71,7 +72,7 @@ class OrphanWatchTest(unittest.TestCase):
             f"{current},dispatch_depth=2,route_id={self.route_id},"
             f"route_file={self.route},route_node=execute,attempt_id=att-child,"
             f"parent=owner,parent_attempt_id=att-watch,pid={child_pid},"
-            f"pid_start={child_start}\n"
+            f"pid_start={child_start}{child_group}\n"
         )
 
     def watcher(self):

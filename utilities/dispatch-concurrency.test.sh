@@ -8,8 +8,9 @@
 #   3대를 같은 parent 로 --early-exit-watch 0(즉시 반환)으로 분사 → 관측:
 #     (1) jobs.log 에 3개 open row 가 _동시_ 존재 (동일 parent·distinct slug) = 병렬 분사 성립
 #     (2) dispatch-liveness 가 3대 모두 ALIVE = 병렬 _실행_ 성립
-#     (3) dispatch-wait --parent 다중-자식 대기 의미론: 실행 중 "자식 3개" 보고(exit 2),
-#         종료 후 exit 0
+#     (3) shared readiness classifier selects all 3 children while dispatch-wait
+#         stays pending (exit 2), then reports ready only after semantic-terminal
+#         row evidence and process quiescence
 #     (4) Σ 상한: wrapper 는 상한을 강제하지 않음(orchestrator/conductor 큐잉 책임) — 계약 대로
 #         실측 기록.
 set -uo pipefail
@@ -17,6 +18,7 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 WRAP="$SCRIPT_DIR/../adapters/claude/bin/dispatch-headless.py"
 LIVE="$SCRIPT_DIR/dispatch-liveness.sh"
 WAIT="$SCRIPT_DIR/dispatch-wait.sh"
+READY="$SCRIPT_DIR/dispatch-attempt-ready.py"
 fails=0
 ok()  { printf 'ok   - %s\n' "$1"; }
 bad() { printf 'FAIL - %s\n' "$1"; fails=$((fails + 1)); }
@@ -46,7 +48,7 @@ sleep 60 & parent_pid=$!
 parent_start=$(awk '{print $22}' "/proc/$parent_pid/stat")
 parent_attempt="att-concurrency-parent"
 mkdir -p "$AH/.dispatch"
-printf '2026-07-23T00:00:00Z\topen\t%s\t%s\t%s\tattempt_schema_version=2,dispatch_depth=1,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless,worker_type=owner,attempt_id=%s,pid=%s,pid_start=%s\n' \
+printf '2026-07-23T00:00:00Z\topen\t%s\t%s\t%s\tattempt_schema_version=2,dispatch_depth=1,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless,worker_type=owner,harness=claude,runtime_sandbox=fixture,attempt_id=%s,pid=%s,pid_start=%s\n' \
   "$wt" "$wt" "$PARENT" "$parent_attempt" "$parent_pid" "$parent_start" > "$AH/.dispatch/jobs.log"
 i=0
 for r in $roles; do
@@ -76,21 +78,26 @@ alive_n=$(printf '%s\n' "$live" | grep -c 'ALIVE')
 [ "$alive_n" -eq 3 ] && ok "(2) liveness: 3 workers ALIVE simultaneously (병렬 실행 성립)" \
   || bad "(2) expected 3 ALIVE, got $alive_n. live=[$live]"
 
-# (3) dispatch-wait 다중-자식: 실행 중 → 자식 3개 보고, exit 2(재호출).
+# (3) shared classifier + dispatch-wait: 실행 중 → 정확히 3개 선택, exit 2(재호출).
+ready_json=$(AGENT_HOME="$AH" python3 "$READY" --parent "$PARENT" --jobs "$jobs" 2>&1)
+ready_rc=$?
+ready_n=$(printf '%s\n' "$ready_json" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["children"]))' 2>/dev/null || printf '0\n')
 wout=$(AGENT_HOME="$AH" CLAUDE_CONFIG_DIR="$RT" DISPATCH_RUNTIME_ROOT="$RT" \
-  sh "$WAIT" --parent "$PARENT" --jobs "$jobs" --interval 1 --max 2 2>&1 || true)
-echo "$wout" | grep -Eq '3 children' && ok "(3a) dispatch-wait reports 3 children (다중-자식 대기 의미론)" \
-  || bad "(3a) wait did not report 3 children. wout=[$wout]"
+  sh "$WAIT" --parent "$PARENT" --jobs "$jobs" --interval 1 --max 2 2>&1)
+wait_rc=$?
+[ "$ready_rc" -eq 2 ] && [ "$ready_n" -eq 3 ] && [ "$wait_rc" -eq 2 ] \
+  && ok "(3a) classifier selects 3 live children and dispatch-wait stays pending" \
+  || bad "(3a) expected 3 pending children. readiness=[$ready_json] wait=[$wout]"
 
 # 워커 종료 대기 후 (3b) exit 0.
 sleep $((SLEEP + 2))
-# fake claude 종료 = transcript stale 아님이지만 프로세스 종료 → row 는 여전히 open(정상 harvest
-# 가 done 처리). SD-16(d) 검증은 "동시성"이므로 여기선 프로세스 종료 확인만: pgrep 없이
-# transcript mtime 로는 stale 판정이 STALE_MIN(15m)이라 안 뜬다 → 대신 open row 를 done 으로
-# 수동 마감해 dispatch-wait exit 0 경로를 확인.
-awk -F'\t' -v p="parent=$PARENT" 'BEGIN{OFS="\t"} $2=="open" && $6 ~ p {$2="done"} {print}' "$jobs" > "$jobs.tmp" && mv "$jobs.tmp" "$jobs"
-wout2=$(AGENT_HOME="$AH" sh "$WAIT" --parent "$PARENT" --jobs "$jobs" --max 2 2>&1 || true)
-echo "$wout2" | grep -q 'ready to harvest (exit 0)' && ok "(3b) all children done → dispatch-wait exit 0 (수확)" \
+# fake claude 종료 뒤 fixture row 에 capability-route complete 가 원자적으로 쓰는
+# semantic-terminal handshake 를 재현한다. Marker 자체의 결속 검증은 dedicated
+# dispatch_completion_marker suite 가 담당하고, 여기서는 다중-process join 만 격리한다.
+awk -F'\t' -v p="parent=$PARENT" 'BEGIN{OFS="\t"} $2=="open" && $6 ~ p {$2="done"; $6=$6 ",note=completed-marker"} {print}' "$jobs" > "$jobs.tmp" && mv "$jobs.tmp" "$jobs"
+wout2=$(AGENT_HOME="$AH" sh "$WAIT" --parent "$PARENT" --jobs "$jobs" --max 2 2>&1)
+wait_rc2=$?
+[ "$wait_rc2" -eq 0 ] && echo "$wout2" | grep -q 'ready to harvest (exit 0)' && ok "(3b) semantic-terminal + process exit → dispatch-wait exit 0" \
   || bad "(3b) wait did not report harvest-ready. wout2=[$wout2]"
 
 # (4) Σ 상한: wrapper 가 5대 분사도 막지 않음(강제는 orchestrator 큐잉). 계약대로 실측 기록.

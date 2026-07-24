@@ -101,16 +101,36 @@ class FallbackTest(unittest.TestCase):
     args,route,node,"att-process-exit",{"child_pid":"1","child_pid_start":"2"})
   self.assertEqual(state,"fallback")
   self.assertEqual(fields["terminal_action"],"process-exited")
+ def test_completed_row_is_draining_until_exact_process_exits(self):
+  proc=subprocess.Popen(["sleep","30"],start_new_session=True)
+  try:
+   start=(Path("/proc")/str(proc.pid)/"stat").read_text().split()[21]
+   self.jobs.write_text(
+    "2026-07-24T00:00:00Z\tdone\t/repo\t/wt\tplan\t"
+    "route_id=rt-q,route_node=plan,attempt_id=att-q,"
+    f"pid={proc.pid},pid_start={start},pgid={proc.pid},"
+    f"pid_observer_ns={os.readlink('/proc/self/ns/pid')},note=completed-marker\n")
+   state,fields=F.terminal_attempt_state(self.jobs,"rt-q","plan","att-q")
+   self.assertEqual(state,"draining")
+   self.assertEqual(fields["process_state"],"live")
+   proc.terminate();proc.wait(timeout=5)
+   state,fields=F.terminal_attempt_state(self.jobs,"rt-q","plan","att-q")
+   self.assertEqual(state,"terminal")
+   self.assertEqual(fields["process_state"],"quiescent")
+  finally:
+   if proc.poll() is None:proc.kill()
+   proc.wait()
  def test_attempt_identity_is_stable_across_actions(self):
   path=self.route(); first=self.run_chain(path); second=self.run_chain(path)
   def attempt(out): return next(line.split("=",1)[1] for line in out.splitlines() if line.startswith("attempt_id="))
   self.assertEqual(attempt(first.stdout),attempt(second.stdout))
- def test_direct_register_is_idempotent_without_broker(self):
+ def test_replica_register_is_rejected_without_creating_a_row(self):
   path=self.route(); first=self.run_register(path); second=self.run_register(path)
-  self.assertEqual(first.returncode,0,first.stdout+first.stderr); self.assertEqual(second.returncode,0,second.stdout+second.stderr)
-  self.assertEqual(len(self.jobs.read_text().splitlines()),2)
-  self.assertIn("duplicate_attempt=1",second.stdout)
-  self.assertNotIn("broker_request_id=",self.jobs.read_text())
+  self.assertEqual(first.returncode,65,first.stdout+first.stderr)
+  self.assertEqual(second.returncode,65,second.stdout+second.stderr)
+  self.assertIn("reason=replica-group-batch-required",first.stdout)
+  self.assertEqual(len(self.jobs.read_text().splitlines()),1)
+  self.assertIn("att-fallback-parent",self.jobs.read_text())
  def test_registry_prevents_unchanged_same_harness_retry(self):
   path=self.route(same_status="supported"); route=json.loads(path.read_text())
   pipe=f"capability=autopilot-code,route_id={route['route_id']},route_node=plan,parent=owner,attempt_id=att-prior000000,parent_harness=codex,parent_transport=headless,parent_sandbox=workspace-write,child_harness=codex,launch_authority=conductor,note=dead-network"

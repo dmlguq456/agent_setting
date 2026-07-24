@@ -53,7 +53,7 @@ launch() { # $1=fake-claude-body $2=slug $3=watch
   parent_start=$(awk '{print $22}' "/proc/$parent_pid/stat")
   parent_attempt="att-parent-$2-fixture"
   mkdir -p "$AH/.dispatch"
-  printf '2026-07-23T00:00:00Z\topen\t%s\t%s\tcx\tattempt_schema_version=2,dispatch_depth=1,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless,worker_type=owner,attempt_id=%s,pid=%s,pid_start=%s\n' \
+  printf '2026-07-23T00:00:00Z\topen\t%s\t%s\tcx\tattempt_schema_version=2,dispatch_depth=1,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless,worker_type=owner,harness=claude,runtime_sandbox=fixture,attempt_id=%s,pid=%s,pid_start=%s\n' \
     "$wt" "$wt" "$parent_attempt" "$parent_pid" "$parent_start" >> "$AH/.dispatch/jobs.log"
   AGENT_HOME="$AH" AGENT_DISPATCH_JOBS="$AH/.dispatch/jobs.log" \
     AGENT_DISPATCH_ATTEMPT_ID="$parent_attempt" PATH="$bin:$PATH" python3 "$WRAP" --start \
@@ -84,7 +84,7 @@ out=$(launch "#!/bin/sh
 echo 'Selected model is at capacity'
 exit 1" capacity1 4)
 echo "$out" | grep -q 'early_death=capacity' \
-  && grep -q $'\tdone\t.*capacity1.*model=sonnet.*note=dead-capacity.*failure_class=capacity' "$AH/.dispatch/jobs.log" \
+  && awk -F'\t' '$2=="done" && $5=="capacity1" && $6 ~ /(^|,)model=sonnet(,|$)/ && $6 ~ /(^|,)note=dead-capacity(,|$)/ && $6 ~ /(^|,)failure_class=capacity(,|$)/ { found=1 } END { exit !found }' "$AH/.dispatch/jobs.log" \
   && [ "$(cat "$AH/.dispatch/usage-reset.claude")" = "$before_reset" ] \
   && ok "capacity death → exact row dead-capacity without usage-reset pollution" \
   || bad "capacity death contract failed. out=[$out]"

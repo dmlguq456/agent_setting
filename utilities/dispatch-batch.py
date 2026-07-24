@@ -1,0 +1,1083 @@
+#!/usr/bin/env python3
+"""Atomically admit and concurrently launch one immutable two-way replica group."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib.util
+import itertools
+import json
+import os
+from pathlib import Path
+import re
+import selectors
+import signal
+import subprocess
+import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "utilities"))
+from dispatch_contract import (  # noqa: E402
+    DispatchContractError,
+    GOVERNOR_RESERVATION_ENV,
+    attempt_process_quiescence,
+    completion_attempt_readiness,
+    completion_marker_gate,
+    completion_marker_is_current,
+    parse_registry_metadata,
+    recover_unstarted_attempt,
+    resolve_agent_home,
+    resolve_global_registry,
+    resolve_live_parent_attempt,
+    resolve_model_governor_root,
+    validate_attempt_metadata,
+)
+from dispatch_lifecycle import select_launch_lifecycle  # noqa: E402
+from replica_batch_contract import DIGEST, build_manifest  # noqa: E402
+
+NODE_SPEC = importlib.util.spec_from_file_location(
+    "dispatch_node", ROOT / "utilities" / "dispatch-node.py"
+)
+if NODE_SPEC is None or NODE_SPEC.loader is None:  # pragma: no cover - install corruption
+    raise RuntimeError("dispatch-node loader unavailable")
+DISPATCH_NODE = importlib.util.module_from_spec(NODE_SPEC)
+NODE_SPEC.loader.exec_module(DISPATCH_NODE)
+
+SUPPORTED_BATCH_HARNESSES = ("codex", "claude")
+SAFE_SLUG = re.compile(r"[^A-Za-z0-9._-]+")
+RESERVATION_TOKEN = re.compile(r"[0-9a-f]{32}")
+OUTPUT_TAIL_BYTES = 65536
+DEFAULT_PROMPT = "Execute the selected immutable replica node and emit its completion evidence."
+
+
+class BatchError(RuntimeError):
+    def __init__(self, reason: str, detail: str = ""):
+        super().__init__(detail or reason)
+        self.reason = reason
+        self.detail = detail or reason
+
+
+def fail(reason: str, code: int, **fields: object) -> int:
+    receipt = {"schema_version": 1, "state": "blocked", "reason": reason, **fields}
+    print(json.dumps(receipt, separators=(",", ":"), sort_keys=True))
+    return code
+
+
+def load_route(route_path: Path) -> dict[str, object]:
+    try:
+        route = json.loads(route_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise BatchError("route-record-unreadable", str(exc)) from exc
+    if not isinstance(route, dict):
+        raise BatchError("route-record-invalid", "route root must be an object")
+    verify = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "utilities" / "capability-route.py"),
+            "verify",
+            "--route",
+            str(route_path),
+            "--cwd",
+            str(route.get("cwd", "")),
+        ],
+        text=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if verify.returncode:
+        raise BatchError("route-record-invalid", verify.stderr.strip()[:512])
+    return route
+
+
+def replica_nodes(route: dict[str, object], group: str) -> list[dict[str, object]]:
+    nodes = [
+        node
+        for node in route.get("nodes", [])
+        if isinstance(node, dict) and node.get("replica_group") == group
+    ]
+    if len(nodes) != 2:
+        raise BatchError("replica-group-cardinality", f"group={group} count={len(nodes)}")
+    if any(node.get("dispatch_depth") != 2 for node in nodes):
+        raise BatchError("replica-group-depth-invalid", group)
+    dependencies = {tuple(node.get("depends_on", [])) for node in nodes}
+    if len(dependencies) != 1:
+        raise BatchError("replica-group-dependency-mismatch", group)
+    return nodes
+
+
+def candidate(node: dict[str, object], adapter: str) -> tuple[str, int] | None:
+    for entry in sorted(node.get("fallback_hops", []), key=lambda row: row.get("ordinal", 0)):
+        if entry.get("fallback_hop") not in DISPATCH_NODE.FALLBACK_HOPS:
+            continue
+        rows = [row for row in entry.get("candidates", []) if row.get("child_harness") == adapter]
+        if not rows:
+            continue
+        if len(rows) == 1 and rows[0].get("status") == "supported":
+            return str(entry["fallback_hop"]), int(entry["ordinal"])
+        return None
+    return None
+
+
+def assign_harnesses(
+    route: dict[str, object],
+    nodes: list[dict[str, object]],
+    *,
+    allow_degraded: bool,
+    parent_identity: dict[str, str] | None = None,
+) -> tuple[list[tuple[dict[str, object], str, str, int]], str]:
+    options: list[list[tuple[str, str, int]]] = []
+    for node in nodes:
+        choices = []
+        for adapter in SUPPORTED_BATCH_HARNESSES:
+            selected = candidate(node, adapter)
+            if selected is None:
+                continue
+            try:
+                tuple_row = DISPATCH_NODE.select_checked_tuple(route, node, adapter)
+                if parent_identity is not None:
+                    DISPATCH_NODE.validate_parent_identity(tuple_row, parent_identity)
+            except DISPATCH_NODE.DispatchNodeError:
+                continue
+            choices.append((adapter, selected[0], selected[1]))
+        if not choices:
+            raise BatchError("replica-headless-unavailable", str(node.get("id", "-")))
+        options.append(choices)
+
+    combinations = list(itertools.product(*options))
+    distinct = [rows for rows in combinations if len({row[0] for row in rows}) == len(nodes)]
+    independence = "cross-harness"
+    if distinct:
+        combinations = distinct
+    elif allow_degraded:
+        independence = "degraded-same-harness"
+    else:
+        raise BatchError("replica-cross-harness-unavailable")
+
+    def score(rows: tuple[tuple[str, str, int], ...]) -> tuple[int, int, tuple[str, ...]]:
+        affinity_misses = sum(
+            1
+            for node, row in zip(nodes, rows)
+            if node.get("harness_affinity") not in {None, "", "unspecified", row[0]}
+        )
+        return affinity_misses, sum(row[2] for row in rows), tuple(row[0] for row in rows)
+
+    chosen = min(combinations, key=score)
+    return [
+        (node, adapter, hop, ordinal)
+        for node, (adapter, hop, ordinal) in zip(nodes, chosen)
+    ], independence
+
+
+def stable_attempt_id(
+    route: dict[str, object], node: dict[str, object], slug: str, parent: str,
+    parent_attempt_id: str, adapter: str, ordinal: int,
+) -> str:
+    # Display labels are deliberately excluded. One exact parent generation,
+    # route node and selected fallback tuple must always resolve to the same
+    # launch identity even when a caller varies --slug-prefix on a retry.
+    del slug, parent
+    payload = {
+        "route_id": route["route_id"],
+        "route_node": node["id"],
+        "parent_attempt_id": parent_attempt_id,
+        "target_harness": adapter,
+        "fallback_ordinal": ordinal,
+    }
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return "att-" + digest[:48]
+
+
+def replica_slug(prefix: str, node_id: str) -> str:
+    """Keep the node identity after truncation and avoid sanitized collisions."""
+
+    safe_prefix = SAFE_SLUG.sub("-", prefix).strip("-") or "replica"
+    safe_node = SAFE_SLUG.sub("-", node_id).strip("-") or "node"
+    node_digest = hashlib.sha256(node_id.encode("utf-8")).hexdigest()[:8]
+    node_component = f"{safe_node[:40]}-{node_digest}"
+    prefix_limit = 120 - len(node_component) - 1
+    return f"{safe_prefix[:prefix_limit]}-{node_component}"
+
+
+def reserve_batch(
+    governor: Path,
+    governor_root: Path,
+    pending_legs: list[dict[str, object]],
+    *,
+    manifest: dict[str, object],
+    manifest_digest: str,
+    peer: dict[str, str] | None = None,
+) -> list[str]:
+    count = len(pending_legs)
+    encoded_manifest = json.dumps(manifest, separators=(",", ":"), sort_keys=True)
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(governor),
+            "--root",
+            str(governor_root),
+            "reserve",
+            "--class",
+            "dispatch",
+            "--count",
+            str(count),
+            "--pid",
+            str(os.getpid()),
+            "--batch-manifest",
+            encoded_manifest,
+            *[
+                value
+                for leg in pending_legs
+                for value in ("--batch-attempt-id", str(leg["attempt_id"]))
+            ],
+            *(
+                [
+                    "--batch-peer-agent-home", peer["agent_home"],
+                    "--batch-peer-attempt-id", peer["attempt_id"],
+                    "--batch-peer-jobs", peer["jobs"],
+                    "--batch-peer-route", peer["route"],
+                ]
+                if peer is not None
+                else []
+            ),
+        ],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    try:
+        payload = json.loads(result.stdout)
+    except ValueError:
+        payload = {}
+    tokens = payload.get("tokens") if isinstance(payload, dict) else None
+    valid_payload = (
+        isinstance(payload, dict)
+        and payload.get("class") == "dispatch"
+        and payload.get("count") == count
+        and payload.get("owner_pid") == os.getpid()
+        and payload.get("batch_manifest_sha256") == manifest_digest
+        and isinstance(tokens, list)
+        and len(tokens) == count
+        and all(isinstance(token, str) and RESERVATION_TOKEN.fullmatch(token) for token in tokens)
+        and len(set(tokens)) == count
+    )
+    if result.returncode or not valid_payload:
+        detail = (result.stderr or result.stdout).strip()[:512]
+        raise BatchError("model-worker-governor-denied", detail or "atomic-reserve-failed")
+    return tokens
+
+
+def cancel_unclaimed(governor: Path, governor_root: Path, token: str) -> None:
+    try:
+        check = subprocess.run(
+            [
+                sys.executable,
+                str(governor),
+                "--root",
+                str(governor_root),
+                "reservation-check",
+                "--token",
+                token,
+            ],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError:
+        return
+    try:
+        state = json.loads(check.stdout).get("state")
+    except (AttributeError, ValueError):
+        state = "invalid"
+    if state != "unclaimed":
+        return
+    try:
+        subprocess.run(
+            [
+                sys.executable,
+                str(governor),
+                "--root",
+                str(governor_root),
+                "cancel",
+                "--token",
+                token,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError:
+        pass
+
+
+class BatchSignalRelay:
+    """Keep wrapper groups owned and forward cancellation to every live leg."""
+
+    def __init__(self) -> None:
+        self.processes: list[subprocess.Popen] = []
+        self.received: list[int] = []
+        self.previous: dict[int, object] = {}
+
+    def __enter__(self) -> "BatchSignalRelay":
+        for signum in (signal.SIGINT, signal.SIGTERM):
+            self.previous[signum] = signal.getsignal(signum)
+            signal.signal(signum, self._forward)
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        for signum, handler in self.previous.items():
+            signal.signal(signum, handler)
+
+    def _forward(self, signum: int, _frame: object) -> None:
+        self.received.append(signum)
+        for proc in tuple(self.processes):
+            if proc.poll() is not None:
+                continue
+            try:
+                os.killpg(proc.pid, signum)
+            except ProcessLookupError:
+                pass
+
+    def add(self, proc: subprocess.Popen) -> None:
+        self.processes.append(proc)
+        if self.received and proc.poll() is None:
+            try:
+                os.killpg(proc.pid, self.received[-1])
+            except ProcessLookupError:
+                pass
+
+
+def stop_wrapper(proc: subprocess.Popen) -> None:
+    """Boundedly stop only the wrapper whose collection contract failed."""
+
+    if proc.poll() is not None:
+        return
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+        proc.wait(timeout=0.5)
+    except (OSError, subprocess.TimeoutExpired):
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait(timeout=0.5)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+
+def output_fields(value: str) -> dict[str, str]:
+    return dict(line.split("=", 1) for line in value.splitlines() if "=" in line)
+
+
+def _append_tail(buffer: bytearray, chunk: bytes) -> None:
+    buffer.extend(chunk)
+    if len(buffer) > OUTPUT_TAIL_BYTES:
+        del buffer[:-OUTPUT_TAIL_BYTES]
+
+
+def bounded_process_output(proc: subprocess.Popen) -> tuple[str, str]:
+    """Drain both wrapper pipes while retaining only fixed-size UTF-8 tails."""
+
+    stdout_stream = getattr(proc, "stdout", None)
+    stderr_stream = getattr(proc, "stderr", None)
+    if stdout_stream is None or stderr_stream is None:
+        # Unit-test doubles have no real file descriptors; production Popen
+        # always supplies both PIPE streams above.
+        stdout, stderr = proc.communicate()
+        return stdout[-OUTPUT_TAIL_BYTES:], stderr[-OUTPUT_TAIL_BYTES:]
+
+    tails = {"stdout": bytearray(), "stderr": bytearray()}
+    with selectors.DefaultSelector() as selector:
+        selector.register(stdout_stream, selectors.EVENT_READ, "stdout")
+        selector.register(stderr_stream, selectors.EVENT_READ, "stderr")
+        while selector.get_map():
+            for key, _ in selector.select():
+                chunk = os.read(key.fd, 8192)
+                if chunk:
+                    _append_tail(tails[str(key.data)], chunk)
+                    continue
+                selector.unregister(key.fileobj)
+                key.fileobj.close()
+    proc.wait()
+    return (
+        bytes(tails["stdout"]).decode("utf-8", errors="replace"),
+        bytes(tails["stderr"]).decode("utf-8", errors="replace"),
+    )
+
+
+def collect_wrapper(
+    item: tuple[dict[str, object], str, subprocess.Popen],
+) -> tuple[dict[str, object], str, subprocess.Popen, str, str]:
+    leg, token, proc = item
+    stdout, stderr = bounded_process_output(proc)
+    return leg, token, proc, stdout, stderr
+
+
+def wrapper_result(
+    leg: dict[str, object], proc: subprocess.Popen, stdout: str, stderr: str
+) -> dict[str, object]:
+    fields = output_fields(stdout + stderr)
+    started = fields.get("started", fields.get("child_spawned", "unknown"))
+    duplicate = fields.get("duplicate_attempt", "unknown")
+    runtime_failure = fields.get("worker_failure", "-") not in {"", "-"}
+    early_death = fields.get("early_death", "-") not in {"", "-"}
+    receipt_valid = (
+        proc.returncode == 0
+        and fields.get("check") == "ok"
+        and fields.get("adapter") == leg["adapter"]
+        and fields.get("status") == "start"
+        and fields.get("attempt_id") == leg["attempt_id"]
+        and started in {"0", "1"}
+        and duplicate in {"0", "1"}
+        and (started, duplicate) in {("1", "0"), ("0", "1")}
+        and not runtime_failure
+        and not early_death
+    )
+    if receipt_valid:
+        launch_state = "started" if started == "1" else "existing"
+        reason = "-"
+    else:
+        launch_state = "failed"
+        reason = fields.get("reason", "invalid-wrapper-receipt")[:160]
+    return {
+        **leg,
+        "exit_code": proc.returncode,
+        "child_spawned": started,
+        "duplicate_attempt": duplicate,
+        "check": fields.get("check", "invalid"),
+        "launch_state": launch_state,
+        "reason": reason,
+    }
+
+
+def existing_leg_result(
+    jobs: Path,
+    leg: dict[str, object],
+    route: dict[str, object],
+    *,
+    repo: str,
+    parent: str,
+    parent_attempt_id: str,
+    replica_group: str,
+    manifest_digest: str,
+    leg_digest: str,
+    agent_home: Path,
+) -> dict[str, object] | None:
+    """Classify one exact prior attempt before consuming governor capacity.
+
+    ``None`` means the leg is absent or is an open registered-only row that still
+    needs its one launch claim. An already claimed active leg and an exact
+    completed-marker leg are safe idempotent results. Every other terminal or
+    malformed exact row is a typed failure and can never be promoted to
+    ``existing`` merely because the wrapper returned ``duplicate_attempt=1``.
+    """
+
+    try:
+        lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise BatchError("batch-registry-unreadable", str(exc)) from exc
+    matches: list[tuple[list[str], dict[str, str]]] = []
+    for line in lines:
+        fields = line.split("\t")
+        if len(fields) != 6:
+            continue
+        metadata = parse_registry_metadata(fields[5])
+        if metadata.get("attempt_id") == leg["attempt_id"]:
+            matches.append((fields, metadata))
+    if not matches:
+        return None
+    if len(matches) != 1:
+        raise BatchError(
+            "batch-attempt-row-not-unique",
+            f"attempt_id={leg['attempt_id']} rows={len(matches)}",
+        )
+    fields, metadata = matches[0]
+    try:
+        validate_attempt_metadata(metadata)
+    except DispatchContractError as exc:
+        raise BatchError("batch-attempt-row-invalid", exc.detail) from exc
+    # The stable launch identity deliberately excludes the display prefix.  If
+    # a retry uses a different --slug-prefix, keep the already registered
+    # display slug so the wrapper also reuses the row-bound transcript paths.
+    # The exact attempt id, route node, parent generation and fallback tuple
+    # below remain the authority; a display alias must not turn that same
+    # attempt into either a conflict or a second launch.
+    leg["slug"] = fields[4]
+    expected = {
+        "attempt_id": str(leg["attempt_id"]),
+        "route_id": str(route["route_id"]),
+        "route_node": str(leg["node"]),
+        "parent": parent,
+        "parent_attempt_id": parent_attempt_id,
+        "harness": str(leg["adapter"]),
+        "child_harness": str(leg["adapter"]),
+        "dispatch_depth": "2",
+        "fallback_hop": str(leg["hop"]),
+        "fallback_ordinal": str(leg["ordinal"]),
+        "replica_group": replica_group,
+        "reservation_kind": "replica-batch",
+        "batch_declared_size": "2",
+        "batch_group": replica_group,
+        "batch_route_id": str(route["route_id"]),
+        "batch_parent_attempt_id": parent_attempt_id,
+        "batch_attempt_id": str(leg["attempt_id"]),
+        "batch_route_node": str(leg["node"]),
+        "batch_harness": str(leg["adapter"]),
+        "batch_fallback_hop": str(leg["hop"]),
+        "batch_fallback_ordinal": str(leg["ordinal"]),
+        "batch_independence": str(leg["independence"]),
+        "batch_assignment_sha256": str(leg["assignment_sha256"]),
+        "batch_manifest_sha256": manifest_digest,
+        "batch_leg_sha256": leg_digest,
+    }
+    mismatches = {
+        key: (value, metadata.get(key, ""))
+        for key, value in expected.items()
+        if metadata.get(key) != value
+    }
+    if metadata.get("batch_admission_count") not in {"1", "2"}:
+        mismatches["batch_admission_count"] = (
+            "1|2", metadata.get("batch_admission_count", "")
+        )
+    if metadata.get("batch_admission_count") == "1":
+        for key in (
+            "batch_peer_attempt_id", "batch_peer_state", "batch_peer_proof_sha256"
+        ):
+            if not metadata.get(key):
+                mismatches[key] = ("partial-recovery-peer-proof", "")
+        if metadata.get("batch_peer_state") not in {"active", "completed"}:
+            mismatches["batch_peer_state"] = (
+                "active|completed", metadata.get("batch_peer_state", "")
+            )
+        proof = metadata.get("batch_peer_proof_sha256", "")
+        if not DIGEST.fullmatch(proof):
+            mismatches["batch_peer_proof_sha256"] = (
+                "sha256:<64 lowercase hex>", proof
+            )
+    if (
+        fields[2] != repo
+        or os.path.realpath(fields[3]) != os.path.realpath(str(route["cwd"]))
+        or mismatches
+    ):
+        detail = ";".join(
+            f"{key}:expected={expected_value}:actual={actual_value}"
+            for key, (expected_value, actual_value) in sorted(mismatches.items())
+        )
+        raise BatchError(
+            "batch-attempt-identity-conflict",
+            detail or f"attempt_id={leg['attempt_id']}",
+        )
+
+    claimed = metadata.get("launch_claimed")
+    if fields[1] == "open" and claimed == "0":
+        return None
+    common = {
+        **leg,
+        "exit_code": 0,
+        "child_spawned": "0",
+        "duplicate_attempt": "1",
+    }
+    if fields[1] in {"open", "running"} and claimed == "1":
+        process = attempt_process_quiescence(metadata)
+        if (
+            process.state == "quiescent"
+            and metadata.get("launch_fence") == "registry-v1"
+            and metadata.get("launch_started") != "1"
+            and not metadata.get("launch_outcome")
+            and recover_unstarted_attempt(jobs, str(leg["attempt_id"]))
+        ):
+            return None
+        if process.state != "live":
+            return {
+                **common,
+                "exit_code": 70,
+                "check": "failed",
+                "launch_state": "failed",
+                "reason": "existing-active-attempt-" + process.reason,
+            }
+        return {
+            **common,
+            "check": "ok",
+            "launch_state": "existing",
+            "reason": "existing-active-attempt",
+        }
+    if (
+        fields[1] == "done"
+        and claimed == "1"
+        and metadata.get("note") == "completed-marker"
+    ):
+        node = next(
+            (
+                candidate for candidate in route.get("nodes", [])
+                if isinstance(candidate, dict) and candidate.get("id") == leg["node"]
+            ),
+            None,
+        )
+        marker_path = (
+            agent_home / ".dispatch" / "completion" / str(route["route_id"])
+            / f"{leg['node']}.json"
+        )
+        try:
+            marker = json.loads(marker_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            marker = None
+        if (
+            isinstance(node, dict)
+            and isinstance(marker, dict)
+            and completion_marker_is_current(route, node, marker_path, marker)
+        ):
+            readiness = completion_attempt_readiness(
+                route, node, marker, jobs, registry_lines=lines
+            )
+            if readiness.state == "ready":
+                return {
+                    **common,
+                    "check": "ok",
+                    "launch_state": "existing",
+                    "reason": "existing-completed-attempt",
+                }
+            terminal_reason = readiness.reason
+        else:
+            terminal_reason = "completion-marker-not-current"
+        return {
+            **common,
+            "exit_code": 70,
+            "check": "failed",
+            "launch_state": "failed",
+            "reason": "existing-completed-attempt-" + terminal_reason,
+        }
+    return {
+        **common,
+        "exit_code": 70,
+        "check": "failed",
+        "launch_state": "failed",
+        "reason": "existing-terminal-attempt-" + (metadata.get("note") or fields[1]),
+    }
+
+
+def batch_receipt(
+    *,
+    args: argparse.Namespace,
+    lifecycle: str,
+    independence: str,
+    legs: list[dict[str, object]],
+    results: list[dict[str, object]],
+    admitted: int,
+    interrupted_signal: int = 0,
+) -> tuple[dict[str, object], bool]:
+    order = {str(leg["attempt_id"]): index for index, leg in enumerate(legs)}
+    results.sort(key=lambda leg: order[str(leg["attempt_id"])])
+    started_count = sum(leg.get("launch_state") == "started" for leg in results)
+    existing_count = sum(leg.get("launch_state") == "existing" for leg in results)
+    success = (
+        not interrupted_signal
+        and len(results) == len(legs)
+        and started_count + existing_count == len(legs)
+    )
+    if interrupted_signal:
+        state = "interrupted"
+    elif not success:
+        state = "partial-failure"
+    elif existing_count:
+        state = "idempotent-existing" if not started_count else "idempotent-mixed"
+    else:
+        state = "launched"
+    receipt = {
+        "schema_version": 1,
+        "state": state,
+        "action": "start",
+        "replica_group": args.replica_group,
+        "independence": independence,
+        "concurrent_launch": int(started_count == len(legs)),
+        "launch_lifecycle": lifecycle,
+        "requested": len(legs),
+        "admitted": admitted,
+        "newly_started": started_count,
+        "existing": existing_count,
+        "legs": results,
+    }
+    if interrupted_signal:
+        receipt["signal"] = interrupted_signal
+    return receipt, success
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--route", type=Path, required=True)
+    parser.add_argument("--replica-group", required=True)
+    parser.add_argument("--action", choices=("dry-run", "start"), default="dry-run")
+    parser.add_argument("--slug-prefix", required=True)
+    parser.add_argument("--parent", required=True)
+    parser.add_argument("--qa", default="standard")
+    parser.add_argument("--jobs", type=Path)
+    parser.add_argument("--log-dir", type=Path)
+    parser.add_argument(
+        "--prompt-text",
+        default=DEFAULT_PROMPT,
+    )
+    parser.add_argument("--allow-degraded-independence", action="store_true")
+    args = parser.parse_args(argv)
+
+    try:
+        route_path = args.route.resolve()
+        route = load_route(route_path)
+        nodes = replica_nodes(route, args.replica_group)
+        parent_identity = DISPATCH_NODE.current_parent_identity()
+        if parent_identity is None:
+            raise BatchError("parent-runtime-identity-missing")
+        assignments, independence = assign_harnesses(
+            route,
+            nodes,
+            allow_degraded=args.allow_degraded_independence,
+            parent_identity=parent_identity,
+        )
+        self_slug = os.environ.get("AGENT_DISPATCH_SELF_SLUG", "")
+        parent_attempt = os.environ.get("AGENT_DISPATCH_ATTEMPT_ID", "")
+        if not self_slug or args.parent != self_slug or not parent_attempt:
+            raise BatchError("parent-identity-mismatch", f"parent={args.parent} self={self_slug or '-'}")
+        agent_home = resolve_agent_home()
+        jobs = resolve_global_registry(
+            agent_home,
+            str(args.jobs) if args.jobs else os.environ.get("AGENT_DISPATCH_JOBS"),
+            2,
+            args.action,
+        ).path
+        repo = subprocess.check_output(
+            ["git", "-C", str(route["cwd"]), "rev-parse", "--show-toplevel"],
+            text=True,
+        ).strip()
+        resolve_live_parent_attempt(
+            jobs,
+            parent_slug=args.parent,
+            repo=repo,
+            worktree=str(route["cwd"]),
+            expected_attempt_id=parent_attempt,
+            expected_harness=parent_identity["parent_harness"],
+            expected_transport=parent_identity["parent_transport"],
+            expected_sandbox=parent_identity["parent_sandbox"],
+        )
+        for node, _, _, _ in assignments:
+            completion_marker_gate(
+                str(route_path), str(node["id"]), args.action, agent_home, jobs
+            )
+    except (
+        BatchError,
+        DispatchContractError,
+        DISPATCH_NODE.DispatchNodeError,
+        OSError,
+        subprocess.SubprocessError,
+    ) as exc:
+        reason = getattr(exc, "reason", "batch-validation-failed")
+        detail = getattr(exc, "detail", str(exc))
+        return fail(reason, 78 if reason.startswith("predecessor-process-") else 65, detail=detail)
+
+    lifecycle = select_launch_lifecycle()
+    assignment_digest = "sha256:" + hashlib.sha256(
+        args.prompt_text.encode("utf-8")
+    ).hexdigest()
+    legs = []
+    for node, adapter, hop, ordinal in assignments:
+        node_id = str(node["id"])
+        slug = replica_slug(args.slug_prefix, node_id)
+        attempt_id = stable_attempt_id(
+            route,
+            node,
+            slug,
+            args.parent,
+            parent_attempt,
+            adapter,
+            ordinal,
+        )
+        legs.append(
+            {
+                "node": node_id,
+                "adapter": adapter,
+                "hop": hop,
+                "ordinal": ordinal,
+                "slug": slug,
+                "attempt_id": attempt_id,
+                "assignment_sha256": assignment_digest,
+                "independence": independence,
+            }
+        )
+    manifest, manifest_digest, leg_digests = build_manifest(
+        replica_group=args.replica_group,
+        route_id=str(route["route_id"]),
+        parent_attempt_id=parent_attempt,
+        independence=independence,
+        members=[
+            {
+                "assignment_sha256": assignment_digest,
+                "attempt_id": str(leg["attempt_id"]),
+                "route_node": str(leg["node"]),
+                "harness": str(leg["adapter"]),
+                "fallback_hop": str(leg["hop"]),
+                "fallback_ordinal": int(leg["ordinal"]),
+            }
+            for leg in legs
+        ],
+    )
+
+    if args.action != "start":
+        print(json.dumps({
+            "schema_version": 1,
+            "state": "validated",
+            "action": args.action,
+            "replica_group": args.replica_group,
+            "independence": independence,
+            "launch_lifecycle": lifecycle,
+            "legs": legs,
+        }, separators=(",", ":"), sort_keys=True))
+        return 0
+
+    governor = ROOT / "utilities" / "model-worker-governor.py"
+    artifact_root = Path(
+        os.environ.get("AGENT_ARTIFACT_ROOT", str(agent_home / ".agent_reports"))
+    )
+    try:
+        governor_root = resolve_model_governor_root(artifact_root)
+    except DispatchContractError as exc:
+        return fail(exc.reason, 73, detail=exc.detail, admitted=0, spawned=0)
+    results: list[dict[str, object]] = []
+    pending_legs: list[dict[str, object]] = []
+    try:
+        for leg in legs:
+            existing = existing_leg_result(
+                jobs,
+                leg,
+                route,
+                repo=repo,
+                parent=args.parent,
+                parent_attempt_id=parent_attempt,
+                replica_group=args.replica_group,
+                manifest_digest=manifest_digest,
+                leg_digest=leg_digests[str(leg["attempt_id"])],
+                agent_home=agent_home,
+            )
+            if existing is None:
+                pending_legs.append(leg)
+            else:
+                results.append(existing)
+    except BatchError as exc:
+        return fail(exc.reason, 73, detail=exc.detail, admitted=0, spawned=0)
+
+    # A stable failed attempt cannot be relaunched under the same identity. Do
+    # not start an absent sibling and turn a prior terminal failure into a new
+    # partial batch.
+    if any(result.get("launch_state") == "failed" for result in results):
+        for leg in pending_legs:
+            results.append({
+                **leg,
+                "exit_code": 70,
+                "child_spawned": "0",
+                "duplicate_attempt": "0",
+                "check": "failed",
+                "launch_state": "failed",
+                "reason": "batch-peer-terminal-attempt",
+            })
+        receipt, _ = batch_receipt(
+            args=args,
+            lifecycle=lifecycle,
+            independence=independence,
+            legs=legs,
+            results=results,
+            admitted=0,
+        )
+        print(json.dumps(receipt, separators=(",", ":"), sort_keys=True))
+        return 70
+
+    tokens: list[str] = []
+    processes: list[tuple[dict[str, object], str, subprocess.Popen]] = []
+    with BatchSignalRelay() as relay:
+        if pending_legs:
+            try:
+                peer = None
+                if len(pending_legs) == 1:
+                    existing_peers = [
+                        result for result in results
+                        if result.get("launch_state") == "existing"
+                    ]
+                    if len(existing_peers) != 1:
+                        raise BatchError(
+                            "replica-partial-peer-proof-missing",
+                            f"existing={len(existing_peers)}",
+                        )
+                    peer = {
+                        "agent_home": str(agent_home.resolve(strict=False)),
+                        "attempt_id": str(existing_peers[0]["attempt_id"]),
+                        "jobs": str(jobs.resolve(strict=False)),
+                        "route": str(route_path),
+                    }
+                tokens = reserve_batch(
+                    governor,
+                    governor_root,
+                    pending_legs,
+                    manifest=manifest,
+                    manifest_digest=manifest_digest,
+                    peer=peer,
+                )
+            except BatchError as exc:
+                return fail(
+                    exc.reason,
+                    75,
+                    detail=exc.detail,
+                    admitted=0,
+                    spawned=0,
+                    existing=len(results),
+                )
+
+        for leg, token in zip(pending_legs, tokens):
+            if relay.received:
+                cancel_unclaimed(governor, governor_root, token)
+                results.append({
+                    **leg,
+                    "exit_code": 128 + relay.received[-1],
+                    "child_spawned": "0",
+                    "duplicate_attempt": "0",
+                    "check": "failed",
+                    "launch_state": "failed",
+                    "reason": "batch-interrupted-before-wrapper",
+                })
+                continue
+            command = [
+                sys.executable,
+                str(ROOT / "utilities" / "dispatch-node.py"),
+                "--route",
+                str(route_path),
+                "--node",
+                str(leg["node"]),
+                "--adapter",
+                str(leg["adapter"]),
+                "--action",
+                "start",
+                "--slug",
+                str(leg["slug"]),
+                "--qa",
+                args.qa,
+                "--parent",
+                args.parent,
+                "--prompt-text",
+                args.prompt_text,
+                "--",
+                "--attempt-id",
+                str(leg["attempt_id"]),
+                "--parent-attempt-id",
+                parent_attempt,
+                "--jobs",
+                str(jobs),
+                *(
+                    ["--log-dir", str(args.log_dir.resolve())]
+                    if args.log_dir is not None
+                    else []
+                ),
+                "--launch-lifecycle",
+                lifecycle,
+                "--fallback-hop",
+                str(leg["hop"]),
+                "--fallback-ordinal",
+                str(leg["ordinal"]),
+            ]
+            env = {
+                **os.environ,
+                GOVERNOR_RESERVATION_ENV: token,
+                "AGENT_MODEL_GOVERNOR_ROOT": str(governor_root),
+                "AGENT_DISPATCH_JOBS": str(jobs),
+            }
+            try:
+                proc = subprocess.Popen(
+                    command,
+                    cwd=ROOT,
+                    env=env,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    start_new_session=True,
+                )
+                relay.add(proc)
+                processes.append((leg, token, proc))
+            except OSError:
+                cancel_unclaimed(governor, governor_root, token)
+                results.append(
+                    {
+                        **leg,
+                        "exit_code": 70,
+                        "child_spawned": "0",
+                        "duplicate_attempt": "0",
+                        "check": "failed",
+                        "launch_state": "failed",
+                        "reason": "replica-wrapper-spawn-failed",
+                    }
+                )
+
+        if processes:
+            with ThreadPoolExecutor(max_workers=len(processes)) as executor:
+                futures = {
+                    executor.submit(collect_wrapper, item): item
+                    for item in processes
+                }
+                for future in as_completed(futures):
+                    original_leg, token, proc = futures[future]
+                    try:
+                        leg, _, proc, stdout, stderr = future.result()
+                        result = wrapper_result(leg, proc, stdout, stderr)
+                        if result["launch_state"] == "existing":
+                            checked = existing_leg_result(
+                                jobs,
+                                leg,
+                                route,
+                                repo=repo,
+                                parent=args.parent,
+                                parent_attempt_id=parent_attempt,
+                                replica_group=args.replica_group,
+                                manifest_digest=manifest_digest,
+                                leg_digest=leg_digests[str(leg["attempt_id"])],
+                                agent_home=agent_home,
+                            )
+                            if checked is None:
+                                result.update(
+                                    check="failed",
+                                    launch_state="failed",
+                                    reason="duplicate-attempt-row-unclaimed",
+                                )
+                            else:
+                                result = checked
+                        results.append(result)
+                    except Exception as exc:  # retain a typed batch receipt
+                        stop_wrapper(proc)
+                        results.append({
+                            **original_leg,
+                            "exit_code": proc.returncode if proc.returncode is not None else 70,
+                            "child_spawned": "unknown",
+                            "duplicate_attempt": "unknown",
+                            "check": "failed",
+                            "launch_state": "failed",
+                            "reason": "replica-wrapper-collect-failed:" + type(exc).__name__,
+                        })
+                    finally:
+                        cancel_unclaimed(governor, governor_root, token)
+
+        interrupted_signal = relay.received[-1] if relay.received else 0
+
+    receipt, success = batch_receipt(
+        args=args,
+        lifecycle=lifecycle,
+        independence=independence,
+        legs=legs,
+        results=results,
+        admitted=len(tokens),
+        interrupted_signal=interrupted_signal,
+    )
+    print(json.dumps(receipt, separators=(",", ":"), sort_keys=True))
+    if interrupted_signal:
+        return 128 + interrupted_signal
+    return 0 if success else 70
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

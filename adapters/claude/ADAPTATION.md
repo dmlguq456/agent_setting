@@ -109,11 +109,11 @@ main sessions and the adapter-owned statusline script. Its CLI supports one-off
 model/effort overrides, so dispatch model selection follows the core rule:
 main/orchestrator chooses per job and the wrapper only reflects that choice:
 
-- Standard+ depth-1 owners run under `utilities/claude-session-supervisor.py`:
+- Standard+ dispatch-depth-1 owners run under `utilities/claude-session-supervisor.py`:
   the first print turn uses one generated `--session-id`, exact child batches are
   joined outside the model, and each batch resumes once with `--resume`. The
   wrapper suppresses intermediate `result` rows and exposes only the final result
-  to the attempt-specific `.claude.jsonl`. Quick and depth-2 one-shot workers keep
+  to the attempt-specific `.claude.jsonl`. Quick and dispatch-depth-2 one-shot workers keep
   `--no-session-persistence`. `--completion-delivery auto` probes both CLI flags;
   forced supervised mode fails before registration, and the checked legacy path
   is reported as `poll-fallback`. Before each supervised turn the bridge writes
@@ -143,10 +143,15 @@ main/orchestrator chooses per job and the wrapper only reflects that choice:
   forwarding termination signals and recording the lifecycle on wrapper output
   and the exact jobs row. Outside that scope it keeps the existing `detached`
   launch. The explicit long-lived-namespace override also remains detached.
-- A dispatch-depth-2 claim resolves one live exact depth-1 owner and seals its
-  `parent_attempt_id`. The final parent check, spawn, and PID/start/PGID publish
-  share the jobs lock. Owner death then reaps only exact-bound child groups via
-  the shared bounded cascade; retries with the same slug are never targeted.
+- A dispatch-depth-2 claim resolves one live exact dispatch-depth-1 owner and
+  seals its `parent_attempt_id`. The row stays registered-only until a blocked
+  parent-death-safe fence has a complete PID/start/namespace/leader-PGID
+  identity; publication and `launch_claimed=1` share the jobs lock, and the
+  fence records `launch_started=1` immediately before exec. Parent identity is
+  rechecked before fence release. Foreground fences retain parent-death
+  coupling, procfs-incomplete group scans fail closed, and teardown signals
+  only a current exact group leader; retries with the same slug are never
+  targeted.
 
 Codex and future adapters should preserve the dispatch invariant, but must map
 it onto their own thread/subagent/session/status surfaces instead of copying the

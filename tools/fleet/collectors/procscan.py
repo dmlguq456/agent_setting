@@ -31,7 +31,8 @@ def _read_cwd(pid):
 def read_environ(pid):
     """/proc/<pid>/environ → dict[str,str] (or {} on failure). pid: int or str. Read-only, same-user only."""
     try:
-        raw = open("/proc/%s/environ" % pid, "rb").read()
+        with open("/proc/%s/environ" % pid, "rb") as handle:
+            raw = handle.read()
     except OSError:
         return {}
     env = {}
@@ -43,13 +44,15 @@ def read_environ(pid):
 
 
 def read_proc_start(pid):
-    """/proc/<pid>/stat field 22 (starttime, clock ticks since boot) as a str, else None.
+    """Live /proc/<pid>/stat field 22 (starttime) as a str, else None.
 
     This is the PID-reuse guard: pid alone is not an identity, (pid, start-time) is. The
     claude registry stores the same value as `procStart`, so the two compare directly.
     Field 22 is counted from field 1, and comm (field 2) is parenthesized and may itself
     contain spaces/parens — so split AFTER the last ')' and index from there.
-    Windows / unreadable /proc → None (tolerate: callers treat None as "no evidence").
+    Zombie processes are already terminal and therefore return None, matching the
+    authoritative governor's process identity rule. Windows / unreadable /proc →
+    None (tolerate: callers treat None as "no evidence").
     """
     try:
         with open("/proc/%s/stat" % pid) as f:
@@ -58,6 +61,8 @@ def read_proc_start(pid):
         return None
     try:
         rest = data[data.rindex(")") + 1:].split()
+        if rest[0] == "Z":
+            return None
         return rest[19]           # field 22 = index 19 after (pid, comm) are consumed
     except (ValueError, IndexError):
         return None
@@ -332,6 +337,7 @@ def scan(harness_filter=None):
             route_file=env.get("AGENT_ROUTE_FILE") or None,
             route_id=env.get("AGENT_ROUTE_ID") or None,
             route_node=env.get("AGENT_ROUTE_NODE") or None,
+            attempt_id=env.get("AGENT_DISPATCH_ATTEMPT_ID") or None,
             assigned_contract=env.get("AGENT_DISPATCH_ASSIGNED_CONTRACT") or None,
             unit=env.get("AGENT_DISPATCH_UNIT") or None,
             worker_type=env.get("AGENT_DISPATCH_WORKER_TYPE") or None,

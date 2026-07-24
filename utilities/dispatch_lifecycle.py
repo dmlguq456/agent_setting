@@ -12,7 +12,12 @@ import subprocess
 import time
 from typing import Mapping
 
-from dispatch_contract import process_identity_is_live, process_start_ticks
+from dispatch_contract import (
+    process_group_observation,
+    process_identity_is_live,
+    process_start_ticks,
+    signal_exact_process_group,
+)
 
 DETACHED = "detached"
 FOREGROUND_SCOPED = "foreground-scoped"
@@ -88,22 +93,65 @@ def select_launch_lifecycle(
 class ForegroundResult:
     exit_code: int
     failure: str
+    group_empty: bool = True
 
 
-def _terminate_group(proc: subprocess.Popen, signum: int) -> None:
+def _group_empty(pgid: int) -> bool | None:
+    observation = process_group_observation(pgid)
+    if observation.state == "empty":
+        return True
+    if observation.state == "populated":
+        return False
+    return None
+
+
+def _terminate_group(proc: subprocess.Popen, signum: int, leader_start: str) -> str:
+    return signal_exact_process_group(proc.pid, leader_start, signum)
+
+
+def _wait_group_empty(pgid: int, deadline: float, poll_interval: float) -> bool:
+    while time.monotonic() < deadline:
+        if _group_empty(pgid) is True:
+            return True
+        time.sleep(max(0.01, min(poll_interval, deadline - time.monotonic())))
+    return _group_empty(pgid) is True
+
+
+def _stop_direct_child(proc: subprocess.Popen, grace: float = 0.5) -> None:
+    """Best-effort cleanup when exact group identity cannot be established."""
+
+    if proc.poll() is not None:
+        return
     try:
-        os.killpg(proc.pid, signum)
-    except ProcessLookupError:
+        proc.terminate()
+        proc.wait(timeout=grace)
+        return
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    try:
+        proc.kill()
+        proc.wait(timeout=grace)
+    except (OSError, subprocess.TimeoutExpired):
         pass
 
 
-def _bounded_group_stop(proc: subprocess.Popen, grace: float = 5.0) -> int:
-    _terminate_group(proc, signal.SIGTERM)
+def _bounded_group_stop(
+    proc: subprocess.Popen,
+    leader_start: str,
+    *,
+    grace: float = 5.0,
+    poll_interval: float = 0.05,
+) -> tuple[int, bool]:
+    _terminate_group(proc, signal.SIGTERM, leader_start)
+    empty = _wait_group_empty(proc.pid, time.monotonic() + grace, poll_interval)
+    if not empty:
+        _terminate_group(proc, signal.SIGKILL, leader_start)
+        empty = _wait_group_empty(proc.pid, time.monotonic() + grace, poll_interval)
     try:
-        return proc.wait(timeout=grace)
+        exit_code = proc.wait(timeout=0.5)
     except subprocess.TimeoutExpired:
-        _terminate_group(proc, signal.SIGKILL)
-        return proc.wait()
+        exit_code = proc.poll()
+    return (exit_code if exit_code is not None else -signal.SIGKILL), empty
 
 
 def wait_foreground(
@@ -118,36 +166,66 @@ def wait_foreground(
 
     received: list[int] = []
     previous: dict[int, object] = {}
+    leader_start = process_start_ticks(proc.pid)
+    if not leader_start:
+        _stop_direct_child(proc)
+        return ForegroundResult(
+            proc.poll() if proc.poll() is not None else -1,
+            "process-identity-unavailable",
+            False,
+        )
 
     def forward(signum: int, _frame: object) -> None:
         received.append(signum)
-        _terminate_group(proc, signum)
+        _terminate_group(proc, signum, leader_start)
 
-    for signum in (signal.SIGINT, signal.SIGTERM):
+    forwarded_signals = [signal.SIGINT, signal.SIGTERM]
+    if hasattr(signal, "SIGHUP"):
+        forwarded_signals.append(signal.SIGHUP)
+    for signum in forwarded_signals:
         previous[signum] = signal.getsignal(signum)
         signal.signal(signum, forward)
     try:
         bounded_timeout = bounded_foreground_timeout(timeout)
-        if parent_pid is not None and parent_pid_start:
-            deadline = time.monotonic() + bounded_timeout
-            while True:
-                exit_code = proc.poll()
-                if exit_code is not None:
-                    break
-                if not process_identity_is_live(parent_pid, parent_pid_start):
-                    exit_code = _bounded_group_stop(proc)
-                    return ForegroundResult(exit_code, "parent-terminated")
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    exit_code = _bounded_group_stop(proc)
-                    return ForegroundResult(exit_code, "timeout")
-                time.sleep(min(max(poll_interval, 0.01), remaining))
-        else:
-            try:
-                exit_code = proc.wait(timeout=bounded_timeout)
-            except subprocess.TimeoutExpired:
-                exit_code = _bounded_group_stop(proc)
-                return ForegroundResult(exit_code, "timeout")
+        deadline = time.monotonic() + bounded_timeout
+        while True:
+            exit_code = proc.poll()
+            group_empty = _group_empty(proc.pid)
+            if exit_code is not None and group_empty is True:
+                break
+            if received:
+                exit_code, group_empty = _bounded_group_stop(
+                    proc, leader_start, poll_interval=poll_interval
+                )
+                return ForegroundResult(
+                    exit_code, f"signal-{received[-1]}", group_empty
+                )
+            if (
+                parent_pid is not None
+                and parent_pid_start
+                and not process_identity_is_live(parent_pid, parent_pid_start)
+            ):
+                exit_code, group_empty = _bounded_group_stop(
+                    proc, leader_start, poll_interval=poll_interval
+                )
+                return ForegroundResult(exit_code, "parent-terminated", group_empty)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                exit_code, group_empty = _bounded_group_stop(
+                    proc, leader_start, poll_interval=poll_interval
+                )
+                return ForegroundResult(exit_code, "timeout", group_empty)
+            time.sleep(min(max(poll_interval, 0.01), remaining))
+    except BaseException:
+        try:
+            _exit_code, group_empty = _bounded_group_stop(
+                proc, leader_start, poll_interval=poll_interval
+            )
+            if not group_empty:
+                _stop_direct_child(proc)
+        except BaseException:
+            _stop_direct_child(proc)
+        raise
     finally:
         for signum, handler in previous.items():
             signal.signal(signum, handler)

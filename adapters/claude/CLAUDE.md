@@ -45,6 +45,8 @@ satisfy the spec-read gate before mutation.
 
 Every standard+ same/cross-harness dispatch-depth-2 headless target uses
 `stage-dispatch-fallback.py`, which invokes the checked adapter wrapper directly.
+A two-way `replica_group` instead uses one checked `dispatch-batch.py` call so
+both governor slots are reserved atomically and both wrappers launch concurrently.
 Dispatch contract v3 atomically claims one stable attempt row before spawn and
 starts no child for a duplicate claim. Broker v1/v2 routes are read-only migration
 inputs; the retired broker exposes only legacy `status`/`stop`. Claude native

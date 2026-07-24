@@ -52,6 +52,60 @@ class DispatchArtifactRootTests(unittest.TestCase):
             self.repo,
         )
         self.canonical = str(self.repo / ".agent_reports")
+        evidence = self.base / "quick-evidence.json"
+        evidence.write_text(
+            json.dumps(
+                {
+                    "candidates": [
+                        {
+                            "harness": adapter,
+                            "transport": "headless",
+                            "surface": "registered-headless",
+                            "status": "supported",
+                            "probe_source": "artifact-root-fixture",
+                            "probe_time": "2026-07-24T00:00:00Z",
+                        }
+                        for adapter in ("claude", "codex", "opencode")
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.route_file = self.base / "quick-route.json"
+        run(
+            [
+                sys.executable,
+                str(ROOT / "utilities" / "capability-route.py"),
+                "compile",
+                "--capability",
+                "autopilot-code",
+                "--capability-mode",
+                "dev",
+                "--intensity",
+                "quick",
+                "--cwd",
+                str(self.worktree),
+                "--artifact-root",
+                self.canonical,
+                "--registered-headless-evidence",
+                str(evidence),
+                "--tracking",
+                "tracked",
+                "--spec-read",
+                "artifact-root-fixture",
+                "--drift-verdict",
+                "within-spec",
+                "--workflow-mode",
+                "tracked",
+                "--artifact-guard",
+                "artifact-root-fixture",
+                "--output",
+                str(self.route_file),
+            ],
+            ROOT,
+        )
+        self.route = json.loads(self.route_file.read_text(encoding="utf-8"))
+        self.route_node = self.route["nodes"][0]
 
     def tearDown(self):
         self.temp.cleanup()
@@ -72,6 +126,22 @@ class DispatchArtifactRootTests(unittest.TestCase):
             "--intensity",
             "quick",
             "--inherit-model-settings",
+            "--route-file",
+            str(self.route_file),
+            "--route-id",
+            self.route["route_id"],
+            "--route-hash",
+            self.route["route_hash"],
+            "--route-node",
+            "one-shot",
+            "--registry-digest",
+            self.route["registry_digest"],
+            "--write-scope",
+            ";".join(self.route_node["write_scope"]),
+            "--completion-gate",
+            self.route_node["completion_gate"],
+            "--attempt-id",
+            f"att-{adapter}-artifact-root",
             "--jobs",
             str(self.jobs),
             "--log-dir",
@@ -87,7 +157,9 @@ class DispatchArtifactRootTests(unittest.TestCase):
             self.assertIn(extra_command, result.stdout)
         registry = self.jobs.read_text(encoding="utf-8")
         self.assertIn(f"artifact_root={self.canonical}", registry)
-        prompt = next(self.logs.glob(f"{adapter}-artifact-root.{adapter}.prompt.txt"))
+        prompt = next(
+            self.logs.glob(f"{adapter}-artifact-root.*.{adapter}.prompt.txt")
+        )
         body = prompt.read_text(encoding="utf-8")
         self.assertIn(self.canonical, body)
         self.assertIn("read-only shadow state", body)
