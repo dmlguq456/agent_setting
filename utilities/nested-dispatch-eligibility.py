@@ -86,6 +86,12 @@ def evaluate(args: argparse.Namespace) -> dict[str, str]:
             "dispatch-contract-v3",
             "noncanonical-parent-transport",
         )
+    elif args.child_harness == "opencode":
+        status, source, failure = (
+            "unsupported",
+            "dispatch-contract-v3",
+            "opencode-standard-depth2-unsupported",
+        )
     elif (
         args.parent_harness == "codex"
         and args.parent_transport == "headless"

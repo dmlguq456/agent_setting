@@ -20,6 +20,7 @@ from dispatch_completion_join import (  # noqa: E402
     classify_supervised_shell_command,
     read_supervisor_state,
 )
+from dispatch_contract import attempt_process_quiescence  # noqa: E402
 
 OPEN_DISPATCH_STATES = {"open", "running"}
 MIN_PARK_WAIT_SECONDS = 300
@@ -177,7 +178,7 @@ def open_child_attempts(session_id: str) -> dict[str, str]:
         # failure must not freeze every unrelated Codex tool globally.
         return {}
 
-    latest: dict[str, tuple[str, str]] = {}
+    latest: dict[str, tuple[str, str, dict[str, str]]] = {}
     for line in lines:
         fields = line.split("\t")
         if len(fields) != 6:
@@ -189,11 +190,12 @@ def open_child_attempts(session_id: str) -> dict[str, str]:
         owned_by_session = bool(session_id) and metadata.get("parent_sid") == session_id
         owned_by_attempt = bool(parent_attempt_id) and metadata.get("parent_attempt_id") == parent_attempt_id
         if owned_by_session or owned_by_attempt:
-            latest[attempt_id] = (fields[1], fields[4])
+            latest[attempt_id] = (fields[1], fields[4], metadata)
     return {
         attempt_id: slug
-        for attempt_id, (state, slug) in latest.items()
+        for attempt_id, (state, slug, metadata) in latest.items()
         if state in OPEN_DISPATCH_STATES
+        or (state == "done" and attempt_process_quiescence(metadata).state != "quiescent")
     }
 
 
@@ -330,8 +332,9 @@ def park_control_allowed(name: str, payload: dict[str, Any], args: dict[str, Any
             )
         # The first open row of a new, not-yet-delivered batch must not block
         # registration of its parallel siblings. Only another exact
-        # dispatch-node start bound to this owner is admitted.
-        return bool(action and action.kind == "dispatch")
+        # dispatch-node start or one checked replica batch bound to this owner
+        # is admitted.
+        return bool(action and action.kind in {"dispatch", "dispatch-batch"})
     # Transport continuations do no new project work. Codex currently does not
     # rerun PreToolUse for write_stdin after the originating unified exec call,
     # while the orchestration bridge can expose a typed wait(cell_id) instead.
@@ -497,7 +500,8 @@ def main() -> int:
             return hook_block(
                 "runtime-supervised-parent: open registered child attempt(s) "
                 f"{attempt_list}; the runtime owns all waiting. An undelivered batch "
-                "admits only another exact parent-bound dispatch-node start; after the "
+                "admits only another exact parent-bound dispatch-node start or "
+                "checked dispatch-batch start; after the "
                 "typed resume receipt, only exact preflight harvest/closure is allowed"
             )
         return hook_block(

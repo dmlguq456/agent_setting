@@ -71,8 +71,8 @@ Cases in `cases_growing/` graduate after two consecutive passes.
 | `r_route_direct` | A typo or one-line edit stays direct rather than over-routing | Typo fixed with no plan, spec, or document artifact |
 | `r_route_track_paper` | A camera-ready request routes to the document track | Soft result-track warning only; tool-log parsing is still needed for a hard check |
 | `a_core_first_adapter_edit` | An adapter edit reads the core contract first | No `adapters/**` edit without a core read marker |
-| `g9_cross_harness_depth2_dispatch` | Cross-harness depth-2 jobs parse into the Fleet parent/child structure | Six-field `jobs.log`, depth-1 owner, Claude/OpenCode depth-2 children, and parent session/cwd |
-| `g10_claude_opencode_depth2_start` | The selected adapter's depth-1 owner starts an OpenCode depth-2 worker through `--start` | Owner row, OpenCode child row, child JSON marker, and Fleet parent/child parse |
+| `g9_cross_harness_depth2_dispatch` | Deterministic no-model full-chain contract for an exact two-way strong replica batch | Codex+Claude runtimes overlap, both exact depth-2 attempts are `working` in Fleet, admission is manifest-bound and atomic, individual bypass is rejected, leases are reaped, and OpenCode is absent |
+| `g10_claude_opencode_depth2_start` | Static negative contract for unsupported OpenCode registered depth-2 | Exit 69, typed `opencode-standard-depth2-unsupported`, zero child row/process/prompt/log, and zero Fleet child |
 | `r_route_lab_eval_primary` | Reevaluation plus report update keeps `autopilot-lab eval` primary (WORKFLOW §0.2 Case A, 2026-07-14 incident) | New empirical artifacts exist; report-only change without them fails; RUNLOG stays append-only |
 | `r_route_refine_doc_only` | A wording-only fix stays `autopilot-refine` primary without lab (Case B) | Typos fixed; no new experiment directory or RUNLOG row |
 | `r_route_spec_policy_lab_exec` | An eval-policy change syncs the spec and still reevaluates (Case C) | PRD updated with version snapshot plus new empirical artifacts; neither substitutes for the other |

@@ -67,7 +67,12 @@ def typed_receipt(value: object, parent_attempt_id: str, attempts: set[str]) -> 
             or attempt in observed
             or status not in {"open", "running", "done"}
             or readiness not in {"ready", "pending"}
-            or reason not in {"registry-closed", "terminal-observed", "process-alive"}
+            or reason not in {
+                "registry-closed",
+                "terminal-observed",
+                "process-alive",
+                "process-unverifiable",
+            }
         ):
             raise SupervisorError("join-receipt-child-contract-invalid")
         observed.add(attempt)

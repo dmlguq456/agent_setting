@@ -144,13 +144,13 @@ class WrapperInternalWaitBoundTest(unittest.TestCase):
             self.assertTrue(math.isfinite(b) and b > 0, msg=f"v={v} -> {b}")
 
     def test_wait_foreground_never_waits_indefinitely_on_sentinel(self):
-        proc = mock.Mock(pid=5150)
-        proc.wait.return_value = 0
-        L.wait_foreground(proc, 0)
-        proc.wait.assert_called_once()
-        self.assertEqual(
-            proc.wait.call_args.kwargs.get("timeout"), L.FOREGROUND_TIMEOUT_DEFAULT
-        )
+        proc = subprocess.Popen(["sleep", "60"], start_new_session=True)
+        with mock.patch.object(L, "bounded_foreground_timeout", return_value=0.05) as bounded:
+            outcome = L.wait_foreground(proc, 0, poll_interval=0.01)
+        bounded.assert_called_once_with(0)
+        self.assertEqual(outcome.failure, "timeout")
+        self.assertTrue(outcome.group_empty)
+        self.assertIsNotNone(proc.poll())
 
 
 class HelperWiringTest(unittest.TestCase):

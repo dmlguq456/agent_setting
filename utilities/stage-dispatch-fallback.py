@@ -39,7 +39,11 @@ from dispatch_lifecycle import (  # noqa: E402
     bounded_foreground_timeout,
     select_launch_lifecycle,
 )
-from dispatch_contract import DispatchContractError, validate_attempt_metadata  # noqa: E402
+from dispatch_contract import (  # noqa: E402
+    DispatchContractError,
+    attempt_process_quiescence,
+    validate_attempt_metadata,
+)
 from worker_bootstrap import assigned_contract, worker_type_for_kind  # noqa: E402
 
 ORDER = ["same-harness-headless", "cross-harness-headless", "native-subagent", "inline"]
@@ -203,6 +207,12 @@ def terminal_attempt_state(
         "terminal_action": "registry-terminal",
         "note": note or "unknown",
     }
+    process = attempt_process_quiescence(row)
+    fields.update(process_state=process.state, process_reason=process.reason)
+    if process.state == "live":
+        return "draining", fields
+    if process.state != "quiescent":
+        return "fail-closed", fields
     if note == "completed-marker":
         return "terminal", fields
     if note == "dead-capacity":
@@ -503,7 +513,11 @@ def watch_launched_attempt(args, route, node, attempt_id, launch_fields):
             terminal = terminal_attempt_state(
                 args.jobs, route["route_id"], node["id"], attempt_id
             )
-            return terminal if terminal is not None else ("fail-closed", last)
+            if terminal is None:
+                return "fail-closed", last
+            if terminal[0] == "draining":
+                return "observed", terminal[1]
+            return terminal
         return "observed", last
 
     # Establish a file/heartbeat fingerprint before the first deadline. This
@@ -686,6 +700,13 @@ def main() -> int:
         return fail("legacy-broker-route-read-only", 76, contract_version=str(contract or 1), child_spawned="0")
     if args.broker_root is not None or args.broker_timeout is not None:
         return fail("retired-broker-option", 64, child_spawned="0")
+    if node.get("replica_group") and args.action in {"register", "start"}:
+        return fail(
+            "replica-group-batch-required",
+            65,
+            replica_group=str(node["replica_group"]),
+            child_spawned="0",
+        )
 
     inherited_jobs = os.environ.get("AGENT_DISPATCH_JOBS")
     args.jobs = (args.jobs or Path(inherited_jobs or ROOT / ".dispatch/jobs.log")).resolve()
@@ -766,6 +787,18 @@ def main() -> int:
                             fields.get("reason")
                             or (worker_failure if worker_failure != "-" else "wrapper-exit")
                         )
+                        if failure_reason in {
+                            "predecessor-process-draining",
+                            "predecessor-process-unverifiable",
+                        }:
+                            return fail(
+                                failure_reason,
+                                78,
+                                attempt_id=attempt_id,
+                                child_spawned="0",
+                                detail=fields.get("detail", "-"),
+                                attempt_trace="|".join(attempts),
+                            )
                         direct_failures.append({
                             "attempt_id": attempt_id,
                             "exit": str(result.returncode),

@@ -22,7 +22,11 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import (  # noqa: E402
     DispatchContractError,
+    GOVERNOR_RESERVATION_ENV,
     anchored_capacity_failure,
+    annotate_attempt_row,
+    attempt_launch_is_available,
+    cancel_governor_reservation,
     claim_attempt_row,
     close_attempt_row,
     completion_marker_gate,
@@ -32,7 +36,11 @@ from dispatch_contract import (  # noqa: E402
     new_attempt_id,
     parse_registry_metadata,
     resolve_global_registry,
+    resolve_model_governor_root,
+    reserve_governor_token,
+    spawn_claimed_attempt,
     validate_nested_eligibility,
+    wait_governor_reservation_claim,
 )
 from worker_bootstrap import (  # noqa: E402
     assigned_contract,
@@ -490,7 +498,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         pipe += f",parent_cwd={_effective_parent_cwd(args)}"
     if args.worker_role:
         pipe += f",worker_role={args.worker_role}"
-    pipe += f",worker_type={args.worker_type}"
+    pipe += f",worker_type={args.worker_type},runtime_sandbox=adapter-default"
     pipe += f",assigned_contract={args.assigned_contract}"
     if args.unit:
         pipe += f",unit={args.unit}"
@@ -514,7 +522,10 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},variant={settings['variant']}"
     pipe += f",artifact_root={args.artifact_root},log_file={args.log_path}"
     if args.attempt_id:
-        pipe += f",attempt_id={args.attempt_id},launch_authority={args.launch_authority},fallback_ordinal={args.fallback_ordinal}"
+        pipe += (
+            f",attempt_id={args.attempt_id},launch_authority={args.launch_authority}"
+            f",fallback_ordinal={args.fallback_ordinal},launch_fence=registry-v1"
+        )
     if args.capacity_retry:
         pipe += (
             f",capacity_retry=1,prior_attempt_id={args.prior_attempt_id}"
@@ -528,11 +539,23 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
                   "capacity_retry": "1"} if args.capacity_retry else None)
     quick_exclusive = ({"route_id": args.route_id, "route_node": args.route_node}
                        if getattr(args, "quick_attempt", False) else None)
+    preclaim = None
+    if args.action == "start" and args.route_file:
+        preclaim = lambda lines: completion_marker_gate(
+            args.route_file,
+            args.route_node,
+            args.action,
+            args.agent_home,
+            jobs,
+            registry_lines=lines,
+        )
+    args.launch_preclaim = preclaim
     return claim_attempt_row(
-        jobs, args.attempt_id, row, launch=args.action == "start",
+        jobs, args.attempt_id, row, launch=False,
         exclusive_metadata=exclusive,
         exclusive_live_metadata=quick_exclusive,
         terminal_attempt_limit=getattr(args, "quick_attempt_limit", None),
+        preclaim=None,
     )
 
 
@@ -676,7 +699,7 @@ def watch_early_death(
     try:
         tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
     except OSError:
-        return None
+        tail = ""
     death = scan_anchored_death(tail)
     if death:
         return death
@@ -855,10 +878,22 @@ def validate_route_record(args: argparse.Namespace) -> int:
         if result.stderr: print(result.stderr,end="",file=sys.stderr)
         return fail("worker-route-validation-failed",result.returncode,route_file=args.route_file)
     args.route_validation=result.stdout.strip()
+    early_jobs = Path(
+        args.jobs
+        or os.environ.get("AGENT_DISPATCH_JOBS", "")
+        or args.agent_home / ".dispatch" / "jobs.log"
+    )
     try:
-        completion_marker_gate(args.route_file, args.route_node, args.action, args.agent_home)
+        completion_marker_gate(
+            args.route_file, args.route_node, args.action, args.agent_home, early_jobs
+        )
     except DispatchContractError as e:
-        return fail(e.reason, 65, detail=e.detail, child_spawned="0")
+        return fail(
+            e.reason,
+            78 if e.reason.startswith("predecessor-process-") else 65,
+            detail=e.detail,
+            child_spawned="0",
+        )
     return 0
 
 
@@ -917,6 +952,14 @@ def main(argv: list[str]) -> int:
     rc = validate_route_record(args)
     if rc != 0:
         return rc
+    if args.dispatch_depth == 2 and action in {"register", "start"}:
+        return fail(
+            "opencode-standard-depth2-unsupported",
+            69,
+            detail=("OpenCode lacks exact parent binding, foreground lifecycle, and "
+                    "supervisor snapshot parity"),
+            child_spawned="0",
+        )
     try:
         attempt_policy = headless_attempt_policy(
             route_file=args.route_file, route_node=args.route_node,
@@ -960,34 +1003,75 @@ def main(argv: list[str]) -> int:
             ensure_global_registry_writable(jobs)
     except DispatchContractError as e:
         return fail(e.reason, 73, detail=e.detail, child_spawned="0")
+    try:
+        completion_marker_gate(
+            args.route_file, args.route_node, action, agent_home, jobs
+        )
+    except DispatchContractError as e:
+        return fail(e.reason, 78 if e.reason.startswith("predecessor-process-") else 65,
+                    detail=e.detail, child_spawned="0")
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
     prompt_text, prompt_source = prompt(args)
-    prompt_path = log_dir / f"{args.slug}.opencode.prompt.txt"
+    prompt_name = (
+        f"{args.slug}.{args.attempt_id}.opencode.prompt.txt"
+        if args.attempt_id
+        else f"{args.slug}.opencode.prompt.txt"
+    )
+    prompt_path = log_dir / prompt_name
     log_name = (f"{args.slug}.{args.attempt_id}.opencode.jsonl"
                 if args.route_id and args.attempt_id else f"{args.slug}.opencode.jsonl")
     log_path = log_dir / log_name
     args.log_path = log_path
     command = shell_command(args, prompt_path, log_path)
 
+    governor = ROOT / "utilities" / "model-worker-governor.py"
+    try:
+        governor_root = resolve_model_governor_root(args.artifact_root)
+    except DispatchContractError as exc:
+        return fail(exc.reason, 73, detail=exc.detail, child_spawned="0")
+    reservation_token = ""
     if action in ("register", "start"):
         prompt_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        prompt_path.write_text(prompt_text, encoding="utf-8")
         if action == "start":
-            governor = ROOT / "utilities" / "model-worker-governor.py"
-            governor_root = Path(
-                os.environ.get("AGENT_MODEL_GOVERNOR_ROOT")
-                or Path(args.artifact_root) / ".runtime" / "model-worker-governor"
-            )
-            gate = subprocess.run([sys.executable, str(governor), "--root", str(governor_root), "check", "--class", "dispatch"])
-            if gate.returncode != 0:
-                return fail("model-worker-governor-denied", 75)
+            try:
+                reservation_token, _reservation_receipt = reserve_governor_token(
+                    governor,
+                    governor_root,
+                    "dispatch",
+                    provided_token=os.environ.get(GOVERNOR_RESERVATION_ENV, ""),
+                )
+            except DispatchContractError as exc:
+                return fail(exc.reason, 75, detail=exc.detail, child_spawned="0")
         try:
             args.attempt_claimed = append_job(jobs, args)
+            if action == "start" and not args.attempt_claimed:
+                args.attempt_claimed = attempt_launch_is_available(
+                    jobs, args.attempt_id
+                )
         except DispatchContractError as e:
+            cancel_governor_reservation(governor, governor_root, reservation_token)
             return fail(e.reason, 73, detail=e.detail, child_spawned="0")
+        if args.attempt_claimed:
+            try:
+                prompt_path.write_text(prompt_text, encoding="utf-8")
+            except OSError as exc:
+                annotate_attempt_row(
+                    jobs, args.attempt_id, {"launch_outcome": "never-launched"}
+                )
+                cancel_governor_reservation(governor, governor_root, reservation_token)
+                close_job_row(
+                    jobs, args.slug, args.worktree,
+                    "prompt-materialization-failed", "", args.attempt_id,
+                )
+                return fail(
+                    "prompt-materialization-failed", 73,
+                    detail=str(exc), child_spawned="0",
+                )
     else:
         args.attempt_claimed = False
+    if action == "start" and not args.attempt_claimed:
+        cancel_governor_reservation(governor, governor_root, reservation_token)
     if action == "start" and args.attempt_claimed:
         dispatch_env = {
             **{key: value for key, value in os.environ.items() if not key.startswith("AGENT_DISPATCH_BROKER_")},
@@ -1000,7 +1084,10 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_REGISTERED_WORKER": str(int(bool(args.registered_worker))),
             "AGENT_DISPATCH_FALLBACK_HOP": args.fallback_hop,
             "AGENT_DISPATCH_INTENSITY": args.intensity,
+            "AGENT_DISPATCH_SELF_SLUG": args.slug,
             "AGENT_DISPATCH_PARENT_SLUG": args.parent_slug or "",
+            "AGENT_DISPATCH_ATTEMPT_ID": args.attempt_id,
+            "AGENT_DISPATCH_PARENT_ATTEMPT_ID": "",
             "AGENT_DISPATCH_PARENT_SESSION_ID": args.parent_session_id or "",
             "AGENT_DISPATCH_PARENT_CWD": (_effective_parent_cwd(args) if (args.parent_slug or args.parent_session_id) else ""),
             "AGENT_DISPATCH_WORKER_TYPE": args.worker_type,
@@ -1012,6 +1099,7 @@ def main(argv: list[str]) -> int:
             "AGENT_ROUTE_ID": args.route_id or "",
             "AGENT_ROUTE_NODE": args.route_node or "",
             "AGENT_MODEL_GOVERNOR_ROOT": str(governor_root),
+            GOVERNOR_RESERVATION_ENV: reservation_token,
             "AGENT_DISPATCH_JOBS": str(jobs),
             "AGENT_DISPATCH_CURRENT_HARNESS": "opencode",
             "AGENT_DISPATCH_CURRENT_TRANSPORT": "headless",
@@ -1032,24 +1120,89 @@ def main(argv: list[str]) -> int:
             dispatch_env["AGENT_DISPATCH_UNIT"] = args.unit
         else:
             dispatch_env.pop("AGENT_DISPATCH_UNIT", None)
-        try:
-            proc = subprocess.Popen(
-                [sys.executable, str(governor), "--root", str(governor_root),
-                 "run", "--class", "dispatch", "--", "sh", "-c", command],
+        def spawn_worker(gate_fd: int) -> subprocess.Popen:
+            return subprocess.Popen(
+                [
+                    sys.executable, str(ROOT / "utilities" / "launch-fence.py"),
+                    "--parent-pid", str(os.getpid()),
+                    "--gate-fd", str(gate_fd),
+                    "--jobs", str(jobs), "--attempt-id", args.attempt_id,
+                    "--post-release-parent-death-signal", "none", "--",
+                    sys.executable, str(governor), "--root", str(governor_root),
+                    "run", "--class", "dispatch", "--", "sh", "-c", command,
+                ],
                 start_new_session=True,
                 env=dispatch_env,
+                pass_fds=(gate_fd,),
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+        launch_metadata = {}
+        if args.dispatch_depth >= 2 and os.environ.get("AGENT_DISPATCH_CHILD") == "1":
+            launch_metadata["pid_scope"] = "namespace-local"
+        try:
+            proc, launch_metadata = spawn_claimed_attempt(
+                jobs,
+                args.attempt_id,
+                parent_binding=None,
+                spawn=spawn_worker,
+                launch_metadata=launch_metadata,
+                preclaim=getattr(args, "launch_preclaim", None),
+            )
+        except DispatchContractError as exc:
+            if exc.reason == "attempt-launch-already-claimed":
+                cancel_governor_reservation(
+                    governor, governor_root, reservation_token
+                )
+                return fail(
+                    exc.reason, 73, detail=exc.detail,
+                    attempt_id=args.attempt_id, child_spawned="0",
+                )
+            outcome = (
+                "reaped-before-publish"
+                if exc.reason == "attempt-launch-identity-record-failed"
+                else (
+                    "launch-cleanup-unverified"
+                    if exc.reason == "attempt-launch-cleanup-unverified"
+                    else "never-launched"
+                )
+            )
+            annotate_attempt_row(jobs, args.attempt_id, {"launch_outcome": outcome})
+            cancel_governor_reservation(governor, governor_root, reservation_token)
+            close_job_row(jobs, args.slug, args.worktree, "launch-error", "", args.attempt_id)
+            return fail(exc.reason, 73, detail=exc.detail, attempt_id=args.attempt_id)
         except OSError as exc:
+            annotate_attempt_row(
+                jobs, args.attempt_id, {"launch_outcome": "never-launched"}
+            )
+            cancel_governor_reservation(governor, governor_root, reservation_token)
             close_job_row(jobs, args.slug, args.worktree, "launch-error", "", args.attempt_id)
             return fail("child-launch-failed", 70, detail=str(exc), attempt_id=args.attempt_id)
-        start_ticks = process_start_ticks(proc.pid)
-        launch_identity = f"pid={proc.pid}" + (f",pid_start={start_ticks}" if start_ticks else "")
-        if args.dispatch_depth >= 2 and os.environ.get("AGENT_DISPATCH_CHILD") == "1":
-            launch_identity += ",pid_scope=namespace-local"
-        annotate_job_row(jobs, args.slug, args.worktree, launch_identity, args.attempt_id)
+        start_ticks = launch_metadata.get("pid_start", "")
+        try:
+            args.governor_reservation = wait_governor_reservation_claim(
+                governor, governor_root, reservation_token, proc
+            )
+        except DispatchContractError as exc:
+            try:
+                os.killpg(proc.pid, signal.SIGTERM)
+                proc.wait(timeout=0.5)
+            except (ProcessLookupError, subprocess.TimeoutExpired):
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                    proc.wait(timeout=0.5)
+                except (ProcessLookupError, subprocess.TimeoutExpired):
+                    pass
+            cancel_governor_reservation(governor, governor_root, reservation_token)
+            close_job_row(
+                jobs, args.slug, args.worktree,
+                "governor-reservation-transfer", "", args.attempt_id,
+            )
+            return fail(
+                exc.reason, 75, detail=exc.detail,
+                attempt_id=args.attempt_id, child_spawned="1",
+            )
         if args.dispatch_depth == 1 and args.worker_type == "owner":
             try:
                 watcher_pid = launch_orphan_watch(
@@ -1081,6 +1234,7 @@ def main(argv: list[str]) -> int:
                 write_reset_cache(agent_home, "opencode", reason, reset)
             args.early_death = (reason, reset)
 
+    print("check=ok")
     print("adapter=opencode")
     print("runtime_surface=opencode-run-headless")
     print(f"status={action}")
@@ -1113,6 +1267,10 @@ def main(argv: list[str]) -> int:
     print(f"variant={settings['variant']}")
     print(f"job_registry={jobs}")
     print("broker_lifecycle=retired")
+    print(
+        "governor_reservation="
+        + (str(getattr(args, "governor_reservation", {}).get("state", "-")))
+    )
     print(f"registry_authority={registry.source}")
     print(f"attempt_id={args.attempt_id or '-'}")
     print(f"launch_authority={args.launch_authority}")

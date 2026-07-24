@@ -128,7 +128,7 @@ echo "$drive" | grep -q 'early_death=session-limit:3pm' \
 [ -f "$AH/.dispatch/usage-reset.codex" ] && ok "reset cache written" || bad "no reset cache"
 
 echo "$drive" | grep -q 'early_death=capacity:' \
-  && grep -q $'\tdone\t.*capacity1.*attempt_id=att-capacity0001.*note=dead-capacity.*failure_class=capacity' "$AH/.dispatch/jobs.log" \
+  && awk -F'\t' '$2=="done" && $5=="capacity1" && $6 ~ /(^|,)attempt_id=att-capacity0001(,|$)/ && $6 ~ /(^|,)note=dead-capacity(,|$)/ && $6 ~ /(^|,)failure_class=capacity(,|$)/ { found=1 } END { exit !found }' "$AH/.dispatch/jobs.log" \
   && ok "capacity death closes the exact attempt as dead-capacity" \
   || bad "capacity row not closed exactly. drive=[$drive] jobs=[$(cat "$AH/.dispatch/jobs.log")]"
 

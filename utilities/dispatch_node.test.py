@@ -128,6 +128,17 @@ class SelectCheckedTupleTest(unittest.TestCase):
 
 
 class BindDispatchEvidenceTest(unittest.TestCase):
+    def test_generated_route_and_depth_arguments_cannot_be_overridden(self):
+        for values, flag in (
+            (["--route-file", "/tmp/forged.json"], "--route-file"),
+            (["--dispatch-depth=1"], "--dispatch-depth"),
+            (["--start"], "--start"),
+        ):
+            with self.subTest(flag=flag), self.assertRaises(N.DispatchNodeError) as ctx:
+                N.reject_generated_argument_overrides(values)
+            self.assertEqual(ctx.exception.reason, "dispatch-generated-argument-override")
+            self.assertEqual(ctx.exception.fields["flag"], flag)
+
     def test_supported_record_emits_six_flags_and_nonempty_failure_class(self):
         claude = base_tuple("claude", failure_class="minor-warning")
         node = make_node(dispatch_fallback=make_fallback(claude=claude))
@@ -320,6 +331,56 @@ class MainMaterializationTest(unittest.TestCase):
                 with self.assertRaises(SystemExit) as ctx:
                     N.main()
         self.assertEqual(ctx.exception.code, 65)
+
+    def test_replica_start_requires_batch_token_before_wrapper_invocation(self):
+        first = make_node()
+        first["replica_group"] = "execute"
+        second = {**make_node(), "id": "execute-replica", "replica_group": "execute"}
+        route = make_route(first)
+        route["nodes"].append(second)
+        with tempfile.TemporaryDirectory() as td:
+            route_path = Path(td) / "route.json"
+            route_path.write_text(json.dumps(route))
+            argv = [
+                "dispatch-node.py", "--route", str(route_path), "--node", "execute",
+                "--adapter", "claude", "--slug", "replica", "--parent", "owner",
+                "--action", "start",
+            ]
+            with mock.patch.object(sys, "argv", argv), \
+                 mock.patch.dict(N.os.environ, {}, clear=True), \
+                 mock.patch.object(
+                     N.subprocess, "run", return_value=mock.Mock(returncode=0)
+                 ) as run:
+                with self.assertRaises(SystemExit) as ctx:
+                    N.main()
+        self.assertEqual(ctx.exception.code, 65)
+        self.assertEqual(run.call_count, 1)
+
+    def test_replica_register_is_forbidden_even_with_batch_token(self):
+        node = make_node()
+        node["replica_group"] = "execute"
+        route = make_route(node)
+        with tempfile.TemporaryDirectory() as td:
+            route_path = Path(td) / "route.json"
+            route_path.write_text(json.dumps(route))
+            argv = [
+                "dispatch-node.py", "--route", str(route_path), "--node", "execute",
+                "--adapter", "claude", "--slug", "replica", "--parent", "owner",
+                "--action", "register",
+            ]
+            with mock.patch.object(sys, "argv", argv), \
+                 mock.patch.dict(
+                     N.os.environ,
+                     {N.GOVERNOR_RESERVATION_ENV: "a" * 32},
+                     clear=True,
+                 ), \
+                 mock.patch.object(
+                     N.subprocess, "run", return_value=mock.Mock(returncode=0)
+                 ) as run:
+                with self.assertRaises(SystemExit) as ctx:
+                    N.main()
+        self.assertEqual(ctx.exception.code, 65)
+        self.assertEqual(run.call_count, 1)
 
 
 if __name__ == "__main__":

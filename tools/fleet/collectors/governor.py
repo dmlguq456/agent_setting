@@ -4,8 +4,8 @@ Consumes `utilities/model-worker-governor.py`'s `state.json` (real code, real li
 plan §6a's probe distinguishes this from the OTHER half of F-28c, the resource-runner run
 registry, which is skipped for lack of a canonical path — see `_internal/carryover.md`).
 
-**Read-only**: this module never writes `state.json` (governor's own `acquire`/`release`/
-`check` own that file exclusively) and never spawns a subprocess (no `artifact-root.sh` per
+**Read-only**: this module never writes `state.json` (governor's own reservation/lease
+transactions own that file exclusively) and never spawns a subprocess (no `artifact-root.sh` per
 tick — governor's own `default_root()` shells out to it as a LAST resort only; fleet accepts
 the env-var-first, home-guess-fallback resolution instead and skips the subprocess hop
 entirely, since a dispatch tick already runs `ps` and a second subprocess per tick is exactly
@@ -83,6 +83,9 @@ def _read(path):
     leases = data.get("leases")
     if not isinstance(leases, dict):
         return None
+    reservations = data.get("reservations", {})
+    if not isinstance(reservations, dict):
+        return None
     total = int(os.environ.get("AGENT_MODEL_WORKER_TOTAL", DEFAULT_TOTAL_LIMIT))
     # ★ read-only consequence (plan §6a): governor prunes dead leases only at WRITE time
     # (model-worker-governor.py:80-84) — a read-only consumer can NEVER touch state.json, so a
@@ -102,5 +105,20 @@ def _read(path):
             continue   # dead lease — governor would have pruned this at its next write
         active += 1
         cls = lease.get("class") or "?"
+        classes[cls] = classes.get(cls, 0) + 1
+    # Atomic replica admission occupies real cap before either runner claims
+    # its lease. Count only reservations whose exact owner PID/start identity
+    # is still live; this mirrors governor pruning without mutating state.
+    for reservation in reservations.values():
+        if not isinstance(reservation, dict):
+            continue
+        pid = reservation.get("owner_pid")
+        starttime = reservation.get("owner_starttime")
+        if pid is None or starttime is None:
+            continue
+        if procscan.read_proc_start(pid) != str(starttime):
+            continue
+        active += 1
+        cls = reservation.get("class") or "?"
         classes[cls] = classes.get(cls, 0) + 1
     return {"active": active, "cap": total, "classes": classes}

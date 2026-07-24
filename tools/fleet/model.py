@@ -331,12 +331,23 @@ class DispatchJob:
     stage: Optional[str] = None         # plan | exec | test | done (live_stage)
     mode: Optional[str] = None          # --mode value
     qa: Optional[str] = None            # --qa value
-    pid: Optional[int] = None           # dispatch process pid (proc-scanned jobs) — for own model/env lookup
-    proc_start: Optional[str] = None    # /proc/<pid>/stat field 22 — the other half of the pid's
+    pid: Optional[int] = None           # observer-authoritative dispatch pid; None when a registry pid
+                                        # belongs to another namespace without a verified mapping
+    proc_start: Optional[str] = None    # authoritative /proc/<pid>/stat field 22 — the other half of the pid's
                                         # identity. F-27 refuses to signal without it, so a job row
                                         # is only a kill target when this is filled alongside pid.
     pid_scope: Optional[str] = None     # namespace-local for dispatch-depth-2 launches whose recorded PID
                                         # is only meaningful inside the capability-owner namespace.
+    pid_local: Optional[int] = None     # raw registry pid= value; display/audit only when not authoritative
+    pid_local_start: Optional[str] = None  # raw registry pid_start= paired with pid_local
+    pid_host: Optional[int] = None      # NSpid[0] candidate, usable only with bound proof+namespace
+    pid_host_start: Optional[str] = None
+    pid_host_ns: Optional[str] = None
+    pid_ns: Optional[str] = None
+    pid_observer_ns: Optional[str] = None
+    pid_host_proof: Optional[str] = None
+    pgid: Optional[int] = None
+    pid_identity_source: Optional[str] = None  # local | host | None (unverifiable)
     model: Optional[str] = None         # dispatch runtime model (own statusline if resolvable; else parent's, filled at render)
     elapsed_min: Optional[int] = None
     slug: str = ""
@@ -642,7 +653,14 @@ def classify_attempt_evidence(ev_in, now=None):
     """
     identity = ("attempt_id", "route_id", "route_node")
     has_process_identity = ev_in.get("pid") is not None and bool(ev_in.get("proc_start"))
-    if not has_process_identity and any(not ev_in.get(key) for key in identity):
+    has_recorded_identity = (
+        has_process_identity
+        or (
+            ev_in.get("pid_local") is not None
+            and bool(ev_in.get("pid_local_start"))
+        )
+    )
+    if not has_recorded_identity and any(not ev_in.get(key) for key in identity):
         return None
     heartbeat = _matching_attempt_heartbeat(ev_in)
     terminal = _matching_attempt_terminal(ev_in)
@@ -658,22 +676,32 @@ def classify_attempt_evidence(ev_in, now=None):
             if completed
             else f"exact attempt observed terminal action {terminal['terminal_action']}"
         )
-    elif not has_process_identity:
-        state, source = "unknown", "registry"
-        rule = "exact registered attempt has no process identity"
     elif pid_scope == "namespace-local":
         if heartbeat and heartbeat.get("phase") == "terminal":
             state, source = "done", "heartbeat"
             rule = "namespace-local attempt emitted an exact terminal heartbeat"
-        elif ev_in.get("pid_alive") is True and ev_in.get("proc_start_match") is True:
+        elif (
+            ev_in.get("pid_authoritative") is True
+            and ev_in.get("pid_alive") is True
+            and ev_in.get("proc_start_match") is True
+        ):
             state, source = "working", "proc"
-            rule = "namespace-local attempt pid/start-time is visible and live"
+            rule = "namespace-bound authoritative pid/start-time is live"
+        elif ev_in.get("pid_authoritative") is True and (
+            ev_in.get("pid_alive") is False
+            or ev_in.get("proc_start_match") is False
+        ):
+            state, source = "dead", "proc"
+            rule = "namespace-bound authoritative process identity ended or changed"
         elif heartbeat and now is not None and now - float(heartbeat["updated_at"]) <= ATTEMPT_HEARTBEAT_LIVE_SEC:
             state, source = "working", "heartbeat"
-            rule = "namespace-local attempt has a fresh exact heartbeat"
+            rule = "namespace-local attempt has a fresh exact UI heartbeat"
         else:
-            state, source = "unknown", "heartbeat"
-            rule = "namespace-local attempt has no fresh exact heartbeat"
+            state, source = "unknown", "namespace"
+            rule = "namespace-local process identity has no authoritative observer proof"
+    elif not has_process_identity:
+        state, source = "unknown", "registry"
+        rule = "exact registered attempt has no process identity"
     elif ev_in.get("pid_alive") is False:
         source = "proc"
         state, rule = "dead", "recorded attempt pid is not alive"
@@ -699,6 +727,17 @@ def classify_attempt_evidence(ev_in, now=None):
         "pid_scope": pid_scope,
         "proc_start": ev_in.get("proc_start"),
         "actual_proc_start": ev_in.get("actual_proc_start"),
+        "pid_authoritative": ev_in.get("pid_authoritative"),
+        "pid_identity_source": ev_in.get("pid_identity_source"),
+        "pid_local": ev_in.get("pid_local"),
+        "pid_local_start": ev_in.get("pid_local_start"),
+        "pid_host": ev_in.get("pid_host"),
+        "pid_host_start": ev_in.get("pid_host_start"),
+        "pid_host_ns": ev_in.get("pid_host_ns"),
+        "pid_ns": ev_in.get("pid_ns"),
+        "pid_observer_ns": ev_in.get("pid_observer_ns"),
+        "pid_host_proof": ev_in.get("pid_host_proof"),
+        "pgid": ev_in.get("pgid"),
         "heartbeat": ev_in.get("heartbeat"),
         "terminal_observation": terminal,
         "registry_transition": ev_in.get("registry_transition"),

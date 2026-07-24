@@ -421,7 +421,7 @@ Codex-native counterpart today.
 | role profiles | Read `roles/README.md`, then run `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` to resolve Codex model/reasoning-effort settings or pipeline profile aliases to native custom agents |
 | permission mapping | Run `adapters/codex/bin/preflight.sh permissions` to inspect the Codex approval/sandbox contract and confirm Claude `allowedTools` is unsupported |
 | MCP mapping | Run `adapters/codex/bin/preflight.sh mcp --check` to inspect Codex's native MCP CLI/config surface; do not copy Claude `settings.json` MCP registrations or project `tools/design-mcp` wholesale |
-| headless dispatch | Run `preflight.sh headless --check <worktree>` before launch; it verifies native Skills, native Agents, and native Modes. Use `dispatch --dry-run|--register|--start [--require-hook-trust]` for registered work. Standard+ depth-1 owners use `--completion-delivery auto`: a checked App Server probe selects an ephemeral same-thread supervisor, forced `supervised` fails before registration when unavailable, and explicit/unavailable fallback is reported as `poll-fallback`. Quick and depth-2 workers stay one-shot `codex exec`. The wrapper validates `capability-info`, `mode-info`, and the portable QA level before writing `.dispatch/jobs.log`; registry writes and harvest rewrites are serialized with a `.lock` file. Registration materializes the portable kernel, one worker type, route metadata, and assigned Skill/mode. Route, model, approval, hook-trust, harvest, and cleanup contracts are unchanged |
+| headless dispatch | Run `preflight.sh headless --check <worktree>` before launch; it verifies native Skills, native Agents, and native Modes. Use `dispatch --dry-run|--register|--start [--require-hook-trust]` for registered work. Standard+ dispatch-depth-1 owners use `--completion-delivery auto`: a checked App Server probe selects an ephemeral same-thread supervisor, forced `supervised` fails before registration when unavailable, and explicit/unavailable fallback is reported as `poll-fallback`. Quick and dispatch-depth-2 workers stay one-shot `codex exec`. The wrapper validates `capability-info`, `mode-info`, and the portable QA level before writing `.dispatch/jobs.log`; registry writes and harvest rewrites are serialized with a `.lock` file. Registration materializes the portable kernel, one worker type, route metadata, and assigned Skill/mode. Route, model, approval, hook-trust, harvest, and cleanup contracts are unchanged |
 | parent completion park | The App Server supervisor owns exact-batch waiting and emits no model/tool activity between the owner's intermediate turn and join readiness. It resumes the same thread once per batch with child identities/status enums only, withholds intermediate `turn.completed`, and exposes exactly one final terminal handoff. Before each turn it writes an atomic attempt-scoped delivered-set state: an undelivered open batch admits only another exact same-parent dispatch start, so the first child cannot block sibling registration; a delivered open batch admits only exact typed harvest. Waits and unrelated tools are denied in both phases, missing state is harvest-only recovery, and normal exit or the exact owner watcher removes the state file. The 300–600 second `dispatch-wait` path is an explicitly reported fallback, not normal parity |
 | role modes | Read `roles/MODES.md`, then run `adapters/codex/bin/preflight.sh mode-info <family/mode>`; read the reported `native_mode_path`, obey `fallback=reference-only` only for unsupported modes, and satisfy any named `tool_contract` / `tool_contract_check` before claiming tool-contract modes |
 | mode guides | Use `adapters/codex/modes/<family>/<mode>.md` as the Codex-native realization guide reported by `mode-info`; satisfy named tool contracts or report unavailable before claiming support |
@@ -599,10 +599,15 @@ Wrapper output and the exact attempt row record the effective runtime sandbox.
 ### SD-51~53 direct headless launch — realized
 
 Dispatch contract v3 removes the resident launch broker, request spool,
-heartbeat, lease, and fencing identity. `dispatch-chain` invokes the checked
-Codex, Claude, or OpenCode adapter wrapper directly from the conductor. A stable
-attempt identity is claimed under the canonical jobs lock before process spawn;
-a duplicate claim starts zero children. Standard+ dispatch-depth-1 Codex owners run with
+broker heartbeat, broker lease, and broker fencing identity. `dispatch-chain`
+invokes the checked Codex, Claude, or OpenCode adapter wrapper directly from the
+conductor. A stable attempt is first registered with `launch_claimed=0`; a
+parent-death-safe fence remains blocked while the wrapper publishes complete
+PID/start/namespace/leader-PGID identity and the only claim transition under
+the canonical jobs lock. The fence records `launch_started=1` immediately
+before payload exec. A duplicate or already-started claim starts zero children,
+and a dead unstarted fence is retryable only after exact group quiescence.
+Standard+ dispatch-depth-1 Codex owners run with
 `sandbox_workspace_write.network_access=true` and
 `AGENT_NESTED_HEADLESS_NETWORK=1`. Their writable worktree-local `CODEX_HOME`
 links the existing auth/config without copying or mutating credentials and
@@ -624,13 +629,15 @@ or network authority. The wrapper also exports its exact self slug so
 ### SD-77 parent-bound orphan convergence — realized
 
 Both registered-headless wrappers bind a dispatch-depth-2 attempt to one live
-exact dispatch-depth-1 `parent_attempt_id`. The final parent liveness check,
-process spawn, and PID/start/PGID publication are serialized by the canonical
-jobs lock. Parent death therefore yields either zero child processes or one
-exact process group that foreground supervision or the detached owner watcher
-can terminate with a bounded TERM/KILL cascade. PID reuse is never signalled,
-same-slug retries stay untouched, and completion markers or typed terminal
-handoffs retain precedence.
+exact dispatch-depth-1 `parent_attempt_id`. Parent identity is checked before
+spawn and again before fence release; the release requires aligned procfs/PID
+namespace evidence, exact start identity, and `pgid == pid`. Foreground fences
+retain parent-death coupling, while detached fences clear it before committing
+`launch_started`. Process-group scans preserve inaccessible/incomplete as
+unverifiable, and teardown signals only a current exact group leader after
+adjacent identity checks. PID or PGID reuse is never signalled, same-slug
+retries stay untouched, and completion markers or typed terminal handoffs
+retain precedence.
 
 The shared terminal inspector normalizes Codex `turn.completed` and Claude
 stream-json `result` events into the same three-line handoff contract. Codex

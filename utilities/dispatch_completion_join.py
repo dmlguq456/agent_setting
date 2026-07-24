@@ -17,9 +17,12 @@ import shlex
 import subprocess
 import tempfile
 import time
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "utilities"))
+from dispatch_contract import attempt_process_quiescence  # noqa: E402
 OPEN_STATES = frozenset({"open", "running"})
 SCHEMA_VERSION = 1
 STATE_SCHEMA_VERSION = 1
@@ -37,12 +40,25 @@ class ChildRow:
     slug: str
     attempt_id: str
     raw: str
+    metadata: dict[str, str]
 
 
 @dataclass(frozen=True)
 class SupervisorShellAction:
     kind: str
     attempt_id: str = ""
+
+
+@dataclass(frozen=True)
+class SupervisedDispatchContext:
+    """Immutable owner boundary used while a supervised batch is parked."""
+
+    jobs: Path
+    route_file: Path
+    route_id: str
+    parent_attempt_id: str
+    route: dict[str, object]
+    rows: tuple[ChildRow, ...]
 
 
 def _safe_identity(value: str) -> bool:
@@ -188,12 +204,323 @@ def _parse_long_options(
     return parsed
 
 
+def _resolved_from(base: Path, raw: str) -> Path | None:
+    if not raw:
+        return None
+    candidate = Path(raw)
+    if not candidate.is_absolute():
+        candidate = base / candidate
+    try:
+        return candidate.resolve()
+    except OSError:
+        return None
+
+
+def _selected_long_options(
+    tokens: list[str], selected: set[str]
+) -> dict[str, list[str]] | None:
+    """Read selected opaque adapter options without accepting missing values."""
+
+    values: dict[str, list[str]] = {}
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        matched = next(
+            (option for option in selected if token.startswith(option + "=")),
+            None,
+        )
+        if matched is not None:
+            value = token[len(matched) + 1 :]
+            if not value:
+                return None
+            values.setdefault(matched, []).append(value)
+            index += 1
+            continue
+        if token in selected:
+            if index + 1 >= len(tokens) or tokens[index + 1].startswith("--"):
+                return None
+            values.setdefault(token, []).append(tokens[index + 1])
+            index += 2
+            continue
+        index += 1
+    return values
+
+
+def _strict_supervisor_binding_requested(
+    *,
+    jobs: Path | None,
+    parent_attempt_id: str,
+    route_file: Path | None,
+    route_id: str,
+) -> bool:
+    return bool(
+        jobs
+        or parent_attempt_id
+        or route_file
+        or route_id
+        or os.environ.get("AGENT_DISPATCH_COMPLETION_MODE") == "supervised"
+    )
+
+
+def _supervised_dispatch_context(
+    *,
+    jobs: Path | None,
+    parent_attempt_id: str,
+    route_file: Path | None,
+    route_id: str,
+    open_attempt_ids: set[str],
+) -> SupervisedDispatchContext:
+    """Resolve the exact owner route/registry tuple or fail closed."""
+
+    raw_jobs = jobs or (
+        Path(os.environ["AGENT_DISPATCH_JOBS"])
+        if os.environ.get("AGENT_DISPATCH_JOBS")
+        else None
+    )
+    raw_route = route_file or (
+        Path(os.environ["AGENT_ROUTE_FILE"])
+        if os.environ.get("AGENT_ROUTE_FILE")
+        else None
+    )
+    expected_parent = parent_attempt_id or os.environ.get(
+        "AGENT_DISPATCH_ATTEMPT_ID", ""
+    )
+    expected_route_id = route_id or os.environ.get("AGENT_ROUTE_ID", "")
+    if (
+        raw_jobs is None
+        or raw_route is None
+        or not raw_jobs.is_absolute()
+        or not raw_route.is_absolute()
+        or not expected_parent
+        or not expected_route_id
+    ):
+        raise JoinContractError("supervisor-dispatch-binding-missing")
+    try:
+        canonical_jobs = raw_jobs.resolve()
+        canonical_route = raw_route.resolve()
+        route = json.loads(canonical_route.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise JoinContractError("supervisor-dispatch-binding-unreadable") from exc
+    if not isinstance(route, dict) or route.get("route_id") != expected_route_id:
+        raise JoinContractError("supervisor-route-id-mismatch")
+    rows = current_children(canonical_jobs, expected_parent)
+    indexed = {row.attempt_id: row for row in rows}
+    if not open_attempt_ids or not open_attempt_ids.issubset(indexed):
+        raise JoinContractError("supervisor-open-attempt-binding-mismatch")
+    return SupervisedDispatchContext(
+        jobs=canonical_jobs,
+        route_file=canonical_route,
+        route_id=expected_route_id,
+        parent_attempt_id=expected_parent,
+        route=route,
+        rows=tuple(rows),
+    )
+
+
+def _command_paths_match(
+    *,
+    base: Path,
+    route_values: list[str],
+    jobs_values: list[str],
+    context: SupervisedDispatchContext,
+) -> bool:
+    return (
+        len(route_values) == 1
+        and len(jobs_values) == 1
+        and _resolved_from(base, route_values[0]) == context.route_file
+        and _resolved_from(base, jobs_values[0]) == context.jobs
+    )
+
+
+def _row_matches_current_route(
+    row: ChildRow, context: SupervisedDispatchContext
+) -> bool:
+    route_path = _resolved_from(
+        Path(row.metadata.get("worktree", "/")),
+        row.metadata.get("route_file", ""),
+    )
+    return (
+        row.metadata.get("parent_attempt_id") == context.parent_attempt_id
+        and row.metadata.get("route_id") == context.route_id
+        and route_path == context.route_file
+    )
+
+
+def _declared_replica_nodes(
+    route: dict[str, object], group: str
+) -> dict[str, dict[str, object]] | None:
+    raw_nodes = route.get("nodes")
+    if not isinstance(raw_nodes, list):
+        return None
+    nodes = {
+        str(node.get("id")): node
+        for node in raw_nodes
+        if isinstance(node, dict) and node.get("replica_group") == group
+    }
+    if (
+        len(nodes) != 2
+        or "" in nodes
+        or any(node.get("dispatch_depth") != 2 for node in nodes.values())
+    ):
+        return None
+    return nodes
+
+
+def _replica_row_matches(
+    row: ChildRow,
+    *,
+    context: SupervisedDispatchContext,
+    group: str,
+    node_ids: set[str],
+) -> bool:
+    metadata = row.metadata
+    node = metadata.get("route_node", "")
+    return (
+        _row_matches_current_route(row, context)
+        and node in node_ids
+        and metadata.get("replica_group") == group
+        and metadata.get("reservation_kind") == "replica-batch"
+        and metadata.get("batch_declared_size") == "2"
+        and metadata.get("batch_group") == group
+        and metadata.get("batch_route_id") == context.route_id
+        and metadata.get("batch_parent_attempt_id") == context.parent_attempt_id
+        and metadata.get("batch_attempt_id") == row.attempt_id
+        and metadata.get("batch_route_node") == node
+    )
+
+
+def _bound_batch_start(
+    *,
+    base: Path,
+    options: dict[str, list[str]],
+    open_attempt_ids: set[str],
+    context: SupervisedDispatchContext,
+) -> bool:
+    if not _command_paths_match(
+        base=base,
+        route_values=options.get("--route", []),
+        jobs_values=options.get("--jobs", []),
+        context=context,
+    ):
+        return False
+    group = options["--replica-group"][0]
+    declared = _declared_replica_nodes(context.route, group)
+    if declared is None:
+        return False
+    node_ids = set(declared)
+    pending_rows = [
+        row for row in context.rows if row.attempt_id in open_attempt_ids
+    ]
+    if not pending_rows or any(
+        not _replica_row_matches(
+            row, context=context, group=group, node_ids=node_ids
+        )
+        for row in pending_rows
+    ):
+        return False
+
+    route_group_rows = [
+        row
+        for row in context.rows
+        if row.metadata.get("route_node") in node_ids
+        or row.metadata.get("replica_group") == group
+        or row.metadata.get("batch_group") == group
+    ]
+    exact_rows = [
+        row
+        for row in route_group_rows
+        if _replica_row_matches(
+            row, context=context, group=group, node_ids=node_ids
+        )
+    ]
+    # The only parked recovery admission is one exact manifest-bound leg. A
+    # second exact row means the whole two-way group has already been claimed;
+    # zero or malformed rows cannot authorize a fresh batch from this phase.
+    return (
+        len(route_group_rows) == 1
+        and len(exact_rows) == 1
+        and len({row.metadata.get("route_node") for row in exact_rows}) == 1
+    )
+
+
+def _bound_dispatch_node_start(
+    *,
+    base: Path,
+    options: dict[str, list[str]],
+    trailing: list[str],
+    open_attempt_ids: set[str],
+    context: SupervisedDispatchContext,
+) -> bool:
+    selected = _selected_long_options(
+        trailing,
+        {
+            "--jobs",
+            "--parent-attempt-id",
+            "--route-file",
+            "--route-id",
+            "--route-node",
+            "--dispatch-depth",
+            "--parent",
+        },
+    )
+    if selected is None or any(
+        option in selected
+        for option in {
+            "--route-file",
+            "--route-id",
+            "--route-node",
+            "--dispatch-depth",
+            "--parent",
+        }
+    ):
+        return False
+    if not _command_paths_match(
+        base=base,
+        route_values=options.get("--route", []),
+        jobs_values=selected.get("--jobs", []),
+        context=context,
+    ):
+        return False
+    explicit_parent = selected.get("--parent-attempt-id", [])
+    if len(explicit_parent) > 1 or (
+        explicit_parent and explicit_parent != [context.parent_attempt_id]
+    ):
+        return False
+    raw_nodes = context.route.get("nodes")
+    if not isinstance(raw_nodes, list):
+        return False
+    node_id = options["--node"][0]
+    matches = [
+        node
+        for node in raw_nodes
+        if isinstance(node, dict) and node.get("id") == node_id
+    ]
+    if (
+        len(matches) != 1
+        or matches[0].get("dispatch_depth") != 2
+        or matches[0].get("replica_group")
+    ):
+        return False
+    pending_rows = [
+        row for row in context.rows if row.attempt_id in open_attempt_ids
+    ]
+    if not pending_rows or any(
+        not _row_matches_current_route(row, context) for row in pending_rows
+    ):
+        return False
+    return not any(row.metadata.get("route_node") == node_id for row in context.rows)
+
+
 def classify_supervised_shell_command(
     *,
     base: Path,
     command: str,
     open_attempt_ids: set[str],
     parent_slug: str,
+    jobs: Path | None = None,
+    parent_attempt_id: str = "",
+    route_file: Path | None = None,
+    route_id: str = "",
 ) -> SupervisorShellAction | None:
     """Recognize only exact harvest or one additional parent-bound dispatch."""
 
@@ -228,13 +555,81 @@ def classify_supervised_shell_command(
             return None
         return SupervisorShellAction("harvest", attempt)
 
+    strict_binding = _strict_supervisor_binding_requested(
+        jobs=jobs,
+        parent_attempt_id=parent_attempt_id,
+        route_file=route_file,
+        route_id=route_id,
+    )
+    context: SupervisedDispatchContext | None = None
+    if strict_binding:
+        try:
+            context = _supervised_dispatch_context(
+                jobs=jobs,
+                parent_attempt_id=parent_attempt_id,
+                route_file=route_file,
+                route_id=route_id,
+                open_attempt_ids=open_attempt_ids,
+            )
+        except JoinContractError:
+            return None
+
     dispatch_tokens = tokens
     if tokens[0] in {"python", "python3"}:
         if len(tokens) < 2:
             return None
         dispatch_tokens = tokens[1:]
-    if not _local_contract_path(base, dispatch_tokens[0], "utilities/dispatch-node.py"):
+    is_batch = False
+    if _local_contract_path(base, dispatch_tokens[0], "adapters/codex/bin/preflight.sh"):
+        if len(dispatch_tokens) < 2 or dispatch_tokens[1] != "dispatch-batch":
+            return None
+        dispatch_tokens = [str(ROOT / "utilities" / "dispatch-batch.py"), *dispatch_tokens[2:]]
+        is_batch = True
+    elif _local_contract_path(base, dispatch_tokens[0], "utilities/dispatch-batch.py"):
+        is_batch = True
+    elif not _local_contract_path(base, dispatch_tokens[0], "utilities/dispatch-node.py"):
         return None
+
+    if is_batch:
+        options = _parse_long_options(
+            dispatch_tokens[1:],
+            {
+                "--route",
+                "--replica-group",
+                "--action",
+                "--slug-prefix",
+                "--parent",
+                "--qa",
+                "--jobs",
+                "--prompt-text",
+            },
+            {"--allow-degraded-independence"},
+        )
+        required = {
+            "--route",
+            "--replica-group",
+            "--action",
+            "--slug-prefix",
+            "--parent",
+        }
+        if (
+            options is None
+            or not parent_slug
+            or any(len(values) != 1 for values in options.values())
+            or not required.issubset(options)
+            or options["--action"] != ["start"]
+            or options["--parent"] != [parent_slug]
+        ):
+            return None
+        if context is not None and not _bound_batch_start(
+            base=base,
+            options=options,
+            open_attempt_ids=open_attempt_ids,
+            context=context,
+        ):
+            return None
+        return SupervisorShellAction("dispatch-batch")
+
     try:
         separator = dispatch_tokens.index("--")
     except ValueError:
@@ -262,6 +657,14 @@ def classify_supervised_shell_command(
         or options["--action"] != ["start"]
         or options["--parent"] != [parent_slug]
         or options["--adapter"][0] not in {"claude", "codex", "opencode"}
+    ):
+        return None
+    if context is not None and not _bound_dispatch_node_start(
+        base=base,
+        options=options,
+        trailing=dispatch_tokens[separator + 1 :] if separator < len(dispatch_tokens) else [],
+        open_attempt_ids=open_attempt_ids,
+        context=context,
     ):
         return None
     return SupervisorShellAction("dispatch")
@@ -326,6 +729,7 @@ def current_children(
             slug=fields[4],
             attempt_id=attempt_id,
             raw=line,
+            metadata=meta,
         )
 
     if expected_attempts is not None:
@@ -333,6 +737,19 @@ def current_children(
         if missing:
             raise JoinContractError("expected-attempt-missing")
     return sorted(latest.values(), key=lambda row: row.order)
+
+
+def pending_attempt_ids(rows: list[ChildRow]) -> set[str]:
+    """Return children that are open or terminal-but-not-yet-quiescent."""
+
+    pending: set[str] = set()
+    for row in rows:
+        if row.status in OPEN_STATES:
+            pending.add(row.attempt_id)
+            continue
+        if row.status == "done" and attempt_process_quiescence(row.metadata).state != "quiescent":
+            pending.add(row.attempt_id)
+    return pending
 
 
 def _liveness_state(row: ChildRow, command: list[str], env: dict[str, str]) -> str:
@@ -400,15 +817,33 @@ def join_batch(
         children: list[dict[str, str]] = []
         pending = False
         for row in rows:
+            process = attempt_process_quiescence(row.metadata)
             if row.status == "done":
-                readiness, reason = "ready", "registry-closed"
+                if process.state == "quiescent":
+                    readiness, reason = "ready", "registry-closed"
+                else:
+                    readiness = "pending"
+                    reason = (
+                        "process-alive"
+                        if process.state == "live"
+                        else "process-unverifiable"
+                    )
+                    pending = True
             elif row.status in OPEN_STATES:
                 observed = _liveness_state(row, command, runtime_env)
                 if observed == "alive":
                     readiness, reason = "pending", "process-alive"
                     pending = True
-                else:
+                elif process.state == "quiescent":
                     readiness, reason = "ready", "terminal-observed"
+                else:
+                    readiness = "pending"
+                    reason = (
+                        "process-alive"
+                        if process.state == "live"
+                        else "process-unverifiable"
+                    )
+                    pending = True
             else:
                 raise JoinContractError("owned-row-status-invalid")
             children.append(

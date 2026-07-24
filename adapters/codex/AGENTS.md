@@ -92,7 +92,9 @@ choice/inheritance. `worker_role` is legacy read-only metadata, not bootstrap
 or Skill identity. Monitor with
 `preflight.sh liveness [jobs.log]`; harvest with `preflight.sh harvest`.
 Conductors use `dispatch-chain` to invoke checked same/cross-harness dispatch-depth-2
-adapter wrappers directly. Dispatch contract v3 atomically claims one stable
+adapter wrappers directly. A two-way `replica_group` uses one `dispatch-batch`
+call so both checked wrappers are admitted atomically and launched concurrently;
+do not serialize the two legs through separate `dispatch-chain` calls. Dispatch contract v3 atomically claims one stable
 attempt row before spawn and starts no child for a duplicate claim. A standard+
 Codex dispatch-depth-1 owner receives workspace-write network access for this purpose;
 dispatch-depth-2 workers do not. The retired broker exposes only legacy `status`/`stop`.

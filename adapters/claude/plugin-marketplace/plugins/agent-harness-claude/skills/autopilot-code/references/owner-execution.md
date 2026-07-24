@@ -36,15 +36,15 @@ Defaults:
 |---|---|---|---|
 | `direct` | intake → produce → sanity/report | None | No independent QA |
 | `quick` | intake → orient-lite → micro-plan → plan-check-lite → produce → verify-lite → report | None by default | Inline check with 3-4 questions |
-| `standard` | code-plan → plan-check → bounded dispatch-depth-2 verifier/planner when separable → synthesize → code-execute → code-test → code-report | Required | Use bounded dispatch-depth-2 planning or verification for separable work |
-| `strong` | standard + cross-harness 2-way replicate-and-merge at the riskiest review (route adds `impl-review-replica`) | Required | Dispatch both legs on different harness/model families; merge verdicts, stricter wins |
-| `thorough`/`adversarial` | strong + multi-axis dispatch-depth-2 planner/verifier/adversary synthesis | Required | Synthesize dispatch-depth-2 reports concisely |
+| `standard` | (`frame` + `frame-replica`) → code-plan → plan-check → bounded dispatch-depth-2 verifier/planner when separable → synthesize → code-execute → impl-review → code-test → code-report | Required | Run the framing anchor as one exact cross-harness 2-way replica group; use bounded non-replica planning or verification elsewhere when separable |
+| `strong` | standard + (`plan` + `plan-replica`) → plan-check arbitration + (`impl-review` + `impl-review-replica`) → verdict merge | Required | Keep framing exact 2-way and add separate exact cross-harness 2-way plan and implementation-review groups; each group has exactly two legs |
+| `thorough`/`adversarial` | strong base graph + deeper rigor + any explicitly composed planner/verifier/adversary nodes | Required | Retain all three exact 2-way anchor groups; non-replica perspectives require declared compose-on-demand nodes and never widen an anchor group to N-way |
 
-**`standard+` dispatch**: Run each durable stage (`code-plan`, `code-execute`, `code-test`, and `code-report`) in its own dispatch-depth-2 headless session. The dispatch-depth-1 conductor passes artifact paths, reads only verdict and status, then yields while the adapter supervisor joins the exact child batch and resumes the same session once with a typed receipt (dev-pipeline Steps 1-7; OPERATIONS §5.10 and SD-78). Use `dispatch-wait` only when the wrapper explicitly reports `poll-fallback`. Keep `direct`, `quick`, and plan-check micro-stages inline.
+**`standard+` dispatch**: Run every durable compiled node (`frame`, `code-plan`, `plan-check`, `code-execute`, `impl-review`, `code-test`, and `code-report`) as dispatch depth 2; start each declared replica pair with one `dispatch-batch` transaction instead of two node calls. The dispatch-depth-1 conductor passes artifact paths, reads only verdict and status, then yields while the adapter supervisor joins the exact child batch and resumes the same session once with a typed receipt (dev-pipeline Steps 0-7; OPERATIONS §5.10 and SD-78). Use `dispatch-wait` only when the wrapper explicitly reports `poll-fallback`. Only `direct` and `quick` keep their plan-check micro-stages inline; the durable standard+ `plan-check` node is dispatched.
 
 ## Mode Routing
 
-- `dev`: add features, refactor, or implement. `direct|quick` shorten the full pipeline; `standard+` uses `code-plan`, optional `code-refine`, `code-execute`, `code-test`, and `code-report`.
+- `dev`: add features, refactor, or implement. `direct|quick` shorten the full pipeline; `standard+` uses framing, `code-plan`, durable `plan-check`, optional `code-refine`, `code-execute`, `impl-review`, `code-test`, and `code-report`.
 - `debug`: diagnose the root cause before planning a fix. Proceed when the cause is clear; ask for a choice only when materially different causes remain plausible.
 - `audit`: inspect a codebase or app comprehensively and apply low-risk fixes. Keep review fan-out read-only; make and verify changes in a worktree based on current HEAD before harvest.
 

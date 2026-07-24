@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # dispatch-wait.test.sh — SD-14 one-shot 대기 헬퍼 conformance (exit-code 매트릭스).
-#   증명 대상: (0) 열린 자식 없음 → 수확, (2) 살아있음 → 재호출, (3) SUSPECT/DEAD → 진단.
-#   liveness 를 재사용하므로 transcript mtime 으로 ALIVE/DEAD 를 조립해 판정을 유도한다.
+#   증명 대상: (0) 대상 없음/종료 → 수확, (2) 실행 중·검증 불가 → 재호출,
+#   (3) 실행 종료가 증명된 미닫힘/실패 행 → 진단.
 set -uo pipefail
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -36,19 +36,13 @@ if [ "$rc" -eq 0 ]; then ok "missing jobs.log → exit 0 (harvest)"; else bad "m
 : > "$jobs"
 printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-10T00:00:00" "done" "repo" "$tmp/wt/c1" "child1" "capability=code-plan,parent=conf" >> "$jobs"
 out=$(AGENT_HOME="$agent_home" sh "$WAIT" --jobs "$jobs" --parent conf 2>&1); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'no open children'; then
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'execution-quiescent'; then
   ok "no open children for parent → exit 0"
 else bad "done-only children expected 0 got $rc [$out]"; fi
 
 # --- Case 0b2: --jobs 생략 시 shared registry env를 사용 ---
 out=$(AGENT_HOME="$agent_home" AGENT_DISPATCH_JOBS="$jobs" sh "$WAIT" --parent conf 2>&1); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'no open children'; then
-  ok "AGENT_DISPATCH_JOBS selects the shared registry when --jobs is omitted"
-else bad "shared registry done-only children expected 0 got $rc [$out]"; fi
-
-# --- Case 0b2: --jobs 생략 시 shared registry env를 사용 ---
-out=$(AGENT_HOME="$agent_home" AGENT_DISPATCH_JOBS="$jobs" sh "$WAIT" --parent conf 2>&1); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'no open children'; then
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'execution-quiescent'; then
   ok "AGENT_DISPATCH_JOBS selects the shared registry when --jobs is omitted"
 else bad "shared registry done-only children expected 0 got $rc [$out]"; fi
 
@@ -68,17 +62,17 @@ if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'call again'; then
   ok "alive open child, max reached → exit 2 (re-call)"
 else bad "alive child expected 2 got $rc [$out]"; fi
 
-# --- Case 3: open 자식 DEAD(transcript 없음) → exit 3 (진단) ---
+# --- Case 2b: exact PID가 없는 open legacy 행은 종료를 추측하지 않고 exit 2 ---
 : > "$jobs"
 printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-10T00:00:00" "open" "repo" "$tmp/wt/dead" "deadc" "capability=code-test,parent=conf" >> "$jobs"
-out=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" sh "$WAIT" --jobs "$jobs" --parent conf --interval 1 --max 5 2>&1); rc=$?
-if [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'SUSPECT/DEAD'; then
-  ok "dead open child → exit 3 (diagnose)"
-else bad "dead child expected 3 got $rc [$out]"; fi
+out=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" sh "$WAIT" --jobs "$jobs" --parent conf --interval 1 --max 0 2>&1); rc=$?
+if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'unverifiable'; then
+  ok "legacy open child without exact PID → exit 2 (fail-closed)"
+else bad "legacy unverifiable child expected 2 got $rc [$out]"; fi
 
 # --- Case 3b: supplemental controlled current/open Codex terminal rows.
-# Real foreground FAIL/BLOCKED rows close before return; these byte-shaped logs
-# exercise wait/liveness without weakening current-row filtering.
+# Real foreground FAIL/BLOCKED rows close before return. Explicit
+# reaped-before-publish evidence makes these synthetic open rows quiescent.
 term_wt="$tmp/wt/terminal"
 term_root="$tmp/canonical/.agent_reports"
 mkdir -p "$term_wt" "$term_root"
@@ -100,12 +94,10 @@ path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
 PY
   : > "$jobs"
   printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-22T00:00:00" "open" "repo" "$term_wt" "wait-$lower" \
-    "attempt_schema_version=2,dispatch_depth=2,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless,attempt_id=att-wait-$lower,parent=conf,harness=codex,artifact_root=$term_root,log_file=$log" >> "$jobs"
+    "attempt_schema_version=2,dispatch_depth=2,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless,attempt_id=att-wait-$lower,parent=conf,harness=codex,artifact_root=$term_root,log_file=$log,launch_outcome=reaped-before-publish" >> "$jobs"
   out=$(AGENT_HOME="$agent_home" AGENT_ARTIFACT_ROOT="$term_root" sh "$WAIT" --jobs "$jobs" --parent conf --interval 1 --max 5 2>&1); rc=$?
-  expected="EXITED"
-  [ "$verdict" = "PASS" ] && expected="COMPLETED"
-  if [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'terminal/SUSPECT/DEAD child detected' \
-      && printf '%s' "$out" | grep -q "$expected.*turn.completed $verdict" \
+  if [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'terminal failure/unclosed child' \
+      && printf '%s' "$out" | grep -q 'terminal-unclosed' \
       && ! printf '%s' "$out" | grep -q 'RAW_WAIT_SENTINEL\|private-fail\|private-blocked'; then
     ok "supplemental open Codex $verdict row → typed wait exit 3 without raw leakage"
   else
@@ -122,7 +114,7 @@ if grep -Fq 'MAX=600' "$WAIT"; then ok "--max clamped to 600 in source"; else ba
 mk_transcript "$tmp/wt/other-slug"
 printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-23T00:00:00" "open" "repo" "$tmp/wt/other-slug" "other-slug" "capability=code-plan,parent=conf" >> "$jobs"
 out=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" sh "$WAIT" --jobs "$jobs" --slug missing-slug 2>&1); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'slug=missing-slug has no open children'; then
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'execution-quiescent'; then
   ok "--slug exact match ignores unrelated open rows, absent target → exit 0"
 else bad "--slug filter expected 0 got $rc [$out]"; fi
 
@@ -131,7 +123,7 @@ else bad "--slug filter expected 0 got $rc [$out]"; fi
 printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-23T00:00:00" "open" "repo" "$tmp/wt/target" "target-slug" "capability=code-plan,parent=conf" >> "$jobs"
 printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-23T00:01:00" "done" "repo" "$tmp/wt/target" "target-slug" "capability=code-plan,parent=conf" >> "$jobs"
 out=$(AGENT_HOME="$agent_home" sh "$WAIT" --jobs "$jobs" --slug target-slug 2>&1); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'no open children'; then
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'execution-quiescent'; then
   ok "--slug target closed by later done row (last-status) → exit 0"
 else bad "--slug last-status expected 0 got $rc [$out]"; fi
 
@@ -140,7 +132,7 @@ else bad "--slug last-status expected 0 got $rc [$out]"; fi
 mk_transcript "$tmp/wt/attempt-other"
 printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-23T00:00:00" "open" "repo" "$tmp/wt/attempt-other" "attempt-slug" "capability=code-plan,parent=conf,attempt_id=att-other" >> "$jobs"
 out=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" sh "$WAIT" --jobs "$jobs" --attempt-id att-target 2>&1); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'attempt_id=att-target has no open children'; then
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'execution-quiescent'; then
   ok "--attempt-id exact match ignores rows with a different attempt_id"
 else bad "--attempt-id filter expected 0 got $rc [$out]"; fi
 
@@ -159,9 +151,35 @@ else bad "--parent+--slug AND expected 2 got $rc [$out]"; fi
 : > "$jobs"
 printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-23T00:00:00" "open" "repo" "$tmp/wt/unrelated-dead" "unrelated-dead" "capability=code-test,parent=conf" >> "$jobs"
 out=$(AGENT_HOME="$agent_home" DISPATCH_RUNTIME_ROOT="$runtime_root" sh "$WAIT" --jobs "$jobs" --slug my-target-slug --max 1 2>&1); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'slug=my-target-slug has no open children'; then
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'execution-quiescent'; then
   ok "unrelated DEAD row does not steal exit 3 when --slug scopes to an absent target (regression)"
 else bad "--slug scope regression expected 0 got $rc [$out]"; fi
+
+# --- Case q1: completed-marker가 먼저 나와도 exact PID가 살아 있으면 exit 2,
+# 프로세스를 reap한 뒤에만 exit 0. ---
+: > "$jobs"
+python3 -c 'import os,time; os.setsid(); time.sleep(30)' &
+live_pid=$!
+live_start=$(python3 - "$live_pid" <<'PY'
+from pathlib import Path
+import sys
+raw = Path(f"/proc/{sys.argv[1]}/stat").read_text()
+print(raw[raw.rfind(")") + 2:].split()[19])
+PY
+)
+pid_ns=$(readlink /proc/self/ns/pid)
+printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-24T00:00:00" "done" "repo" "$tmp/wt/quiescence" "q-child" \
+  "attempt_schema_version=2,dispatch_depth=2,transport=headless,execution_surface=registered-headless,registered_worker=1,attempt_id=att-quiescence,parent=conf,note=completed-marker,pid=$live_pid,pid_start=$live_start,pgid=$live_pid,pid_observer_ns=$pid_ns" >> "$jobs"
+out=$(AGENT_HOME="$agent_home" sh "$WAIT" --jobs "$jobs" --attempt-id att-quiescence --max 0 2>&1); rc=$?
+if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'still running or unverifiable'; then
+  ok "semantic completion while process live → exit 2 (draining)"
+else bad "live completed process expected 2 got $rc [$out]"; fi
+kill "$live_pid"
+wait "$live_pid" 2>/dev/null || true
+out=$(AGENT_HOME="$agent_home" sh "$WAIT" --jobs "$jobs" --attempt-id att-quiescence --max 0 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'execution-quiescent'; then
+  ok "same completed attempt after process reap → exit 0"
+else bad "reaped completed process expected 0 got $rc [$out]"; fi
 
 if [ "$fails" -eq 0 ]; then echo "dispatch-wait conformance: PASS"; exit 0; fi
 echo "dispatch-wait conformance: $fails FAIL"; exit 1

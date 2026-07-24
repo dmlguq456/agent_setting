@@ -45,6 +45,8 @@ _SHELLS = ("zsh", "bash", "sh", "dash")
 _PIPE_TOK = re.compile(r"[,\s]+")
 _DRILL_SLUG_RE = re.compile(r"^drill-[a-z]+-(.+)-\d{14}-\d+$")   # registry slug → case
 _DRILL_CWD_COMP_RE = re.compile(r"^drill-(.+)-[^-]+$")           # /tmp/drill-<case>-<rand> component to case
+_TERMINAL_REGISTRY_STATUSES = frozenset(("done", "killed", "cancelled"))
+_PID_HOST_NAMESPACE_PROOF = "nspid-procfs-root-v1"
 
 
 def _drill_case_from_slug(slug):
@@ -115,6 +117,47 @@ def _parse_pipe(pipe):
     """Parse a jobs.log pipe field, dual-form → (name, mode, qa, profile)."""
     fields = _parse_pipe_meta(pipe)
     return fields.get("_name"), fields.get("mode"), fields.get("qa"), fields.get("profile")
+
+
+def _pid_namespace_identity(pid="self"):
+    try:
+        return os.readlink("/proc/%s/ns/pid" % pid)
+    except OSError:
+        return None
+
+
+def _authoritative_registry_pid(meta):
+    """Resolve the registry identity valid in Fleet's current PID namespace.
+
+    This is intentionally equivalent to
+    ``dispatch_contract.authoritative_process_identities``.  Fleet's portable
+    copy cannot treat an equal numeric PID as cross-namespace proof: local
+    evidence needs the launch observer namespace, while ``pid_host`` needs the
+    recorded procfs-root namespace plus the explicit NSpid proof marker.
+    """
+    current_namespace = _pid_namespace_identity()
+    raw_local = meta.get("pid", "")
+    local_start = meta.get("pid_start", "") or meta.get("proc_start", "")
+    recorded_observer = meta.get("pid_observer_ns", "")
+    pid_scope = meta.get("pid_scope", "host-visible")
+    local_authoritative = (
+        bool(recorded_observer and current_namespace == recorded_observer)
+        or (not recorded_observer and pid_scope != "namespace-local")
+    )
+    if raw_local.isdigit() and local_start and local_authoritative:
+        return int(raw_local), local_start, "local"
+
+    raw_host = meta.get("pid_host", "")
+    host_start = meta.get("pid_host_start", "") or local_start
+    if (
+        raw_host.isdigit()
+        and host_start
+        and meta.get("pid_host_proof") == _PID_HOST_NAMESPACE_PROOF
+        and current_namespace
+        and current_namespace == meta.get("pid_host_ns", "")
+    ):
+        return int(raw_host), host_start, "host"
+    return None, None, None
 
 
 def _parse_depth(value):
@@ -475,11 +518,15 @@ def _dispatch_liveness(job, now, track=True):
     actual_proc_start = None
     if job.pid is not None:
         proc_path = "/proc/%s" % job.pid
-        pid_alive = os.path.exists(proc_path)
-        if pid_alive and job.proc_start:
+        visible = os.path.exists(proc_path)
+        if not visible:
+            pid_alive = False
+            proc_start_match = False if job.proc_start else None
+        elif job.proc_start:
             observed_start = procscan.read_proc_start(job.pid)
             if observed_start is not None:
                 actual_proc_start = str(observed_start)
+                pid_alive = True
                 proc_start_match = str(observed_start) == str(job.proc_start)
     ev_in = {
         "source": job.source,
@@ -492,6 +539,24 @@ def _dispatch_liveness(job, now, track=True):
         "pid": job.pid,
         "proc_start": job.proc_start,
         "pid_scope": job.pid_scope,
+        "pid_authoritative": bool(
+            job.pid is not None
+            and (
+                job.source == "proc"
+                or job.pid_scope != "namespace-local"
+                or bool(job.pid_identity_source)
+            )
+        ),
+        "pid_identity_source": job.pid_identity_source,
+        "pid_local": job.pid_local,
+        "pid_local_start": job.pid_local_start,
+        "pid_host": job.pid_host,
+        "pid_host_start": job.pid_host_start,
+        "pid_host_ns": job.pid_host_ns,
+        "pid_ns": job.pid_ns,
+        "pid_observer_ns": job.pid_observer_ns,
+        "pid_host_proof": job.pid_host_proof,
+        "pgid": job.pgid,
         "actual_proc_start": actual_proc_start,
         "pid_alive": pid_alive,
         "proc_start_match": proc_start_match,
@@ -1034,25 +1099,30 @@ def _iso_to_epoch(ts):
     return dt.timestamp()
 
 
-def _scan_route_nodes(paths):
-    """{route_id: {node_id: {...}}} — F-28a (§3.3): unlike `_scan_jobs_log`, this pass keeps
-    TERMINAL rows (done/killed/cancelled). A route node that just finished has no live job row
-    left (`_scan_jobs_log` drops terminal rows before classification, dispatch.py:845-846), so
-    without this separate pass a completed node could never render `✓` (plan §3.3's "설계상 가장
-    놓치기 쉬운 지점"). Rereads the same jobs.log files (§3.2.3 — `_jobs_log_fields` precedent,
-    not a new I/O pattern); last-occurrence-wins per (route_id, route_node), same reconciliation
-    idiom as `_scan_jobs_log`'s per-slug dedup."""
+def _scan_registry_evidence(paths):
+    """Return terminal-surviving route evidence and an exact-attempt drain index.
+
+    Both projections come from one registry snapshot. Route nodes keep their existing
+    last-occurrence-wins behavior, while attempts are keyed by ``attempt_id`` rather than
+    slug/cwd/PID. The second result contains only current, terminal registered stages;
+    a still-live proc row for one of those exact attempts is a runtime drain, not a new
+    stage row.
+
+    The return shape is ``(route_nodes, terminal_registered_attempts)``.
+    """
     result = {}
+    latest_attempts = {}
     if isinstance(paths, (str, bytes, os.PathLike)):
         paths = [paths]
     for path in paths:
         path_result = {}
+        path_attempts = {}
         try:
             with open(path, encoding="utf-8", errors="replace") as f:
                 rows = f.read().splitlines()
         except OSError:
             continue
-        for line in rows:
+        for registry_order, line in enumerate(rows):
             if not line.strip():
                 continue
             fields = line.split("\t")
@@ -1060,17 +1130,32 @@ def _scan_route_nodes(paths):
                 continue
             ts, status, _repo, _worktree, slug, pipe = fields
             meta = _parse_pipe_meta(pipe or "")
+            attempt_contract = _attempt_contract(meta)
             route_id = meta.get("route_id")
             route_node = meta.get("route_node")
+            attempt_id = meta.get("attempt_id")
+            if attempt_id:
+                # Latest row for this exact attempt wins inside one registry, even if
+                # the later row is non-terminal. This prevents an earlier terminal row
+                # from hiding a subsequently reopened/malformed attempt.
+                path_attempts[attempt_id] = {
+                    "attempt_id": attempt_id,
+                    "status": status,
+                    "route_id": route_id,
+                    "route_node": route_node,
+                    "harness": _infer_harness(meta, slug),
+                    "slug": slug,
+                    "registry_order": registry_order,
+                    **attempt_contract,
+                }
             if not route_id or not route_node:
                 continue
             pid_s = meta.get("pid")
-            attempt_contract = _attempt_contract(meta)
             node_evidence = path_result.setdefault(route_id, {}).setdefault(
                 route_node, {}
             )
             node_evidence.setdefault("attempt_history", []).append({
-                "attempt_id": meta.get("attempt_id"),
+                "attempt_id": attempt_id,
                 "status": status,
                 "dispatch_depth": attempt_contract["dispatch_depth"],
                 "transport": attempt_contract["transport"],
@@ -1104,12 +1189,64 @@ def _scan_route_nodes(paths):
             })
         # Candidate paths are precedence-ordered (canonical first). Preserve
         # last-occurrence-wins inside each file, but never let a later legacy
-        # registry overwrite canonical terminal evidence.
+        # registry overwrite canonical terminal evidence or attempt identity.
         for route_id, nodes in path_result.items():
             target = result.setdefault(route_id, {})
             for route_node, evidence in nodes.items():
                 target.setdefault(route_node, evidence)
-    return result
+        for attempt_id, evidence in path_attempts.items():
+            latest_attempts.setdefault(attempt_id, evidence)
+
+    terminal_attempts = {
+        attempt_id: evidence
+        for attempt_id, evidence in latest_attempts.items()
+        if evidence["status"] in _TERMINAL_REGISTRY_STATUSES
+        and evidence["attempt_contract_status"] == "current"
+        and evidence["transport"] == "headless"
+        and evidence["execution_surface"] == "registered-headless"
+        and evidence["registered_worker"] is True
+        and evidence["dispatch_depth"] in (1, 2)
+        and evidence["route_id"]
+        and evidence["route_node"]
+    }
+    return result, terminal_attempts
+
+
+def _scan_route_nodes(paths):
+    """{route_id: {node_id: {...}}} — F-28a (§3.3): unlike `_scan_jobs_log`, this pass keeps
+    TERMINAL rows (done/killed/cancelled). A route node that just finished has no live job row
+    left (`_scan_jobs_log` drops terminal rows before classification, dispatch.py:845-846), so
+    without this separate pass a completed node could never render `✓` (plan §3.3's "설계상 가장
+    놓치기 쉬운 지점"). Rereads the same jobs.log files (§3.2.3 — `_jobs_log_fields` precedent,
+    not a new I/O pattern); last-occurrence-wins per (route_id, route_node), same reconciliation
+    idiom as `_scan_jobs_log`'s per-slug dedup."""
+    return _scan_registry_evidence(paths)[0]
+
+
+def _suppress_terminal_attempt_proc_jobs(proc_jobs, terminal_attempts):
+    """Drop only duplicate proc jobs for exact terminal registered stages.
+
+    The semantic stage remains in ``last_route_nodes``. Sessions are deliberately not
+    accepted by this helper, so native subagents and unrelated same-cwd harness sessions
+    cannot disappear through registry reconciliation.
+    """
+    kept = []
+    for job in proc_jobs:
+        evidence = terminal_attempts.get(getattr(job, "attempt_id", None))
+        exact_stage = (
+            getattr(job, "source", None) == "proc"
+            and evidence is not None
+            and getattr(job, "route_id", None) == evidence.get("route_id")
+            and getattr(job, "route_node", None) == evidence.get("route_node")
+            and (
+                not evidence.get("harness")
+                or not getattr(job, "harness", None)
+                or job.harness == evidence["harness"]
+            )
+        )
+        if not exact_stage:
+            kept.append(job)
+    return kept
 
 
 # --- source (a): process scan (uncapped, no related() filter) ---
@@ -1188,6 +1325,7 @@ def _scan_processes():
                 route_file=env.get("AGENT_ROUTE_FILE") or None,
                 route_id=env.get("AGENT_ROUTE_ID") or None,
                 route_node=env.get("AGENT_ROUTE_NODE") or None,
+                attempt_id=env.get("AGENT_DISPATCH_ATTEMPT_ID") or None,
                 # AGENT_ROUTE_HASH is not exported by the headless launcher (§3.2.2) — a proc
                 # job's route_hash stays None; integrity still rests on the record's own
                 # recomputed hash (route.py P1), so this is not a weaker check.
@@ -1225,6 +1363,7 @@ def _scan_processes():
                 capability_owner=key,
                 effort=env.get("AGENT_DISPATCH_EFFORT"),
                 model_role=env.get("AGENT_DISPATCH_MODEL_ROLE"),
+                attempt_id=env.get("AGENT_DISPATCH_ATTEMPT_ID") or None,
             ))
     return jobs
 
@@ -1297,16 +1436,28 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None, registry_priority=0):
         parent_sid = meta.get("parent_sid") or meta.get("parent_session_id") or None
         parent_cwd = meta.get("parent_cwd") or meta.get("parent_worktree") or None
         harness = _infer_harness(meta, slug)
-        pid_s = meta.get("pid")
-        registry_pid = int(pid_s) if (pid_s or "").isdigit() else None
+        pid_s = meta.get("pid", "")
+        pid_local = int(pid_s) if pid_s.isdigit() else None
+        pid_local_start = meta.get("pid_start") or meta.get("proc_start")
+        registry_pid, registry_start, identity_source = _authoritative_registry_pid(meta)
+        pid_host_s = meta.get("pid_host", "")
+        pgid_s = meta.get("pgid", "")
         job = DispatchJob(
             key=pname, stage=status, mode=meta.get("mode"), qa=q,
             elapsed_min=_iso_elapsed_min(ts), slug=slug or worktree or repo,
             cwd=cwd, parent_sid=parent_sid, parent_cwd=parent_cwd, parent_slug=parent_slug,
             is_child=bool(parent_slug or parent_sid or parent_cwd), qa_source=qsrc, source="jobs", status=status,
             harness=harness, model=meta.get("model"),
-            pid=registry_pid, proc_start=meta.get("pid_start") or meta.get("proc_start"),
+            pid=registry_pid, proc_start=registry_start,
             pid_scope=meta.get("pid_scope"),
+            pid_local=pid_local, pid_local_start=pid_local_start,
+            pid_host=int(pid_host_s) if pid_host_s.isdigit() else None,
+            pid_host_start=meta.get("pid_host_start"),
+            pid_host_ns=meta.get("pid_host_ns"), pid_ns=meta.get("pid_ns"),
+            pid_observer_ns=meta.get("pid_observer_ns"),
+            pid_host_proof=meta.get("pid_host_proof"),
+            pgid=int(pgid_s) if pgid_s.isdigit() else None,
+            pid_identity_source=identity_source,
             profile=meta.get("profile"),
             depth=_parse_depth(meta.get("dispatch_depth", meta.get("depth"))),
             **attempt_contract,
@@ -1421,7 +1572,7 @@ def _reconcile_drill_rows(jobs, now=None):
         if r is None:
             continue
         # Absorb process PID and liveness into the canonical registry row as evidence.
-        if r.pid is None:
+        if r.pid is None and r.pid_scope != "namespace-local":
             r.pid = p.pid
             r.proc_start = p.proc_start      # pid and its start-time travel together, always
         if r.elapsed_min is None:
@@ -1523,9 +1674,16 @@ def collect(jobs_path=None, harness_filter=None):
     """Return merged [DispatchJob]. harness_filter does not restrict dispatch — the section
     is cross-harness by design (jobs, not sessions)."""
     proc_jobs = _scan_processes()
+    paths = _candidate_jobs_paths(jobs_path)
+    try:
+        route_nodes, terminal_attempts = _scan_registry_evidence(paths)
+    except Exception:
+        # Registry evidence is an enrichment surface. On read/parse failure keep the
+        # process row visible rather than hiding it without exact terminal proof.
+        route_nodes, terminal_attempts = {}, {}
+    proc_jobs = _suppress_terminal_attempt_proc_jobs(proc_jobs, terminal_attempts)
     seen = set(j.slug for j in proc_jobs if j.slug)
     seen_keys = set((_norm_cwd(j.cwd), _slug_stem(j.slug)) for j in proc_jobs if j.cwd and j.slug)
-    paths = _candidate_jobs_paths(jobs_path)
     log_jobs = []
     malformed = 0
     for registry_priority, path in enumerate(paths):
@@ -1557,7 +1715,10 @@ def collect(jobs_path=None, harness_filter=None):
     # Guard the extra `ps` spawn: only scan for live processes when there is at least one
     # unenriched log job to match (fleet re-collects every ~2s, so skipping the second `ps`
     # when nothing needs it saves a subprocess per tick in the common all-argv-matched case).
-    candidates = [j for j in log_jobs if j.harness is None and j.cwd]
+    candidates = [
+        j for j in log_jobs
+        if j.harness is None and j.cwd and not j.attempt_id
+    ]
     if candidates:
         exclude = {j.pid for j in proc_jobs if j.pid}
         cwd_index = _live_claude_cwds(exclude)
@@ -1591,12 +1752,11 @@ def collect(jobs_path=None, harness_filter=None):
     collect.last_malformed = malformed
     # F-28a (§3.3) — terminal route-node evidence, stashed the same way `last_malformed` is
     # (module attribute, not a return-signature change — every existing caller stays untouched).
-    try:
-        collect.last_route_nodes = _scan_route_nodes(paths)
-    except Exception:
-        collect.last_route_nodes = {}
+    collect.last_route_nodes = route_nodes
+    collect.last_terminal_attempts = terminal_attempts
     return jobs
 
 
 collect.last_malformed = 0
 collect.last_route_nodes = {}
+collect.last_terminal_attempts = {}

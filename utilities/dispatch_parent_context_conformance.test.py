@@ -94,7 +94,9 @@ class ParentContextConformance(unittest.TestCase):
             "AGENT_HOME": str(self.agent_home),
             "CODEX_HOME": str(self.codex_home),
             "AGENT_ARTIFACT_ROOT": str(self.artifact_root),
-            "AGENT_MODEL_GOVERNOR_ROOT": str(self.base / "governor" / verdict.lower()),
+            "AGENT_MODEL_GOVERNOR_ROOT": str(
+                self.artifact_root / ".runtime" / "model-worker-governor"
+            ),
             "FAKE_CODEX_VERDICT": verdict,
             "FAKE_CODEX_ARTIFACT": str(artifact),
             "CODEX_DISPATCH_EARLY_EXIT_WATCH": "0",
@@ -199,7 +201,8 @@ class ParentContextConformance(unittest.TestCase):
                     ["sh", str(WAIT), "--jobs", str(jobs), "--interval", "1", "--max", "5"],
                     run["env"], "pass-wait",
                 )
-                self.assertIn("terminal/SUSPECT/DEAD", wait.stdout)
+                self.assertIn("terminal-unclosed", wait.stdout)
+                self.assertIn(run["attempt"], wait.stdout)
                 harvest = self.run_parent_surface(
                     [sys.executable, str(HARVEST), "--jobs", str(jobs),
                      "--attempt-id", run["attempt"], "--status", "open"],
@@ -211,8 +214,10 @@ class ParentContextConformance(unittest.TestCase):
                 self.assertFalse(any(completion.rglob(f"*{run['attempt']}*")) if completion.exists() else False)
             else:
                 # Closed real failures are read only by the exact-attempt harvest
-                # selector.  Liveness/wait use a separately labeled current/open
-                # row with the same exact wrapper-shaped JSONL.
+                # selector. Liveness uses a separately labeled current/open row
+                # with the same exact wrapper-shaped JSONL. The readiness-only
+                # wait surface does not reinterpret transcript content; a gone
+                # process whose row remains open is terminal-unclosed.
                 real_before = run["jobs"].read_bytes()
                 harvest = self.run_parent_surface(
                     [sys.executable, str(HARVEST), "--jobs", str(run["jobs"]),
@@ -248,7 +253,8 @@ class ParentContextConformance(unittest.TestCase):
                     ["sh", str(WAIT), "--jobs", str(supplemental), "--interval", "1", "--max", "5"],
                     run["env"], f"{verdict.lower()}-supplemental-wait",
                 )
-                self.assertIn(f"turn.completed {verdict}", wait.stdout)
+                self.assertIn("terminal-unclosed", wait.stdout)
+                self.assertIn(supplemental_attempt, wait.stdout)
                 self.assertIn("\topen\t", supplemental.read_text())
                 self.assertEqual(run["jobs"].read_bytes(), real_before)
 

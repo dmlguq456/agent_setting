@@ -4,6 +4,7 @@ import argparse, json, os, subprocess, sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "utilities"))
+from dispatch_contract import GOVERNOR_RESERVATION_ENV
 from worker_bootstrap import assigned_contract, worker_type_for_kind
 ROLE_MODE={"deep maker":"dev/refactor","fast implementer":"dev/backend","deep reviewer":"qa/test","fast reviewer":"qa/review","fast writer":"docs/writing","deep orchestrator":"ops/orchestration","orchestrator":"ops/orchestration"}
 
@@ -30,6 +31,13 @@ CURRENT_PARENT_ENV = {
     "parent_transport": "AGENT_DISPATCH_CURRENT_TRANSPORT",
     "parent_sandbox": "AGENT_DISPATCH_CURRENT_SANDBOX",
 }
+PROTECTED_ADAPTER_FLAGS = frozenset({
+    "--worktree", "--slug", "--capability", "--mode", "--qa", "--intensity",
+    "--dispatch-depth", "--worker-type", "--unit", "--assigned-contract",
+    "--owner", "--route-file", "--route-id", "--route-hash", "--route-node",
+    "--registry-digest", "--write-scope", "--completion-gate", "--prompt-text",
+    "--harness-affinity", "--parent", "--start", "--register", "--dry-run",
+})
 
 
 class DispatchNodeError(Exception):
@@ -39,6 +47,17 @@ class DispatchNodeError(Exception):
         super().__init__(reason)
         self.reason = reason
         self.fields = fields
+
+
+def reject_generated_argument_overrides(adapter_args):
+    """Keep trailing wrapper args from replacing route-generated authority."""
+
+    for token in strip_leading_separator(adapter_args):
+        flag = token.split("=", 1)[0]
+        if flag in PROTECTED_ADAPTER_FLAGS:
+            raise DispatchNodeError(
+                "dispatch-generated-argument-override", flag=flag
+            )
 
 
 def _normalized_failure_class(row):
@@ -217,6 +236,19 @@ def main():
  a=p.parse_args(); route=json.loads(Path(a.route).read_text()); subprocess.run([sys.executable,str(ROOT/"utilities/capability-route.py"),"verify","--route",a.route,"--cwd",route["cwd"]],check=True,stdout=subprocess.DEVNULL)
  node=next((x for x in route["nodes"] if x["id"]==a.node),None)
  if not node: raise SystemExit("unknown route node")
+ try:
+  reject_generated_argument_overrides(a.adapter_args)
+ except DispatchNodeError as e:
+  print("check=failed"); print(f"reason={e.reason}")
+  for k,v in e.fields.items(): print(f"{k}={v}")
+  raise SystemExit(65)
+ if node.get("replica_group") and a.action in {"register", "start"}:
+  if a.action == "register" or not os.environ.get(GOVERNOR_RESERVATION_ENV):
+   print("check=failed")
+   print("reason=replica-group-batch-required")
+   print(f"replica_group={node['replica_group']}")
+   print("child_spawned=0")
+   raise SystemExit(65)
  if node["kind"]=="resource-runner": print("resource_runner="+str(ROOT/"utilities/resource-runner.py")+"\nroute_node="+a.node); return
  print("completion_marker="+str(Path(os.environ.get("AGENT_HOME", ROOT))/".dispatch/completion"/route["route_id"]/(node["id"]+".json")))
  wrapper=ROOT/"adapters"/a.adapter/"bin"/"dispatch-headless.py"

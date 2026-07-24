@@ -16,6 +16,7 @@ from dispatch_completion_join import (  # noqa: E402
     JoinContractError,
     classify_supervised_shell_command,
     current_children,
+    pending_attempt_ids,
     read_supervisor_state,
 )
 
@@ -70,9 +71,7 @@ def main() -> int:
         rows = current_children(registry, parent_attempt)
     except JoinContractError:
         return deny("runtime-supervised-parent: exact child registry contract is invalid")
-    open_attempts = {
-        row.attempt_id for row in rows if row.status in {"open", "running"}
-    }
+    open_attempts = pending_attempt_ids(rows)
     if not open_attempts:
         return 0
 
@@ -91,6 +90,14 @@ def main() -> int:
             command=command,
             open_attempt_ids=open_attempts,
             parent_slug=os.environ.get("AGENT_DISPATCH_SELF_SLUG", ""),
+            jobs=registry,
+            parent_attempt_id=parent_attempt,
+            route_file=(
+                Path(os.environ["AGENT_ROUTE_FILE"])
+                if os.environ.get("AGENT_ROUTE_FILE")
+                else None
+            ),
+            route_id=os.environ.get("AGENT_ROUTE_ID", ""),
         )
 
     delivered_open = open_attempts.intersection(delivered or set())
@@ -103,7 +110,7 @@ def main() -> int:
             and action.attempt_id in delivered_open
         )
     else:
-        allowed = bool(action and action.kind == "dispatch")
+        allowed = bool(action and action.kind in {"dispatch", "dispatch-batch"})
     if allowed:
         return 0
 
@@ -111,7 +118,8 @@ def main() -> int:
     return deny(
         "runtime-supervised-parent: open registered child attempt(s) "
         f"{attempts}; a new undelivered batch admits only another exact "
-        "parent-bound dispatch-node start, while a delivered batch admits "
+        "parent-bound dispatch-node start or checked dispatch-batch start, "
+        "while a delivered batch admits "
         "only exact preflight harvest"
     )
 
