@@ -10,7 +10,7 @@ LOG_DIR="$REPO/.dispatch/logs"
 SLUG="g10-opencode-depth2-blocked"
 FAKE_BIN="$WORK/fake-bin"
 RUNTIME_SENTINEL="$WORK/opencode-runtime-started"
-GOVERNOR_ROOT="$WORK/model-worker-governor"
+GOVERNOR_ROOT="$REPO/.agent_reports/.runtime/model-worker-governor"
 
 mkdir -p "$FAKE_BIN"
 printf '%s\n' \
@@ -26,14 +26,15 @@ OUTPUT=$(PATH="$FAKE_BIN:$PATH" \
   AGENT_HOME="$HARNESS_ROOT" \
   "$HARNESS_ROOT/adapters/opencode/bin/dispatch-headless.py" --start \
   --worktree "$REPO" --jobs "$JOBS" --log-dir "$LOG_DIR" \
-  --slug "$SLUG" --capability autopilot-code --mode qa/test --qa standard \
+  --slug "$SLUG" --capability autopilot-code --capability-mode dev \
+  --worker-mode qa/test --unit qa/test --qa standard \
   --intensity standard --dispatch-depth 2 --parent g10-owner \
   --parent-session-id g10-parent-session --worker-type review \
   --assigned-contract code-test --owner autopilot-code --owner-harness codex \
   --parent-harness codex --parent-transport headless \
   --parent-sandbox workspace-write --launch-authority conductor \
   --nested-eligibility supported --eligibility-source drill-fixture \
-  --inherit-model-settings 2>&1)
+  --model-role 'fast implementer' 2>&1)
 RC=$?
 set -e
 
