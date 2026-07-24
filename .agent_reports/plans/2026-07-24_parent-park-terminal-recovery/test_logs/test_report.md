@@ -40,4 +40,5 @@ portable guard failures.
   canonical jobs registry selected: **exit 0, stdout empty, stderr empty**
 - the 50 focused checks were rerun on integrated main: **all PASS**
 
-Verdict: **PASS**. Main push and guarded worktree cleanup remain.
+Main push: **PASS**. Guarded worktree cleanup: check `eligible`, apply `removed`,
+active PID 0, stale registry row 0. Final verdict: **PASS**.

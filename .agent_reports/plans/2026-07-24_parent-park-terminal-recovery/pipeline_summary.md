@@ -1,6 +1,6 @@
 # Parent-park terminal recovery — pipeline summary
 
-- status: integrated main verification PASS; push and cleanup pending
+- status: complete
 - spec: v27 / SD-83, atomic transaction complete
 - code: completion-mode-scoped parent candidate selection complete
 - safety: shared readiness/quiescence and registry state unchanged
@@ -8,4 +8,6 @@
 - broad verification: adaptation and manifest PASS; portable guard delta 0 against the identical 29-failure baseline
 - source: `a9462fc1`, fast-forwarded to main
 - installed smoke: runtime projection/hook trust ok; no-bypass current-session hook returned cleanly
-- remaining: push main, guarded worktree cleanup
+- integration: main pushed through `d6d2d5b4`
+- cleanup: worktree removed after guarded eligibility check; branch retained, stale rows 0
+- remaining: none

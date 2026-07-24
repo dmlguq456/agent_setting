@@ -7,5 +7,5 @@
 - [x] Codex completion-mode-aware parent park 구현
 - [x] ordinary/poll/supervised 회귀 테스트 추가
 - [x] 관련 테스트·정적 검사 통과
-- [ ] 커밋·push·main 통합 검증
-- [ ] guarded worktree cleanup check/apply
+- [x] 커밋·push·main 통합 검증
+- [x] guarded worktree cleanup check/apply
