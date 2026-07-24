@@ -39,7 +39,9 @@ _LOOPS = re.compile(r"loops/(oncall|note|study|drill|runtime-watch)")
 _LOOP_KEYS = ("oncall", "note", "study", "drill", "runtime-watch")
 _DRILL_LOG_PATH = re.compile(r"(/[^\s'\";]*drill[^\s'\";]*\.log)")
 _DRILL_CASE_LINE = re.compile(r"^▶\s+(.+?)\s+\(work=", re.MULTILINE)
-_MODE = re.compile(r"--mode ([a-z]+)")
+_MODE = re.compile(r"(?:^|\s)--mode(?:=|\s+)([a-z][a-z0-9-]*(?:/[a-z][a-z0-9-]*)?)")
+_CAPABILITY_MODE = re.compile(r"(?:^|\s)--capability-mode(?:=|\s+)([a-z][a-z0-9-]*)")
+_WORKER_MODE = re.compile(r"(?:^|\s)--worker-mode(?:=|\s+)([a-z][a-z0-9-]*/[a-z][a-z0-9-]*)")
 _QA = re.compile(r"--qa ([a-z]+)")
 # Valid qa levels — guards argv layer-1 (effective_qa) against contaminated matches:
 # `\w+` is Unicode so `--qa (\w+)` would capture Korean/label text that merely mentions
@@ -124,6 +126,43 @@ def _parse_pipe(pipe):
     """Parse a jobs.log pipe field, dual-form → (name, mode, qa, profile)."""
     fields = _parse_pipe_meta(pipe)
     return fields.get("_name"), fields.get("mode"), fields.get("qa"), fields.get("profile")
+
+
+def _dispatch_mode_axes(meta, worker_type=None, unit=None):
+    """Project current and legacy mode metadata without laundering conflicts.
+
+    Canonical fields always win. A scalar legacy ``mode`` can backfill only the
+    capability axis; a slash form can backfill only a non-owner worker axis.
+    The historically invalid owner + stage-mode row stays visible as a conflict
+    and is never presented as the owner's capability mode.
+    """
+
+    capability_mode = meta.get("capability_mode") or None
+    worker_mode = meta.get("worker_mode") or None
+    legacy_mode = meta.get("mode") or None
+    owner_row = bool(
+        worker_type == "owner"
+        or unit == "_kernel/owner"
+        or (meta.get("worker_role") or "").endswith("orchestrator")
+    )
+    conflict = False
+    if legacy_mode:
+        if "/" in legacy_mode:
+            if owner_row:
+                conflict = True
+            elif worker_mode is None:
+                worker_mode = legacy_mode
+            elif worker_mode != legacy_mode:
+                conflict = True
+        elif capability_mode is None:
+            capability_mode = legacy_mode
+        elif capability_mode != legacy_mode:
+            conflict = True
+    if owner_row and worker_mode:
+        conflict = True
+    if worker_mode and unit and not unit.startswith("_kernel/") and worker_mode != unit:
+        conflict = True
+    return capability_mode, worker_mode, conflict
 
 
 def _pid_namespace_identity(pid="self"):
@@ -1317,7 +1356,27 @@ def _scan_processes():
             if jcwd.endswith(" (deleted)"):
                 jcwd = jcwd[: -len(" (deleted)")]
             key = ms[-1]
-            mode = (_MODE.findall(args) or [None])[-1]
+            env_capability_mode = env.get("AGENT_DISPATCH_CAPABILITY_MODE") or None
+            env_worker_mode = env.get("AGENT_DISPATCH_WORKER_MODE") or None
+            mode = (
+                None
+                if env_capability_mode or env_worker_mode
+                else (_MODE.findall(args) or [None])[-1]
+            )
+            worker_type = env.get("AGENT_DISPATCH_WORKER_TYPE")
+            unit = env.get("AGENT_DISPATCH_UNIT") or None
+            capability_mode, worker_mode, mode_axis_conflict = _dispatch_mode_axes(
+                {
+                    "capability_mode": env_capability_mode
+                    or (_CAPABILITY_MODE.findall(args) or [None])[-1],
+                    "worker_mode": env_worker_mode
+                    or (_WORKER_MODE.findall(args) or [None])[-1],
+                    "mode": mode,
+                    "worker_role": env.get("AGENT_DISPATCH_WORKER_ROLE"),
+                },
+                worker_type=worker_type,
+                unit=unit,
+            )
             qa_hits = [q for q in _QA.findall(args) if q in _QA_LEVELS]
             qa = qa_hits[-1] if qa_hits else None
             slug = os.path.basename(jcwd.rstrip("/")) if jcwd else ""
@@ -1342,7 +1401,9 @@ def _scan_processes():
             q, qsrc = effective_qa(qa, None, jcwd, slug, key,
                                    artifact_root=env.get("AGENT_ARTIFACT_ROOT"))
             jobs.append(DispatchJob(
-                key=key, stage=None, mode=mode, qa=q,
+                key=key, stage=None, mode=mode,
+                capability_mode=capability_mode, worker_mode=worker_mode,
+                mode_axis_conflict=mode_axis_conflict, qa=q,
                 elapsed_min=etime_to_min(etime), slug=slug, cwd=jcwd,
                 parent_sid=parent_sid, parent_slug=parent_slug, is_child=is_child,
                 qa_source=qsrc, source="proc", harness="claude",
@@ -1351,9 +1412,9 @@ def _scan_processes():
                 model=_claude_job_model(pid_s, jcwd), depth=depth,
                 **attempt_contract,
                 intensity=env.get("AGENT_DISPATCH_INTENSITY"),
-                worker_type=env.get("AGENT_DISPATCH_WORKER_TYPE"),
+                worker_type=worker_type,
                 assigned_contract=env.get("AGENT_DISPATCH_ASSIGNED_CONTRACT"),
-                unit=env.get("AGENT_DISPATCH_UNIT") or None,
+                unit=unit,
                 worker_role=env.get("AGENT_DISPATCH_WORKER_ROLE"),
                 capability_owner=env.get("AGENT_DISPATCH_OWNER"),
                 effort=env.get("AGENT_DISPATCH_EFFORT"),
@@ -1472,6 +1533,11 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None, registry_priority=0):
         parent_sid = meta.get("parent_sid") or meta.get("parent_session_id") or None
         parent_cwd = meta.get("parent_cwd") or meta.get("parent_worktree") or None
         harness = _infer_harness(meta, slug)
+        worker_type = meta.get("worker_type")
+        unit = meta.get("unit") or None
+        capability_mode, worker_mode, mode_axis_conflict = _dispatch_mode_axes(
+            meta, worker_type=worker_type, unit=unit
+        )
         pid_s = meta.get("pid", "")
         pid_local = int(pid_s) if pid_s.isdigit() else None
         pid_local_start = meta.get("pid_start") or meta.get("proc_start")
@@ -1479,7 +1545,9 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None, registry_priority=0):
         pid_host_s = meta.get("pid_host", "")
         pgid_s = meta.get("pgid", "")
         job = DispatchJob(
-            key=pname, stage=status, mode=meta.get("mode"), qa=q,
+            key=pname, stage=status, mode=meta.get("mode"),
+            capability_mode=capability_mode, worker_mode=worker_mode,
+            mode_axis_conflict=mode_axis_conflict, qa=q,
             elapsed_min=_iso_elapsed_min(ts), slug=slug or worktree or repo,
             cwd=cwd, parent_sid=parent_sid, parent_cwd=parent_cwd, parent_slug=parent_slug,
             is_child=bool(parent_slug or parent_sid or parent_cwd), qa_source=qsrc, source="jobs", status=status,
@@ -1498,9 +1566,9 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None, registry_priority=0):
             depth=_parse_depth(meta.get("dispatch_depth", meta.get("depth"))),
             **attempt_contract,
             intensity=meta.get("intensity"),
-            worker_type=meta.get("worker_type"),
+            worker_type=worker_type,
             assigned_contract=meta.get("assigned_contract"),
-            unit=meta.get("unit") or None,
+            unit=unit,
             worker_role=worker_role,
             capability_owner=meta.get("owner") or meta.get("capability_owner"),
             effort=meta.get("effort"), model_role=meta.get("model_role"),
@@ -1540,7 +1608,7 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None, registry_priority=0):
 
 
 def _jobs_log_fields(paths):
-    """{slug: (mode, profile)} from the latest jobs.log row per slug (last-occurrence-wins,
+    """{slug: metadata} from the latest jobs.log row per slug (last-occurrence-wins,
     mirrors the reconciliation in _scan_jobs_log). Tolerant: missing file / malformed rows
     (field count != 6) never raise — worst case an empty or partial map."""
     if isinstance(paths, (str, bytes, os.PathLike)):
@@ -1560,8 +1628,7 @@ def _jobs_log_fields(paths):
             if len(fields) != 6:
                 continue
             slug = fields[4]
-            _pname, pmode, _pqa, pprofile = _parse_pipe(fields[5] or "")
-            path_fields[slug] = (pmode, pprofile)   # last occurrence wins within a file
+            path_fields[slug] = _parse_pipe_meta(fields[5] or "")
         for slug, value in path_fields.items():
             if slug not in fields_by_slug:
                 fields_by_slug[slug] = value         # first registry wins across files
@@ -1730,18 +1797,39 @@ def collect(jobs_path=None, harness_filter=None):
         log_jobs.extend(path_jobs)
         malformed += path_malformed
     jobs = proc_jobs + log_jobs
-    # mode+profile backfill for proc jobs whose argv lacked --mode (mode=None is an
-    # opportunistic fix, not spec-mandated; profile=None backfill IS spec §7-mandated —
+    # Typed-mode+profile backfill for proc jobs whose argv/env omitted metadata.
+    # Legacy mode backfill is read-only; profile=None backfill IS spec §7-mandated —
     # a proc-scanned profile job has no argv signal for --profile at all).
-    if any(j.mode is None or j.profile is None for j in proc_jobs):
+    if any(
+        j.mode is None or j.capability_mode is None
+        or j.worker_mode is None or j.profile is None
+        for j in proc_jobs
+    ):
         log_fields = _jobs_log_fields(paths)
         for j in proc_jobs:
-            if j.slug and (j.mode is None or j.profile is None):
-                lm, lp = log_fields.get(j.slug, (None, None))
+            if j.slug:
+                metadata = log_fields.get(j.slug, {})
                 if j.mode is None:
-                    j.mode = lm
+                    j.mode = metadata.get("mode")
+                if j.capability_mode is None:
+                    j.capability_mode = metadata.get("capability_mode")
+                if j.worker_mode is None:
+                    j.worker_mode = metadata.get("worker_mode")
                 if j.profile is None:
-                    j.profile = lp
+                    j.profile = metadata.get("profile")
+                cap_mode, worker_mode, conflict = _dispatch_mode_axes(
+                    {
+                        "capability_mode": j.capability_mode,
+                        "worker_mode": j.worker_mode,
+                        "mode": j.mode,
+                        "worker_role": j.worker_role,
+                    },
+                    worker_type=j.worker_type,
+                    unit=j.unit,
+                )
+                j.capability_mode = cap_mode
+                j.worker_mode = worker_mode
+                j.mode_axis_conflict = j.mode_axis_conflict or conflict
     # cwd-fallback enrichment for tokenless headless dispatch (stdin-piped `claude -p`,
     # `-p -c` resume — plan Phase B): these jobs.log rows have harness=None because their
     # argv carries no /autopilot- token, so _scan_processes() never argv-matched them.

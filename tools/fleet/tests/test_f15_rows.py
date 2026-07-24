@@ -400,14 +400,14 @@ class OptsDialHierarchyTest(unittest.TestCase):
             key="code",
             slug="o",
             depth=1,
-            mode="dev/refactor",
+            capability_mode="dev",
             intensity="strong",
             worker_type="owner",
             worker_role="deep maker",
             capability_owner="autopilot-code",
         )
         self.assertEqual(self._dial(child), "code-test(strong)")
-        self.assertEqual(self._dial(owner), "code(dev/refactor·strong·owner)")
+        self.assertEqual(self._dial(owner), "code(dev·strong·owner)")
 
     def test_unit_is_a_distinct_dim_tail_not_a_skill_or_worker_role(self):
         child = DispatchJob(
@@ -451,13 +451,14 @@ class OptsDialHierarchyTest(unittest.TestCase):
         # user 2026-07-20: "codex랑 claude가 서로 다르게 뜨는데" — the codex writer puts the
         # model-role phrase in worker_role; the conductor reads 'owner' on both harnesses.
         codex = DispatchJob(key="code", slug="s", depth=1, harness="codex",
-                            mode="dev/refactor", intensity="strong",
-                            worker_role="deep orchestrator", capability_owner="autopilot-code")
+                            capability_mode="dev", intensity="strong",
+                            worker_type="owner", worker_role="deep orchestrator",
+                            capability_owner="autopilot-code")
         claude = DispatchJob(key="code", slug="s", depth=1, harness="claude",
-                             mode="dev/refactor", intensity="strong",
-                             worker_role="autopilot-code-owner",
+                             capability_mode="dev", intensity="strong",
+                             worker_type="owner", worker_role="autopilot-code-owner",
                              capability_owner="autopilot-code")
-        self.assertEqual(self._dial(codex), "code(dev/refactor·strong·owner)")
+        self.assertEqual(self._dial(codex), "code(dev·strong·owner)")
         self.assertEqual(self._dial(codex), self._dial(claude))
 
     def test_legacy_team_metadata_and_maker_phrase_drop_from_knobs(self):

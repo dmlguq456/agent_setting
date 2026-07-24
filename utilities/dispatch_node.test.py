@@ -41,6 +41,7 @@ def make_node(depth=2, dispatch_fallback=None):
         "id": "execute",
         "kind": "pipeline-stage",
         "role": "fast implementer",
+        "unit": "dev/backend",
         "dispatch_depth": depth,
         "write_scope": ["source/**"],
         "completion_gate": "code-execute",
@@ -52,6 +53,7 @@ def make_route(node, tuples=None):
     return {
         "cwd": "/tmp/fixture-worktree",
         "capability": "autopilot-code",
+        "capability_mode": "dev",
         "effective_intensity": "standard",
         "route_id": "rt-fixture",
         "route_hash": "sha256:fixture",
@@ -277,6 +279,8 @@ class MainMaterializationTest(unittest.TestCase):
         self.assertIn("--parent", argv)
         self.assertIn("owner", argv)
         self.assertEqual(argv[argv.index("--worker-type") + 1], "stage")
+        self.assertEqual(argv[argv.index("--capability-mode") + 1], "dev")
+        self.assertEqual(argv[argv.index("--worker-mode") + 1], "dev/backend")
         self.assertEqual(argv[argv.index("--assigned-contract") + 1], "code-execute")
         self.assertEqual(argv[argv.index("--model-role") + 1], "fast implementer")
         self.assertNotIn("--worker-role", argv)

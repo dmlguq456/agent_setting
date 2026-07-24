@@ -114,10 +114,10 @@ class ClaudeSD45(unittest.TestCase):
    art=base/".agent_reports"; art.mkdir(); gate={"spec_read":{"satisfied":True,"source":"claude-fixture"},"drift_verdict":"within-spec","workflow_mode":"tracked","artifact_guard":{"satisfied":True,"source":"claude-fixture"}}
    dispatch={"tuples":[{"parent_harness":"claude","parent_transport":"headless","parent_sandbox":"fixture","child_harness":"claude","launch_authority":"conductor","status":"supported","probe_source":"claude-fixture","probe_time":"2026-07-16T00:00:00Z","failure_class":""}],"native_subagent":[]}; route=R.compile_route("autopilot-code","dev","strong",repo,art,signals=["shared-contract"],transport="headless",tracking="tracked",tracked_gate_evidence=gate,dispatch_evidence=dispatch); path=base/"route.json"; path.write_text(json.dumps(route)); node=next(x for x in route["nodes"] if x["id"]=="execute"); jobs=base/"jobs.log"; logs=base/"logs"
    parent=subprocess.Popen(["sleep","60"]);self.addCleanup(parent.wait);self.addCleanup(parent.kill);parent_start=(Path("/proc")/str(parent.pid)/"stat").read_text().split()[21];jobs.write_text(f"2026-07-23T00:00:00Z\topen\t{repo}\t{repo}\towner\tattempt_schema_version=2,dispatch_depth=1,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless,worker_type=owner,harness=claude,runtime_sandbox=fixture,attempt_id=att-sd45-parent,pid={parent.pid},pid_start={parent_start}\n")
-   args=[sys.executable,str(ROOT/"adapters/claude/bin/dispatch-headless.py"),"--register","--worktree",str(repo),"--slug","claude-sd45","--capability","autopilot-code","--mode","dev/backend","--qa","standard","--intensity","strong","--dispatch-depth","2","--parent","owner","--parent-harness","claude","--parent-transport","headless","--parent-sandbox","fixture","--nested-eligibility","supported","--eligibility-source","claude-fixture","--fallback-ordinal","1","--route-file",str(path),"--route-id",route["route_id"],"--route-hash",route["route_hash"],"--route-node","execute","--unit",node["unit"],"--registry-digest",route["registry_digest"],"--write-scope",";".join(node["write_scope"]),"--completion-gate",node["completion_gate"],"--model","claude-test","--effort","low","--jobs",str(jobs),"--log-dir",str(logs)]
-   env={**{k:v for k,v in os.environ.items() if k!="AGENT_DISPATCH_JOBS"},"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),"AGENT_DISPATCH_ATTEMPT_ID":"att-sd45-parent"}; ok=subprocess.run(args,text=True,capture_output=True,env=env); self.assertEqual(ok.returncode,0,ok.stderr); output=dict(line.split("=",1) for line in ok.stdout.splitlines() if "=" in line); prompt=Path(output["prompt_file"]).read_text(); self.assertIn("consume the immutable record",prompt); self.assertNotIn("status -> prompt-signal -> mode -> route\n",prompt); self.assertIn("async_wait_policy=deny-proven",jobs.read_text()); self.assertIn(f"unit={node['unit']}",jobs.read_text()); self.assertIn(f"unit={node['unit']}",ok.stdout)
+   args=[sys.executable,str(ROOT/"adapters/claude/bin/dispatch-headless.py"),"--register","--worktree",str(repo),"--slug","claude-sd45","--capability","autopilot-code","--capability-mode","dev","--worker-mode",node["unit"],"--qa","standard","--intensity","strong","--dispatch-depth","2","--parent","owner","--parent-harness","claude","--parent-transport","headless","--parent-sandbox","fixture","--nested-eligibility","supported","--eligibility-source","claude-fixture","--fallback-ordinal","1","--route-file",str(path),"--route-id",route["route_id"],"--route-hash",route["route_hash"],"--route-node","execute","--unit",node["unit"],"--registry-digest",route["registry_digest"],"--write-scope",";".join(node["write_scope"]),"--completion-gate",node["completion_gate"],"--model","claude-test","--effort","low","--jobs",str(jobs),"--log-dir",str(logs)]
+   env={**{k:v for k,v in os.environ.items() if k!="AGENT_DISPATCH_JOBS"},"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),"AGENT_DISPATCH_ATTEMPT_ID":"att-sd45-parent"}; ok=subprocess.run(args,text=True,capture_output=True,env=env); self.assertEqual(ok.returncode,0,ok.stdout+ok.stderr); output=dict(line.split("=",1) for line in ok.stdout.splitlines() if "=" in line); prompt=Path(output["prompt_file"]).read_text(); self.assertIn("consume the immutable record",prompt); self.assertNotIn("status -> prompt-signal -> mode -> route\n",prompt); self.assertIn("async_wait_policy=deny-proven",jobs.read_text()); self.assertIn(f"unit={node['unit']}",jobs.read_text()); self.assertIn(f"unit={node['unit']}",ok.stdout)
    broken=json.loads(path.read_text()); del broken["tracked_gate_evidence"]; broken["route_hash"]=R.route_hash(broken); broken["route_id"]="rt-"+broken["route_hash"].split(":",1)[1][:16]; path.write_text(json.dumps(broken)); bad=args.copy(); bad[bad.index(route["route_id"])]=broken["route_id"]; bad[bad.index(route["route_hash"])]=broken["route_hash"]; denied=subprocess.run(bad,text=True,capture_output=True,env=env); self.assertEqual(denied.returncode,65); self.assertIn("tracked gate evidence",denied.stderr)
-   legacy=[sys.executable,str(ROOT/"adapters/claude/bin/dispatch-headless.py"),"--dry-run","--worktree",str(repo),"--slug","claude-legacy-scope","--capability","autopilot-code","--mode","dev/backend","--qa","standard","--write-scope","source/**","--model","claude-test","--effort","low"]
+   legacy=[sys.executable,str(ROOT/"adapters/claude/bin/dispatch-headless.py"),"--dry-run","--worktree",str(repo),"--slug","claude-legacy-scope","--capability","autopilot-code","--mode","dev","--qa","standard","--write-scope","source/**","--model","claude-test","--effort","low"]
    compatible=subprocess.run(legacy,text=True,capture_output=True,env=env); self.assertEqual(compatible.returncode,0,compatible.stderr); self.assertIn("status=dry-run",compatible.stdout)
 
 
@@ -127,6 +127,7 @@ def _shell_command_args(**overrides):
         worktree="/tmp/fixture-worktree",
         agent_home=Path("/tmp/fixture-agent-home"),
         completion_gate=None, assigned_contract=None, unit=None,
+        capability_mode="dev", worker_mode=None, mode=None,
         resolved_model_settings={"source": "inherit", "role": "-", "model": None, "effort": None},
     )
     base.update(overrides)
@@ -177,7 +178,7 @@ class ClaudeSD78CompletionDelivery(unittest.TestCase):
         args.parent_slug = args.parent_session_id = args.capability_owner = args.owner_harness = None
         args.route_file = None
         args.capability = "autopilot-code"
-        args.mode = "dev"
+        args.capability_mode = "dev"; args.worker_mode = None; args.mode = None
         args.qa = "thorough"
         args.dispatch_depth = 1
         task_spec = importlib.util.spec_from_file_location(
@@ -228,7 +229,7 @@ class ClaudeSD78CompletionDelivery(unittest.TestCase):
         args.parent_slug = args.parent_session_id = args.capability_owner = args.owner_harness = None
         args.route_file = None
         args.capability = "autopilot-code"
-        args.mode = "dev"
+        args.capability_mode = "dev"; args.worker_mode = None; args.mode = None
         args.qa = "thorough"
         args.dispatch_depth = 2
         with mock.patch.object(WH, "task_prompt", return_value=("do the thing", "cli")):

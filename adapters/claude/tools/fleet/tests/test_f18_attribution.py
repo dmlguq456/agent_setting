@@ -102,10 +102,10 @@ class RenderDuplicateParentTest(unittest.TestCase):
         sessions = [Session(harness="codex", pid=1, cwd="/work/repo", session_id="same", slug="repo", liveness="working"),
                     Session(harness="codex", pid=2, cwd="/work/repo", session_id="same", slug="repo", liveness="working")]
         job = DispatchJob(key="autopilot-code", slug="child", cwd="/work/child", parent_sid="same", is_child=True,
-                          harness="codex", mode="dev/refactor", liveness="working")
+                          harness="codex", capability_mode="dev", liveness="working")
         lines = render._build_lines(sessions, [job], section="both", narrow=False, malformed=0, layout="wide")
         text = "\n".join("".join(part for part, _key in line) for line in lines if line)
-        self.assertEqual(text.count("dev/refactor"), 1)
+        self.assertEqual(text.count("dev"), 1)
 
 
 class RenderMemExclusionTest(unittest.TestCase):

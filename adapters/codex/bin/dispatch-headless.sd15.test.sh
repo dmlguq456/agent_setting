@@ -61,8 +61,9 @@ dh._bind_runtime_parent(d1)
 print(f"D1={d1.parent_session_id}:{d1.parent_slug or '-'}")
 
 d2 = dh.parser().parse_args([
-    "--worktree", "/work/repo", "--slug", "stage", "--capability", "code-plan",
-    "--mode", "debug", "--dispatch-depth", "2", "--parent", "real-owner",
+    "--worktree", "/work/repo", "--slug", "stage", "--capability", "autopilot-code",
+    "--capability-mode", "debug", "--worker-mode", "plan/plan-author",
+    "--unit", "plan/plan-author", "--dispatch-depth", "2", "--parent", "real-owner",
     "--parent-session-id", "owner-thread",
 ])
 dh._bind_runtime_parent(d2)

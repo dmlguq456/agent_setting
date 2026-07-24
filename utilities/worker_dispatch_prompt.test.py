@@ -77,8 +77,10 @@ class WorkerDispatchPromptTest(unittest.TestCase):
                     topology = [
                         "--dispatch-depth", "1",
                         "--worker-type", "owner",
+                        "--unit", "_kernel/owner",
                         "--assigned-contract", "autopilot-code",
                     ]
+                    mode_axes = ["--capability-mode", "dev"]
                     expected_worker_type = "Owner"
                     expected_contract = "autopilot-code"
                 else:
@@ -87,6 +89,10 @@ class WorkerDispatchPromptTest(unittest.TestCase):
                         "--parent", "owner",
                         "--worker-type", "stage",
                         "--assigned-contract", "code-test",
+                    ]
+                    mode_axes = [
+                        "--capability-mode", "dev",
+                        "--worker-mode", "dev/backend",
                     ]
                     expected_worker_type = "Stage"
                     expected_contract = "code-test"
@@ -100,8 +106,7 @@ class WorkerDispatchPromptTest(unittest.TestCase):
                     slug,
                     "--capability",
                     "autopilot-code",
-                    "--mode",
-                    "dev/backend",
+                    *mode_axes,
                     "--intensity",
                     "standard",
                     *topology,
@@ -156,8 +161,9 @@ class WorkerDispatchPromptTest(unittest.TestCase):
                 spec=importlib.util.spec_from_file_location(f"dispatch_{harness}",wrapper)
                 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
                 args=module.parser().parse_args([
-                    "--worktree","/work/repo","--slug","stage","--capability","code-test",
-                    "--mode","dev/backend","--intensity","standard","--dispatch-depth","2",
+                    "--worktree","/work/repo","--slug","stage","--capability","autopilot-code",
+                    "--capability-mode","dev","--worker-mode","dev/backend",
+                    "--unit","dev/backend","--intensity","standard","--dispatch-depth","2",
                     "--parent","owner","--worker-type","stage",
                     "--assigned-contract","code-test","--prompt-text","TASK",*model,
                 ])

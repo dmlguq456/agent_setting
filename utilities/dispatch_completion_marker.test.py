@@ -128,7 +128,8 @@ class CompletionMarkerTest(unittest.TestCase):
         node = next(n for n in route["nodes"] if n["id"] == node_id)
         return wrapper + [
             f"--{action}", "--worktree", str(self.repo), "--slug", f"{harness}-{node_id}",
-            "--capability", "autopilot-code", "--mode", "dev/backend",
+            "--capability", "autopilot-code", "--capability-mode", route["capability_mode"],
+            "--worker-mode", node["unit"],
             "--intensity", route["effective_intensity"], "--dispatch-depth", "2", "--parent", "owner",
             "--worker-role", "code-" + node_id, "--owner", "autopilot-code",
             "--jobs", str(self.jobs), "--log-dir", str(self.logs),
@@ -246,7 +247,8 @@ class CompletionMarkerTest(unittest.TestCase):
                 wrapper, model = ADAPTERS[harness]
                 command = wrapper + [
                     "--start", "--worktree", str(self.repo), "--slug", f"{harness}-unbound",
-                    "--capability", "autopilot-code", "--mode", "dev/backend",
+                    "--capability", "autopilot-code", "--capability-mode", "dev",
+                    "--worker-mode", "dev/backend", "--unit", "dev/backend",
                     "--intensity", "standard", "--dispatch-depth", "2", "--parent", "owner",
                     "--worker-role", "code-execute", "--owner", "autopilot-code",
                     "--jobs", str(self.jobs), "--log-dir", str(self.logs),

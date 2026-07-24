@@ -331,7 +331,10 @@ class DispatchJob:
     """One headless dispatch job (autopilot-*/loops process, or jobs.log row)."""
     key: str                            # pipe key: autopilot-code / oncall / ...
     stage: Optional[str] = None         # plan | exec | test | done (live_stage)
-    mode: Optional[str] = None          # --mode value
+    mode: Optional[str] = None          # legacy overloaded --mode value (read-only)
+    capability_mode: Optional[str] = None  # entry capability behavior (dev/debug/...)
+    worker_mode: Optional[str] = None   # non-owner family/mode compatibility projection
+    mode_axis_conflict: bool = False    # owner/stage or canonical/legacy contradiction
     qa: Optional[str] = None            # --qa value
     pid: Optional[int] = None           # observer-authoritative dispatch pid; None when a registry pid
                                         # belongs to another namespace without a verified mapping

@@ -95,7 +95,7 @@ class ClaudeDispatchModelEligibilityTest(unittest.TestCase):
                     "--log-dir", str(logs),
                     "--slug", "main-only-rejected",
                     "--capability", "autopilot-code",
-                    "--mode", "dev/backend",
+                    "--capability-mode", "dev",
                     "--qa", "standard",
                     "--model", "claude-fable-5",
                     "--effort", "xhigh",

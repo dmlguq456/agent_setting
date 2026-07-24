@@ -40,7 +40,7 @@ class AdapterV11Test(unittest.TestCase):
   art=root/".agent_reports"; art.mkdir(); return repo,art
  def command(self,harness,action,repo,jobs,logs,status="supported"):
   wrapper,model=ADAPTERS[harness]
-  return wrapper+[f"--{action}","--worktree",str(repo),"--slug",f"{harness}-v11","--capability","autopilot-code","--mode","dev/backend","--intensity","standard","--dispatch-depth","2","--parent","owner","--worker-role","code-plan","--owner","autopilot-code","--jobs",str(jobs),"--log-dir",str(logs),"--attempt-id",f"att-{harness}-fixture-0001","--parent-harness",harness,"--parent-transport","headless","--parent-sandbox","fixture","--launch-authority","conductor","--nested-eligibility",status,"--eligibility-source",f"{harness}-fixture","--fallback-ordinal","1"]+model
+  return wrapper+[f"--{action}","--worktree",str(repo),"--slug",f"{harness}-v11","--capability","autopilot-code","--capability-mode","dev","--worker-mode","dev/backend","--intensity","standard","--dispatch-depth","2","--parent","owner","--worker-role","code-plan","--owner","autopilot-code","--jobs",str(jobs),"--log-dir",str(logs),"--attempt-id",f"att-{harness}-fixture-0001","--parent-harness",harness,"--parent-transport","headless","--parent-sandbox","fixture","--launch-authority","conductor","--nested-eligibility",status,"--eligibility-source",f"{harness}-fixture","--fallback-ordinal","1"]+model
  def test_sibling_registry_rows_and_nested_refusal(self):
   for harness in ("codex", "claude"):
    with self.subTest(harness=harness), tempfile.TemporaryDirectory() as td:
@@ -53,6 +53,8 @@ class AdapterV11Test(unittest.TestCase):
     self.assertEqual(registered.returncode,0,registered.stdout+registered.stderr)
     row=jobs.read_text(encoding="utf-8")
     self.assertIn(f"harness={harness}",row); self.assertIn("attempt_id=att-",row)
+    self.assertIn("capability_mode=dev",row); self.assertIn("worker_mode=dev/backend",row)
+    self.assertNotIn(",mode=",row)
     self.assertIn("nested_eligibility=supported",row); self.assertIn("fallback_ordinal=1",row)
     self.assertIn("parent_attempt_id=att-parent-fixture",row)
     self.assertIn("parent_pid=",row);self.assertIn("parent_pid_start=",row)
@@ -88,7 +90,8 @@ class AdapterV11Test(unittest.TestCase):
    claude_config=root/"claude"; (claude_config/"session-env").mkdir(parents=True)
    command=[sys.executable,str(ROOT/"adapters/codex/bin/dispatch-headless.py"),"--dry-run",
             "--worktree",str(repo),"--slug","codex-owner","--capability","autopilot-code",
-            "--mode","dev/backend","--intensity","standard","--dispatch-depth","1","--worker-type","owner",
+            "--capability-mode","dev","--intensity","standard","--dispatch-depth","1","--worker-type","owner",
+            "--unit","_kernel/owner","--assigned-contract","autopilot-code",
             "--model","gpt-test","--reasoning","low","--log-dir",str(logs)]
    env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),
         "CLAUDE_CONFIG_DIR":str(claude_config)}

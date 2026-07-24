@@ -28,31 +28,24 @@ touches the named domain.
 
 ## Routing and Execution
 
-Select the primary capability semantically per `core/WORKFLOW.md §0.2` and
-answer the pre-execution gate in §0.3 when applicable. Before material work,
-propose the route with the completed five-field card in §0.4 and wait for
-approval unless the same route and scope are already approved. Route from
-compact generated metadata before approval; load full capability detail in the
-acting owner or worker after approval. Read-only orientation and targeted
-memory recall do not themselves invoke a capability. For spec-backed work,
-satisfy the spec-read gate before mutation.
+Route by `core/WORKFLOW.md §0.2`, apply its §0.3 gate, and obtain the §0.4
+five-field approval before material work unless scope and route are already
+approved. Load full capability detail only in the acting owner or worker; spec
+work also requires the spec-read gate.
 
-`autopilot-code` follows the portable intensity graph:
+For `autopilot-code`, `direct` is inline, `quick` is one registered dispatch-depth-1
+owner, and `standard+` follows `code-plan -> code-execute -> code-test ->
+code-report` under `core/OPERATIONS.md §5.10`.
 
-- `direct`: inline, no durable plan.
-- `quick`: one registered-headless dispatch-depth-1 one-shot owner with micro-plan, plan-check-lite, focused verification, and concise report.
-- `standard+`: `code-plan -> code-execute -> code-test -> code-report`, optional `code-refine`, file-only handoff, and the dispatch/fallback rules in `core/OPERATIONS.md §5.10`.
+Checked wrappers keep `capability_mode` separate from a non-owner
+`worker_mode`, which must equal its portable `unit`. A dispatch-depth-1 owner is
+`_kernel/owner` with no worker mode; contradictory owner/stage tuples fail
+before prompt, registry, or spawn. Legacy `mode` is read-only compatibility
+data. Use `stage-dispatch-fallback.py` for standard+ dispatch-depth-2 work and one
+`dispatch-batch.py` call for a two-way `replica_group`. Contract v3 claims one
+stable attempt before spawn; the retired broker only supports `status`/`stop`.
 
-Every standard+ same/cross-harness dispatch-depth-2 headless target uses
-`stage-dispatch-fallback.py`, which invokes the checked adapter wrapper directly.
-A two-way `replica_group` instead uses one checked `dispatch-batch.py` call so
-both governor slots are reserved atomically and both wrappers launch concurrently.
-Dispatch contract v3 atomically claims one stable attempt row before spawn and
-starts no child for a duplicate claim. Broker v1/v2 routes are read-only migration
-inputs; the retired broker exposes only legacy `status`/`stop`. Claude native
-subagents remain distinct from registered recursive headless dispatch.
-
-Keep native agents distinct from registered headless worker dispatch; a restriction on one surface never silently extends to the other. Preserve model role, intensity, depth, required tools/tests, safety, and validation when falling back. Do not run drill automatically.
+Keep native agents distinct from registered headless worker dispatch; a restriction on one surface never silently extends to the other. Preserve model role, intensity, depth, tests, safety, and validation on fallback. Do not run drill automatically.
 
 ## Runtime Lifecycle
 

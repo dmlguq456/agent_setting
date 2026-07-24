@@ -381,6 +381,7 @@ def _compile_from_recipe(registry, recipe, capability, capability_mode, requeste
         )
         transport="headless"
         nodes=[{"id":"one-shot","kind":recipe["quick"]["worker_kind"],"dispatch_depth":1,"role":"orchestrator",
+                "unit":"_kernel/owner",
                 "write_scope":recipe["quick"]["write_scope"],"resource_class":"normal",
                 "execution_surface":"registered-headless","registered_worker":True,
                 "completion_gate":"quick-complete"}]
@@ -540,6 +541,7 @@ def verify_route(route, expected_cwd=None):
         if (
             node.get("id") != "one-shot"
             or node.get("dispatch_depth") != 1
+            or node.get("unit") != "_kernel/owner"
             or node.get("execution_surface") != "registered-headless"
             or node.get("registered_worker") is not True
             or node.get("fallback_hops")

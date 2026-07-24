@@ -1325,6 +1325,41 @@ def _strip_autopilot(name):
     return name
 
 
+def _is_owner_mode_row(j):
+    worker_role = getattr(j, "worker_role", None) or ""
+    return bool(
+        getattr(j, "worker_type", None) == "owner"
+        or getattr(j, "unit", None) == "_kernel/owner"
+        or worker_role.endswith("orchestrator")
+    )
+
+
+def _mode_axis_conflict(j):
+    legacy = getattr(j, "mode", None) or ""
+    worker_mode = getattr(j, "worker_mode", None)
+    return bool(
+        getattr(j, "mode_axis_conflict", False)
+        or (
+            _is_owner_mode_row(j)
+            and (worker_mode or "/" in legacy)
+        )
+    )
+
+
+def _display_capability_mode(j):
+    """Return only an honest owner-capability mode for the options dial."""
+
+    current = getattr(j, "capability_mode", None)
+    if current:
+        return current
+    if _mode_axis_conflict(j):
+        return None
+    legacy = getattr(j, "mode", None)
+    if getattr(j, "key", None) in _LOOPS_KEYS:
+        return legacy
+    return legacy if legacy and "/" not in legacy else None
+
+
 def _entry_skill(j):
     """Skill identity for the options dial.
 
@@ -1347,7 +1382,12 @@ def _entry_skill(j):
     skill = cap or (key if key in _PIPE_STAGES else None)
     if not skill:
         return None
-    if skill in (getattr(j, "mode", None) or "").split("/"):
+    projected_mode = (
+        getattr(j, "worker_mode", None)
+        or getattr(j, "mode", None)
+        or ""
+    )
+    if skill in projected_mode.split("/"):
         return None
     return skill
 
@@ -1441,7 +1481,10 @@ def _opts_segs(j):
     if depth >= 2:
         knob_items = [t for t in (_short_level(getattr(j, "intensity", None)),) if t]
     else:
-        knob_items = [t for t in (j.mode, _short_level(getattr(j, "intensity", None))) if t]
+        knob_items = [t for t in (
+            _display_capability_mode(j),
+            _short_level(getattr(j, "intensity", None)),
+        ) if t]
     # the worker ROLE is a behaviour knob too (who the worker acts as), not environment —
     # it rides the paren group's last slot (user 2026-07-20: "owner의 위치가 애매").
     role = "" if depth >= 2 else _dispatch_role_suffix(
@@ -1451,8 +1494,13 @@ def _opts_segs(j):
     knobs = "·".join(knob_items)
     tail = _dispatch_profile(j)
     unit = getattr(j, "unit", None)
-    if unit:
-        tail = " / ".join(value for value in (tail, "unit:" + _compact_dispatch_name(unit, _PROFILE_MAX)) if value)
+    projected_unit = unit or (
+        None if _is_owner_mode_row(j) else getattr(j, "worker_mode", None)
+    )
+    if projected_unit:
+        tail = " / ".join(value for value in (tail, "unit:" + _compact_dispatch_name(projected_unit, _PROFILE_MAX)) if value)
+    if _mode_axis_conflict(j):
+        tail = " / ".join(value for value in (tail, "mode!") if value)
     contract_status = getattr(j, "attempt_contract_status", None)
     if contract_status == "legacy-read-only":
         tail = " / ".join(value for value in (tail, "legacy") if value)
@@ -2737,8 +2785,11 @@ def _degrade_card(job, session_by_identity, term_width):
     (there is no record to derive one from). No job-row entry (the card key IS the job)."""
     cap = job.key or "?"
     tag_bits = [cap]
-    if job.mode:
-        tag_bits.append(job.mode)
+    capability_mode = _display_capability_mode(job)
+    if capability_mode:
+        tag_bits.append(capability_mode)
+    if _mode_axis_conflict(job):
+        tag_bits.append("mode!")
     tag = "·".join(tag_bits)
     card_key = job.slug or job.key or "?"
     folded = _ROUTE_FOLD.get(card_key, False)
