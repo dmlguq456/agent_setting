@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "intensities": [
     "direct",
     "quick",
@@ -173,12 +173,14 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replication": {
-          "node": "verify",
-          "min_intensity": "strong",
-          "ways": 2,
-          "independence_axis": "cross-harness"
-        }
+        "replications": [
+          {
+            "node": "verify",
+            "min_intensity": "strong",
+            "ways": 2,
+            "independence_axis": "cross-harness"
+          }
+        ]
       },
       "completion_gates": [
         "apply-hash",
@@ -233,14 +235,44 @@
         "topology": "staged",
         "nodes": [
           {
-            "id": "plan",
-            "kind": "pipeline-stage",
+            "id": "frame",
+            "kind": "map-worker",
             "depends_on": [],
             "role": "deep maker",
             "inputs": [
               "task",
               "spec",
               "source"
+            ],
+            "outputs": [
+              "shards/frame/direction-brief.md"
+            ],
+            "write_scope": [
+              "shards/frame/**"
+            ],
+            "resource_class": "normal",
+            "completion_gate": "code-frame",
+            "dispatch_depth": 2,
+            "fallback_hops": [
+              "same-harness-headless",
+              "cross-harness-headless",
+              "native-subagent",
+              "inline"
+            ],
+            "unit": "plan/frame"
+          },
+          {
+            "id": "plan",
+            "kind": "pipeline-stage",
+            "depends_on": [
+              "frame"
+            ],
+            "role": "deep maker",
+            "inputs": [
+              "task",
+              "spec",
+              "source",
+              "shards/frame/direction-brief.md"
             ],
             "outputs": [
               "plan.md",
@@ -417,14 +449,29 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replication": {
-          "node": "impl-review",
-          "min_intensity": "strong",
-          "ways": 2,
-          "independence_axis": "cross-harness"
-        }
+        "replications": [
+          {
+            "node": "frame",
+            "min_intensity": "standard",
+            "ways": 2,
+            "independence_axis": "cross-harness"
+          },
+          {
+            "node": "plan",
+            "min_intensity": "strong",
+            "ways": 2,
+            "independence_axis": "cross-harness"
+          },
+          {
+            "node": "impl-review",
+            "min_intensity": "strong",
+            "ways": 2,
+            "independence_axis": "cross-harness"
+          }
+        ]
       },
       "completion_gates": [
+        "code-frame",
         "code-plan",
         "code-plan-check",
         "code-execute",
@@ -434,6 +481,7 @@
       ],
       "human_gates": [],
       "resume_retry_boundaries": [
+        "frame",
         "plan",
         "plan-check",
         "execute",
@@ -623,12 +671,20 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replication": {
-          "node": "critic-review",
-          "min_intensity": "strong",
-          "ways": 2,
-          "independence_axis": "cross-harness"
-        }
+        "replications": [
+          {
+            "node": "refs",
+            "min_intensity": "standard",
+            "ways": 2,
+            "independence_axis": "cross-harness"
+          },
+          {
+            "node": "critic-review",
+            "min_intensity": "strong",
+            "ways": 2,
+            "independence_axis": "cross-harness"
+          }
+        ]
       },
       "completion_gates": [
         "design-refs",
@@ -856,12 +912,20 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replication": {
-          "node": "fact-verify",
-          "min_intensity": "strong",
-          "ways": 2,
-          "independence_axis": "cross-harness"
-        }
+        "replications": [
+          {
+            "node": "material-strategy",
+            "min_intensity": "standard",
+            "ways": 2,
+            "independence_axis": "cross-harness"
+          },
+          {
+            "node": "fact-verify",
+            "min_intensity": "strong",
+            "ways": 2,
+            "independence_axis": "cross-harness"
+          }
+        ]
       },
       "completion_gates": [
         "draft-strategy",
@@ -1005,12 +1069,14 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replication": {
-          "node": "smoke",
-          "min_intensity": "strong",
-          "ways": 2,
-          "independence_axis": "cross-harness"
-        }
+        "replications": [
+          {
+            "node": "smoke",
+            "min_intensity": "strong",
+            "ways": 2,
+            "independence_axis": "cross-harness"
+          }
+        ]
       },
       "completion_gates": [
         "lab-scaffold",
@@ -1232,12 +1298,14 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replication": {
-          "node": "independent-verify",
-          "min_intensity": "strong",
-          "ways": 2,
-          "independence_axis": "cross-harness"
-        }
+        "replications": [
+          {
+            "node": "independent-verify",
+            "min_intensity": "strong",
+            "ways": 2,
+            "independence_axis": "cross-harness"
+          }
+        ]
       },
       "completion_gates": [
         "hash-bound-eval",
@@ -1460,12 +1528,14 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replication": {
-          "node": "review",
-          "min_intensity": "strong",
-          "ways": 2,
-          "independence_axis": "cross-harness"
-        }
+        "replications": [
+          {
+            "node": "review",
+            "min_intensity": "strong",
+            "ways": 2,
+            "independence_axis": "cross-harness"
+          }
+        ]
       },
       "completion_gates": [
         "refine-review",
@@ -1626,12 +1696,20 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replication": {
-          "node": "claim-verify",
-          "min_intensity": "strong",
-          "ways": 2,
-          "independence_axis": "cross-harness"
-        }
+        "replications": [
+          {
+            "node": "retrieval",
+            "min_intensity": "standard",
+            "ways": 2,
+            "independence_axis": "cross-harness"
+          },
+          {
+            "node": "claim-verify",
+            "min_intensity": "strong",
+            "ways": 2,
+            "independence_axis": "cross-harness"
+          }
+        ]
       },
       "completion_gates": [
         "research-retrieval",
@@ -1767,12 +1845,14 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replication": {
-          "node": "release-review",
-          "min_intensity": "strong",
-          "ways": 2,
-          "independence_axis": "cross-harness"
-        }
+        "replications": [
+          {
+            "node": "release-review",
+            "min_intensity": "strong",
+            "ways": 2,
+            "independence_axis": "cross-harness"
+          }
+        ]
       },
       "completion_gates": [
         "ship-setup",
@@ -1921,12 +2001,20 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replication": {
-          "node": "review",
-          "min_intensity": "strong",
-          "ways": 2,
-          "independence_axis": "cross-harness"
-        }
+        "replications": [
+          {
+            "node": "research",
+            "min_intensity": "standard",
+            "ways": 2,
+            "independence_axis": "cross-harness"
+          },
+          {
+            "node": "review",
+            "min_intensity": "strong",
+            "ways": 2,
+            "independence_axis": "cross-harness"
+          }
+        ]
       },
       "completion_gates": [
         "spec-research",
@@ -2003,6 +2091,10 @@
     "apply-handback": {
       "kind": "custom",
       "doc": "owner handback record; conductor-owned, no unit persona"
+    },
+    "code-frame": {
+      "kind": "unit-io",
+      "unit": "plan/frame"
     },
     "code-plan": {
       "kind": "capability-doc",

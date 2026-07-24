@@ -232,41 +232,53 @@ def _verify_fallback_chain(node, contract_version=None):
     return chain
 
 def _replica_output(path):
+    if path.endswith("/**") and "*" not in path[:-3]:
+        return path[:-3] + "-replica/**"
     head, sep, tail = path.rpartition("/")
     name, dot, ext = tail.rpartition(".")
     if not dot:
         return path + "-replica"
     return f"{head}{sep}{name}.replica{dot}{ext}"
 
-def _expand_replication(nodes, replication, effective_intensity):
-    """CONVENTIONS §3.12 (strengthened 2026-07-21): from the declared min
-    intensity (default strong) the riskiest review node compiles into a 2-way
-    replica pair whose verdicts the conductor merges. The replica is a full
-    dispatch-depth-2 node; the independence axis (different harness/model
-    family) is realized at dispatch time, and a same-harness fallback must be
-    reported as reduced independence (DESIGN_PRINCIPLES independent-QA rule)."""
-    if not replication:
+def _expand_replications(nodes, replications, effective_intensity):
+    """CONVENTIONS §3.12 (strengthened 2026-07-21; framing anchors added
+    2026-07-24): each declared anchor whose min intensity is reached compiles
+    into a 2-way replica pair. Review anchors merge at conductor verdict level
+    (stricter wins, blocking findings unioned — SD-76 unchanged). Map-worker
+    and pipeline-stage anchors instead extend their direct dependents' inputs
+    with the replica outputs, so the downstream synthesizer or review arbiter
+    reads both independent legs. Anchors expand in declared order, so a later
+    anchor's replica inherits earlier wiring deterministically. Every replica
+    is a full dispatch-depth-2 node; the independence axis (different
+    harness/model family) is realized at dispatch time, and a same-harness
+    fallback must be reported as reduced independence (DESIGN_PRINCIPLES
+    independent-QA rule)."""
+    if not replications:
         return nodes
     if effective_intensity not in ORDER:
         raise ValueError("invalid intensity")
-    if ORDER[effective_intensity] < ORDER[replication["min_intensity"]]:
-        return nodes
-    base = next(n for n in nodes if n["id"] == replication["node"])
-    replica = json.loads(json.dumps(base))
-    replica["id"] = f"{base['id']}-replica"
-    replica["outputs"] = [_replica_output(path) for path in base["outputs"]]
-    replica["independence_axis"] = replication["independence_axis"]
-    for leg in (base, replica):
-        leg["replica_group"] = base["id"]
-    for node in nodes:
-        if node is not base and base["id"] in node.get("depends_on", []):
-            node["depends_on"] = list(node["depends_on"]) + [replica["id"]]
-    expanded = []
-    for node in nodes:
-        expanded.append(node)
-        if node is base:
-            expanded.append(replica)
-    return expanded
+    for replication in replications:
+        if ORDER[effective_intensity] < ORDER[replication["min_intensity"]]:
+            continue
+        base = next(n for n in nodes if n["id"] == replication["node"])
+        replica = json.loads(json.dumps(base))
+        replica["id"] = f"{base['id']}-replica"
+        replica["outputs"] = [_replica_output(path) for path in base["outputs"]]
+        replica["independence_axis"] = replication["independence_axis"]
+        for leg in (base, replica):
+            leg["replica_group"] = base["id"]
+        for node in nodes:
+            if node is not base and base["id"] in node.get("depends_on", []):
+                node["depends_on"] = list(node["depends_on"]) + [replica["id"]]
+                if base.get("kind") != "review-worker":
+                    node["inputs"] = list(node.get("inputs", [])) + list(replica["outputs"])
+        expanded = []
+        for node in nodes:
+            expanded.append(node)
+            if node is base:
+                expanded.append(replica)
+        nodes = expanded
+    return nodes
 
 def _seal_dispatch_defaults(nodes, capability):
     """Return dispatch_defaults_digest and stamp each dispatch-depth-2 node's
@@ -379,7 +391,7 @@ def _compile_from_recipe(registry, recipe, capability, capability_mode, requeste
             raise ValueError(f"invalid standard+ transport: {transport!r}")
         transport="headless"
         nodes=json.loads(json.dumps(recipe["standard_plus"]["nodes"])); gates=recipe["completion_gates"]
-        nodes=_expand_replication(nodes, recipe["standard_plus"].get("replication"), effective)
+        nodes=_expand_replications(nodes, recipe["standard_plus"].get("replications"), effective)
         for node in nodes:
             node.pop("fallback_hops", None)
         selection_basis=[{"axis":"promotion","signal":s,"source":"caller"} for s in signals]
@@ -448,8 +460,8 @@ def verify_route(route, expected_cwd=None):
         def _node_identity(node):
             return {k:v for k,v in node.items() if k not in ("fallback_hops","harness_affinity")}
         expected_nodes=json.loads(json.dumps(composed_recipe["standard_plus"]["nodes"]))
-        expected_nodes=_expand_replication(
-            expected_nodes, composed_recipe["standard_plus"].get("replication"),
+        expected_nodes=_expand_replications(
+            expected_nodes, composed_recipe["standard_plus"].get("replications"),
             route.get("effective_intensity"))
         if ([_node_identity(n) for n in route.get("nodes",[])]
                 != [_node_identity(n) for n in expected_nodes]):

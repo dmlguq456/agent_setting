@@ -51,7 +51,7 @@ class FallbackTest(unittest.TestCase):
   self.assertIn("selected_hop=cross-harness-headless",result.stdout); self.assertIn("child_harness=claude",result.stdout)
   self.assertIn("launch_authority=conductor",result.stdout); self.assertIn("broker_lifecycle=retired",result.stdout)
  def test_wrapper_command_projects_selected_lifecycle_to_codex_and_claude(self):
-  path=self.route(same_status="supported"); route=json.loads(path.read_text()); node=route["nodes"][0]
+  path=self.route(same_status="supported"); route=json.loads(path.read_text()); node=next(n for n in route["nodes"] if n["id"]=="plan")
   args=SimpleNamespace(action="dry-run",slug="stage",parent="owner",mode="dev/refactor",qa="standard",worker_role=None,model_role="deep maker",prompt_file=None,jobs=self.jobs,route=path,launch_lifecycle="foreground-scoped",foreground_timeout=123.0)
   for ordinal,harness in ((1,"codex"),(2,"claude")):
    row=self.tuple(harness,"supported")
@@ -67,6 +67,12 @@ class FallbackTest(unittest.TestCase):
   self.assertNotIn("--foreground-timeout",command)
   command=F.wrapper_command(args,route,node,self.tuple("opencode","supported"),1,"att-test")
   self.assertNotIn("--launch-lifecycle",command)
+  frame=next(n for n in route["nodes"] if n["id"]=="frame")
+  command=F.wrapper_command(args,route,frame,self.tuple("codex","supported"),1,"att-test")
+  self.assertEqual(command[command.index("--worker-type")+1],"support")
+  # unit-io stage: the readable contract stays the entry capability; the
+  # plan/frame unit persona carries the stage contract (same as design build).
+  self.assertEqual(command[command.index("--assigned-contract")+1],"autopilot-code")
  def test_explicit_parent_mismatch_fails_before_registration(self):
   path=self.route(same_status="supported")
   cmd=[sys.executable,str(ROOT/"utilities/stage-dispatch-fallback.py"),"--route",str(path),"--node","plan","--slug","fallback-plan","--parent","wrong-owner","--mode","dev/backend","--jobs",str(self.jobs),"--register"]

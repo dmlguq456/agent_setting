@@ -120,14 +120,15 @@ class TestRoute(unittest.TestCase):
      self.assertTrue(route["nodes"][0]["registered_worker"])
  def test_promotion_standard(self):
   evidence=self.dispatch(self.nested())
-  a=R.compile_route(**self.args(signals=["public-api"],transport="headless",inline_reason=None,dispatch_evidence=evidence)); self.assertEqual([x["id"] for x in a["nodes"]],["plan","plan-check","execute","impl-review","test","report"])
+  a=R.compile_route(**self.args(signals=["public-api"],transport="headless",inline_reason=None,dispatch_evidence=evidence)); self.assertEqual([x["id"] for x in a["nodes"]],["frame","frame-replica","plan","plan-check","execute","impl-review","test","report"])
  def test_strong_expands_replica_pair_and_standard_does_not(self):
   evidence=self.dispatch(self.nested())
   standard=R.compile_route(**self.args(signals=["public-api"],transport="headless",inline_reason=None,dispatch_evidence=evidence))
   self.assertNotIn("impl-review-replica",[x["id"] for x in standard["nodes"]])
+  self.assertNotIn("plan-replica",[x["id"] for x in standard["nodes"]])
   strong=self.compile_v3(evidence)
   self.assertEqual([x["id"] for x in strong["nodes"]],
-   ["plan","plan-check","execute","impl-review","impl-review-replica","test","report"])
+   ["frame","frame-replica","plan","plan-replica","plan-check","execute","impl-review","impl-review-replica","test","report"])
   base=next(n for n in strong["nodes"] if n["id"]=="impl-review")
   replica=next(n for n in strong["nodes"] if n["id"]=="impl-review-replica")
   self.assertEqual(base["replica_group"],"impl-review")
@@ -141,6 +142,44 @@ class TestRoute(unittest.TestCase):
   self.assertIn("impl-review",test_node["depends_on"])
   self.assertIn("impl-review-replica",test_node["depends_on"])
   R.verify_route(strong,R.ROOT)
+ def test_framing_anchor_expands_from_standard_and_feeds_plan(self):
+  # user directive 2026-07-24: direction-setting points get independent
+  # cross-model 2-way exploration from `standard`; the plan synthesizer reads
+  # BOTH legs' briefs, and at `strong` the plan itself replicates with
+  # plan-check as the arbiter reading both plans.
+  evidence=self.dispatch(self.nested())
+  standard=R.compile_route(**self.args(signals=["public-api"],transport="headless",inline_reason=None,dispatch_evidence=evidence))
+  frame=next(n for n in standard["nodes"] if n["id"]=="frame")
+  frame_replica=next(n for n in standard["nodes"] if n["id"]=="frame-replica")
+  self.assertEqual(frame["replica_group"],"frame")
+  self.assertEqual(frame_replica["replica_group"],"frame")
+  self.assertEqual(frame_replica["independence_axis"],"cross-harness")
+  self.assertEqual(frame_replica["outputs"],["shards/frame/direction-brief.replica.md"])
+  plan=next(n for n in standard["nodes"] if n["id"]=="plan")
+  self.assertIn("frame",plan["depends_on"]); self.assertIn("frame-replica",plan["depends_on"])
+  self.assertIn("shards/frame/direction-brief.md",plan["inputs"])
+  self.assertIn("shards/frame/direction-brief.replica.md",plan["inputs"])
+  strong=self.compile_v3(evidence)
+  plan_replica=next(n for n in strong["nodes"] if n["id"]=="plan-replica")
+  self.assertEqual(plan_replica["outputs"],["plan.replica.md","checklist.replica.md"])
+  self.assertIn("shards/frame/direction-brief.replica.md",plan_replica["inputs"])
+  check=next(n for n in strong["nodes"] if n["id"]=="plan-check")
+  self.assertIn("plan",check["depends_on"]); self.assertIn("plan-replica",check["depends_on"])
+  self.assertIn("plan.replica.md",check["inputs"]); self.assertIn("checklist.replica.md",check["inputs"])
+  R.verify_route(strong,R.ROOT)
+ def test_map_worker_shard_replica_gets_disjoint_tree(self):
+  # spec research shards replicate as a sibling '-replica' tree; the review
+  # arbiter reads both trees.
+  route=R.compile_route(**self.args(
+   capability="autopilot-spec",capability_mode="update",requested_intensity="standard",
+   predicates=[],signals=["shared-contract"],transport="headless",inline_reason=None,
+   dispatch_evidence=self.dispatch(self.nested())))
+  replica=next(n for n in route["nodes"] if n["id"]=="research-replica")
+  self.assertEqual(replica["outputs"],["shards/spec-research-replica/**"])
+  review=next(n for n in route["nodes"] if n["id"]=="review")
+  self.assertIn("research-replica",review["depends_on"])
+  self.assertIn("shards/spec-research-replica/**",review["inputs"])
+  R.verify_route(route,R.ROOT)
  def test_replica_carries_fallback_chain_and_seal(self):
   strong=self.compile_v3(self.dispatch(self.nested()))
   replica=next(n for n in strong["nodes"] if n["id"]=="impl-review-replica")
@@ -155,7 +194,9 @@ class TestRoute(unittest.TestCase):
   route=self.compile_v3(self.dispatch(self.nested()))
   units={n["id"]:n.get("unit") for n in route["nodes"]}
   self.assertEqual(units,{
-   "plan":"plan/plan-author","plan-check":"qa/plan-review","execute":"dev/backend",
+   "frame":"plan/frame","frame-replica":"plan/frame",
+   "plan":"plan/plan-author","plan-replica":"plan/plan-author",
+   "plan-check":"qa/plan-review","execute":"dev/backend",
    "impl-review":"qa/code-review","impl-review-replica":"qa/code-review",
    "test":"qa/test","report":"editorial/report"})
   tampered=json.loads(json.dumps(route)); tampered["nodes"][0]["unit"]="dev/backend"
@@ -233,8 +274,9 @@ class TestRoute(unittest.TestCase):
   with dispatch_defaults_config(DD_CONFIG_A):
    route=self._standard()
   by_id={n["id"]:n["harness_affinity"] for n in route["nodes"]}
-  self.assertEqual(set(by_id),{"plan","plan-check","execute","impl-review","test","report"})
+  self.assertEqual(set(by_id),{"frame","frame-replica","plan","plan-check","execute","impl-review","test","report"})
   for value in by_id.values(): self.assertIn(value,R.VALID_AFFINITY)
+  self.assertEqual(by_id["frame"],"unspecified")
   self.assertEqual(by_id["plan"],"unspecified")
   self.assertEqual(by_id["plan-check"],"unspecified")
   self.assertEqual(by_id["impl-review"],"unspecified")

@@ -12,6 +12,7 @@
 > · **v23 2026-07-23** (SD-77 implementation closure — parent-check/spawn/PID publish 원자화·PID reuse no-signal exact closure·Claude result liveness/harvest parity)
 > · **v24 2026-07-23** (runtime-owned completion join — 모델 폴링 제거·exact child batch join·Codex App Server/Claude resume supervisor·typed single-resume, SD-78; SD-14 normal path superseded)
 > · **v25 2026-07-24** (semantic completion과 execution quiescence 분리·strong replica concurrent batch/atomic admission·Fleet exact-attempt projection, SD-79~81)
+> · **v26 2026-07-24** (framing 앵커 — registry v4 다중 `replications` 앵커·autopilot-code `frame` 스테이지 신설·생성형 5 recipe framing standard 2-way·plan strong 2-way + plan-check 중재, SD-82; SD-76 단일 review 앵커 스키마 supersede, 원 의도(듀얼 모델 독립 방향 탐색) 복원)
 > 컴포넌트: `agent_setting` repo 의 **autopilot 파이프 디스패치 토폴로지 개정** — 각 sub-skill 스테이지(code-plan / code-execute / code-test / code-report)를 `standard+` 에서 **기본으로 별개 headless 세션**으로 분사하는 계약. 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 와 무관한 독립 청사진. 이 폴더(`spec/stage-dispatch/`)가 자체 SoT.
 > 입력(1순위 근거):
 > - **사용자 승인 결정 (2026-07-20 v20)**: `effective_intensity=quick` 인 모든 route는 registered headless worker session만 사용한다. `native-subagent`, `inline-fallback`, interactive/empty, unknown/arbitrary surface는 compile 단계에서 fail-closed이며 dispatch depth로 이름 붙이지 않는다. `direct` inline과 `standard+` fallback은 유지한다. portable nesting은 `dispatch_depth`/`max_dispatch_depth`로 한정하고 Codex `agents.max_depth`와 분리한다. Claude subagent, Claude agent-team teammate session, registered headless worker session을 구별하며 multi-capability composition은 추가하지 않는다.
@@ -1133,6 +1134,10 @@ registered-headless status는 별도 속성이다.
 
 ### 13.12.4 SD-76 — strong+ 2-way cross-harness replica-and-merge의 route 컴파일 (v21)
 
+> **superseded by SD-82 (v26)**: 단일 `replication` dict와 review-worker 전용
+> 제약은 registry v4의 다중 `replications` 앵커(kind 확장·framing standard
+> 기본)로 대체되었다. verdict-merge·독립성 축·fallback 의미는 그대로다.
+
 **근거**: 2026-07-21 사용자 지침(검토 적대화·독립 병렬화 일반화, core 등재
 9b4e81b2 — `CONVENTIONS §3.5/§3.12`, `WORKFLOW.md` intensity 표,
 `DESIGN_PRINCIPLES.md` 독립 QA 규칙)이 실행 표면에 미배선된 갭의 사후 spec-sync.
@@ -1408,6 +1413,60 @@ unsupported conformance ⑧ Fleet는 terminal stage 1행을 유지하고 같은
 attempt runtime `stage one-shot` 중복행 0, unrelated/native subagent 행 mutation 0 ⑨ fixed
 cap live strong cross-harness drill에서 governor denial·inline fallback 없이 두 review leg
 동시 수행 ⑩ lifecycle/registry/supervisor/fallback/wait/Fleet/adaptation/portable guard 회귀 0.
+
+## 13.16 v26 — framing 앵커와 다중 replication 앵커 route 컴파일 (2026-07-24)
+
+### 13.16.1 SD-82 — registry v4 다중 앵커·frame 스테이지·plan 중재
+
+**근거**: 2026-07-24 사용자 지침. SD-76의 2-way 원 의도는 review 중복이 아니라
+서로 다른 모델의 독립 사고에 의한 상호보완이었고, 특히 (a) 계획 수립 전 근본
+진단·방향 탐색(framing)이 자체 스테이지로 서서 standard부터 2-way여야 하며
+(b) plan 수립 자체도 strong부터 2-way여야 한다 — 최상류 방향 오판이 hotfix/patch
+연쇄와 비용 폭증의 근원이기 때문. v3 스키마는 recipe당 단일 review-worker 앵커만
+허용해 이 의도가 미배선 상태였다.
+
+- registry `schema_version: 4`. `standard_plus.replication`(단일 dict)은 폐기하고
+  `replications`(앵커 배열)로 대체한다. 각 앵커 필드는 `{node, min_intensity,
+  ways: 2, independence_axis: "cross-harness"}` 그대로이며, 대상 kind는
+  review-worker · map-worker · pipeline-stage로 확장한다. capability-owner와
+  resource-runner는 앵커 불가. 비-review 앵커는 하류 소비자 ≥1을 요구하고,
+  pipeline-stage 앵커는 직접 하류에 review-worker 중재자를 요구한다. 앵커 출력은
+  concrete file이 원칙이되 map-worker 앵커에 한해 단일 `<dir>/**` shard tree를
+  허용하고 복제 시 `<dir>-replica/**`로 전개한다(파일 충돌 방지 규칙의 glob 확장).
+- **framing 앵커(standard 기본)**: 방향이 파이프라인 안에서 정해지는 생성형
+  recipe에만 선언한다 — autopilot-code `frame`(신설), autopilot-spec `research`,
+  autopilot-draft `material-strategy`, autopilot-design `refs`,
+  autopilot-research `retrieval`. 처방적/경계된 recipe(apply·refine·ship·lab·note)는
+  방향이 상류(cheatsheet·기존 artifact·ship 계약·spec)에서 고정되므로 framing
+  앵커 비대상이며, 이는 스테이지 발명 금지(CONVENTIONS §3.2)의 유지다.
+- **autopilot-code `frame` 스테이지 신설**: map-worker, unit `plan/frame`(신규
+  카탈로그 unit — worker_type stage, floor highest), gate `code-frame`(unit-io),
+  출력 `shards/frame/direction-brief.md`. 두 leg는 서로 blind로 각자 방향
+  판정문(문제 본질·근본원인 증거·방향 후보와 트레이드오프·채택/기각 판정)을
+  쓰고, plan은 두 marker에 record-bound되어 두 brief를 모두 읽고 채택 방향을
+  기록한다(leg 불일치는 오류가 아니라 신호). quick의 orient-lite는 불변이며
+  direct/quick에 새 세션을 강요하지 않는다(§3.2 보존).
+- **plan 앵커(strong)**: strong+에서 `plan-replica`가 전개되고
+  (`plan.replica.md`/`checklist.replica.md`, 두 leg 모두 두 frame brief 입력)
+  plan-check가 두 plan leg에 record-bound된 중재자가 된다. 중재 memo는 승자
+  leg와 채택할 graft를 지명하고, 최종 `plan.md` 실체화는 기존 bounded
+  code-refine 경로를 쓴다(plan-check는 read-only 유지). execute는 `plan.md`만
+  소비한다.
+- **merge 계약 3종**: review 앵커 = conductor verdict 병합(stricter-wins +
+  blocking findings 합집합, SD-76 불변) · map-worker 앵커 = 하류 소비자가 두
+  leg를 직접 읽는 구조 병합(compiler가 하류 depends_on과 inputs에 replica를
+  결정론적으로 추가) · pipeline-stage 앵커 = 직접 하류 review 중재자 판정.
+  전개는 선언 순서대로 결정론이다(동일 입력=동일 그래프; 후행 앵커의 replica는
+  선행 앵커가 이미 배선한 depends_on/inputs를 그대로 복제한다).
+- 독립성 축 실현·단일 harness 강등 보고·fallback 사슬·seal/attempt/marker 계약은
+  SD-76/SD-80에서 변경 없다. 강등 시 framing 앵커도 same-harness 독립 세션으로
+  내려가되 독립성 저하를 결정 기록에 남긴다.
+- 규칙 구간: v4 스키마 검증(앵커 kind 어휘·중복 앵커·하류 소비자·중재자·tier·
+  glob 규칙·legacy 단일 키 거부)·다중 앵커 전개 결정론·replica 출력 경로 변환
+  (`name.ext→name.replica.ext`, `<dir>/**→<dir>-replica/**`)·하류 inputs 확장·
+  composed route 동일 확장·schema_version 3 read-only. 의미 판단 구간: framing
+  앵커 선정(registry 선언 시 1회)·frame brief의 방향 판정 품질·plan 중재의
+  승자/graft 판단·leg 배치의 harness/family 선택.
 
 ## 14. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
 

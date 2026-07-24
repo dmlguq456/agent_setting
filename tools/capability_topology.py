@@ -276,41 +276,79 @@ def _validate_recipe(recipe, registry):
             raise TopologyError(f"{recipe['capability']}:{node['id']}: reviewer may write isolated verdicts only")
         if node["kind"] == "map-worker" and any(not s.startswith("shards/") for s in scopes):
             raise TopologyError(f"{recipe['capability']}:{node['id']}: map worker may write shards only")
-    replication = graph.get("replication")
-    if replication is not None:
-        # strong+ 2-way cross-harness replicate-and-merge (CONVENTIONS §3.12,
-        # strengthened 2026-07-21): the compiler expands this declaration; the
-        # registry only names the riskiest review node and the independence axis.
+    if "replication" in graph:
+        raise TopologyError(
+            f"{recipe['capability']}: v4 declares replication anchors under 'replications'"
+        )
+    replications = graph.get("replications")
+    if replications is not None:
+        # v4 multi-anchor 2-way cross-harness replicate-and-merge (CONVENTIONS
+        # §3.12, strengthened 2026-07-21; framing anchors added 2026-07-24 on
+        # the user directive that direction-setting points get independent
+        # cross-model exploration from `standard`, because early direction
+        # errors cascade into hotfix/patch work). The compiler expands each
+        # anchor; the registry only names the nodes and the independence axis.
+        if not isinstance(replications, list) or not replications:
+            raise TopologyError(
+                f"{recipe['capability']}: replications must be a non-empty list of anchors"
+            )
         required_rep = {"node", "min_intensity", "ways", "independence_axis"}
-        if not isinstance(replication, dict) or set(replication) != required_rep:
-            raise TopologyError(
-                f"{recipe['capability']}: replication requires exactly {sorted(required_rep)}"
-            )
-        target = by_id.get(replication["node"])
-        if target is None:
-            raise TopologyError(
-                f"{recipe['capability']}: replication node {replication['node']!r} not in graph"
-            )
-        if target.get("kind") != "review-worker":
-            raise TopologyError(
-                f"{recipe['capability']}: replication target {replication['node']} must be a review-worker"
-            )
-        tiers = registry["intensities"]
-        if (replication["min_intensity"] not in tiers
-                or tiers.index(replication["min_intensity"]) < tiers.index("standard")):
-            raise TopologyError(
-                f"{recipe['capability']}: replication min_intensity must be a standard+ tier"
-            )
-        if replication["ways"] != 2:
-            raise TopologyError(f"{recipe['capability']}: replication ways must be 2")
-        if replication["independence_axis"] != "cross-harness":
-            raise TopologyError(
-                f"{recipe['capability']}: replication independence_axis must be cross-harness"
-            )
-        if any("*" in out for out in target.get("outputs", [])):
-            raise TopologyError(
-                f"{recipe['capability']}: replication target outputs must be concrete files"
-            )
+        anchored = set()
+        for replication in replications:
+            if not isinstance(replication, dict) or set(replication) != required_rep:
+                raise TopologyError(
+                    f"{recipe['capability']}: replication anchors require exactly {sorted(required_rep)}"
+                )
+            if replication["node"] in anchored:
+                raise TopologyError(
+                    f"{recipe['capability']}: duplicate replication anchor {replication['node']!r}"
+                )
+            anchored.add(replication["node"])
+            target = by_id.get(replication["node"])
+            if target is None:
+                raise TopologyError(
+                    f"{recipe['capability']}: replication node {replication['node']!r} not in graph"
+                )
+            kind = target.get("kind")
+            if kind not in ("review-worker", "map-worker", "pipeline-stage"):
+                raise TopologyError(
+                    f"{recipe['capability']}: replication target {replication['node']} "
+                    "must be a review-worker, map-worker, or pipeline-stage"
+                )
+            dependents = [n for n in nodes if replication["node"] in n.get("depends_on", [])]
+            if kind != "review-worker" and not dependents:
+                raise TopologyError(
+                    f"{recipe['capability']}: non-review replication anchor "
+                    f"{replication['node']} requires a downstream consumer"
+                )
+            if kind == "pipeline-stage" and not any(
+                d.get("kind") == "review-worker" for d in dependents
+            ):
+                raise TopologyError(
+                    f"{recipe['capability']}: pipeline-stage replication anchor "
+                    f"{replication['node']} requires a direct review-worker arbiter"
+                )
+            tiers = registry["intensities"]
+            if (replication["min_intensity"] not in tiers
+                    or tiers.index(replication["min_intensity"]) < tiers.index("standard")):
+                raise TopologyError(
+                    f"{recipe['capability']}: replication min_intensity must be a standard+ tier"
+                )
+            if replication["ways"] != 2:
+                raise TopologyError(f"{recipe['capability']}: replication ways must be 2")
+            if replication["independence_axis"] != "cross-harness":
+                raise TopologyError(
+                    f"{recipe['capability']}: replication independence_axis must be cross-harness"
+                )
+            for out in target.get("outputs", []):
+                if "*" not in out:
+                    continue
+                if kind == "map-worker" and out.endswith("/**") and "*" not in out[:-3]:
+                    continue
+                raise TopologyError(
+                    f"{recipe['capability']}: replication target outputs must be concrete "
+                    "files (or a map-worker '<dir>/**' shard tree)"
+                )
     visiting, done = set(), set()
     def visit(node_id):
         if node_id in visiting: raise TopologyError(f"{recipe['capability']}: cycle")
@@ -335,7 +373,7 @@ def _validate_recipe(recipe, registry):
 
 
 def validate_registry(registry, manifest=None):
-    if registry.get("schema_version") != 3:
+    if registry.get("schema_version") != 4:
         raise TopologyError("legacy topology registry is read-only")
     if set(registry.get("transports", [])) != WRAPPER_TRANSPORTS:
         raise TopologyError("transport vocabulary differs from portable dispatch contract")

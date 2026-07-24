@@ -3,7 +3,7 @@
   "canonical_manifest": "harness-manifest.json",
   "topology_registry": {
     "source": "capabilities/topologies.json",
-    "digest": "sha256:711e2e39c3bbe9da7523dd79b967902bbf307c2f2215ef1860682fde58d5bd7f",
+    "digest": "sha256:d03bc3aa590b3d21974a6473f30c20baa878a1e709b10de8ca2ded418ccc10c8",
     "capabilities": 10,
     "recipes": 22
   },
@@ -476,6 +476,12 @@
       "worker_type": "support",
       "floor": "near-zero"
     },
+    "plan/frame": {
+      "family": "plan",
+      "role": "deep maker",
+      "worker_type": "stage",
+      "floor": "highest"
+    },
     "plan/plan-author": {
       "family": "plan",
       "role": "deep maker",
@@ -611,6 +617,10 @@
     "material/web-image-search": {
       "unit": "material/web-image-search",
       "status": "portable-with-tool-contract"
+    },
+    "plan/frame": {
+      "unit": "plan/frame",
+      "status": "portable-persona"
     },
     "plan/plan-author": {
       "unit": "plan/plan-author",
@@ -764,6 +774,7 @@
         "material/data-script",
         "material/figure-gen",
         "material/pdf-extract",
+        "plan/frame",
         "plan/plan-author",
         "qa/code-review",
         "qa/data-curate",
@@ -794,6 +805,7 @@
         "material/data-script",
         "material/figure-gen",
         "material/pdf-extract",
+        "plan/frame",
         "plan/plan-author",
         "qa/code-review",
         "qa/data-curate",
@@ -807,12 +819,12 @@
       "kernel_agents": [
         "memory-scout"
       ],
-      "digest": "a745a9831d1697cb776109cf37abd5445eb5e137dc142e23213590ed9abd17ea",
+      "digest": "ba43a9220cde7b08376c9fc444810e466b47e2cda1c9de0c867f69b94760ef1e",
       "counts": {
         "capabilities": 14,
-        "units": 19,
+        "units": 20,
         "roles": 7,
-        "modes": 19
+        "modes": 20
       }
     },
     "full": {
@@ -870,6 +882,7 @@
         "material/figure-gen",
         "material/pdf-extract",
         "material/web-image-search",
+        "plan/frame",
         "plan/plan-author",
         "qa/code-review",
         "qa/data-curate",
@@ -910,6 +923,7 @@
         "material/figure-gen",
         "material/pdf-extract",
         "material/web-image-search",
+        "plan/frame",
         "plan/plan-author",
         "qa/code-review",
         "qa/data-curate",
@@ -925,12 +939,12 @@
       "kernel_agents": [
         "memory-scout"
       ],
-      "digest": "f1a57d0f6930f323c1adbdd039e02f94a2cda04624f0f6a8771ea597389ae5d3",
+      "digest": "11ec8711c025514e957676624b90edf0f8a4ac33bff0b46f5ae3e02450e93040",
       "counts": {
         "capabilities": 27,
-        "units": 27,
+        "units": 28,
         "roles": 8,
-        "modes": 28
+        "modes": 29
       }
     },
     "starter": {
@@ -953,6 +967,7 @@
         "dev/refactor",
         "editorial/report",
         "editorial/translate",
+        "plan/frame",
         "plan/plan-author",
         "qa/code-review",
         "qa/plan-review",
@@ -972,6 +987,7 @@
         "dev/refactor",
         "editorial/report",
         "editorial/translate",
+        "plan/frame",
         "plan/plan-author",
         "qa/code-review",
         "qa/plan-review",
@@ -980,12 +996,12 @@
       "kernel_agents": [
         "memory-scout"
       ],
-      "digest": "d34db7a7cf9db08d5132eb1704b00f59d46208d8a777d76144a3aca01a0697f4",
+      "digest": "397bd652a508250a14fe6494f647faa60b6a7b7131d626b82051b4e377f3205c",
       "counts": {
         "capabilities": 6,
-        "units": 10,
+        "units": 11,
         "roles": 5,
-        "modes": 10
+        "modes": 11
       }
     }
   },

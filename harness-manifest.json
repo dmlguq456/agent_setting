@@ -123,6 +123,7 @@
           "dev/new-lib",
           "dev/refactor",
           "editorial/report",
+          "plan/frame",
           "plan/plan-author",
           "qa/code-review",
           "qa/plan-review",
@@ -688,6 +689,12 @@
       "worker_type": "support",
       "floor": "near-zero"
     },
+    "plan/frame": {
+      "family": "plan",
+      "role": "deep maker",
+      "worker_type": "stage",
+      "floor": "highest"
+    },
     "plan/plan-author": {
       "family": "plan",
       "role": "deep maker",
@@ -823,6 +830,10 @@
     "material/web-image-search": {
       "unit": "material/web-image-search",
       "status": "portable-with-tool-contract"
+    },
+    "plan/frame": {
+      "unit": "plan/frame",
+      "status": "portable-persona"
     },
     "plan/plan-author": {
       "unit": "plan/plan-author",

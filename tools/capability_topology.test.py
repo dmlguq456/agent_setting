@@ -41,7 +41,7 @@ class TestTopology(unittest.TestCase):
         r=copy.deepcopy(self.r); r["recipes"][0]["standard_plus"]["nodes"][1]["write_scope"]=["source/**"]; self.assertRaises(T.TopologyError,T.validate_registry,r)
         r=copy.deepcopy(self.r); d=next(x for x in r["recipes"] if x["capability"]=="autopilot-design"); d["standard_plus"]["nodes"][0]["write_scope"]=["design/**"]; self.assertRaises(T.TopologyError,T.validate_registry,r)
     def test_concurrent_overlap(self):
-        r=copy.deepcopy(self.r); d=next(x for x in r["recipes"] if x["capability"]=="autopilot-design"); d["standard_plus"]["nodes"][1]["depends_on"]=[]; d["standard_plus"]["nodes"][1]["write_scope"]=["shards/refs/**"]; self.assertRaisesRegex(T.TopologyError,"overlap",T.validate_registry,r)
+        r=copy.deepcopy(self.r); d=next(x for x in r["recipes"] if x["capability"]=="autopilot-design"); critic=next(n for n in d["standard_plus"]["nodes"] if n["id"]=="critic-review"); critic["depends_on"]=[]; critic["write_scope"]=["reviews/visual/verify/**"]; self.assertRaisesRegex(T.TopologyError,"overlap",T.validate_registry,r)
     def test_spec_scope_requires_owner_or_precondition(self):
         r=copy.deepcopy(self.r); code=next(x for x in r["recipes"] if x["capability"]=="autopilot-code")
         execute=next(n for n in code["standard_plus"]["nodes"] if n["id"]=="execute")
@@ -56,8 +56,9 @@ class TestTopology(unittest.TestCase):
         self.assertRaisesRegex(T.TopologyError,"enforced",T.validate_registry,r)
         r=copy.deepcopy(self.r); r["rollout"]["legacy_low_level_dispatch"]=True
         self.assertRaisesRegex(T.TopologyError,"retired",T.validate_registry,r)
-        r=copy.deepcopy(self.r); r["schema_version"]=2
-        self.assertRaisesRegex(T.TopologyError,"read-only",T.validate_registry,r)
+        for legacy in (2,3):
+            r=copy.deepcopy(self.r); r["schema_version"]=legacy
+            self.assertRaisesRegex(T.TopologyError,"read-only",T.validate_registry,r)
     def test_unknown_unit_ref_fails_closed(self):
         r=copy.deepcopy(self.r); r["recipes"][0]["standard_plus"]["nodes"][0]["unit"]="dev/does-not-exist"
         self.assertRaisesRegex(T.TopologyError,"unknown unit",T.validate_registry,r)
@@ -92,29 +93,59 @@ class TestTopology(unittest.TestCase):
                     T._validate_unit_ref({"capability":"t"},node,self.r)
             finally:
                 T.UNITS=old; T._UNIT_CACHE.clear()
-    def test_replication_declared_on_review_nodes(self):
+    def test_replication_anchor_declarations(self):
         code=next(x for x in self.r["recipes"] if x["capability"]=="autopilot-code")
-        self.assertEqual(code["standard_plus"]["replication"],
-            {"node":"impl-review","min_intensity":"strong","ways":2,"independence_axis":"cross-harness"})
+        self.assertEqual(code["standard_plus"]["replications"],[
+            {"node":"frame","min_intensity":"standard","ways":2,"independence_axis":"cross-harness"},
+            {"node":"plan","min_intensity":"strong","ways":2,"independence_axis":"cross-harness"},
+            {"node":"impl-review","min_intensity":"strong","ways":2,"independence_axis":"cross-harness"}])
+        # Framing anchors (2-way from standard) exist exactly on the generative
+        # recipes whose direction is set in-pipeline; prescriptive/bounded
+        # recipes keep review-only strong anchors (user directive 2026-07-24).
+        framing={"autopilot-code":"frame","autopilot-spec":"research","autopilot-draft":"material-strategy",
+                 "autopilot-design":"refs","autopilot-research":"retrieval"}
+        for recipe in self.r["recipes"]:
+            anchors=recipe["standard_plus"].get("replications",[])
+            standard_anchors=[a["node"] for a in anchors if a["min_intensity"]=="standard"]
+            expected=framing.get(recipe["capability"])
+            with self.subTest(capability=recipe["capability"],modes=recipe["modes"]):
+                self.assertNotIn("replication",recipe["standard_plus"])
+                self.assertEqual(standard_anchors,[expected] if expected else [])
         note=next(x for x in self.r["recipes"] if x["capability"]=="autopilot-note")
-        self.assertNotIn("replication",note["standard_plus"])
+        self.assertNotIn("replications",note["standard_plus"])
     def test_replication_validation_fails_closed(self):
-        def broken(mutate):
+        def broken(mutate,capability="autopilot-code"):
             r=copy.deepcopy(self.r)
-            code=next(x for x in r["recipes"] if x["capability"]=="autopilot-code")
-            mutate(code["standard_plus"]["replication"])
+            recipe=next(x for x in r["recipes"] if x["capability"]==capability)
+            mutate(recipe["standard_plus"])
             return r
-        cases={
-            "not in graph": lambda rep: rep.update(node="missing-node"),
-            "must be a review-worker": lambda rep: rep.update(node="execute"),
-            "standard\\+ tier": lambda rep: rep.update(min_intensity="quick"),
-            "ways must be 2": lambda rep: rep.update(ways=3),
-            "independence_axis must be cross-harness": lambda rep: rep.update(independence_axis="same-harness"),
-            "requires exactly": lambda rep: rep.update(extra=True),
+        def legacy_singular(g): g["replication"]=g.pop("replications")[2]
+        code_cases={
+            "under 'replications'": legacy_singular,
+            "non-empty list": lambda g: g.update(replications=[]),
+            "require exactly": lambda g: g["replications"][2].update(extra=True),
+            "duplicate replication anchor": lambda g: g["replications"].append(dict(g["replications"][0])),
+            "not in graph": lambda g: g["replications"][2].update(node="missing-node"),
+            "requires a downstream consumer": lambda g: g["replications"][2].update(node="report"),
+            "requires a direct review-worker arbiter": lambda g: g["replications"][2].update(node="test"),
+            "standard\\+ tier": lambda g: g["replications"][2].update(min_intensity="quick"),
+            "ways must be 2": lambda g: g["replications"][2].update(ways=3),
+            "independence_axis must be cross-harness":
+                lambda g: g["replications"][2].update(independence_axis="same-harness"),
         }
-        for pattern,mutate in cases.items():
+        for pattern,mutate in code_cases.items():
             with self.subTest(pattern=pattern):
                 self.assertRaisesRegex(T.TopologyError,pattern,T.validate_registry,broken(mutate))
+        # kind vocabulary: a capability-owner node can never anchor a replica pair
+        r=broken(lambda g: g["replications"][0].update(node="handback"),capability="autopilot-apply")
+        self.assertRaisesRegex(T.TopologyError,"review-worker, map-worker, or pipeline-stage",
+            T.validate_registry,r)
+        # anchor output shape: concrete files for stage anchors, '<dir>/**' only for map anchors
+        r=broken(lambda g: next(n for n in g["nodes"] if n["id"]=="plan").update(outputs=["plan/**"]))
+        self.assertRaisesRegex(T.TopologyError,"concrete",T.validate_registry,r)
+        r=broken(lambda g: next(n for n in g["nodes"] if n["id"]=="research").update(
+            outputs=["shards/spec-*/**"]),capability="autopilot-spec")
+        self.assertRaisesRegex(T.TopologyError,"concrete",T.validate_registry,r)
     def test_gate_contract_missing_entry(self):
         r=copy.deepcopy(self.r); del r["completion_gate_contracts"]["apply-hash"]
         self.assertRaisesRegex(T.TopologyError,"completion_gate_contracts entry",T.validate_registry,r)

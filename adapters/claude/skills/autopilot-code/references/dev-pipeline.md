@@ -85,6 +85,32 @@ If a stage dies immediately from usage, session, or authentication limits, the w
 
 When implementation or reporting requires result plots, experiment-log visualization, or result tables, the code-execute or code-report worker records the need in its artifact. The enumerated autopilot-code recipe compiles no `material/*` node, so the owner satisfies the need per the WORKFLOW compose-on-demand doctrine: a composed route extension node bound to the matching `material/*` unit (e.g. `material/figure-gen`, `material/data-script`) that passes the same validator and hash-seal as a recipe route — or, for narrow throwaway scaffolding only, an ephemeral native helper with no unit semantics. Training and experiment execution remain in autopilot-code; the material units own postprocessing. Record generated asset paths in the relevant dev log.
 
+### Step 0: frame (direction briefs, 2-way from standard)
+
+Skip for direct and quick (orient-lite carries the framing posture inline). Every
+compiled standard+ route opens with the `frame` map-worker pair: `frame` and
+`frame-replica` (`replica_group=frame`, `independence_axis=cross-harness`, unit
+`plan/frame`, completion gate `code-frame`). Framing replicates from `standard` —
+not `strong` — because the direction decision is the point of maximum downstream
+leverage (user directive 2026-07-24: an early direction error cascades into
+hotfix/patch work and cost blowups).
+
+Dispatch both legs in parallel through the route-bound transaction
+(`NODE_ID=frame`, `NODE_ID=frame-replica`) and place the legs on different
+harness/model families; prefer the GPT/Codex family for the root-cause-leaning
+leg per the root-cause-first routing practice, and when only one harness is
+live, fall back to a same-harness independent session and record the reduced
+independence. The legs work blind to each other and each writes its own
+direction brief (`shards/frame/direction-brief.md`,
+`shards/frame/direction-brief.replica.md`) containing a problem statement,
+root-cause/essence evidence, 2–3 direction options with trade-offs, and a
+committed direction verdict with rejected alternatives.
+
+Publish each leg's exact completion from its brief. There is no conductor-level
+merge for framing: `plan` is record-bound to both markers, reads both briefs,
+and must record which direction it adopts (and why, when the legs disagree —
+disagreement between briefs is signal, not an error).
+
 ### Step 1: code-plan
 
 Skip for direct. quick uses an inline micro-plan. For standard+, first verify the SD-13 precondition: the repository has an artifact root and `spec/`. Then dispatch:
@@ -108,11 +134,25 @@ sh "$AGENT_HOME/utilities/dispatch-wait.sh" --parent <cycle-slug>
 
 After the typed receipt (or fallback exit 0), read only plan status and paths. A terminal recovery receipt permits checked exact-attempt diagnosis; raw transcript inspection still requires a terminal/closed row or explicit operator recovery. For direct, quick, or unavailable headless runtime, invoke `code-plan` in-session.
 
+At `strong` and above the compiled route also contains `plan-replica`
+(`replica_group=plan`, outputs `plan.replica.md`/`checklist.replica.md`): two
+independent cross-harness planning legs, each reading both direction briefs.
+Dispatch both legs in parallel on different harness/model families. Neither leg
+is "the" plan until Step 2 arbitrates.
+
 ### Step 2: plan-check and Optional Refinement
 
 Only durable standard+ graphs use this step. direct has none; quick already completed plan-check-lite.
 
 The compiled standard+ route contains the `plan-check` review node unconditionally (default unit `qa/plan-review`, completion gate `code-plan-check`); `execute` is record-bound to its completion marker and cannot start without it. Intensity scales the review's depth and reviewer role/family, never whether the node runs.
+
+At `strong` and above `plan-check` is additionally the plan arbiter: it is
+record-bound to both plan legs, reads `plan.md`/`checklist.md` and
+`plan.replica.md`/`checklist.replica.md`, and its memo names the winning leg
+plus any grafts worth taking from the other. When the replica leg wins or a
+graft is required, materialize the final `plan.md` through the existing bounded
+`code-refine` path before `execute` — `plan-check` itself stays read-only, and
+`execute` consumes `plan.md` only.
 
 1. Resolve `en_plan_path`, `ko_plan_path`, and `log_dir`.
 2. Run the route-bound dispatch transaction with `NODE_ID=plan-check`: the node reads `plan.md` and `checklist.md` and writes `_internal/plan_reviews/round_1.md`. Poll, then publish exact completion from the review memo.

@@ -249,8 +249,8 @@ Autopilot entrypoints choose `intensity`; verification rigor is derived from it 
 |---|---|---|
 | One-off answer, typo, rename, or explicit no-artifact work | `direct` | No plan stage, plan check, or durable plan |
 | Small localized change that misses at least one atomic-direct predicate and has no promotion signal | `quick` | Registered-headless dispatch-depth-1 one-shot owner with orient-lite, micro-plan, plan-check-lite, focused verification, and concise report; no dispatch depth 2 |
-| Work with a promotion signal or separable durable stages | `standard` | Durable plan/checklist; thin dispatch-depth-1 conductor dispatches capability-defined stages with file-only handoff and may open a bounded verifier or planner, optionally a cross-harness 2-way replica, when separable |
-| Important multi-file or risk-bearing work | `strong` | Standard stage dispatch plus a cross-harness 2-way independent replica-and-merge at the riskiest point |
+| Work with a promotion signal or separable durable stages | `standard` | Durable plan/checklist; thin dispatch-depth-1 conductor dispatches capability-defined stages with file-only handoff, compiles the capability's framing anchor as a cross-harness 2-way replica pair by default, and may open a bounded verifier or planner, optionally a further 2-way replica, when separable |
+| Important multi-file or risk-bearing work | `strong` | Standard stage dispatch plus cross-harness 2-way independent replica-and-merge at the plan-committal and riskiest review anchors |
 | Complex cross-domain or cross-harness work | `thorough` | Bounded dispatch-depth-2 perspective and verifier workers |
 | High-stakes, irreversible, security, or external-facing work | `adversarial` | Thorough plus an explicit adversary, failure-mode, or security pass |
 
@@ -309,7 +309,7 @@ under §0.4, and internal routing is automatic. Portable model roles come from
 | `analyze-project` | One capability analyzing code, paper, or document mode itself |
 | `autopilot-spec` | Planning role for PRD, material role for research import, and setup logic for hosting and CI/CD |
 | `autopilot-design` | Design maker and critic plus material web-image-search |
-| `autopilot-code` | Direct is dispatch-depth-0 inline. Quick is one registered-headless dispatch-depth-1 one-shot owner running orient-lite → micro-plan → plan-check-lite → produce → focused verification → concise report. At `standard+`, independently dispatch planning, implementation, code-review/test, and task-aware plan review; visual work uses a design critic, while research and code use research review. |
+| `autopilot-code` | Direct is dispatch-depth-0 inline. Quick is one registered-headless dispatch-depth-1 one-shot owner running orient-lite → micro-plan → plan-check-lite → produce → focused verification → concise report. At `standard+`, independently dispatch framing (2-way cross-harness direction briefs feeding the planner), planning, implementation, code-review/test, and task-aware plan review; visual work uses a design critic, while research and code use research review. |
 | `autopilot-code` in app mode | General code flow plus design critique at plan review and after render, DB migration safety, and automatic deploy after an authorized push |
 | `autopilot-draft` | Material figure/data/reference work, writing implementation, editorial polish, and research fact-check |
 | `autopilot-refine` | Reuse the draft roles plus editorial review |
