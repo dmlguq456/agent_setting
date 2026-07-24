@@ -347,22 +347,24 @@ class SpecPhaseSequenceTest(unittest.TestCase):
                                    ("dev", "active")])
             segs = render._session_stage_segs(entity, working=True, max_width=80)
             text = "".join(t for t, _k in segs)
-            # Mode-tagged capability name + dim colon lead-in: `spec-cli : …`.
-            self.assertIn("spec-cli : ", text)
+            # Code-parity paren syntax: `spec(cli) : …` — parens (not brackets), dim colon.
+            self.assertIn("spec(cli) : ", text)
             self.assertNotIn("[cli]", text)               # square brackets never used
-            self.assertNotIn("(cli)", text)               # nor parens — the mode rides the name
+            self.assertNotIn("spec-cli", text)            # mode is a paren knob, not a name suffix
             self.assertNotIn("topic-a", text)             # topic dropped
             self.assertIn("spec✓", text)                  # done glyph
             self.assertNotIn("scaffolding", text)         # deferred phase filtered out (no ⊘)
             self.assertNotIn("⊘", text)                   # skip glyph never rendered
             self.assertIn("dev", text)                    # active phase present
             self.assertIn("›", text)                      # dispatch-syntax separator
-            # entry `spec-cli` rides the dim name_dim hue (per _opts_segs entry convention).
-            self.assertEqual(dict((t, k) for t, k in segs).get("spec-cli"), "name_dim")
+            # entry `spec` rides name_dim, the paren group is dim — exactly _opts_segs.
+            keyed = dict((t, k) for t, k in segs)
+            self.assertEqual(keyed.get("spec"), "name_dim")
+            self.assertEqual(keyed.get("("), "dim")
 
-    def test_mode_abbreviations_hyphenate_into_the_name(self):
-        cases = {"cli": "spec-cli", "library": "spec-lib", "app": "spec-app",
-                 "library,cli": "spec-lib-cli"}
+    def test_mode_rides_the_paren_group_like_code(self):
+        cases = {"cli": "spec(cli) : ", "library": "spec(library) : ",
+                 "app": "spec(app) : ", "library,cli": "spec(library·cli) : "}
         for mode, expected in cases.items():
             with tempfile.TemporaryDirectory() as tmp:
                 _write_pipeline_state(tmp, "t",
@@ -374,7 +376,7 @@ class SpecPhaseSequenceTest(unittest.TestCase):
                 segs = render._session_stage_segs(entity, working=True, max_width=80)
                 text = "".join(t for t, _k in segs)
                 with self.subTest(mode=mode):
-                    self.assertIn(expected + " : ", text)
+                    self.assertIn(expected, text)
             # active phase carries a lit (non-dim) color key so it stands out / blinks.
             active_keys = [k for t, k in segs if t == "dev"]
             self.assertTrue(any(k and k.startswith("stg") and k.endswith("_on")
