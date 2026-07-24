@@ -1,7 +1,7 @@
 project_name: stage-dispatch
 component: stage-dispatch          # autopilot 파이프 디스패치 토폴로지 개정 (repo spec/prd.md = Unified Memory System, spec/harness-layer-sync·dispatch-profiles·agent-fleet-dashboard 무관)
 created: 2026-07-10
-version: 27
+version: 25
 mode: [library, cli]              # library(스테이지 분사 계약·오케스트레이션) + cli(dispatch wrapper·jobs.log·fleet 관제) — infra
 scope_note: "dispatch_depth=0 main은 substantive tracked work의 orchestration/integration만 소유. direct=atomic main-inline, quick=registered-headless-only capability owner 1개(owner/max dispatch depth=1, child 없음), standard+=capability-specific recipe와 기존 checked fallback. v20부터 portable dispatch depth는 Codex agents.max_depth 및 runtime-native agent surfaces와 별도 namespace다."
 inputs:
@@ -42,18 +42,13 @@ inputs:
   - '사용자 관측·정식 drill 2026-07-24: strong review replica가 순차 표시. execute marker/row terminal 후 outer governor lease가 약 4.6초 잔존해 owner+draining predecessor+replica가 dispatch cap 3을 채우고 다른 replica가 governor 75로 거부; terminal stage와 runtime stage one-shot Fleet 중복도 관측'
   - '코드 전수검토 2026-07-24: gate/join/wait/fallback이 semantic terminal을 successor-ready와 동일시, wrapper check→row claim→run/acquire TOCTOU, OpenCode shared spawn/PID parity 누락, sequential dispatch-chain은 replica concurrency primitive가 아님. strong plan은 원래 순차 DAG이며 review replica만 병렬 대상'
   - 'plans/2026-07-24_dispatch-quiescence-contract/{plan/plan.md,_internal/metrics.md,_internal/spec-route.json}: shared quiescence + atomic replica admission/batch + Fleet exact-attempt projection; cap/sleep/marker-delay 금지'
-  - '사용자 결정 2026-07-24 (v26): 생성형 recipe의 framing은 standard 2-way, plan은 strong 2-way로 독립 방향 탐색하고 plan-check가 중재; registry v4 다중 replications와 frame stage로 배선(SD-82)'
-  - '운영 진단 2026-07-24 (v27): terminal-unverifiable current-contract row 46개가 ordinary Codex root/worker의 모든 local tool을 parent-parked로 차단. semantic terminal이라 wait/harvest로 해소 불가하고 host process 증거 부재로 quiescence도 입증 불가 — completion-delivery scope와 global park 후보 집합의 결합이 원인'
-  - '공식·로컬 surface 대조 2026-07-24 (v27): Codex native subagent spawn/wait와 registered-headless App Server completion supervisor는 별도 runtime surface. native 지원을 registered parent park로 제한하지 않으며 supervised/poll readiness만 strict 유지'
 phases:
-  spec: done              # PRD v27 — SD-83 completion-delivery-scoped parent park; v25/v26 누락 snapshot을 transaction에서 복구
+  spec: done              # PRD v25 — SD-79~81 successor-ready/replica batch/Fleet exact attempt; v24 snapshot = _internal/versions/v24/
   scaffolding: deferred   # lean — 코드 skeleton 은 autopilot-code 로 이월 (§11 module 구조만 확정, wrapper 재작성 불요)
   design: n/a             # 시각 UI 없음 (인프라 계약)
-  dev: in_progress        # parent-park-terminal-recovery 구현·회귀·일반 hook smoke 진행 중
+  dev: in_progress        # dispatch-quiescence-contract 구현·회귀·live strong cross-harness drill 진행 중
 last_updated: 2026-07-24
 decisions_locked:
-  - 'SD-83(v27): supervised와 explicit poll-fallback owner는 terminal non-quiescent를 strict pending으로 유지한다. ordinary interactive depth-0 all-tool hook은 exact latest direct child의 open/running만 park하며 terminal live/unverifiable은 전역 park 후보에서 제외한다. successor gate/join/wait/fallback/cleanup은 shared quiescence로 계속 fail-closed하고 registry mutation/dead inference/native-subagent 제한은 금지'
-  - 'SD-82(v26): registry v4 replications 배열로 review/map/pipeline-stage 다중 앵커를 전개. 생성형 5 recipe framing은 standard 2-way, autopilot-code frame stage 신설, plan은 strong 2-way+plan-check 중재. quick/direct와 처방적 recipe는 새 stage 비대상'
   - 'SD-81(v25): Fleet runtime scanner는 AGENT_DISPATCH_ATTEMPT_ID를 process/session row에 투영하고 latest exact terminal/draining registry row와 join해 동일 attempt의 stage one-shot 중복만 숨긴다. route-node stage done은 유지하며 cwd/slug/PID 단독 억제 금지. registered depth-2 context-window 실측은 계속 미지원'
   - 'SD-80(v25): strong plan은 순차 DAG 유지, 같은 replica_group의 review sibling 정확히 2개만 한 checked non-model batch로 동시 launch. route/parent/dependency/cardinality 검증, distinct supported harness 우선, transient foreground 병렬 유지. governor N-slot atomic reserve→wrapper exact claim으로 check/acquire TOCTOU 제거; 부족 시 row/model spawn 0, partial launch는 successful sibling 보존+failed leg typed SD-50 fallback, silent serial/inline 금지'
   - 'SD-79(v25): marker+terminal row는 semantic stage done/Fleet 표시를 즉시 유지하되 successor-ready=semantic_terminal AND exact outer governor quiescent. gate/join/wait/fallback shared classifier는 live=draining, gone/reused/zombie/explicit never-launched=quiescent, 증거 없는 PID 누락·namespace host identity 없음=unverifiable fail-closed. cap 상향·marker 지연·임의 sleep 금지. Codex/Claude shared spawn parity; OpenCode는 reservation/env만 동형 적용하고 standard+ depth-2 unsupported 유지'
