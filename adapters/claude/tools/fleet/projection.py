@@ -125,10 +125,17 @@ def _active_node(node, state, job=None):
 
 
 def _record_view(record, route_id, jobs, node_evidence=None, now=None):
-    """Use route.py's pure state resolver so projection and legacy route views agree."""
+    """Use route.py's pure state resolver so projection and legacy route views agree.
+
+    Resolve this record's gate marks (2026-07-24) and pass them through, so a
+    completion-marked node that died on an earlier attempt renders `done` rather than
+    `✕` on the owning session/dispatch row — parity with the group/process route views,
+    which already resolve marks via `resolve_and_build_views`."""
     from . import route
+    marks = route.resolve_gate_marks({route_id: record}).get(route_id)
     return route._record_view(record, route_id, list(jobs), node_evidence or {},
-                              time.time() if now is None else now)
+                              time.time() if now is None else now,
+                              gate_marks_for_route=marks)
 
 
 def _record_nodes(record, route_id, jobs, node_evidence=None, now=None):
