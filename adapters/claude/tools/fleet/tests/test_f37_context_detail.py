@@ -36,19 +36,19 @@ class ContextDetailTruthTableTest(unittest.TestCase):
     def test_context_now_truth_table(self):
         cases = [
             (ContextProjection(63, "normal", "claude"), "Doing work",
-             "💬 ━━━━━━━━━━────── 63%   Doing work"),
+             "📚 ━━━━━━━━━━────── 63%   Doing work"),
             (ContextProjection(63, "normal", "claude"), None,
-             "💬 ━━━━━━━━━━────── 63%"),
+             "📚 ━━━━━━━━━━────── 63%"),
             (ContextProjection(None, "unknown", "claude"), "Doing work",
-             "💬 ────────────────   —   Doing work"),
-            (None, None, "💬 ────────────────   —"),
+             "📚 ────────────────   —   Doing work"),
+            (None, None, "📚 ────────────────   —"),
             (ContextProjection(0, "normal", "claude"), None,
-             "💬 ────────────────  0%"),
+             "📚 ────────────────  0%"),
         ]
         for context, now, expected in cases:
             row = render._context_detail_row(self._session(context=context, summary=now), term_width=168)
             # The row is left-aligned to the NAME column (2026-07-24).
-            self.assertEqual(text(row), " " * render._NAME_COL + expected)
+            self.assertEqual(text(row), " " * render._CONTEXT_INDENT_W + expected)
 
     def test_stale_and_dead_rows_suppress_cached_detail(self):
         for state in ("stale", "dead"):
@@ -69,14 +69,14 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                 row = render._dispatch_summary_detail_row(
                     job, depth=1, term_width=width)
                 visible = text(row)
-                self.assertNotIn("💬", visible)
+                self.assertNotIn("📚", visible)
                 self.assertEqual(visible.index("NOW"), render._NAME_COL)
                 self.assertLessEqual(render._dw(visible), width)
 
                 rendered = text(render._build_lines(
                     [], [job], "both", False, 0,
                     layout=layout, term_width=width))
-                self.assertNotIn("💬", rendered)
+                self.assertNotIn("📚", rendered)
                 self.assertIn("NOW", rendered)
 
         job.summary = None
@@ -87,8 +87,8 @@ class ContextDetailTruthTableTest(unittest.TestCase):
             with self.subTest(malformed=malformed):
                 row = render._context_detail_row(
                     self._session(ctx_pct=malformed), term_width=168)
-                self.assertEqual(text(row), " " * render._NAME_COL +
-                                 "💬 ────────────────   —")
+                self.assertEqual(text(row), " " * render._CONTEXT_INDENT_W +
+                                 "📚 ────────────────   —")
 
     def test_context_alert_uses_the_full_visible_label(self):
         session = self._session(slug="hot", ctx_pct=85)
@@ -105,15 +105,13 @@ class ContextDetailTruthTableTest(unittest.TestCase):
             self.assertLessEqual(render._dw(text(row)), width)
             track = re.search(r"[━─]+", text(row)).group(0)
             self.assertEqual(len(track), render._HW)
-            self.assertIn("💬 ", text(row))
-            self.assertLess(text(row).index("💬 "), text(row).index("한글"))
+            self.assertIn("📚 ", text(row))
+            self.assertLess(text(row).index("📚 "), text(row).index("한글"))
             self.assertNotIn(": ", text(row))
             self.assertIn("   한글", text(row))
             row_text = text(row)
-            # The context row starts at the NAME column on wide terminals, at the compact strip
-            # inset on narrow ones (2026-07-24 left-align gated to wide layout).
-            expected_col = render._NAME_COL if width >= render._TWO_LINE_CUTOFF else len(render._SUBAGENT_IND)
-            self.assertEqual(render._dw(row_text[:row_text.index("💬")]), expected_col)
+            # The context row starts under the harness name in every layout (2026-07-24).
+            self.assertEqual(render._dw(row_text[:row_text.index("📚")]), render._CONTEXT_INDENT_W)
 
     def test_description_column_is_stable_for_value_width_and_depth(self):
         for pct in (None, 0, 63, 100):
@@ -126,7 +124,7 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                     visible = text(row)
                     self.assertEqual(
                         render._dw(visible[:visible.index("Doing work")]),
-                        render._NAME_COL + render._CTX_LABEL_W + render._HW
+                        render._CONTEXT_INDENT_W + render._CTX_LABEL_W + render._HW
                         + render._CONTEXT_VALUE_W + render._CONTEXT_NOW_GAP)
                     track = re.search(r"[━─]+", visible).group(0)
                     self.assertEqual(len(track), render._HW - 2 * depth)
@@ -254,7 +252,7 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                                             term_width=width)
                 visible = text(lines)
                 with self.subTest(width=width):
-                    self.assertIn("💬 ", visible)             # context icon
+                    self.assertIn("📚 ", visible)             # context icon
                     self.assertIn("stage exec", visible)      # stage rides the row's own column
                     # An INFERRED inline stage carries NO dedicated detail row (2026-07-24): a
                     # main session must not show the `plan › exec › test` breadcrumb line.
@@ -585,7 +583,7 @@ class ChildAssociationTest(unittest.TestCase):
         finally:
             render.set_process_view(False)
         visible = "\n".join("".join(part for part, _ in line) for line in lines if line)
-        self.assertNotIn("💬", visible)
+        self.assertNotIn("📚", visible)
         self.assertLess(visible.index("└▸🚀"), visible.index("NOW"))
         self.assertLess(visible.index("NOW"), visible.index("⚡tool"))
         now_line = next(line for line in visible.splitlines() if "NOW" in line)
