@@ -280,6 +280,32 @@ else
   bad "codex agent-home wrapper should ignore invalid AGENT_HOME"
 fi
 
+# A preflight executable located in a linked/feature checkout is an
+# orchestration source, not the installed harness root. Its default registry
+# must come from the canonical HOME resolution; a valid explicit AGENT_HOME
+# remains stronger.
+mkdir -p "$TMP/codex_preflight_home/agent_setting/core" "$TMP/codex_preflight_home/agent_setting/.dispatch"
+printf 'core\n' > "$TMP/codex_preflight_home/agent_setting/core/CORE.md"
+printf '2026-07-24T00:00:00Z\topen\t%s\t%s\tcanonical-root-sentinel\tcapability=audit\n' "$TMP/repo" "$TMP/repo" \
+  > "$TMP/codex_preflight_home/agent_setting/.dispatch/jobs.log"
+env -u AGENT_HOME HOME="$TMP/codex_preflight_home" "$CODEX" liveness >/tmp/codex_preflight_root.out 2>/tmp/codex_preflight_root.err || true
+if grep -q 'canonical-root-sentinel' /tmp/codex_preflight_root.out; then
+  ok "worktree-local codex preflight resolves the canonical installed harness root"
+else
+  bad "worktree-local codex preflight must not use its source worktree as AGENT_HOME"
+fi
+mkdir -p "$TMP/codex_explicit_home/core" "$TMP/codex_explicit_home/.dispatch"
+printf 'core\n' > "$TMP/codex_explicit_home/core/CORE.md"
+printf '2026-07-24T00:00:00Z\topen\t%s\t%s\texplicit-root-sentinel\tcapability=audit\n' "$TMP/repo" "$TMP/repo" \
+  > "$TMP/codex_explicit_home/.dispatch/jobs.log"
+AGENT_HOME="$TMP/codex_explicit_home" HOME="$TMP/codex_preflight_home" "$CODEX" liveness >/tmp/codex_preflight_explicit.out 2>/tmp/codex_preflight_explicit.err || true
+if grep -q 'explicit-root-sentinel' /tmp/codex_preflight_explicit.out \
+  && ! grep -q 'canonical-root-sentinel' /tmp/codex_preflight_explicit.out; then
+  ok "codex preflight preserves a valid explicit AGENT_HOME override"
+else
+  bad "codex preflight should prefer a valid explicit AGENT_HOME override"
+fi
+
 echo "== spec read gate CLI =="
 mkdir -p "$TMP/specproj/.agent_reports/spec"
 printf 'prd\n' > "$TMP/specproj/.agent_reports/spec/prd.md"

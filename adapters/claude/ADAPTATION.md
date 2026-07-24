@@ -123,7 +123,10 @@ main/orchestrator chooses per job and the wrapper only reflects that choice:
   siblings; once the receipt is delivered, only exact harvest of delivered open
   rows is admitted. Waits and unrelated tools are denied in both phases, invalid
   state is recovery-only harvest, and normal exit or the exact owner watcher
-  removes the state. This extra
+  removes the state. The watcher reconciles every exact owner exit, including a
+  model/auth/limit failure before the owner creates a route child, so a dead
+  process cannot leave an `open` row that is absent from Fleet but still parks
+  the parent. This extra
   settings object applies only to the spawned command and never edits the user's
   Claude settings.
 - The headless wrapper does not choose a default model. The main/orchestrator
@@ -198,6 +201,11 @@ Hook scripts now follow the same concrete projection pattern:
 adapter-owned copies of the current shared `hooks/` scripts. This keeps the
 existing Claude `settings.json` commands stable while `core/HOOKS.md` continues
 to define the portable invariant layer and future adapter wrapper split.
+`material-route-guard.py` is registered on PreToolUse source Edit/Write and Bash
+commit surfaces, on PostToolUse Bash to bind one successfully compiled route to
+the exact Claude session, and on SessionEnd to remove that session marker. It
+revalidates the immutable route on every protected action; the separate
+capability-grounding Skill marker is display-only and never satisfies this gate.
 
 Utility scripts are a whole-layer collapse (2026-07-22): `claude_setting/utilities`
 points at `adapters/claude/utilities`, which is itself ONE symlink to the shared

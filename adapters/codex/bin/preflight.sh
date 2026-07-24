@@ -11,7 +11,17 @@ fi
 agent_home() {
   if [ -n "${AGENT_HOME:-}" ] && [ -f "$AGENT_HOME/core/CORE.md" ]; then
     printf '%s\n' "$AGENT_HOME"
+    return
+  fi
+  candidate=$(
+    "$ROOT/adapters/codex/utilities/agent-home.sh" 2>/dev/null || true
+  )
+  if [ -n "$candidate" ] && [ -f "$candidate/core/CORE.md" ]; then
+    printf '%s\n' "$candidate"
   else
+    # A standalone, not-yet-installed checkout remains usable. A linked
+    # feature worktree does not reach this branch when the canonical
+    # $HOME/agent_setting or Codex runtime pointer is available.
     printf '%s\n' "$ROOT"
   fi
 }
