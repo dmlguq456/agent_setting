@@ -2094,9 +2094,13 @@ def _dispatch_summary_detail_row(job, depth=1, term_width=None):
                         start_col=_NAME_COL)
 
 
+_CTX_LABEL = "🧩 "            # context-gauge row label (icon, not the word "context" — user 2026-07-24)
+_CTX_LABEL_W = 3              # display cells: 🧩 (2, emoji range) + trailing space (1).
+                               # Hardcoded (not _dw(_CTX_LABEL)) — this constant is computed at
+                               # module load, before _dw/_WIDE are defined further down the file.
 _CONTEXT_VALUE_W = 4
 _CONTEXT_DESCRIPTION_GAP = max(
-    1, _NAME_COL - (len(_SUBAGENT_IND) + len("context ") + _HW + _CONTEXT_VALUE_W))
+    1, _NAME_COL - (len(_SUBAGENT_IND) + _CTX_LABEL_W + _HW + _CONTEXT_VALUE_W))
 
 
 def _compact_context_gauge_width(available, depth=0):
@@ -2106,13 +2110,13 @@ def _compact_context_gauge_width(available, depth=0):
     # the shared wide-layout session start instead of drifting to the right.
     desired = max(4, _HW - 2 * max(0, int(depth or 0)))
     # Preserve at least one subtitle cell on unexpectedly tiny terminals.
-    fixed = (_dw("context ") + _CONTEXT_VALUE_W
+    fixed = (_CTX_LABEL_W + _CONTEXT_VALUE_W
              + _CONTEXT_DESCRIPTION_GAP + 1)
     return min(desired, max(4, available - fixed))
 
 
 def _context_detail_row(entity, depth=0, term_width=None):
-    """One ``context <gauge> <value>   NOW`` row for every live card."""
+    """One ``🧩 <gauge> <value>   NOW`` row for every live card."""
     if getattr(entity, "liveness", None) in ("stale", "dead"):
         return []
     context = getattr(entity, "context", None)
@@ -2126,7 +2130,7 @@ def _context_detail_row(entity, depth=0, term_width=None):
         shown_pct = int(round(pct))
     else:
         shown_pct = None
-    segs = [(indent, None), ("context ", "dim")]
+    segs = [(indent, None), (_CTX_LABEL, "dim")]
     segs.extend(_gauge_segs(shown_pct, gauge_width))
     if shown_pct is None:
         value_text = "—"

@@ -36,14 +36,14 @@ class ContextDetailTruthTableTest(unittest.TestCase):
     def test_context_now_truth_table(self):
         cases = [
             (ContextProjection(63, "normal", "claude"), "Doing work",
-             "context ━━━━━━━━━━────── 63%   Doing work"),
+             "🧩 ━━━━━━━━━━────── 63%        Doing work"),
             (ContextProjection(63, "normal", "claude"), None,
-             "context ━━━━━━━━━━────── 63%"),
+             "🧩 ━━━━━━━━━━────── 63%"),
             (ContextProjection(None, "unknown", "claude"), "Doing work",
-             "context ────────────────   —   Doing work"),
-            (None, None, "context ────────────────   —"),
+             "🧩 ────────────────   —        Doing work"),
+            (None, None, "🧩 ────────────────   —"),
             (ContextProjection(0, "normal", "claude"), None,
-             "context ────────────────  0%"),
+             "🧩 ────────────────  0%"),
         ]
         for context, now, expected in cases:
             row = render._context_detail_row(self._session(context=context, summary=now), term_width=168)
@@ -68,14 +68,14 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                 row = render._dispatch_summary_detail_row(
                     job, depth=1, term_width=width)
                 visible = text(row)
-                self.assertNotIn("context", visible)
+                self.assertNotIn("🧩", visible)
                 self.assertEqual(visible.index("NOW"), render._NAME_COL)
                 self.assertLessEqual(render._dw(visible), width)
 
                 rendered = text(render._build_lines(
                     [], [job], "both", False, 0,
                     layout=layout, term_width=width))
-                self.assertNotIn("context ", rendered)
+                self.assertNotIn("🧩", rendered)
                 self.assertIn("NOW", rendered)
 
         job.summary = None
@@ -87,7 +87,7 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                 row = render._context_detail_row(
                     self._session(ctx_pct=malformed), term_width=168)
                 self.assertEqual(text(row), render._SUBAGENT_IND +
-                                 "context ────────────────   —")
+                                 "🧩 ────────────────   —")
 
     def test_context_alert_uses_the_full_visible_label(self):
         session = self._session(slug="hot", ctx_pct=85)
@@ -104,11 +104,12 @@ class ContextDetailTruthTableTest(unittest.TestCase):
             self.assertLessEqual(render._dw(text(row)), width)
             track = re.search(r"[━─]+", text(row)).group(0)
             self.assertEqual(len(track), render._HW)
-            self.assertIn("context ", text(row))
-            self.assertLess(text(row).index("context "), text(row).index("한글"))
+            self.assertIn("🧩 ", text(row))
+            self.assertLess(text(row).index("🧩 "), text(row).index("한글"))
             self.assertNotIn(": ", text(row))
             self.assertIn("   한글", text(row))
-            self.assertEqual(text(row).index("한글"), render._NAME_COL)
+            row_text = text(row)
+            self.assertEqual(render._dw(row_text[:row_text.index("한글")]), render._NAME_COL)
 
     def test_description_column_is_stable_for_value_width_and_depth(self):
         for pct in (None, 0, 63, 100):
@@ -119,7 +120,8 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                         self._session(context=context, summary="Doing work"),
                         depth=depth, term_width=168)
                     visible = text(row)
-                    self.assertEqual(visible.index("Doing work"), render._NAME_COL)
+                    self.assertEqual(render._dw(visible[:visible.index("Doing work")]),
+                                     render._NAME_COL)
                     track = re.search(r"[━─]+", visible).group(0)
                     self.assertEqual(len(track), render._HW - 2 * depth)
 
@@ -131,7 +133,7 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                                   summary="Doing work"), term_width=168)
                 visible = text(row)
                 self.assertNotIn(band, visible)
-                self.assertIn("85%   Doing work", visible)
+                self.assertIn("85%        Doing work", visible)
                 self.assertNotIn(": ", visible)
 
     def test_percentage_is_dim_while_gauge_keeps_level_color(self):
@@ -246,7 +248,7 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                                             term_width=width)
                 visible = text(lines)
                 with self.subTest(width=width):
-                    self.assertIn("context ", visible)
+                    self.assertIn("🧩 ", visible)
                     for primary in ("plan ✓", "exec ●", "test ○", "report ○"):
                         self.assertEqual(visible.count(primary), 1)
                     self.assertIn("exec ● ←{plan}", visible)
@@ -514,7 +516,7 @@ class ChildAssociationTest(unittest.TestCase):
                 [parent], [job], "both", False, 0, layout=layout, term_width=width))
             with self.subTest(width=width):
                 self.assertEqual(visible.count("⚡stream-tool"), 1)
-                self.assertNotIn("context ", next(
+                self.assertNotIn("🧩", next(
                     line for line in visible.splitlines() if "stream-tool" in line))
 
     def test_process_route_chunk_orders_job_now_then_attempt_subagents(self):
@@ -531,7 +533,7 @@ class ChildAssociationTest(unittest.TestCase):
         finally:
             render.set_process_view(False)
         visible = "\n".join("".join(part for part, _ in line) for line in lines if line)
-        self.assertNotIn("context ", visible)
+        self.assertNotIn("🧩", visible)
         self.assertLess(visible.index("└▸🚀"), visible.index("NOW"))
         self.assertLess(visible.index("NOW"), visible.index("⚡tool"))
         now_line = next(line for line in visible.splitlines() if "NOW" in line)

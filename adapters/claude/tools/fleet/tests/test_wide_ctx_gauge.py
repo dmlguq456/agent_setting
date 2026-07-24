@@ -68,7 +68,7 @@ class SessionRowCtxWidthTest(unittest.TestCase):
         segs = render._session_row(s, narrow=False, ctx_width=40)
         text = "".join(t for t, _k in segs)
         self.assertNotIn("42%", text)
-        self.assertNotIn("context ", text)
+        self.assertNotIn("🧩", text)
 
     def test_no_overflow_at_wide_layout_widths(self):
         """168/200/400 are where the board actually picks the wide layout (`_layout_mode`
