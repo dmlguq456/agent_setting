@@ -20,8 +20,20 @@ import glob
 import os
 import re
 import sqlite3
+import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
+
+_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if (parent / "core" / "CORE.md").is_file()
+    and (parent / "utilities" / "dispatch_contract.py").is_file()
+)
+sys.path.insert(0, str(_ROOT / "utilities"))
+from dispatch_contract import observed_attempt_liveness  # noqa: E402
+from codex_dispatch_terminal import terminal_envelope_observed  # noqa: E402
 
 from .. import model
 from ..model import DispatchJob, etime_to_min
@@ -567,6 +579,24 @@ def _dispatch_liveness(job, now, track=True):
                 actual_proc_start = str(observed_start)
                 pid_alive = True
                 proc_start_match = str(observed_start) == str(job.proc_start)
+    terminal_observation = _attempt_terminal_observation(
+        job.attempt_id, job.route_id, job.route_node
+    )
+    common_observation = None
+    registry_metadata = getattr(job, "_registry_metadata", None)
+    if (
+        isinstance(registry_metadata, dict)
+        and job.attempt_contract_status == "current"
+        and job.registered_worker is True
+    ):
+        common_observation = observed_attempt_liveness(
+            job.status,
+            registry_metadata,
+            terminal_envelope=(
+                bool(terminal_observation)
+                or terminal_envelope_observed(getattr(job, "_log_file", None))
+            ),
+        )
     ev_in = {
         "source": job.source,
         "key": job.key,
@@ -604,8 +634,16 @@ def _dispatch_liveness(job, now, track=True):
         "route_node": job.route_node,
         "registry_transition": {"status": job.status},
         "heartbeat": _attempt_heartbeat(job.attempt_id),
-        "terminal_observation": _attempt_terminal_observation(
-            job.attempt_id, job.route_id, job.route_node
+        "terminal_observation": terminal_observation,
+        "observed_liveness": (
+            {
+                "state": common_observation.state,
+                "reason": common_observation.reason,
+                "process_state": common_observation.process_state,
+                "process_reason": common_observation.process_reason,
+            }
+            if common_observation
+            else None
         ),
         # A loop proc row is decided by tier-2 evidence; skip the mtime probe entirely
         # (it was never consulted on that path pre-F-25 either).
@@ -615,6 +653,9 @@ def _dispatch_liveness(job, now, track=True):
     state, evidence = model.classify_job(ev_in, now,
                                          key=("j", job.slug) if track else None)
     job.state_evidence = evidence
+    if common_observation and common_observation.state == "reconcile-needed":
+        job.stage = "reconcile-needed"
+        job.note = "reconcile-needed"
     return state
 
 
@@ -1544,6 +1585,7 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None, registry_priority=0):
             registry_priority=registry_priority,
         )
         job._log_file = meta.get("log_file")
+        job._registry_metadata = dict(meta)
         jobs.append(job)
     quick_groups = {}
     for job in jobs:

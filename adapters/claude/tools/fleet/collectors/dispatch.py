@@ -25,7 +25,12 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-_ROOT = Path(__file__).resolve().parents[5]
+_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if (parent / "core" / "CORE.md").is_file()
+    and (parent / "utilities" / "dispatch_contract.py").is_file()
+)
 sys.path.insert(0, str(_ROOT / "utilities"))
 from dispatch_contract import observed_attempt_liveness  # noqa: E402
 from codex_dispatch_terminal import terminal_envelope_observed  # noqa: E402

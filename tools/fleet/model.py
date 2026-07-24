@@ -672,7 +672,26 @@ def classify_attempt_evidence(ev_in, now=None):
     heartbeat = _matching_attempt_heartbeat(ev_in)
     terminal = _matching_attempt_terminal(ev_in)
     pid_scope = ev_in.get("pid_scope")
-    if terminal:
+    observed = ev_in.get("observed_liveness")
+    observed_state = observed.get("state") if isinstance(observed, dict) else None
+    # The shared observer is authoritative only when it has a positive exact
+    # process/registry conclusion.  ``unverifiable`` is deliberately no verdict:
+    # Fleet may still have a stronger local procscan/transcript signal for older
+    # current-contract rows that predate namespace metadata.
+    if observed_state in {"alive", "terminal", "reconcile-needed"}:
+        state = {
+            "alive": "working",
+            "terminal": "done",
+            "reconcile-needed": "stale",
+        }[observed_state]
+        source = "shared-observer"
+        rule = (
+            "terminal-observed/reconcile-needed"
+            if observed_state == "reconcile-needed"
+            else "shared observed-liveness: %s (%s)"
+            % (observed_state, observed.get("reason", "unknown"))
+        )
+    elif terminal:
         completed = (
             terminal.get("terminal_action") == "completed-marker"
             or terminal.get("note") == "completed-marker"
@@ -747,6 +766,7 @@ def classify_attempt_evidence(ev_in, now=None):
         "pgid": ev_in.get("pgid"),
         "heartbeat": ev_in.get("heartbeat"),
         "terminal_observation": terminal,
+        "observed_liveness": observed,
         "registry_transition": ev_in.get("registry_transition"),
         "progress_fingerprint": deterministic_progress_fingerprint(ev_in),
         "observed_at": now,
