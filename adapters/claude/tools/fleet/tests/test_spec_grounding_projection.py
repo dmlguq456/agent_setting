@@ -337,7 +337,7 @@ class SpecPhaseSequenceTest(unittest.TestCase):
     def test_projection_attaches_sequence_and_row_renders_lit_breadcrumb(self):
         with tempfile.TemporaryDirectory() as tmp:
             _write_pipeline_state(tmp, "topic-a",
-                "phases:\n  spec: done\n  scaffolding: deferred\n  dev: in_progress\n")
+                "mode: [cli]\nphases:\n  spec: done\n  scaffolding: deferred\n  dev: in_progress\n")
             markers = {_marker_name("sid-a", tmp, "topic-a"): NOW}
             entity = _session(sid="sid-a", cwd=tmp)
             projection.attach_projections([entity], [], artifact_root=tmp, now=NOW,
@@ -347,15 +347,26 @@ class SpecPhaseSequenceTest(unittest.TestCase):
                                    ("dev", "active")])
             segs = render._session_stage_segs(entity, working=True, max_width=80)
             text = "".join(t for t, _k in segs)
-            self.assertIn("spec topic-a:", text)          # topic lead-in
+            self.assertIn("spec[cli] ", text)             # mode lead-in, not the long topic
+            self.assertNotIn("topic-a", text)             # topic dropped
             self.assertIn("spec✓", text)                  # done glyph
-            self.assertIn("scaffolding⊘", text)           # deferred -> skipped glyph
+            self.assertNotIn("scaffolding", text)         # deferred phase filtered out (no ⊘)
+            self.assertNotIn("⊘", text)                   # skip glyph never rendered
             self.assertIn("dev", text)                    # active phase present
             self.assertIn("›", text)                      # dispatch-syntax separator
             # active phase carries a lit (non-dim) color key so it stands out / blinks.
             active_keys = [k for t, k in segs if t == "dev"]
             self.assertTrue(any(k and k.startswith("stg") and k.endswith("_on")
                                 for k in active_keys))
+
+    def test_mode_parsing_flow_and_block_forms(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_pipeline_state(tmp, "flow", "mode: [library, cli]\nphases:\n  dev: in_progress\n")
+            self.assertEqual(projection._spec_mode(tmp, "flow"), "library,cli")
+            _write_pipeline_state(tmp, "block", "mode:\n  - library\n  - cli\nphases:\n  dev: done\n")
+            self.assertEqual(projection._spec_mode(tmp, "block"), "library,cli")
+            _write_pipeline_state(tmp, "none", "phases:\n  dev: done\n")
+            self.assertIsNone(projection._spec_mode(tmp, "none"))
 
     def test_wide_row_does_not_truncate_breadcrumb_on_wide_terminal(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -375,12 +386,16 @@ class SpecPhaseSequenceTest(unittest.TestCase):
 
 
 class RouteStageSkippedGlyphTest(unittest.TestCase):
-    def test_skipped_state_renders_slashed_circle_dim(self):
+    def test_skipped_residual_renders_glyph_free(self):
+        # spec skipped phases are filtered before rendering; a residual one must not emit a
+        # font-fragile skip glyph (⊘ is missing from many terminal fonts) — it falls through to
+        # the plain dim name instead.
         segs = render._route_stage_segs([("a", "done"), ("b", "skipped"), ("c", "active")],
                                         working=False, max_width=60)
-        by_text = {t: k for t, k in segs}
-        self.assertIn("b⊘", by_text)
-        self.assertEqual(by_text["b⊘"], "dim")
+        rendered = "".join(t for t, _k in segs)
+        self.assertIn("a✓", rendered)
+        self.assertIn(" b ", " %s " % rendered)   # plain name, no glyph
+        self.assertNotIn("⊘", rendered)
 
 
 if __name__ == "__main__":
