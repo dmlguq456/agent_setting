@@ -2145,35 +2145,39 @@ def _dispatch_summary_detail_row(job, depth=1, term_width=None):
                         start_col=_NAME_COL)
 
 
-_CTX_LABEL = "🧩 "            # context-gauge row label (icon, not the word "context" — user 2026-07-24)
-_CTX_LABEL_W = 3              # display cells: 🧩 (2, emoji range) + trailing space (1).
+_CTX_LABEL = "💬 "            # context-gauge row label (icon, not the word "context" — user 2026-07-24)
+_CTX_LABEL_W = 3              # display cells: 💬 (2, emoji range) + trailing space (1).
                                # Hardcoded (not _dw(_CTX_LABEL)) — this constant is computed at
                                # module load, before _dw/_WIDE are defined further down the file.
 _CONTEXT_VALUE_W = 4
-_CONTEXT_DESCRIPTION_GAP = max(
-    1, _NAME_COL - (len(_SUBAGENT_IND) + _CTX_LABEL_W + _HW + _CONTEXT_VALUE_W))
+_CONTEXT_NOW_GAP = 3          # gap between the % value and the NOW summary. The whole row is now
+                               # left-aligned to the NAME column (user 2026-07-24 "이름 시작점에
+                               # 맞게"), so this is a plain separator, not an alignment push.
 
 
 def _compact_context_gauge_width(available, depth=0):
-    """Harness-width track whose right-hand description lands on the session column."""
+    """Harness-width context track, left-aligned under the session NAME column."""
     # Root cards use the bare 16-cell harness width. Deeper cards spend their
-    # two-cell ladder inset inside the same column, keeping every description at
-    # the shared wide-layout session start instead of drifting to the right.
+    # two-cell ladder inset inside the same column.
     desired = max(4, _HW - 2 * max(0, int(depth or 0)))
     # Preserve at least one subtitle cell on unexpectedly tiny terminals.
-    fixed = (_CTX_LABEL_W + _CONTEXT_VALUE_W
-             + _CONTEXT_DESCRIPTION_GAP + 1)
+    fixed = (_CTX_LABEL_W + _CONTEXT_VALUE_W + _CONTEXT_NOW_GAP + 1)
     return min(desired, max(4, available - fixed))
 
 
 def _context_detail_row(entity, depth=0, term_width=None):
-    """One ``🧩 <gauge> <value>   NOW`` row for every live card."""
+    """One ``💬 <gauge> <value>   NOW`` row for every live card, left-aligned to the session
+    NAME column (user 2026-07-24: the context bar sits under the name start, not the far-left
+    strip inset — the gauge and the NOW summary read as one block below the row's identity)."""
     if getattr(entity, "liveness", None) in ("stale", "dead"):
         return []
     context = getattr(entity, "context", None)
     pct = getattr(context, "used_pct", None) if context is not None else getattr(entity, "ctx_pct", None)
     now_text = getattr(entity, "summary", None)
-    indent = _SUBAGENT_IND + "  " * max(0, depth)
+    # The NAME column is a WIDE-layout position; only there does aligning under it make sense.
+    # Narrow/stack keep the compact strip inset so the gauge is not starved on small terminals.
+    wide = term_width is None or int(term_width) >= _TWO_LINE_CUTOFF
+    indent = (" " * _NAME_COL if wide else _SUBAGENT_IND) + "  " * max(0, depth)
     available = max(0, (term_width or _SUMMARY_FALLBACK_W) - _dw(indent))
     gauge_width = _compact_context_gauge_width(available, depth=depth)
     if (isinstance(pct, (int, float)) and not isinstance(pct, bool)
@@ -2189,13 +2193,12 @@ def _context_detail_row(entity, depth=0, term_width=None):
         value_text = "%d%%" % shown_pct
     segs.append((value_text.rjust(_CONTEXT_VALUE_W), "dim"))
     if now_text:
-        # The description follows the shifted wide session column; only it clips.
         fixed = (sum(_dw(text) for text, _key in segs) - _dw(indent)
-                 + _CONTEXT_DESCRIPTION_GAP)
+                 + _CONTEXT_NOW_GAP)
         now_room = max(0, available - fixed)
         now_text = _clip_w(str(now_text), now_room) if now_room else ""
         if now_text:
-            segs.extend([(" " * _CONTEXT_DESCRIPTION_GAP, None), (now_text, "dim")])
+            segs.extend([(" " * _CONTEXT_NOW_GAP, None), (now_text, "dim")])
     return [segs]
 
 
@@ -2299,26 +2302,13 @@ def _projection_stage_detail_rows(entity, depth=0, term_width=None):
     if not projection or getattr(projection, "ambiguity", None):
         return []
     source = getattr(projection, "source", None)
-    if source == "artifact-inferred" and not hasattr(entity, "depth"):
-        current = getattr(projection, "stage_label", None)
-        # Membership guard: a spec-grounding label (e.g. "spec <topic> ·<phase>")
-        # is not one of the four generic code stages, so it must not be indexed
-        # into _INLINE_ARTIFACT_STAGES — that produced a ValueError -> None ->
-        # every node rendered "pending", a fake 4-stage track under a spec row.
-        if current not in _INLINE_ARTIFACT_STAGES:
-            return []
-        current_index = _INLINE_ARTIFACT_STAGES.index(current)
-        nodes = []
-        for index, node_id in enumerate(_INLINE_ARTIFACT_STAGES):
-            state = ("done" if index < current_index else
-                     "active" if index == current_index else "pending")
-            nodes.append({
-                "id": node_id,
-                "state": state,
-                "level": index,
-                "depends_on": [] if index == 0 else [_INLINE_ARTIFACT_STAGES[index - 1]],
-            })
-        return _stage_detail_rows(nodes, depth=depth, term_width=term_width)
+    if source == "artifact-inferred":
+        # An INFERRED inline stage (low-confidence: a lone plan dir, no sealed route) rides the
+        # row's own `stage <x>` column ONLY — never a dedicated `plan › exec › test` detail row.
+        # A main session must not carry that breadcrumb line (user 2026-07-24 "main 세션에 여전히
+        # stage 뜨는 케이스"); this is the artifact-inferred case the route-exact suppression
+        # missed. Covers both code (plan/exec/test/report) and spec-grounding labels.
+        return []
     if source != "route-exact":
         return []
     backing = getattr(projection, "_route_view", None) or {}
