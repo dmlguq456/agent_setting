@@ -2250,13 +2250,16 @@ def _projection_stage_detail_rows(entity, depth=0, term_width=None):
     source = getattr(projection, "source", None)
     if source == "artifact-inferred" and not hasattr(entity, "depth"):
         current = getattr(projection, "stage_label", None)
-        try:
-            current_index = _INLINE_ARTIFACT_STAGES.index(current)
-        except ValueError:
-            current_index = None
+        # Membership guard: a spec-grounding label (e.g. "spec <topic> ·<phase>")
+        # is not one of the four generic code stages, so it must not be indexed
+        # into _INLINE_ARTIFACT_STAGES — that produced a ValueError -> None ->
+        # every node rendered "pending", a fake 4-stage track under a spec row.
+        if current not in _INLINE_ARTIFACT_STAGES:
+            return []
+        current_index = _INLINE_ARTIFACT_STAGES.index(current)
         nodes = []
         for index, node_id in enumerate(_INLINE_ARTIFACT_STAGES):
-            state = ("done" if current_index is not None and index < current_index else
+            state = ("done" if index < current_index else
                      "active" if index == current_index else "pending")
             nodes.append({
                 "id": node_id,
@@ -2270,6 +2273,13 @@ def _projection_stage_detail_rows(entity, depth=0, term_width=None):
     backing = getattr(projection, "_route_view", None) or {}
     view = backing.get("view") or {}
     nodes = _collapse_replica_nodes(view.get("nodes") or ())
+    # A fully-complete route needs no detail row on the owning session: the pipeline is
+    # done, and a finished (often dead-conductor) route's whole DAG lingering under the
+    # live dispatcher session is noise (user 2026-07-24 "stage 설명 여전히 뜨는데 이거
+    # 없앴다매?"). The detail row's value is the IN-PROGRESS non-linear process view — a
+    # real failure (non-done node) still shows so it can be seen; only all-done is dropped.
+    if nodes and all(n.get("state") == "done" for n in nodes):
+        return []
     return _stage_detail_rows(nodes, depth=depth, term_width=term_width)
 
 

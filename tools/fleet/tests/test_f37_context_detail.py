@@ -310,6 +310,53 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                 self.assertIn("| root-b", rendered)
                 self.assertIn("| partial", rendered)
 
+    def test_completed_route_suppresses_session_detail_row(self):
+        # 2026-07-24 (user "stage 설명 여전히 뜨는데 이거 없앴다매?"): a fully-done route draws
+        # no stage detail row on the owning session — a finished (often dead-conductor) pipeline's
+        # whole DAG lingering under the live dispatcher session is noise. Any non-done node still
+        # renders so a real failure stays visible.
+        def _session(nodes):
+            return Session(harness="claude", pid=1, proc_start="p", cwd="/x",
+                           session_id="sid-x", slug="root", liveness="working",
+                           work_projection=WorkProjection(
+                               source="route-exact", route_id="rt-done",
+                               _route_view={"view": {"nodes": nodes}}))
+        done_nodes = [
+            {"id": "plan", "state": "done", "level": 0, "depends_on": []},
+            {"id": "execute", "state": "done", "level": 1, "depends_on": ["plan"]},
+        ]
+        for width in (168, 120, 100, 60):
+            with self.subTest(width=width):
+                self.assertEqual(
+                    render._projection_stage_detail_rows(_session(done_nodes), term_width=width),
+                    [])
+        live_nodes = [
+            {"id": "plan", "state": "done", "level": 0, "depends_on": []},
+            {"id": "execute", "state": "active", "level": 1, "depends_on": ["plan"]},
+        ]
+        rows = render._projection_stage_detail_rows(_session(live_nodes), term_width=168)
+        self.assertTrue(rows)
+        self.assertIn("execute", text(rows))
+
+    def test_replica_completed_route_collapses_and_suppresses(self):
+        # The replica legs collapse to `impl-review(2-way)`; when the whole (collapsed) route
+        # is done, still no detail row.
+        nodes = [
+            {"id": "execute", "state": "done", "level": 0, "depends_on": []},
+            {"id": "impl-review", "state": "done", "level": 1, "depends_on": ["execute"],
+             "replica_group": "impl-review"},
+            {"id": "impl-review-replica", "state": "done", "level": 1,
+             "depends_on": ["execute"], "replica_group": "impl-review"},
+            {"id": "test", "state": "done", "level": 2,
+             "depends_on": ["impl-review", "impl-review-replica"]},
+        ]
+        session = Session(harness="claude", pid=2, proc_start="p", cwd="/y",
+                          session_id="sid-y", slug="root", liveness="working",
+                          work_projection=WorkProjection(
+                              source="route-exact", route_id="rt-rep-done",
+                              _route_view={"view": {"nodes": nodes}}))
+        self.assertEqual(render._projection_stage_detail_rows(session, term_width=168), [])
+
 
 class ClaudeStreamSessionTest(unittest.TestCase):
     def setUp(self):

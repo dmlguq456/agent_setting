@@ -30,6 +30,8 @@ MULTIPLE_CHILD_CWD_CANDIDATES = "multiple-child-cwd-candidates"
 MULTIPLE_OWNER_ROUTES = "multiple-owner-routes"
 OWNER_ROUTE_CONFLICT = "owner-route-conflict"
 MULTIPLE_ARTIFACT_PLAN_DIRS = "multiple-artifact-plan-dirs"
+MULTIPLE_SPEC_MARKERS = "multiple-spec-markers"
+MARKER_ARTIFACT_TIE = "marker-artifact-mtime-tie"
 
 
 def _realpath(value):
@@ -123,10 +125,17 @@ def _active_node(node, state, job=None):
 
 
 def _record_view(record, route_id, jobs, node_evidence=None, now=None):
-    """Use route.py's pure state resolver so projection and legacy route views agree."""
+    """Use route.py's pure state resolver so projection and legacy route views agree.
+
+    Resolve this record's gate marks (2026-07-24) and pass them through, so a
+    completion-marked node that died on an earlier attempt renders `done` rather than
+    `✕` on the owning session/dispatch row — parity with the group/process route views,
+    which already resolve marks via `resolve_and_build_views`."""
     from . import route
+    marks = route.resolve_gate_marks({route_id: record}).get(route_id)
     return route._record_view(record, route_id, list(jobs), node_evidence or {},
-                              time.time() if now is None else now)
+                              time.time() if now is None else now,
+                              gate_marks_for_route=marks)
 
 
 def _record_nodes(record, route_id, jobs, node_evidence=None, now=None):
@@ -285,6 +294,208 @@ def _artifact_stage(path):
     return None
 
 
+def _grounding_home():
+    """Agent home holding `.spec-grounding/`. Reproduces `route._completion_home`
+    (AGENT_HOME -> CLAUDE_HOME -> $HOME/agent_setting if a dir -> ~/.claude) rather
+    than importing it: projection.py has no route dependency for this lookup and
+    one four-line resolver is cheaper than inverting that edge."""
+    h = os.environ.get("AGENT_HOME") or os.environ.get("CLAUDE_HOME")
+    if h:
+        return h
+    cand = os.path.expanduser("~/agent_setting")
+    if os.path.isdir(cand):
+        return cand
+    return os.path.expanduser("~/.claude")
+
+
+def _spec_marker_index(home):
+    """Scan ``<home>/.spec-grounding`` once into ``{name: mtime}``. Missing dir or
+    OSError degrades to an empty index rather than raising."""
+    index = {}
+    try:
+        with os.scandir(os.path.join(home, ".spec-grounding")) as entries:
+            for entry in entries:
+                try:
+                    index[entry.name] = entry.stat().st_mtime
+                except OSError:
+                    continue
+    except OSError:
+        return {}
+    return index
+
+
+def _grounding_key(root):
+    # spec-read-marker.sh: key=$(printf '%s' "$root" | sed 's#[/ ]#_#g')
+    return root.replace("/", "_").replace(" ", "_")
+
+
+def _spec_marker_match(entity, index, artifact_root=None):
+    """Match this Session's exact ``session_id`` against the marker index.
+
+    Candidate repo roots mirror ``_artifact_candidates``'s source set (the
+    ``artifact_root`` parameter, ``entity.artifact_root``, ``entity.cwd``) so
+    both inference paths agree on "this entity's repo root". In practice
+    ``entity.artifact_root`` is always ``None`` here: this helper only runs for
+    Session entities (resolve_work_projection gates it on the DispatchJob-only
+    ``depth`` attribute), and ``Session`` carries no ``artifact_root`` field
+    (only ``DispatchJob`` does) — so the parameter and ``entity.cwd`` are the
+    real coverage, not the three-source list this echoes for structural parity.
+
+    Marker names are forward-generated (``sid__key[__slug]``) and never
+    reverse-parsed: ``key`` is a lossy escape and the ``__`` separators can
+    nest when ``key`` itself starts with ``_`` (producing ``___``).
+    """
+    sid = _field(entity, "session_id")
+    if not sid:
+        return []
+    roots = set()
+    for value in (artifact_root, _field(entity, "artifact_root"), _field(entity, "cwd")):
+        if not value:
+            continue
+        value = os.path.realpath(os.path.expanduser(str(value)))
+        base = os.path.basename(value)
+        roots.add(os.path.dirname(value) if base in (".agent_reports", ".claude_reports") else value)
+    matches = []
+    for root in roots:
+        prefix = "%s__%s" % (sid, _grounding_key(root))
+        if prefix in index:
+            matches.append((root, None, index[prefix]))
+        slug_prefix = prefix + "__"
+        for name, mtime in index.items():
+            if name.startswith(slug_prefix):
+                matches.append((root, name[len(slug_prefix):], mtime))
+    return matches
+
+
+_SPEC_MARKER_FRESHNESS_SLACK_S = 120
+
+
+def _fresh_spec_matches(matches, entity, now):
+    """Reject a marker whose mtime predates this entity's estimated start minus
+    slack (etime-minute truncation up to 59s + scan-delay absorption). This is
+    freshness for sid *reuse* in general (e.g. ``claude --resume`` keeps the same
+    sid across a new process), not a codex-specific rule."""
+    elapsed_min = _field(entity, "elapsed_min") or 0
+    cutoff = now - elapsed_min * 60 - _SPEC_MARKER_FRESHNESS_SLACK_S
+    return [m for m in matches if m[2] >= cutoff]
+
+
+def _select_spec_match(matches):
+    """Pick the strictly freshest match; a tie among topics is not adopted."""
+    if not matches:
+        return None
+    best = max(m[2] for m in matches)
+    tied = [m for m in matches if m[2] == best]
+    return tied[0] if len(tied) == 1 else None
+
+
+def _strip_comment(value):
+    idx = value.find("#")
+    return (value if idx < 0 else value[:idx]).strip()
+
+
+def _spec_pipeline_state_path(root, slug):
+    for reports_dir in (".agent_reports", ".claude_reports"):
+        base = os.path.join(root, reports_dir, "spec")
+        path = os.path.join(base, slug, "pipeline_state.yaml") if slug else os.path.join(base, "pipeline_state.yaml")
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def _spec_stage_parts(root, slug):
+    """Zero-dep line parser for ``pipeline_state.yaml``. Every IO or shape failure
+    degrades to topic-only (never raises) since this feeds a best-effort label:
+    ``phases:`` map's first file-order ``in_progress`` key, else top-level
+    ``status:`` value, else no phase. Unrecognized phase vocabulary (beyond
+    done/pending/in_progress/deferred/n/a) auto-degrades since only the exact
+    string ``in_progress`` is matched. Topic is the slug string for a slug
+    marker, or ``project_name:`` (else ``None``) for a root marker."""
+    topic, phase = slug, None
+    path = _spec_pipeline_state_path(root, slug)
+    if not path:
+        return topic, phase
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.readlines()
+    except (OSError, UnicodeDecodeError):
+        return topic, phase
+    project_name = None
+    status = None
+    in_phases = False
+    for raw in lines:
+        line = raw.rstrip("\n")
+        stripped = line.strip()
+        if not stripped:
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if in_phases and indent == 0:
+            in_phases = False
+        if not slug and project_name is None and indent == 0 and stripped.startswith("project_name:"):
+            project_name = _strip_comment(stripped[len("project_name:"):]).strip("'\"")
+        if indent == 0 and stripped.startswith("phases:"):
+            in_phases = True
+            continue
+        if in_phases and phase is None:
+            key_part, sep, value_part = stripped.partition(":")
+            if sep and _strip_comment(value_part) == "in_progress":
+                phase = key_part.strip()
+        if phase is None and status is None and indent == 0 and stripped.startswith("status:"):
+            status = _strip_comment(stripped[len("status:"):]).strip("'\"")
+    if phase is None:
+        phase = status
+    if not slug:
+        topic = project_name
+    return topic, phase
+
+
+def _artifact_latest_mtime(path):
+    """Latest content mtime under an inferred plan dir (2-level glob covers
+    ``plan/plan.md``, ``dev_logs/*``); falls back to the dir's own mtime."""
+    mtimes = []
+    for pattern in (os.path.join(path, "*"), os.path.join(path, "*", "*")):
+        for item in glob.glob(pattern):
+            try:
+                mtimes.append(os.path.getmtime(item))
+            except OSError:
+                continue
+    if mtimes:
+        return max(mtimes)
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return 0.0
+
+
+def _spec_marker_projection(entity, spec_markers, artifact_root=None, now=None):
+    """Resolve one entity's fail-closed spec-grounding marker attribution.
+
+    Returns ``(projection, ambiguity, mtime)``. ``projection`` is populated only
+    for a single, strictly-freshest, exact-sid marker; a tie among fresh matches
+    yields ``(None, MULTIPLE_SPEC_MARKERS, None)`` so the caller may attach the
+    diagnostic only once every other evidence source also comes up empty
+    (mirrors the existing multi-candidate ambiguity handling below).
+    """
+    matches = _spec_marker_match(entity, spec_markers, artifact_root=artifact_root)
+    if not matches:
+        return None, None, None
+    now = time.time() if now is None else now
+    fresh = _fresh_spec_matches(matches, entity, now)
+    if not fresh:
+        return None, None, None
+    selected = _select_spec_match(fresh)
+    if selected is None:
+        return None, MULTIPLE_SPEC_MARKERS, None
+    root, slug, mtime = selected
+    topic, phase = _spec_stage_parts(root, slug)
+    label = "spec"
+    if topic:
+        label += " %s" % topic
+    if phase:
+        label += " ·%s" % phase
+    return WorkProjection(source="artifact-inferred", stage_label=label), None, mtime
+
+
 def _explicit(entity):
     # An attempt identifies one launch, but it is not a route tuple.  Owners
     # carrying only attempt_id must still discover their children through the
@@ -327,7 +538,7 @@ def _candidate_projection(entity, candidate, jobs, route_records, node_evidence,
 
 
 def resolve_work_projection(entity, jobs=(), route_records=None, node_evidence=None,
-                            artifact_root=None, now=None, _seen=None):
+                            artifact_root=None, now=None, spec_markers=None, _seen=None):
     """Resolve one entity using the approved evidence precedence."""
     seen = set() if _seen is None else _seen
     ident = (id(entity), _field(entity, "slug"), _field(entity, "session_id"))
@@ -382,7 +593,7 @@ def resolve_work_projection(entity, jobs=(), route_records=None, node_evidence=N
             child_projections = [resolve_work_projection(
                 child, jobs=jobs, route_records=route_records,
                 node_evidence=node_evidence, artifact_root=artifact_root,
-                now=now, _seen=seen)
+                now=now, spec_markers=spec_markers, _seen=seen)
                 for child in _owner_children(entity, jobs)]
             child_keys = {(p.route_id, p.route_hash) for p in child_projections
                           if p.source == "route-exact" and p.route_id}
@@ -405,7 +616,8 @@ def resolve_work_projection(entity, jobs=(), route_records=None, node_evidence=N
     children = _owner_children(entity, jobs)
     child_projections = [resolve_work_projection(child, jobs=jobs, route_records=route_records,
                                                   node_evidence=node_evidence,
-                                                  artifact_root=artifact_root, now=now, _seen=seen)
+                                                  artifact_root=artifact_root, now=now,
+                                                  spec_markers=spec_markers, _seen=seen)
                          for child in children]
     for rid, record, evidence in _evidence_owner_candidates(entity, node_evidence, route_records or {}):
         child_projections.append(_projection_from_record(
@@ -426,11 +638,32 @@ def resolve_work_projection(entity, jobs=(), route_records=None, node_evidence=N
     # Artifact inference is the final fallback and is legal only when no route
     # tuple exists anywhere on this entity.  Owner candidates above therefore
     # always win, even when a plausible plan directory is present.
+    # Spec-grounding marker attribution is Session-only (DispatchJob keeps its
+    # existing route/registry precedence unchanged, handoff rule 1) and shares
+    # this same final-fallback slot as one more inferred-evidence source.
+    marker_projection = marker_ambiguity = marker_mtime = None
+    if spec_markers is not None and not hasattr(entity, "depth"):
+        marker_projection, marker_ambiguity, marker_mtime = _spec_marker_projection(
+            entity, spec_markers, artifact_root=artifact_root, now=now)
+
     candidates = _artifact_candidates(entity, artifact_root=artifact_root)
+    if marker_projection is not None:
+        # A single named plans dir competes with the marker on freshness; two or
+        # more candidates are already an ambiguous name-inference and lose to the
+        # exact-sid marker outright (no plans-glob dir count wins by default).
+        if len(candidates) == 1:
+            artifact_mtime = _artifact_latest_mtime(candidates[0])
+            if artifact_mtime > marker_mtime:
+                return WorkProjection(source="artifact-inferred", stage_label=_artifact_stage(candidates[0]))
+            if artifact_mtime == marker_mtime:
+                return WorkProjection(source="none", ambiguity=MARKER_ARTIFACT_TIE)
+        return marker_projection
     if len(candidates) == 1:
         return WorkProjection(source="artifact-inferred", stage_label=_artifact_stage(candidates[0]))
     if len(candidates) > 1:
         return WorkProjection(source="none", ambiguity=MULTIPLE_ARTIFACT_PLAN_DIRS)
+    if marker_ambiguity is not None:
+        return WorkProjection(source="none", ambiguity=marker_ambiguity)
     # Without a route tuple or exact artifact evidence there is no observed
     # stage to project.  The renderer may show its honest pre-boot track, but
     # must not echo a manually supplied legacy stage token as current truth.
@@ -443,10 +676,13 @@ def resolve_projection(*args, **kwargs):
 
 
 def attach_projections(sessions: Iterable[Session], jobs: Iterable[DispatchJob],
-                      route_records=None, node_evidence=None, artifact_root=None, now=None):
+                      route_records=None, node_evidence=None, artifact_root=None, now=None,
+                      spec_markers=None, spec_marker_home=None):
     """Attach work to every row and context only to interactive session rows."""
     sessions, jobs = list(sessions), list(jobs)
     route_records = _load_evidence_records(node_evidence, route_records)
+    if spec_markers is None:
+        spec_markers = _spec_marker_index(spec_marker_home or _grounding_home())
     all_entities = sessions + jobs
     for session in sessions:
         public, private = normalize_context(_evidence(session), now=now)
@@ -460,7 +696,8 @@ def attach_projections(sessions: Iterable[Session], jobs: Iterable[DispatchJob],
     for entity in all_entities:
         entity.work_projection = resolve_work_projection(
             entity, jobs=jobs, route_records=route_records,
-            node_evidence=node_evidence, artifact_root=artifact_root, now=now)
+            node_evidence=node_evidence, artifact_root=artifact_root, now=now,
+            spec_markers=spec_markers)
         entity.stage = entity.work_projection.stage_label if isinstance(entity, DispatchJob) else getattr(entity, "stage", None)
     return sessions, jobs
 

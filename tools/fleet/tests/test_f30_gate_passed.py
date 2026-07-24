@@ -436,5 +436,68 @@ class GateDetailRowTest(GateMarkBase):
             render.set_show_all(False)
 
 
+class NodeStateMarkerSupersedesTest(unittest.TestCase):
+    """2026-07-24 (user "execute도 X로 뜨는데 왜?"): a completion marker supersedes a
+    SUPERSEDED dead attempt (failed -> done). Narrowed to the failed case ONLY — a pending
+    node with a marker stays pending, so prd.md:308 state/gate_passed independence holds for
+    the done/no-claim/marker-outlives-job cases."""
+
+    class _Row:
+        def __init__(self, node, liveness):
+            self.route_node, self.liveness = node, liveness
+            self.elapsed_min, self.model, self.harness = 5, "m", "claude"
+            self.effort, self.pid = "high", 111
+            self.registry_priority = self.registry_order = None
+
+    def test_dead_attempt_with_marker_is_done(self):
+        st = route._node_state("execute", [self._Row("execute", "dead")], {}, 100.0,
+                               completion_marked=True)
+        self.assertEqual(st["state"], "done")
+        self.assertIsNone(st["job"])            # complete, not a live target
+        self.assertEqual(st["elapsed_min"], 5)  # dead attempt's telemetry retained
+
+    def test_dead_attempt_without_marker_is_failed(self):
+        st = route._node_state("execute", [self._Row("execute", "dead")], {}, 100.0,
+                               completion_marked=False)
+        self.assertEqual(st["state"], "failed")
+
+    def test_dead_note_evidence_with_marker_is_done(self):
+        ev = {"execute": {"status": "done", "note": "dead-no-progress"}}
+        st = route._node_state("execute", [], ev, 100.0, completion_marked=True)
+        self.assertEqual(st["state"], "done")
+
+    def test_pending_node_with_marker_stays_pending(self):
+        # Boundary: independence preserved for the non-failed case (prd.md:308).
+        st = route._node_state("plan", [], {}, 100.0, completion_marked=True)
+        self.assertEqual(st["state"], "pending")
+
+    def test_active_wins_over_marker(self):
+        st = route._node_state("execute", [self._Row("execute", "working")], {}, 100.0,
+                               completion_marked=True)
+        self.assertEqual(st["state"], "active")
+
+
+class ProjectionMarkThreadingTest(GateMarkBase):
+    """projection._record_view must resolve+thread gate marks (2026-07-24 wiring) so a
+    dead-attempt node with a marker renders `done` on the owning session/dispatch _route_view
+    — parity with the group view. Without the thread, marks were empty and the node showed ✕."""
+
+    class _Row:
+        def __init__(self, node):
+            self.route_node, self.liveness = node, "dead"
+            self.elapsed_min, self.model, self.harness = 3, "m", "claude"
+            self.effort, self.pid = "high", 1
+            self.registry_priority = self.registry_order = None
+
+    def test_projection_record_view_supersedes_dead_attempt(self):
+        from fleet import projection
+        with mock.patch.dict(os.environ, {"AGENT_HOME": self.home}):
+            view = projection._record_view(self.record, self.route_id,
+                                           [self._Row("plan")], now=1_000_000.0)
+        plan = next(n for n in view["nodes"] if n["id"] == "plan")
+        self.assertEqual(plan["state"], "done")      # dead attempt + marker -> done
+        self.assertIs(plan["gate_passed"], True)
+
+
 if __name__ == "__main__":
     unittest.main()
