@@ -975,6 +975,40 @@ class DepthTwoRegistryMetadataTest(unittest.TestCase):
         self.assertIn("drill:g9/", text)
         self.assertNotIn("loops/", text)
 
+    def test_drill_case_code_owner_is_group_root_not_orphan(self):
+        # 2026-07-24 (user "orphan으로 잡히고 메인 세션은 연결도 안되고"): a non-LOOPS `code` owner
+        # spawned INSIDE a drill fixture carries the harness's sentinel parent
+        # (`drill-<h>-parent-session`, unresolvable by design). It must render as the drill:<case>
+        # group's standalone root — no `(orphan)` tag, no "orphaned dispatch rows" divider — with
+        # its depth-2 stage still nested beneath it.
+        owner = DispatchJob(key="code", slug="g10-owner-1", cwd="/tmp/drill-g10-abcd/repo",
+                            parent_sid="drill-claude-parent-session", is_child=True, depth=1,
+                            harness="claude", mode="dev/refactor", qa="standard",
+                            qa_source="jobslog", liveness="working", worker_role="owner")
+        child = DispatchJob(key="code-test", slug="g10-test-1", cwd="/tmp/drill-g10-abcd/repo",
+                            parent_slug="g10-owner-1", parent_sid="drill-claude-parent-session",
+                            is_child=True, depth=2, harness="opencode", mode="qa/test",
+                            qa="standard", qa_source="jobslog", liveness="working",
+                            worker_role="stage")
+        lines = render._build_lines([], [owner, child], section="both", narrow=False,
+                                    malformed=0, layout="wide")
+        text = "\n".join("".join(p for p, _k in line) for line in lines if line)
+        self.assertIn("drill:g10/", text)                  # grouped under the case
+        self.assertNotIn("(orphan)", text)                 # NOT flagged orphan
+        self.assertNotIn("orphaned dispatch rows", text)   # no orphan divider
+        self.assertIn("g10-test", text)                    # depth-2 stage still shown
+
+    def test_non_drill_group_still_orphans_unresolvable_parent(self):
+        # Guard the narrowing: the drill exemption is drill:<case>-only. A real repo job with an
+        # unresolvable parent keeps the honest `(orphan)` surface so lost work stays visible.
+        job = DispatchJob(key="code", slug="lost-owner", cwd="/work/agent_setting",
+                          parent_sid="dead-sid", is_child=True, depth=1, harness="claude",
+                          mode="dev/refactor", qa="standard", qa_source="jobslog",
+                          liveness="working", worker_role="owner")
+        lines = render._build_lines([], [job], section="both", narrow=False, malformed=0,
+                                    layout="wide")
+        text = "\n".join("".join(p for p, _k in line) for line in lines if line)
+        self.assertIn("(orphan)", text)
 
     def test_dispatch_child_session_matching_jobs_log_cwd_is_hidden(self):
         from fleet.model import Session
