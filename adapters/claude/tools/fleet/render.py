@@ -2246,13 +2246,16 @@ def _projection_stage_detail_rows(entity, depth=0, term_width=None):
     source = getattr(projection, "source", None)
     if source == "artifact-inferred" and not hasattr(entity, "depth"):
         current = getattr(projection, "stage_label", None)
-        try:
-            current_index = _INLINE_ARTIFACT_STAGES.index(current)
-        except ValueError:
-            current_index = None
+        # Membership guard: a spec-grounding label (e.g. "spec <topic> ·<phase>")
+        # is not one of the four generic code stages, so it must not be indexed
+        # into _INLINE_ARTIFACT_STAGES — that produced a ValueError -> None ->
+        # every node rendered "pending", a fake 4-stage track under a spec row.
+        if current not in _INLINE_ARTIFACT_STAGES:
+            return []
+        current_index = _INLINE_ARTIFACT_STAGES.index(current)
         nodes = []
         for index, node_id in enumerate(_INLINE_ARTIFACT_STAGES):
-            state = ("done" if current_index is not None and index < current_index else
+            state = ("done" if index < current_index else
                      "active" if index == current_index else "pending")
             nodes.append({
                 "id": node_id,
