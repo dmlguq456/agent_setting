@@ -39,12 +39,20 @@ opencode:
   relief_only: true
 
 capabilities:
-  # autopilot-code: canonical topology node ids are plan, execute, test,
-  # report (capabilities/topologies.json). PRD prose names "exec"/"review";
-  # execute below realizes prose "exec" and test realizes the reviewer
-  # stage. plan is intentionally omitted (discretionary); a literal
-  # exec/review key fails validation against the topology registry.
+  # autopilot-code: canonical topology node ids are frame, plan, plan-check,
+  # execute, impl-review, test, report (capabilities/topologies.json v4).
+  # PRD prose names "exec"/"review"; execute below realizes prose "exec" and
+  # test realizes the reviewer stage. plan is intentionally omitted
+  # (discretionary); a literal exec/review key fails validation against the
+  # topology registry. Replica leg ids (frame-replica, plan-replica,
+  # impl-review-replica) are compile-time expansions, not config keys — the
+  # cross-harness independence contract places each replica leg on a
+  # different family than its configured base leg automatically.
   autopilot-code:
+    # frame: root-cause/direction leg leads on the GPT/Codex family
+    # (root-cause-first practice; SD-82 framing anchor, 2026-07-24). The
+    # frame-replica leg then lands cross-harness (Claude family) by contract.
+    frame: codex
     execute: codex
     test: diverse
     report: claude
@@ -59,14 +67,17 @@ capabilities:
   #   verify:
   #   handback:
   # autopilot-design:
-  #   refs:
+  #   refs:            # framing anchor (2-way from standard, SD-82)
   #   build:
-  #   visual-review:
+  #   visual-verify:
+  #   critic-review:
   #   handoff:
   # autopilot-draft:
-  #   material-strategy:
+  #   material-strategy:  # framing anchor (2-way from standard, SD-82)
+  #   strategy-review:
   #   draft-production:
-  #   review-refine:
+  #   quality-review:
+  #   fact-verify:
   #   finalize:
   # autopilot-lab:
   #   scaffold:
@@ -85,7 +96,7 @@ capabilities:
   #   review:
   #   transaction:
   # autopilot-research:
-  #   retrieval:
+  #   retrieval:       # framing anchor (2-way from standard, SD-82)
   #   synthesis:
   #   report:
   #   claim-verify:
@@ -94,6 +105,6 @@ capabilities:
   #   security-review:
   #   release-review:
   # autopilot-spec:
-  #   research:
+  #   research:        # framing anchor (2-way from standard, SD-82)
   #   review:
   #   prd-transaction:
