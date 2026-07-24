@@ -306,5 +306,82 @@ class SpecGroundingRenderTest(unittest.TestCase):
         self.assertTrue(text.endswith("…"))
 
 
+class SpecPhaseSequenceTest(unittest.TestCase):
+    """2026-07-24: pipeline_state.yaml phases -> ordered [(display, state)] for a lit breadcrumb."""
+
+    def test_standard_phases_verbatim_with_state_mapping(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_pipeline_state(tmp, "topic-a",
+                "phases:\n  spec: done\n  scaffolding: deferred\n"
+                "  design: n/a\n  dev: in_progress\nlast_updated: 2026-07-24\n")
+            seq = projection._spec_phase_sequence(tmp, "topic-a")
+        self.assertEqual(seq, [("spec", "done"), ("scaffolding", "skipped"),
+                               ("design", "skipped"), ("dev", "active")])
+
+    def test_long_custom_names_collapse_to_phase_ordinal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_pipeline_state(tmp, "topic-a",
+                "phases:\n  phase_1_cross_runtime_source_activation: completed\n"
+                "  phase_2_manifest_projections_profiles: in_progress\n"
+                "  some_other_really_long_custom_phase_name: pending\n")
+            seq = projection._spec_phase_sequence(tmp, "topic-a")
+        # explicit phase_<N>_ prefix -> Phase<N>; a long non-standard name -> Phase<position>.
+        self.assertEqual(seq, [("Phase1", "done"), ("Phase2", "active"), ("Phase3", "pending")])
+
+    def test_missing_or_malformed_state_file_yields_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(projection._spec_phase_sequence(tmp, "absent"), [])
+            _write_pipeline_state(tmp, "topic-a", "status: completed\n")  # no phases block
+            self.assertEqual(projection._spec_phase_sequence(tmp, "topic-a"), [])
+
+    def test_projection_attaches_sequence_and_row_renders_lit_breadcrumb(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_pipeline_state(tmp, "topic-a",
+                "phases:\n  spec: done\n  scaffolding: deferred\n  dev: in_progress\n")
+            markers = {_marker_name("sid-a", tmp, "topic-a"): NOW}
+            entity = _session(sid="sid-a", cwd=tmp)
+            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW,
+                                          spec_markers=markers)
+            seq = render._spec_phase_seq(entity)
+            self.assertEqual(seq, [("spec", "done"), ("scaffolding", "skipped"),
+                                   ("dev", "active")])
+            segs = render._session_stage_segs(entity, working=True, max_width=80)
+            text = "".join(t for t, _k in segs)
+            self.assertIn("spec topic-a:", text)          # topic lead-in
+            self.assertIn("spec✓", text)                  # done glyph
+            self.assertIn("scaffolding⊘", text)           # deferred -> skipped glyph
+            self.assertIn("dev", text)                    # active phase present
+            self.assertIn("›", text)                      # dispatch-syntax separator
+            # active phase carries a lit (non-dim) color key so it stands out / blinks.
+            active_keys = [k for t, k in segs if t == "dev"]
+            self.assertTrue(any(k and k.startswith("stg") and k.endswith("_on")
+                                for k in active_keys))
+
+    def test_wide_row_does_not_truncate_breadcrumb_on_wide_terminal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_pipeline_state(tmp, "topic-a",
+                "phases:\n  spec: done\n  scaffolding: done\n  skeleton: done\n"
+                "  design: done\n  dev: in_progress\n  ship_setup: pending\n")
+            markers = {_marker_name("sid-a", tmp, "topic-a"): NOW}
+            entity = _session(sid="sid-a", cwd=tmp, slug="topic-a")
+            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW,
+                                          spec_markers=markers)
+            lines = render._build_lines([entity], [], "fleet", False, 0,
+                                        layout="wide", term_width=220)
+            text = "\n".join("".join(t for t, _k in ln) for ln in lines if ln)
+            # The full 6-phase breadcrumb survives on a wide terminal (no early `…` clip).
+            for phase in ("spec✓", "scaffolding✓", "skeleton✓", "design✓", "ship_setup"):
+                self.assertIn(phase, text)
+
+
+class RouteStageSkippedGlyphTest(unittest.TestCase):
+    def test_skipped_state_renders_slashed_circle_dim(self):
+        segs = render._route_stage_segs([("a", "done"), ("b", "skipped"), ("c", "active")],
+                                        working=False, max_width=60)
+        by_text = {t: k for t, k in segs}
+        self.assertIn("b⊘", by_text)
+        self.assertEqual(by_text["b⊘"], "dim")
+
+
 if __name__ == "__main__":
     unittest.main()
