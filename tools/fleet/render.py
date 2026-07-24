@@ -3254,10 +3254,20 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             j.slug for j in group_jobs
             if j.slug and max(1, int(getattr(j, "depth", 1) or 1)) < 2
         }
+        # A `drill:<case>` group is a self-contained regression fixture: the harness roots every
+        # case under a synthetic sentinel session id (`drill-<harness>-parent-session`) so it never
+        # depends on the launching session. Such a root's parent is UNRESOLVABLE by design, not lost,
+        # so a would-be-orphan here is the case's intended root — surface it as a standalone tree row
+        # (loops_jobs: "no-parent-is-normal", no `(orphan)` marker) instead of the orphan divider
+        # (user 2026-07-24: drill runs "orphan으로 잡히고 메인 세션은 연결도 안되고" — noise, since the
+        # fixture decouples on purpose). Non-drill groups keep the exact prior classification.
+        is_drill_case = str(name).startswith("drill:")
         for j in group_jobs:
             if getattr(j, "parent_slug", None) and getattr(j, "depth", 1) >= 2:
                 if j.parent_slug in visible_parent_slugs:
                     job_children.setdefault(j.parent_slug, []).append(j)
+                elif is_drill_case:
+                    loops_jobs.append(j)
                 else:
                     # A malformed/stale parent edge must not make a live dispatch-depth-2 row
                     # disappear from Fleet. Surface it as a project-level orphan.
@@ -3268,11 +3278,11 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 sid = shown_cwds.get(os.path.realpath(j.parent_cwd))
                 if sid:
                     children.setdefault(sid, []).append(j)
-                elif j.key in _LOOPS_KEYS:
+                elif j.key in _LOOPS_KEYS or is_drill_case:
                     loops_jobs.append(j)
                 else:
                     orphans.append(j)
-            elif j.key in _LOOPS_KEYS:
+            elif j.key in _LOOPS_KEYS or is_drill_case:
                 loops_jobs.append(j)
             else:
                 orphans.append(j)
