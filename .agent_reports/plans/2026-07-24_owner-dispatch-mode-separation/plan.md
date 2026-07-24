@@ -33,3 +33,15 @@ native-mode bootstrap 문구에 재사용된다. 원인은 capability mode와 wo
 ## Rollback
 
 spec와 source commit을 별도로 유지하고 기존 jobs rows는 legacy read-only로 보존한다.
+
+## Completion
+
+- shared mode contract가 canonical `capability_mode`와 optional `worker_mode`를
+  분리하고 세 adapter wrapper에 동일하게 적용됐다.
+- owner는 `worker_type=owner`, `unit=_kernel/owner`, worker mode 부재만 허용하며,
+  owner와 slash/stage mode 또는 non-owner와 `_kernel/owner` 조합은 row/prompt/spawn
+  전에 거부한다.
+- Fleet는 두 축을 따로 수집·표시하고 legacy owner slash-mode 오염을 `mode!`로
+  드러내며, 정상 owner에는 capability mode만 표시한다.
+- 구현 커밋 `89b59d72`를 `main`에 fast-forward 통합·푸시했고 격리 worktree는
+  checked cleanup으로 제거했다.

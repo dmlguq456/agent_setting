@@ -12,3 +12,10 @@
 - runtime parity: official Codex non-interactive/custom-agent surfaces and Claude
   print/subagent surfaces do not require this harness-local overloaded mode field;
   therefore the gap is a local projection defect, not a runtime requirement.
+- implementation: `89b59d72` (`fix(dispatch): separate owner capability and worker modes`)
+- verification: portable guards `PASS=358 FAIL=0`; Fleet `Ran 871 tests / OK`;
+  generated projections, adaptation boundary, installed runtime projection, and
+  `doctor --runtime` all `status=ok`
+- integration: fast-forwarded and pushed to `origin/main`
+- cleanup: checked `status=eligible`, then applied `status=removed`; no active PID,
+  stale registry row, or artifact harvest obligation
