@@ -347,13 +347,34 @@ class SpecPhaseSequenceTest(unittest.TestCase):
                                    ("dev", "active")])
             segs = render._session_stage_segs(entity, working=True, max_width=80)
             text = "".join(t for t, _k in segs)
-            self.assertIn("spec[cli] ", text)             # mode lead-in, not the long topic
+            # Mode-tagged capability name + dim colon lead-in: `spec-cli : …`.
+            self.assertIn("spec-cli : ", text)
+            self.assertNotIn("[cli]", text)               # square brackets never used
+            self.assertNotIn("(cli)", text)               # nor parens — the mode rides the name
             self.assertNotIn("topic-a", text)             # topic dropped
             self.assertIn("spec✓", text)                  # done glyph
             self.assertNotIn("scaffolding", text)         # deferred phase filtered out (no ⊘)
             self.assertNotIn("⊘", text)                   # skip glyph never rendered
             self.assertIn("dev", text)                    # active phase present
             self.assertIn("›", text)                      # dispatch-syntax separator
+            # entry `spec-cli` rides the dim name_dim hue (per _opts_segs entry convention).
+            self.assertEqual(dict((t, k) for t, k in segs).get("spec-cli"), "name_dim")
+
+    def test_mode_abbreviations_hyphenate_into_the_name(self):
+        cases = {"cli": "spec-cli", "library": "spec-lib", "app": "spec-app",
+                 "library,cli": "spec-lib-cli"}
+        for mode, expected in cases.items():
+            with tempfile.TemporaryDirectory() as tmp:
+                _write_pipeline_state(tmp, "t",
+                    "mode: [%s]\nphases:\n  dev: in_progress\n" % mode)
+                markers = {_marker_name("sid-a", tmp, "t"): NOW}
+                entity = _session(sid="sid-a", cwd=tmp)
+                projection.attach_projections([entity], [], artifact_root=tmp, now=NOW,
+                                              spec_markers=markers)
+                segs = render._session_stage_segs(entity, working=True, max_width=80)
+                text = "".join(t for t, _k in segs)
+                with self.subTest(mode=mode):
+                    self.assertIn(expected + " : ", text)
             # active phase carries a lit (non-dim) color key so it stands out / blinks.
             active_keys = [k for t, k in segs if t == "dev"]
             self.assertTrue(any(k and k.startswith("stg") and k.endswith("_on")
