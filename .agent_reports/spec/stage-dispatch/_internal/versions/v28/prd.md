@@ -15,7 +15,6 @@
 > · **v26 2026-07-24** (framing 앵커 — registry v4 다중 `replications` 앵커·autopilot-code `frame` 스테이지 신설·생성형 5 recipe framing standard 2-way·plan strong 2-way + plan-check 중재, SD-82; SD-76 단일 review 앵커 스키마 supersede, 원 의도(듀얼 모델 독립 방향 탐색) 복원)
 > · **v27 2026-07-24** (completion-delivery 범위별 parent park — interactive registry-open 보호와 supervised/poll successor-readiness 분리, terminal-unverifiable 전역 교착 복구, SD-83)
 > · **v28 2026-07-24** (owner dispatch mode-axis 분리 — capability mode와 depth-2 worker unit/persona의 독립 필드·owner 모순 조합 fail-closed, SD-84)
-> · **v29 2026-07-24** (owner terminal reconciliation·canonical parent identity·공통 observed liveness·Claude deep=Opus/Fable main-only, SD-85~87)
 > 컴포넌트: `agent_setting` repo 의 **autopilot 파이프 디스패치 토폴로지 개정** — 각 sub-skill 스테이지(code-plan / code-execute / code-test / code-report)를 `standard+` 에서 **기본으로 별개 headless 세션**으로 분사하는 계약. 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 와 무관한 독립 청사진. 이 폴더(`spec/stage-dispatch/`)가 자체 SoT.
 > 입력(1순위 근거):
 > - **사용자 승인 결정 (2026-07-20 v20)**: `effective_intensity=quick` 인 모든 route는 registered headless worker session만 사용한다. `native-subagent`, `inline-fallback`, interactive/empty, unknown/arbitrary surface는 compile 단계에서 fail-closed이며 dispatch depth로 이름 붙이지 않는다. `direct` inline과 `standard+` fallback은 유지한다. portable nesting은 `dispatch_depth`/`max_dispatch_depth`로 한정하고 Codex `agents.max_depth`와 분리한다. Claude subagent, Claude agent-team teammate session, registered headless worker session을 구별하며 multi-capability composition은 추가하지 않는다.
@@ -1548,55 +1547,6 @@ capability mode로만 해석하고 slash owner mode는 거부 ⑥ generated prom
 native stage mode path를 지시하지 않음 ⑦ jobs/env/Fleet 축 분리와 구 row tolerant read
 ⑧ route/fallback/wrapper/projection/boundary 회귀 0.
 
-## 13.19 v29 — owner terminal reconciliation and dispatch model eligibility (2026-07-24)
-
-### 13.19.1 SD-85 — Claude Fable은 interactive depth-0 main-only, deep dispatch는 Opus
-
-- Claude adapter의 portable `deep *` 역할은 Opus로 실현한다. Fable은 사용자와 직접
-  대화하는 interactive depth-0 main session에서만 허용하며 registered headless
-  owner/stage, native subagent/agent-team worker, inherited dispatch model 및 capacity
-  fallback 후보에서는 자격 미달이다.
-- surface-aware eligibility는 default mapping뿐 아니라 explicit `model=fable`과
-  Fable main에서의 model inheritance도 launch 전에 거부한다. 거부된 Fable을 Opus로
-  조용히 바꾸지 않고 typed reason을 남기며, portable role 기반 재해석만 명시적으로
-  Opus를 선택한다.
-- Claude deep capacity cascade는 `opus -> sonnet`처럼 dispatch-eligible 모델만 가진다.
-  Fable usage/statusline/Fleet telemetry는 interactive main 관측을 위해 유지하되 그것이
-  headless eligibility 증거가 되지 않는다.
-
-### 13.19.2 SD-86 — supervisor exit의 exact terminal reconciliation
-
-- registered owner supervisor는 final runtime envelope와 process exit를 자신이 소유한
-  exact attempt id에 원자 reconcile한다. 성공, capacity, auth, protocol, missing-result,
-  signal/exit를 shared terminal classifier로 typed closure하고 `open` row를 남기지 않는다.
-- Claude 429/Fable-limit 같은 capacity envelope는 `done,note=dead-capacity`와
-  `failure_class=capacity` 증거를 보존한다. 이 terminal state가 SD-59 fallback state
-  machine의 입력이며, short early-death watch window가 끝난 뒤 발생해도 동일하다.
-- supervisor는 slug/cwd로 다른 retry를 breadth-close하지 않는다. marker/terminal race는
-  기존 exact terminal evidence 우선순위를 지키고, partial registry failure는 evidence를
-  보존한 typed nonzero와 exact reconcile 경로로 남긴다.
-
-### 13.19.3 SD-87 — canonical repository parent identity와 공통 observed liveness
-
-- parent lookup은 primary checkout과 linked worktree를 같은 canonical repository로
-  정규화하되 exact worktree, parent attempt id, PID/start 및 current status 조건은
-  약화하지 않는다. `--parent`는 slug, `--parent-attempt-id`는 exact attempt라는
-  별도 namespace를 prompt/CLI/test에서 강제한다.
-- Fleet, parent park, completion join, `dispatch-wait`, liveness와 fallback watcher는
-  같은 pure observed-liveness enum을 소비한다. `open + exact process gone + terminal
-  envelope`는 alive가 아니며 mutating supervisor/reconciler가 exact row를 닫는다.
-- Fleet는 read-only consumer로서 registry를 수정하지 않는다. 아직 reconcile되지 않은
-  stale-open은 숨기거나 alive로 합성하지 않고 `terminal-observed/reconcile-needed`로
-  표시한다. park/wait도 이를 무한 polling 대상으로 취급하지 않는다.
-
-**acceptance**: ① Claude supervisor 429 final이 exact row를 `dead-capacity`로 닫고
-fallback이 다음 eligible non-Fable 모델/harness로 한 번 전이 ② success/non-capacity/
-missing-result/signal terminal도 open 0 ③ deep role과 cascade에 Fable 0, explicit/inherited
-headless Fable launch 0, interactive telemetry 유지 ④ primary↔linked parent binding 성공,
-foreign repo·slug/attempt 혼용 거부 ⑤ PID-gone stale-open fixture에서 Fleet/park/wait/
-fallback observed state 일치, Fleet mutation 0 ⑥ Claude/Codex supervisor·wrapper·Fleet·
-liveness/adaptation 회귀 0.
-
 ## 14. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
 
 - **규칙 구간(코드로 강제)**: depth ≤ 2(wrapper 게이트)·jobs.log row 형식·스테이지-워커 write 클래스·lock 범위·model role 명시 — 전부 결정론 가드/wrapper(§2.4). "산출물 기반 소통"의 완결성은 파일 존재로 결정론적 감사. **v2 추가**: SD-14(b) Stop hook(open 자식 row = 결정론적 차단 조건)·SD-14(c) dispatch-wait(대기 판단을 코드로)·SD-14(a) depth_note(계약 전달의 결정론화). **v6 추가**: quick depth-2 금지, quick jobs.log child-row 부재, mutation quick isolated worktree 는 결정론 gate 대상. **v7 추가**: hard eligibility 기반 후보 제거·adapter exact-ID probe·reason trace 필드·helper read-only·Fleet env child-hidden/metadata-exact 분류는 결정론 테스트 대상. **v8 추가**: canonical path 해석·worker-local artifact write 차단·cleanup eligibility·registry 직렬화는 모두 deterministic fail-closed 규칙이다. **v10 추가**: route record hash/scope 검증·tracked gate 증거 4종 필드 존재 검사·guard↔write_scope validator 항목·spec-transaction lock 시퀀스와 버전 경합 대기 규칙은 전부 결정론 검사 대상이다. **v11 추가**: nested eligibility tuple/status, immutable global registry path, attempt-first row identity, no-change retry 금지, fallback hop 순서·broker parent linkage는 결정론 validator/fixture 대상이다. **v12 추가**: broker endpoint/identity·request schema/idempotency·atomic state transition·fencing/lease·spawn 전 registry·4조합 logical parent 보존은 결정론 protocol/fixture 대상이다. **v13 추가**: per-request lease 직렬화·전역 락 비보유 실행·record v2 필드 규칙(stable identity만)·hop 시점 ensure 해석·completion marker 존재/필드/경로 검사·후속 노드 launch의 선행 marker gate는 전부 결정론 검사 대상이다. **v14 추가**: 생존증거 위계(exact-proc/flock 프로브/fenced ping+heartbeat) 판정 순서·spool publish/consume 원자성과 idempotency·발화-비인정 liveness 신호 집합·capacity failure class 감지와 모델 cooldown·registry reconcile 안전 게이트와 현재-작업 필터는 전부 결정론 검사 대상이다.
@@ -1611,6 +1561,5 @@ liveness/adaptation 회귀 0.
 - **v25 정련**: semantic terminal과 exact-process quiescence의 AND gate, PID/start/namespace 판정, N-slot governor 원자 예약·claim·cancel, replica-group cardinality/동시 lifecycle, exact attempt Fleet join은 결정론 fixture 대상이다. 어떤 review 결과가 타당한지와 실패 leg를 SD-50의 어느 eligible harness로 내릴지는 owner 의미 판단이지만, strong plan을 임의 복제하거나 sibling을 묵시적으로 직렬화하는 것은 허용되지 않는다.
 - **v27 경계 정련**: `supervised|poll-fallback` strict completion park와 ordinary interactive registry-open park의 후보 상태 집합, exact parent/latest-attempt 선택, bypass의 explicit opt-in은 결정론 fixture 대상이다. terminal row를 ordinary global park에서 제외해도 successor/join/wait/fallback/cleanup의 quiescence 판정은 약화하지 않으며, terminal-unverifiable을 dead로 재분류하거나 registry를 수동 수정하는 것은 금지한다.
 - **v28 축 정련**: capability-mode catalog membership, owner reserved unit/worker-mode 부재, non-owner unit↔worker-mode 일치, route tuple equality, legacy mode shape 분류는 결정론 validator 대상이다. capability mode의 의미 선택은 route owner가 하지만 worker persona 칸에 대체값을 넣어 validator를 우회할 수 없다.
-- **v29 terminal/model 정련**: execution-surface별 Fable 자격, deep role의 Opus 실현, supervisor final envelope→exact terminal closure, canonical repo identity, observed-liveness enum과 consumer별 mutation 권한은 결정론 fixture 대상이다. capacity 이후 어느 eligible harness/model을 택할지는 SD-22 의미 판단이지만 Fable을 분사 후보로 되살리거나 죽은 exact process를 alive로 합성할 수 없다.
 - **의미 판단 구간(사람/LLM)**: (1) 마이크로-스테이지 inline 경계 임계 — 계측 후 판정(SD-OPEN-1). (2) 스테이지 실패 시 재분사 vs 이어쓰기 판단 — conductor 의 부분 산출물 해석. (3) 산출물 계약이 "완전한가"의 판정 — 스테이지가 대화 없이 완주 가능한지. **v2 추가**: (4) SD-11 을 deny 가 아니라 reminder 로 시작 — hook 이 intensity(direct/quick 정당 fallback)를 결정론적으로 알 수 없어, 규칙화 불가 구간을 deny 로 억지 규칙화하지 않음(경계 존중). deny 상향은 계측 후. (5) SD-14(b) 피드백도 "대기 강제"가 아니라 liveness 진단→행동 분기 지시 — 죽은 스테이지 해석은 의미 판단으로 남김. **v6 추가**: headless 실패 시 native subagent 로 충분한지, 또는 inline fallback 으로 낮출지의 fallback reason 작성은 runtime 상태 해석이므로 의미 판단으로 남긴다. **v7 추가**: stage affinity와 family diversity의 품질 판단은 의미 구간이지만, 그 적용 순서와 후보 탈락 사유는 helper가 구조화한다. **v10 추가**: "산출물을 추적할 가치가 있는가"(tracking)와 "분사할 실익이 있는가"(promotion/separability)는 각각 의미 판단으로 남되, 두 판단을 하나로 동일시하지 않는 것이 SD-44의 축 분리다 — record는 판단 결과와 근거 신호만 구조화한다. **v11 추가**: eligible 후보가 여러 개일 때 role affinity·family diversity로 어느 cross-harness를 고를지와 새로운 failure class의 의미 해석은 판단 구간이지만, 지원 여부·hop 순서·row 기록은 규칙 구간이다. **v13 추가**: "스테이지 산출물이 계약상 완전한가"의 통과 판정은 conductor의 의미 판단으로 남긴다 — SD-56은 그 판단을 대체하지 않고 판단 결과를 marker로 결정론화하며, marker 부재를 실패로 해석하지 않는 것도 의미 구간의 존중이다. **v14 추가**: 무진행 worker에 대한 최종 interrupt vs 계속 대기, 그리고 재분사 시 이어쓰기/재시작 선택은 conductor 의미 판단으로 남긴다 — SD-58은 경고·차단의 발동 조건과 인정 가능한 liveness 신호 집합만 결정론화한다. capacity failover에서 "어느 대체 모델인가"의 품질 판단도 SD-22 affinity 의미 구간이며, SD-59는 재시도 횟수·cooldown·증거 기록만 규칙화한다.
 - **충돌**: 없음 — 반전의 핵심 우려(현행 "상태 재발굴·연속성 상실")를 §0.5 계약 완결성 의무 + §8 inline 경계로 규칙화해 흡수했다. 우려를 사람 vigilance 로 남기지 않고 "산출물이 상태를 완전히 담는가"라는 검증 가능한 규칙으로 전환한 것이 이 경계 존중. per-stage cost 는 추측으로 규칙화하지 않고 계측(SD-OPEN-1)으로 미룬 것도 동일.

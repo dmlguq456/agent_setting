@@ -1,14 +1,5 @@
 # stage-dispatch — Spec Pipeline Summary
 
-## v29 update (2026-07-24) — owner terminal/model/liveness convergence
-
-종료된 supervised owner의 exact row를 final envelope와 process exit로 즉시 typed
-terminal reconcile하고, capacity closure가 기존 자동 fallback state machine을 실제로
-기동하게 한다. primary/linked worktree parent lookup은 canonical repository identity를
-공유하며 Fleet·park·wait·fallback은 하나의 observed-liveness enum을 소비한다. Claude
-`deep`은 Opus로 고정하고 Fable은 interactive depth-0 main session에서만 허용한다.
-
-
 ## v28 update (2026-07-24) — owner mode-axis separation
 
 `capability_mode`와 depth-2 worker unit/persona를 분리한다. owner는

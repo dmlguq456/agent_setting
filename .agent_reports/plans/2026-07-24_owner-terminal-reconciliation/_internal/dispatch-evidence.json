@@ -1,0 +1,47 @@
+{
+  "tuples": [
+    {
+      "child_harness": "codex",
+      "failure_class": "owner-supervisor-terminal-path-under-repair",
+      "launch_authority": "conductor",
+      "parent_harness": "codex",
+      "parent_sandbox": "workspace-write",
+      "parent_transport": "headless",
+      "probe_source": "observed-stale-open-owner-and-parent-attempt-failure",
+      "probe_time": "2026-07-24T00:00:00Z",
+      "status": "unsupported"
+    },
+    {
+      "child_harness": "claude",
+      "failure_class": "owner-supervisor-terminal-path-under-repair",
+      "launch_authority": "conductor",
+      "parent_harness": "codex",
+      "parent_sandbox": "workspace-write",
+      "parent_transport": "headless",
+      "probe_source": "observed-fable-429-left-owner-row-open",
+      "probe_time": "2026-07-24T00:00:00Z",
+      "status": "unsupported"
+    },
+    {
+      "child_harness": "claude",
+      "failure_class": "",
+      "launch_authority": "conductor",
+      "parent_harness": "claude",
+      "parent_sandbox": "default",
+      "parent_transport": "headless",
+      "probe_source": "prior-live-strong-cross-harness-drill",
+      "probe_time": "2026-07-24T01:01:14.049000Z",
+      "status": "supported"
+    }
+  ],
+  "native_subagent": [
+    {
+      "check_source": "dispatch-infrastructure-self-modification-excludes-native-subagents",
+      "execution_surface": "codex-native-subagent",
+      "harness": "codex",
+      "registered_worker": false,
+      "status": "unsupported",
+      "transport": "headless"
+    }
+  ]
+}

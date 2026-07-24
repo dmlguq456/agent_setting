@@ -1,7 +1,7 @@
 project_name: stage-dispatch
 component: stage-dispatch          # autopilot 파이프 디스패치 토폴로지 개정 (repo spec/prd.md = Unified Memory System, spec/harness-layer-sync·dispatch-profiles·agent-fleet-dashboard 무관)
 created: 2026-07-10
-version: 29
+version: 28
 mode: [library, cli]              # library(스테이지 분사 계약·오케스트레이션) + cli(dispatch wrapper·jobs.log·fleet 관제) — infra
 scope_note: "dispatch_depth=0 main은 substantive tracked work의 orchestration/integration만 소유. direct=atomic main-inline, quick=registered-headless-only capability owner 1개(owner/max dispatch depth=1, child 없음), standard+=capability-specific recipe와 기존 checked fallback. v20부터 portable dispatch depth는 Codex agents.max_depth 및 runtime-native agent surfaces와 별도 namespace다."
 inputs:
@@ -46,15 +46,12 @@ inputs:
   - '운영 진단 2026-07-24 (v27): terminal-unverifiable current-contract row 46개가 ordinary Codex root/worker의 모든 local tool을 parent-parked로 차단. semantic terminal이라 wait/harvest로 해소 불가하고 host process 증거 부재로 quiescence도 입증 불가 — completion-delivery scope와 global park 후보 집합의 결합이 원인'
   - '공식·로컬 surface 대조 2026-07-24 (v27): Codex native subagent spawn/wait와 registered-headless App Server completion supervisor는 별도 runtime surface. native 지원을 registered parent park로 제한하지 않으며 supervised/poll readiness만 strict 유지'
 phases:
-  spec: done              # PRD v29 — SD-85~87 owner terminal/model/liveness contract
+  spec: done              # PRD v28 — SD-84 owner dispatch mode-axis separation
   scaffolding: deferred   # lean — 코드 skeleton 은 autopilot-code 로 이월 (§11 module 구조만 확정, wrapper 재작성 불요)
   design: n/a             # 시각 UI 없음 (인프라 계약)
   dev: in_progress        # parent-park-terminal-recovery 구현·회귀·일반 hook smoke 진행 중
 last_updated: 2026-07-24
 decisions_locked:
-  - 'SD-87(v29): primary/linked worktree는 canonical repository identity를 공유하되 exact worktree/attempt/PID 조건을 유지한다. Fleet/park/wait/fallback은 공통 observed-liveness를 소비하고 read-only Fleet는 stale-open을 숨기거나 mutation하지 않는다'
-  - 'SD-86(v29): supervisor final envelope/process exit는 exact owner attempt를 typed terminal로 reconcile한다. capacity는 dead-capacity/failure_class=capacity로 닫혀 SD-59 fallback을 기동하며 breadth-close는 금지한다'
-  - 'SD-85(v29): Claude deep 역할은 Opus. Fable은 interactive depth-0 main-only이며 registered/native/inherited dispatch 및 capacity cascade에서 금지한다. telemetry 표시는 유지한다'
   - 'SD-84(v28): capability_mode는 entry capability catalog/route 축, worker_mode는 non-owner unit의 호환 projection이다. owner는 _kernel/owner + assigned_contract=capability + worker_mode absent이며 stage mode 우회는 prompt/row/spawn 전에 거부한다. 새 writer는 legacy mode=를 쓰지 않는다'
   - 'SD-83(v27): supervised와 explicit poll-fallback owner는 terminal non-quiescent를 strict pending으로 유지한다. ordinary interactive depth-0 all-tool hook은 exact latest direct child의 open/running만 park하며 terminal live/unverifiable은 전역 park 후보에서 제외한다. successor gate/join/wait/fallback/cleanup은 shared quiescence로 계속 fail-closed하고 registry mutation/dead inference/native-subagent 제한은 금지'
   - 'SD-82(v26): registry v4 replications 배열로 review/map/pipeline-stage 다중 앵커를 전개. 생성형 5 recipe framing은 standard 2-way, autopilot-code frame stage 신설, plan은 strong 2-way+plan-check 중재. quick/direct와 처방적 recipe는 새 stage 비대상'
