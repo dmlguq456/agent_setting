@@ -764,8 +764,9 @@ check_codex_bin_wrappers() {
 
   if ! grep -Fq 'AGENT_ROOT=$(agent_home)' adapters/codex/bin/preflight.sh \
     || ! grep -Fq '[ -f "$AGENT_HOME/core/CORE.md" ]' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq '"$ROOT/adapters/codex/utilities/agent-home.sh"' adapters/codex/bin/preflight.sh \
     || grep -Fq 'AGENT_HOME="${AGENT_HOME:-$ROOT}"' adapters/codex/bin/preflight.sh; then
-    fail_msg "adapters/codex/bin/preflight.sh must validate AGENT_HOME before using it as the harness root"
+    fail_msg "adapters/codex/bin/preflight.sh must validate explicit AGENT_HOME and otherwise use the Codex-owned canonical resolver"
   fi
   if ! grep -Fq 'AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/distill-worker.sh"' adapters/codex/bin/preflight.sh; then
     fail_msg "adapters/codex/bin/preflight.sh must pass a validated harness root to the distill worker"

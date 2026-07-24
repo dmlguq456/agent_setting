@@ -187,6 +187,17 @@ records, commits, dispatch, and handoffs proceed without further confirmation.
 Reconfirm only a material change to the primary capability, scope, completion
 criterion, destructive risk, or touched external system.
 
+Material source work has an additional deterministic participation invariant:
+before a source Edit/Write-family mutation or a commit containing source
+changes, the acting session must hold a current, cwd-bound route record emitted
+by `utilities/capability-route.py compile`. For code, that route is
+`autopilot-code` at no less than `direct`. A Skill invocation, the prose card,
+an earlier session's record, or a stale record from another cwd is not route
+participation. Hotfixes do not bypass this floor. This invariant was hardened
+after the 2026-07-24 agent-note incident in which a route card was shown but no
+route was entered and the feature was edited, committed, and deployed through
+silent no-route work.
+
 Before approval, choose from compact manifest routing metadata and §0.2; do not
 load the full entry Skill body or its references merely to propose a route. At
 `standard+`, the dispatch-depth-1 owner reads the selected capability contract and each
@@ -266,7 +277,15 @@ Only `direct` has no plan. Every other autopilot graph includes a plan check, bu
 | Visual assets and design | — | `autopilot-design` for a new design-first cycle | Substantial direction, token, layout, structure, or built-app design evolution goes through `autopilot-design`, updating the token contract and code from a real render. Only a trivial tweak goes directly through `autopilot-code`. Design tokens are the single contract under `DESIGN_PRINCIPLES §9`. |
 | User profile | — | `analyze-user init` | `analyze-user update` |
 
-One-line edits, renames, cleanup, and one-off reviews that need no plan or log may bypass autopilot and use direct editing or the implementation role. Use autopilot only when work needs tracking or accumulated artifacts. `DESIGN_PRINCIPLES §4` and each capability's quick tier define minor versus major. When one request spans several rows of this map, resolve the primary with the §0.2 semantic precedence.
+One-line prose/config edits, pure renames, cleanup, and one-off reviews that need
+no plan or log may bypass autopilot and use direct editing or the implementation
+role. A source-code Edit/Write or a commit containing source changes may not:
+even an atomic hotfix enters an explicit `autopilot-code` route at `direct` and
+produces the current-session route record required by §0.4. Use heavier
+autopilot tiers only when work needs their tracking or accumulated artifacts.
+`DESIGN_PRINCIPLES §4` and each capability's quick tier define minor versus
+major. When one request spans several rows of this map, resolve the primary with
+the §0.2 semantic precedence.
 
 ## 3. `autopilot-spec` Modes
 

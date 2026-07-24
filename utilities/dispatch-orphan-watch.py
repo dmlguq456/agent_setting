@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Watch one exact owner PID and reconcile only a true post-exit orphan."""
+"""Watch one exact owner PID and reconcile its registry row after exit."""
 
 from __future__ import annotations
 
@@ -36,12 +36,46 @@ def attempt_status(jobs: Path, attempt_id: str) -> str | None:
     return None
 
 
-def reconcile(args) -> int:
+def reconcile_orphan_cascade(args) -> int:
     result = subprocess.run(
         [
             sys.executable,
             str(Path(__file__).resolve().with_name("dispatch-registry.py")),
             "orphan-status",
+            "--attempt", args.attempt_id,
+            "--jobs", str(args.jobs),
+            "--agent-home", str(args.agent_home),
+            "--apply",
+        ],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if re.fullmatch(r"att-[A-Za-z0-9._-]{1,240}", args.attempt_id):
+        remove_supervisor_state(
+            args.agent_home
+            / ".dispatch"
+            / "supervisor-state"
+            / f"{args.attempt_id}.json"
+        )
+    return result.returncode
+
+
+def reconcile_exact_exit(args) -> int:
+    """Close any exact dead owner, even when it failed before child launch.
+
+    `orphan-status` intentionally means "dead owner with unfinished route
+    dependents". Using it as the only post-exit transition left a childless
+    model-limit/auth failure `open` forever. The general registry reconciler
+    uses the same exact PID/start classifier and conditionally closes either a
+    plain dead owner or an orphan owner (including the child cascade).
+    """
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(Path(__file__).resolve().with_name("dispatch-registry.py")),
+            "reconcile",
             "--attempt", args.attempt_id,
             "--jobs", str(args.jobs),
             "--agent-home", str(args.agent_home),
@@ -68,11 +102,11 @@ def watch(args) -> int:
             # A prior watcher may have closed the owner and died before its
             # child cascade. orphan-status is idempotent and only continues a
             # row already typed dead-parent-orphaned.
-            return reconcile(args) if status == "done" else 0
+            return reconcile_orphan_cascade(args) if status == "done" else 0
         if process_start(args.pid) != args.pid_start:
             break
         time.sleep(args.interval)
-    return reconcile(args)
+    return reconcile_exact_exit(args)
 
 
 def main(argv=None) -> int:

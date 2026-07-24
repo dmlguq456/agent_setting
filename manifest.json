@@ -1059,6 +1059,13 @@
       "hard_block": false
     },
     {
+      "slug": "hook__material-route-guard.py__PostToolUse",
+      "name": "material-route-guard.py",
+      "mono": "material-route-guard.py",
+      "event": "PostToolUse",
+      "hard_block": false
+    },
+    {
       "slug": "hook__spec-read-marker__PostToolUse",
       "name": "spec-read-marker",
       "mono": "spec-read-marker",
@@ -1108,6 +1115,13 @@
       "hard_block": false
     },
     {
+      "slug": "hook__material-route-guard.py__PreToolUse",
+      "name": "material-route-guard.py",
+      "mono": "material-route-guard.py",
+      "event": "PreToolUse",
+      "hard_block": false
+    },
+    {
       "slug": "hook__spec-skill-gate__PreToolUse",
       "name": "spec-skill-gate",
       "mono": "spec-skill-gate",
@@ -1146,6 +1160,13 @@
       "slug": "hook__herdr-agent-state__SessionEnd",
       "name": "herdr-agent-state release",
       "mono": "herdr-agent-state",
+      "event": "SessionEnd",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__material-route-guard.py__SessionEnd",
+      "name": "material-route-guard.py",
+      "mono": "material-route-guard.py",
       "event": "SessionEnd",
       "hard_block": false
     },

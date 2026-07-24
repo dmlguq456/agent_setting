@@ -39,6 +39,7 @@ so that residual runtime input is reported separately from profile masking.
 | artifact-order gate | `hooks/artifact-guard.sh` |
 | spec read gate | `hooks/spec-skill-gate.sh` + `hooks/spec-read-marker.sh` |
 | git safety gate | `hooks/git-state-guard.sh` |
+| material route gate | `hooks/material-route-guard.py`; same-session route compile marker plus source Edit/Write and `git commit` chokepoints |
 | memory write guard | `hooks/builtin-memory-guard.sh` |
 
 ## Runtime Home Projection

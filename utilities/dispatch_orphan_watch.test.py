@@ -102,6 +102,19 @@ class OrphanWatchTest(unittest.TestCase):
         self.assertIsNotNone(child.poll())
         self.assertFalse(self.supervisor_state.exists())
 
+    def test_owner_exit_before_any_child_closes_the_open_row(self):
+        self.write_rows()
+        lines = self.jobs.read_text().splitlines()
+        self.jobs.write_text(lines[0] + "\n")
+        watcher = self.watcher()
+        time.sleep(0.05)
+        self.owner.kill(); self.owner.wait()
+        self.assertEqual(watcher.wait(timeout=5), 0)
+        text = self.jobs.read_text()
+        self.assertIn("\tdone\t/r\t/w\towner\t", text)
+        self.assertIn("note=dead-exact-pid", text)
+        self.assertFalse(self.supervisor_state.exists())
+
     def test_terminal_owner_makes_watcher_exit_without_mutation(self):
         self.write_rows(completed_owner=True)
         before = self.jobs.read_text()
