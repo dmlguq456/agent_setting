@@ -10,6 +10,12 @@ repo가 `working`으로 전환돼도 상단으로 승격되지 않는 계약 오
 - 같은-tier mtime 변화는 순서를 흔들지 않으며, 신규 그룹은 현재 tier survivor 뒤에 붙고 사라진 그룹은 즉시 prune한다.
 - 구현 acceptance는 working 승격·강등의 즉시 재배치, 같은-tier 안정성, fold/reveal 재진입, stateless snapshot 정렬, canonical↔Claude mirror parity를 고정한다.
 
+### Implementation closure
+
+- `6b1befe4`에서 `_LiveOrderState`가 그룹별 직전 tier를 보존하도록 바꾸고, 현재 tier가 달라진 그룹만 목적 tier의 신규 진입자로 재배치했다. 그룹 내부 세션 anchor는 변경하지 않았다.
+- canonical `tools/fleet/**`와 Claude mirror를 byte-identical로 동기화했다.
+- focused stable-order 7/7, Fleet 전체 874/874, mirror parity, adaptation boundary가 모두 통과했다. 전체 테스트의 기존 `ResourceWarning` 1건은 non-failing이며 본 변경과 무관하다.
+
 ## 2026-07-24 · v23 mode-axis projection
 
 Fleet가 current jobs/env의 `capability_mode`와 `worker_mode`를 분리 수집한다.

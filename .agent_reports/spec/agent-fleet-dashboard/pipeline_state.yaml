@@ -11,7 +11,7 @@ phases:
   spec: done            # PRD v24: live repo ordering activity-tier correction
   scaffolding: deferred # lean — skeleton 은 autopilot-code 로 이월 (module 구조만 §9 확정)
   design: n/a           # 시각 UI 아님 (터미널 TUI 레이아웃은 PRD §4)
-  dev: in_progress      # activity-tier group anchor + focused regression + mirror parity
+  dev: done             # 6b1befe4 activity-tier group anchor + regression + mirror parity
 last_updated: 2026-07-25
 spec_version: v24
 decisions_locked:
