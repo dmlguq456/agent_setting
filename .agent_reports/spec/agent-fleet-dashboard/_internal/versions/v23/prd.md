@@ -9,7 +9,6 @@
 > · **v21 correction 2026-07-23** (분사 `claude -p`는 session-owned context window를 직접 관측할 수 없으므로 dispatch context 추론·표시를 철회하고 NOW만 summary-only로 유지; v20 stage dedup은 유지)
 > · **v22 hotfix 2026-07-23** (분사 attempt-owned Claude stream의 Agent lifecycle을 dispatch 행에 직접 연결하고 exact child-session association을 fallback으로 사용; dispatch context는 계속 미수집·미표시)
 > · **v23 hotfix 2026-07-24** (dispatch mode-axis projection — capability mode와 worker mode/unit 분리, owner stage-persona 표시·bootstrap 오염 차단, F-40)
-> · **v24 correction 2026-07-25** (live TUI repo 그룹 정렬 — 현재 activity tier를 매 tick 우선 적용하고, 빠른 위치 교환 방지는 같은 tier 안의 survivor anchor에만 적용)
 > 컴포넌트: `agent_setting` repo 의 **별도 내부 도구** — 기존 `spec/prd.md`(Unified Memory System)와 무관, 이 폴더(`spec/agent-fleet-dashboard/`)가 자체 청사진.
 > 입력(1순위 근거): `research/agent-fleet-dashboard/00_prior_art.md`(build-vs-adopt·herdr·렌더스택) · `research/agent-fleet-dashboard/01_tap_mechanics.md`(하네스별 tap·discovery·liveness, file-cited)
 > **v2 추가 입력**: `spec/stage-dispatch/prd.md`(SD-1~9 — 스테이지 단위 depth-2 headless 분사 계약, §9-13 fleet 표시 = Phase 2 잔여) · 현행 `tools/fleet/` 코드 전수 실측(2026-07-10 Explore, file:line-cited) · 사용자 관찰("워크플로우를 못 따라감 + UI 아쉬운 점 다수").
@@ -123,7 +122,7 @@ v1 이후 커밋으로 진화한 현행 렌더 모델을 spec 기준선으로 �
 - loops 잡(cwd 없음, key ∈ {oncall,note,study,drill}) → `loops` 그룹.
 - 그 외 → cwd basename(`.broken*` 접미사는 제거).
 
-각 그룹은 **세션 행 먼저, 그 다음 dispatch 행** 순서로 구성된다. 새 Fleet 실행과 stateless `--once`/`--json` 스냅샷의 그룹 정렬은 활동도(`working` 포함=0, `idle` 포함=1, 그 외=2) → 최근성 → 이름순으로 결정적이다. 한 live TUI 실행에서도 **현재 activity tier가 항상 1차 정렬 경계**다: 그룹이 `working`/`idle`/그 외 tier 사이를 오가면 다음 tick에 즉시 해당 tier로 승격·강등한다. 빠른 위치 교환 방지를 위한 run-local anchor는 같은 tier 안의 계속 표시되는 그룹에만 적용해, mtime이나 같은-tier snapshot 순위 변화로는 survivor의 상대 위치를 바꾸지 않고 신규 그룹만 그 tier의 survivor 뒤에 append한다. 사라진 그룹은 anchor에서 즉시 제거하며 Fleet 프로세스 재시작 시 anchor는 새로 시작한다.
+각 그룹은 **세션 행 먼저, 그 다음 dispatch 행** 순서로 구성된다. 새 Fleet 실행과 stateless `--once`/`--json` 스냅샷의 초기 그룹 정렬은 활동도(working 포함 그룹 우선) → 최근성 → 이름순으로 결정적이다. 그러나 한 live TUI 실행 안에서는 최초 스냅샷 순서를 anchor로 보존한다: 계속 표시되는 그룹은 liveness·mtime 변화에도 서로의 상대 위치를 유지하고, 새 그룹만 survivor 뒤에 append한다. 사라진 그룹은 anchor에서 즉시 제거하며 Fleet 프로세스 재시작 시 anchor는 새로 시작한다.
 
 > **[minor edit · cooling state, 2026-07-03]** 디렉토리(그룹) 헤더의 활동 상태를 **3단계**로 표시한다 — 코드 = `render.py` 그룹 헤더 (`_COOL_WINDOW_MIN`).
 > - **활성(hot)**: 그룹 안에 `working` 세션/잡이 있음 → 이름 앞 녹색 `●`(blink) + green-bold 제목.

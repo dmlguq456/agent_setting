@@ -1,5 +1,15 @@
 # agent-fleet-dashboard — Spec Pipeline Summary
 
+## 2026-07-25 · v24 live repo ordering correction
+
+v13의 run-local anchor가 repo 그룹 전체 순서를 고정해, idle repo보다 아래에 있던
+repo가 `working`으로 전환돼도 상단으로 승격되지 않는 계약 오류를 정정했다.
+
+- 현재 activity tier(`working` → `idle` → 그 외)는 live tick마다 즉시 적용한다.
+- 빠른 위치 교환 방지는 같은 tier 안의 survivor 상대 순서에만 적용한다.
+- 같은-tier mtime 변화는 순서를 흔들지 않으며, 신규 그룹은 현재 tier survivor 뒤에 붙고 사라진 그룹은 즉시 prune한다.
+- 구현 acceptance는 working 승격·강등의 즉시 재배치, 같은-tier 안정성, fold/reveal 재진입, stateless snapshot 정렬, canonical↔Claude mirror parity를 고정한다.
+
 ## 2026-07-24 · v23 mode-axis projection
 
 Fleet가 current jobs/env의 `capability_mode`와 `worker_mode`를 분리 수집한다.
