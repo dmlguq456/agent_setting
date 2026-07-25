@@ -1991,14 +1991,17 @@ def _group_key_job(j, session_groups=None, job_groups=None):
     return project_of(j.cwd)
 
 
-def _group_sort_key(name, g):
+def _group_activity_rank(g):
     members_live = [s.liveness for s in g["sessions"]] + [j.liveness for j in g["jobs"]]
     if "working" in members_live:
-        activity_rank = 0
+        return 0
     elif "idle" in members_live:
-        activity_rank = 1
-    else:
-        activity_rank = 2
+        return 1
+    return 2
+
+
+def _group_sort_key(name, g):
+    activity_rank = _group_activity_rank(g)
     mtimes = [s.mtime for s in g["sessions"] if s.mtime is not None]
     recency = max(mtimes) if mtimes else None
     # None mtime sorts as oldest (i.e. last) — use a very negative sentinel for the desc sort.
@@ -2056,10 +2059,30 @@ class _LiveOrderState:
     """Run-local group and session anchors for the live curses renderer."""
     def __init__(self):
         self.groups = []
+        self.group_tiers = {}
         self.sessions = {}
 
-    def reconcile_groups(self, names):
-        ordered, self.groups = _reconcile_live_order(self.groups, names, lambda name: name)
+    def reconcile_groups(self, names, tiers=None):
+        """Stabilize survivors within their current activity tier.
+
+        A tier transition is intentionally treated as a new entry into the
+        destination tier: activity changes take effect immediately, while
+        mtime churn cannot reshuffle groups that stayed peers.
+        """
+        current_tiers = ({name: 0 for name in names} if tiers is None
+                         else {name: tiers[name] for name in names})
+        ordered = []
+        anchors = []
+        for tier in sorted(set(current_tiers.values())):
+            tier_names = [name for name in names if current_tiers[name] == tier]
+            tier_anchors = [name for name in self.groups
+                            if self.group_tiers.get(name) == tier]
+            tier_order, tier_keys = _reconcile_live_order(
+                tier_anchors, tier_names, lambda name: name)
+            ordered.extend(tier_order)
+            anchors.extend(tier_keys)
+        self.groups = anchors
+        self.group_tiers = current_tiers
         current = set(names)
         self.sessions = {name: anchors for name, anchors in self.sessions.items()
                          if name in current}
@@ -3148,7 +3171,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
         # never become live anchors.
         visible_names = set(visible_order)
         non_card_order = [name for name in order if name not in visible_names]
-        order = live_order.reconcile_groups(visible_order) + non_card_order
+        visible_tiers = {name: _group_activity_rank(groups[name]) for name in visible_order}
+        order = live_order.reconcile_groups(visible_order, visible_tiers) + non_card_order
 
     lines = []
     # F-12(c) legend glyph-appearance tracking — LOCAL to this call (never module/global state,

@@ -34,6 +34,32 @@ class LiveOrderStateTest(unittest.TestCase):
         self.assertEqual(render._LiveOrderState().reconcile_groups(["alpha", "beta"]),
                          ["alpha", "beta"])
 
+    def test_groups_repartition_on_tier_change_but_stabilize_within_tier(self):
+        state = render._LiveOrderState()
+        self.assertEqual(
+            state.reconcile_groups(
+                ["alpha", "beta", "gamma"], {"alpha": 0, "beta": 1, "gamma": 1}),
+            ["alpha", "beta", "gamma"],
+        )
+        # Snapshot recency flips within the idle tier, but survivors stay put.
+        self.assertEqual(
+            state.reconcile_groups(
+                ["alpha", "gamma", "beta"], {"alpha": 0, "beta": 1, "gamma": 1}),
+            ["alpha", "beta", "gamma"],
+        )
+        # beta is promoted immediately, after the existing working survivor.
+        self.assertEqual(
+            state.reconcile_groups(
+                ["beta", "alpha", "gamma"], {"alpha": 0, "beta": 0, "gamma": 1}),
+            ["alpha", "beta", "gamma"],
+        )
+        # alpha's demotion is immediate and appends after idle-tier survivors.
+        self.assertEqual(
+            state.reconcile_groups(
+                ["beta", "alpha", "gamma"], {"alpha": 1, "beta": 0, "gamma": 1}),
+            ["beta", "gamma", "alpha"],
+        )
+
     def test_sessions_survive_swap_append_and_prune(self):
         state = render._LiveOrderState()
         a, b, c = _session("a", elapsed=2, pid=1), _session("b", elapsed=1, pid=2), _session("c", pid=3)
@@ -69,6 +95,31 @@ class LiveOrderStateTest(unittest.TestCase):
             render.set_show_all(old_show)
             render.set_process_view(old_process)
 
+    def test_live_groups_promote_immediately_and_stay_stable_when_both_working(self):
+        old_show, old_process = render._SHOW_ALL, render._PROCESS_VIEW
+        try:
+            render.set_show_all(True)
+            render.set_process_view(False)
+            alpha = _session("a", cwd="/work/alpha", live="idle", elapsed=1, pid=1)
+            beta = _session("b", cwd="/work/beta", live="idle", elapsed=1, pid=2)
+            alpha.mtime, beta.mtime = 20, 10
+            state = render._LiveOrderState()
+
+            initial = _render_text([alpha, beta], live_order=state)
+            self.assertLess(initial.index("alpha/"), initial.index("beta/"))
+
+            beta.liveness = "working"
+            promoted = _render_text([alpha, beta], live_order=state)
+            self.assertLess(promoted.index("beta/"), promoted.index("alpha/"))
+
+            alpha.liveness = "working"
+            alpha.mtime, beta.mtime = 100, 1
+            both_working = _render_text([alpha, beta], live_order=state)
+            self.assertLess(both_working.index("beta/"), both_working.index("alpha/"))
+        finally:
+            render.set_show_all(old_show)
+            render.set_process_view(old_process)
+
     def test_folded_summary_survives_live_prune_and_reveal_appends(self):
         old_show, old_process = render._SHOW_ALL, render._PROCESS_VIEW
         try:
@@ -100,7 +151,8 @@ class LiveOrderStateTest(unittest.TestCase):
 
             stale.liveness = "working"
             rerevealed = _render_text([stale, survivor], live_order=state)
-            self.assertLess(rerevealed.index("beta/"), rerevealed.index("alpha/"))
+            self.assertLess(rerevealed.index("alpha/"), rerevealed.index("beta/"))
+            self.assertEqual(state.groups, ["alpha", "beta"])
         finally:
             render.set_show_all(old_show)
             render.set_process_view(old_process)
