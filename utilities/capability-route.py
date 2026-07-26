@@ -231,54 +231,92 @@ def _verify_fallback_chain(node, contract_version=None):
             raise ValueError(f"dispatch-depth-2 node {node.get('id')} lacks supported dispatch-depth-0 broker tuple")
     return chain
 
-def _replica_output(path):
+def _parallel_path(path, suffix):
+    """Return a deterministic, disjoint artifact/scope path for one extra leg."""
     if path.endswith("/**") and "*" not in path[:-3]:
-        return path[:-3] + "-replica/**"
+        return path[:-3] + f"-{suffix}/**"
     head, sep, tail = path.rpartition("/")
     name, dot, ext = tail.rpartition(".")
     if not dot:
-        return path + "-replica"
-    return f"{head}{sep}{name}.replica{dot}{ext}"
+        return path + f"-{suffix}"
+    return f"{head}{sep}{name}.{suffix}{dot}{ext}"
 
-def _expand_replications(nodes, replications, effective_intensity):
-    """CONVENTIONS §3.12 (strengthened 2026-07-21; framing anchors added
-    2026-07-24): each declared anchor whose min intensity is reached compiles
-    into a 2-way replica pair. Review anchors merge at conductor verdict level
-    (stricter wins, blocking findings unioned — SD-76 unchanged). Map-worker
-    and pipeline-stage anchors instead extend their direct dependents' inputs
-    with the replica outputs, so the downstream synthesizer or review arbiter
-    reads both independent legs. Anchors expand in declared order, so a later
-    anchor's replica inherits earlier wiring deterministically. Every replica
-    is a full dispatch-depth-2 node; the independence axis (different
-    harness/model family) is realized at dispatch time, and a same-harness
-    fallback must be reported as reduced independence (DESIGN_PRINCIPLES
-    independent-QA rule)."""
-    if not replications:
+def _expand_parallel_groups(nodes, parallel_groups, effective_intensity):
+    """Expand registry-v5 groups into ordered 2..4-way sibling nodes.
+
+    The first leg keeps the anchor id for stable downstream references. Extra
+    legs get suffix-specific ids, outputs, and write scopes. Direct consumers
+    depend on every realized leg; non-review consumers also receive every leg's
+    output. `replica_group`/`independence_axis` remain one-window read aliases,
+    while `parallel_group` and the plural axes are canonical.
+    """
+    if not parallel_groups:
         return nodes
     if effective_intensity not in ORDER:
         raise ValueError("invalid intensity")
-    for replication in replications:
-        if ORDER[effective_intensity] < ORDER[replication["min_intensity"]]:
+    for group in parallel_groups:
+        if ORDER[effective_intensity] < ORDER[group["min_intensity"]]:
             continue
-        base = next(n for n in nodes if n["id"] == replication["node"])
-        replica = json.loads(json.dumps(base))
-        replica["id"] = f"{base['id']}-replica"
-        replica["outputs"] = [_replica_output(path) for path in base["outputs"]]
-        replica["independence_axis"] = replication["independence_axis"]
-        for leg in (base, replica):
-            leg["replica_group"] = base["id"]
+        width = group["width_by_intensity"][effective_intensity]
+        base = next(n for n in nodes if n["id"] == group["node"])
+        members = []
+        for index, leg_spec in enumerate(group["legs"][:width]):
+            leg = base if index == 0 else json.loads(json.dumps(base))
+            suffix = leg_spec["suffix"]
+            if index:
+                leg["id"] = f"{base['id']}-{suffix}"
+                leg["outputs"] = [_parallel_path(path, suffix) for path in base["outputs"]]
+                leg["write_scope"] = [
+                    _parallel_path(path, suffix) for path in base["write_scope"]
+                ]
+            leg["model_profile"] = leg_spec["model_profile"]
+            leg["perspective"] = leg_spec["perspective"]
+            leg["parallel_group"] = group["id"]
+            leg["parallel_group_kind"] = group["kind"]
+            leg["parallel_join_policy"] = group["join_policy"]
+            leg["parallel_independence_axes"] = list(group["independence_axes"])
+            leg["parallel_leg_index"] = index
+            leg["parallel_leg_count"] = width
+            leg["parallel_leg_suffix"] = suffix
+            leg["parallel_anchor"] = base["id"]
+            # One-window compatibility fields for jobs/Fleet and old receipts.
+            leg["replica_group"] = group["id"]
+            leg["independence_axis"] = "cross-harness"
+            members.append(leg)
         for node in nodes:
             if node is not base and base["id"] in node.get("depends_on", []):
-                node["depends_on"] = list(node["depends_on"]) + [replica["id"]]
+                node["depends_on"] = list(node["depends_on"]) + [
+                    member["id"] for member in members[1:]
+                ]
                 if base.get("kind") != "review-worker":
-                    node["inputs"] = list(node.get("inputs", [])) + list(replica["outputs"])
+                    node["inputs"] = list(node.get("inputs", [])) + [
+                        output for member in members[1:] for output in member["outputs"]
+                    ]
         expanded = []
         for node in nodes:
             expanded.append(node)
             if node is base:
-                expanded.append(replica)
+                expanded.extend(members[1:])
         nodes = expanded
     return nodes
+
+
+def _realized_parallel_groups(nodes):
+    groups = {}
+    for node in nodes:
+        group_id = node.get("parallel_group")
+        if not group_id:
+            continue
+        row = groups.setdefault(group_id, {
+            "id": group_id,
+            "kind": node["parallel_group_kind"],
+            "join_policy": node["parallel_join_policy"],
+            "independence_axes": list(node["parallel_independence_axes"]),
+            "width": node["parallel_leg_count"],
+            "members": [],
+        })
+        row["members"].append(node["id"])
+    return list(groups.values())
 
 def _seal_dispatch_defaults(nodes, capability):
     """Return dispatch_defaults_digest and stamp each dispatch-depth-2 node's
@@ -298,7 +336,9 @@ def _seal_dispatch_defaults(nodes, capability):
         raise ValueError(f"corrupt dispatch-defaults config: {exc}")
     for node in nodes:
         if node.get("dispatch_depth") == 2:
-            node["harness_affinity"] = DEFAULTS.query_stage_affinity(cfg, capability, node["id"])
+            node["harness_affinity"] = DEFAULTS.query_stage_affinity(
+                cfg, capability, node.get("parallel_anchor", node["id"])
+            )
     return "sha256:" + hashlib.sha256(canonical(cfg)).hexdigest()
 
 def unit_catalog_digest(units_root=None):
@@ -367,6 +407,7 @@ def _compile_from_recipe(registry, recipe, capability, capability_mode, requeste
     if effective=="direct":
         transport="interactive"
         if inline_reason is None: inline_reason="atomic-direct"
+        owner_model_profile=None
         nodes=[{"id":"inline","kind":"capability-owner","dispatch_depth":0,"role":"orchestrator",
                 "write_scope":recipe["quick"]["write_scope"],"resource_class":"normal",
                 "execution_surface":"inline","registered_worker":False,
@@ -380,8 +421,10 @@ def _compile_from_recipe(registry, recipe, capability, capability_mode, requeste
             registered_headless_evidence
         )
         transport="headless"
+        owner_model_profile=registry["owner_profile_by_intensity"]["quick"]
         nodes=[{"id":"one-shot","kind":recipe["quick"]["worker_kind"],"dispatch_depth":1,"role":"orchestrator",
                 "unit":"_kernel/owner",
+                "model_profile":recipe["quick"]["model_profile"],
                 "write_scope":recipe["quick"]["write_scope"],"resource_class":"normal",
                 "execution_surface":"registered-headless","registered_worker":True,
                 "completion_gate":"quick-complete"}]
@@ -391,8 +434,11 @@ def _compile_from_recipe(registry, recipe, capability, capability_mode, requeste
         if transport not in (None, "headless"):
             raise ValueError(f"invalid standard+ transport: {transport!r}")
         transport="headless"
+        owner_model_profile=registry["owner_profile_by_intensity"][effective]
         nodes=json.loads(json.dumps(recipe["standard_plus"]["nodes"])); gates=recipe["completion_gates"]
-        nodes=_expand_replications(nodes, recipe["standard_plus"].get("replications"), effective)
+        nodes=_expand_parallel_groups(
+            nodes, recipe["standard_plus"].get("parallel_groups"), effective
+        )
         for node in nodes:
             node.pop("fallback_hops", None)
         selection_basis=[{"axis":"promotion","signal":s,"source":"caller"} for s in signals]
@@ -413,6 +459,7 @@ def _compile_from_recipe(registry, recipe, capability, capability_mode, requeste
     payload={
       "schema_version":ROUTE_SCHEMA_VERSION,"capability":capability,"capability_mode":capability_mode,
       "requested_intensity":requested_intensity,"effective_intensity":effective,
+      "owner_model_profile":owner_model_profile,
       "execution_topology":("inline" if effective=="direct" else recipe["quick"]["topology"] if effective=="quick" else recipe["topology_class"]),
       "owner_dispatch_depth":0 if effective=="direct" else (recipe["quick"]["owner_dispatch_depth"] if effective=="quick" else recipe["standard_plus"]["owner_dispatch_depth"]),
       "max_dispatch_depth":recipe["quick"]["max_dispatch_depth"] if effective=="quick" else (0 if effective=="direct" else recipe["standard_plus"]["max_dispatch_depth"]),
@@ -424,7 +471,8 @@ def _compile_from_recipe(registry, recipe, capability, capability_mode, requeste
                    "selection_basis":selection_basis,
                    "escalation_basis":[{"signal":s,"source":"caller"} for s in signals],
                    "transport":transport,"transport_evidence":transport_evidence,"inline_reason":inline_reason},
-      "nodes":nodes,"completion_gates":gates,"human_gates":recipe["human_gates"],
+      "nodes":nodes,"parallel_groups":_realized_parallel_groups(nodes),
+      "completion_gates":gates,"human_gates":recipe["human_gates"],
       "resume_retry_boundaries":recipe["resume_retry_boundaries"],
       "dispatch_evidence":checked_dispatch,
       "dispatch_contract_version":DISPATCH_CONTRACT_VERSION,
@@ -461,8 +509,8 @@ def verify_route(route, expected_cwd=None):
         def _node_identity(node):
             return {k:v for k,v in node.items() if k not in ("fallback_hops","harness_affinity")}
         expected_nodes=json.loads(json.dumps(composed_recipe["standard_plus"]["nodes"]))
-        expected_nodes=_expand_replications(
-            expected_nodes, composed_recipe["standard_plus"].get("replications"),
+        expected_nodes=_expand_parallel_groups(
+            expected_nodes, composed_recipe["standard_plus"].get("parallel_groups"),
             route.get("effective_intensity"))
         if ([_node_identity(n) for n in route.get("nodes",[])]
                 != [_node_identity(n) for n in expected_nodes]):
@@ -472,6 +520,14 @@ def verify_route(route, expected_cwd=None):
     if any(key in route for key in ("depth", "owner_depth", "max_depth")):
         raise ValueError("bare route dispatch-depth fields are forbidden")
     observed_dispatch_depths = [route["owner_dispatch_depth"]]
+    effective=route.get("effective_intensity")
+    expected_owner_profile=(
+        None if effective=="direct"
+        else registry["owner_profile_by_intensity"].get(effective)
+    )
+    if route.get("owner_model_profile") != expected_owner_profile:
+        raise ValueError("owner_model_profile differs from the portable intensity policy")
+    realized_groups = {}
     for node in route.get("nodes", []):
         if node.get("kind") == "resource-runner":
             if any(
@@ -485,6 +541,11 @@ def verify_route(route, expected_cwd=None):
             if node.get("resource_transport") != "detached-process":
                 raise ValueError(f"resource node {node.get('id')} lacks detached lifecycle")
             continue
+        if node.get("dispatch_depth") in {1, 2}:
+            profile = node.get("model_profile")
+            row = registry["model_profiles"].get(profile)
+            if not isinstance(row, dict) or row.get("registered_topology") is not True:
+                raise ValueError(f"node {node.get('id')} has invalid registered model_profile")
         if any(key in node for key in ("depth", "owner_depth", "max_depth")) or node.get("dispatch_depth") not in {0, 1, 2}:
             raise ValueError(f"node {node.get('id')} has invalid dispatch_depth")
         observed_dispatch_depths.append(node["dispatch_depth"])
@@ -499,9 +560,38 @@ def verify_route(route, expected_cwd=None):
         for hop in node.get("fallback_hops", []):
             if not isinstance(hop, dict) or hop.get("fallback_hop") not in FALLBACK_HOPS:
                 raise ValueError(f"invalid fallback_hop vocabulary: {hop!r}")
+        group_id=node.get("parallel_group")
+        if group_id:
+            if node.get("replica_group") != group_id:
+                raise ValueError(f"node {node.get('id')} has inconsistent parallel-group alias")
+            realized_groups.setdefault(group_id,[]).append(node)
+    expected_group_rows=[]
+    for group_id, members in realized_groups.items():
+        members.sort(key=lambda member: member.get("parallel_leg_index", -1))
+        width=members[0].get("parallel_leg_count") if members else 0
+        if width != len(members) or [member.get("parallel_leg_index") for member in members] != list(range(width)):
+            raise ValueError(f"parallel group {group_id} has incomplete/duplicate leg indexes")
+        invariant_fields=("parallel_group_kind","parallel_join_policy","parallel_independence_axes")
+        if any(member.get("parallel_leg_count") != width for member in members):
+            raise ValueError(f"parallel group {group_id} width metadata mismatch")
+        if any(member.get(field) != members[0].get(field) for member in members for field in invariant_fields):
+            raise ValueError(f"parallel group {group_id} invariant metadata mismatch")
+        for index,left in enumerate(members):
+            for right in members[index+1:]:
+                if any(TOPO._overlap(a,b) for a in left.get("write_scope",[]) for b in right.get("write_scope",[])):
+                    raise ValueError(f"parallel group {group_id} has overlapping write scopes")
+        expected_group_rows.append({
+            "id":group_id,
+            "kind":members[0]["parallel_group_kind"],
+            "join_policy":members[0]["parallel_join_policy"],
+            "independence_axes":members[0]["parallel_independence_axes"],
+            "width":width,
+            "members":[member["id"] for member in members],
+        })
+    if route.get("parallel_groups") != expected_group_rows:
+        raise ValueError("route parallel_groups summary differs from realized nodes")
     if route["max_dispatch_depth"] != max(observed_dispatch_depths):
         raise ValueError("max_dispatch_depth does not match the realized route")
-    effective=route.get("effective_intensity")
     selection=route.get("selection",{})
     if effective=="direct":
         if (

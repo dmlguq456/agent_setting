@@ -568,11 +568,15 @@ def _record_view(record, route_id, route_jobs, ev_by_node, now, gate_marks_for_r
             )
             if st["state"] == "done":
                 done += 1
+            parallel_group = rn.get("parallel_group") or rn.get("replica_group")
             replica_group = rn.get("replica_group")
             nodes.append({
                 "id": nid, "depends_on": list(rn.get("depends_on") or []), "level": level_i,
                 "unit": unit, "unit_choices": unit_choices,
+                "parallel_group": parallel_group if isinstance(parallel_group, str) else None,
                 "replica_group": replica_group if isinstance(replica_group, str) else None,
+                "model_profile": rn.get("model_profile") if isinstance(rn.get("model_profile"), str) else None,
+                "perspective": rn.get("perspective") if isinstance(rn.get("perspective"), str) else None,
                 "write_scope": rn.get("write_scope"),
                 "state": st["state"], "gate": rn.get("completion_gate"),
                 # True | None — a DIMENSION SEPARATE from `state` (prd.md:308). `state` says what

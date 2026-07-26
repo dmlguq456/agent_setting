@@ -19,7 +19,7 @@ from typing import Any, Callable, NamedTuple
 from replica_batch_contract import ReplicaBatchContractError, verify_manifest
 
 
-CLASS_LIMITS = {"dispatch": 3, "distill": 1, "title": 4, "loop": 2}
+CLASS_LIMITS = {"dispatch": 5, "distill": 1, "title": 4, "loop": 2}
 START_WINDOW_SECONDS = 600
 DEFAULT_TOTAL_LIMIT = 5
 DEFAULT_START_BUDGET = 20
@@ -40,6 +40,13 @@ BATCH_RESERVATION_KEYS = (
     "batch_fallback_ordinal",
     "batch_independence",
     "batch_assignment_sha256",
+    "batch_model_profile",
+    "batch_perspective",
+    "batch_parallel_leg_index",
+    "batch_peer_count",
+    "batch_peer_set",
+    "batch_peer_set_sha256",
+    # Schema-v1 read compatibility for an exact two-way recovery.
     "batch_peer_attempt_id",
     "batch_peer_state",
     "batch_peer_proof",
@@ -416,10 +423,10 @@ def _issue_batch_issuer_capability(pid: int) -> _BatchIssuerCapability:
     """Mint an opaque capability after validating the live parent invocation."""
 
     if not _batch_issuer_is_current_parent(pid):
-        raise ValueError("replica batch reservation issuer is not dispatch-batch")
+        raise ValueError("parallel batch reservation issuer is not dispatch-batch")
     starttime = process_starttime(pid)
     if starttime is None:
-        raise ValueError("replica batch reservation issuer identity unavailable")
+        raise ValueError("parallel batch reservation issuer identity unavailable")
     return _BatchIssuerCapability(pid, starttime, _BATCH_ISSUER_SEAL)
 
 
@@ -447,42 +454,41 @@ def _validate_batch_peer(
     leg_digests: dict[str, str],
     selected_attempt_ids: list[str],
 ) -> dict[str, object]:
-    """Prove the non-selected member before a one-leg recovery reservation."""
+    """Prove one non-selected member before a one-leg recovery reservation."""
 
     required = {"agent_home", "attempt_id", "jobs", "route"}
     if not isinstance(peer, dict) or set(peer) != required:
-        raise ValueError("replica batch partial recovery requires exact peer proof")
+        raise ValueError("parallel batch partial recovery requires exact peer proof")
     paths: dict[str, Path] = {}
     for key in ("agent_home", "jobs", "route"):
         value = peer.get(key)
         if not isinstance(value, str) or not Path(value).is_absolute():
-            raise ValueError("replica batch peer paths must be absolute")
+            raise ValueError("parallel batch peer paths must be absolute")
         paths[key] = Path(value).resolve(strict=False)
     attempt_id = peer.get("attempt_id")
     if not isinstance(attempt_id, str) or not attempt_id:
-        raise ValueError("replica batch peer attempt is invalid")
+        raise ValueError("parallel batch peer attempt is invalid")
     members = {
         str(member["attempt_id"]): member for member in manifest["members"]
     }
     if attempt_id not in members or attempt_id in selected_attempt_ids:
-        raise ValueError("replica batch peer is not the non-selected member")
-    if set(members) != {*selected_attempt_ids, attempt_id}:
-        raise ValueError("replica batch partial recovery membership mismatch")
+        raise ValueError("parallel batch peer is not a non-selected member")
 
     try:
         route = json.loads(paths["route"].read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError(f"replica batch peer route unreadable: {exc}") from exc
+        raise ValueError(f"parallel batch peer route unreadable: {exc}") from exc
     if not isinstance(route, dict) or route.get("route_id") != manifest["route_id"]:
-        raise ValueError("replica batch peer route mismatch")
+        raise ValueError("parallel batch peer route mismatch")
+    group = manifest.get("parallel_group") or manifest.get("replica_group")
     group_nodes = sorted(
         str(node.get("id", ""))
         for node in route.get("nodes", [])
         if isinstance(node, dict)
-        and node.get("replica_group") == manifest["replica_group"]
+        and (node.get("parallel_group") or node.get("replica_group")) == group
     )
     if group_nodes != sorted(str(member["route_node"]) for member in manifest["members"]):
-        raise ValueError("replica batch peer route group mismatch")
+        raise ValueError("parallel batch peer route group mismatch")
 
     from dispatch_contract import (  # local import avoids bootstrap cycles
         DispatchContractError,
@@ -499,7 +505,7 @@ def _validate_batch_peer(
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
             lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError as exc:
-        raise ValueError(f"replica batch peer registry unreadable: {exc}") from exc
+        raise ValueError(f"parallel batch peer registry unreadable: {exc}") from exc
     exact = []
     for line in lines:
         fields = line.split("\t")
@@ -509,13 +515,15 @@ def _validate_batch_peer(
         if metadata.get("attempt_id") == attempt_id:
             exact.append((fields, metadata))
     if len(exact) != 1:
-        raise ValueError("replica batch peer row is not unique")
+        raise ValueError("parallel batch peer row is not unique")
     fields, metadata = exact[0]
     try:
         validate_attempt_metadata(metadata)
     except DispatchContractError as exc:
-        raise ValueError(f"replica batch peer row invalid: {exc.reason}") from exc
+        raise ValueError(f"parallel batch peer row invalid: {exc.reason}") from exc
     member = members[attempt_id]
+    schema_version = int(manifest.get("schema_version", 1))
+    reservation_kind = "parallel-batch" if schema_version == 2 else "replica-batch"
     expected = {
         "attempt_id": attempt_id,
         "route_id": str(manifest["route_id"]),
@@ -525,9 +533,9 @@ def _validate_batch_peer(
         "child_harness": str(member["harness"]),
         "fallback_hop": str(member["fallback_hop"]),
         "fallback_ordinal": str(member["fallback_ordinal"]),
-        "reservation_kind": "replica-batch",
-        "batch_declared_size": "2",
-        "batch_group": str(manifest["replica_group"]),
+        "reservation_kind": reservation_kind,
+        "batch_declared_size": str(manifest["declared_size"]),
+        "batch_group": str(group),
         "batch_route_id": str(manifest["route_id"]),
         "batch_parent_attempt_id": str(manifest["parent_attempt_id"]),
         "batch_attempt_id": attempt_id,
@@ -541,6 +549,14 @@ def _validate_batch_peer(
         "batch_leg_sha256": leg_digests[attempt_id],
         "launch_claimed": "1",
     }
+    if schema_version == 2:
+        expected.update({
+            "parallel_group": str(group),
+            "replica_group": str(group),
+            "batch_model_profile": str(member["model_profile"]),
+            "batch_perspective": str(member["perspective"]),
+            "batch_parallel_leg_index": str(member["parallel_leg_index"]),
+        })
     mismatches = [
         key for key, value in expected.items() if metadata.get(key) != value
     ]
@@ -549,7 +565,7 @@ def _validate_batch_peer(
         or os.path.realpath(fields[3]) != os.path.realpath(str(route.get("cwd", "")))
     ):
         raise ValueError(
-            "replica batch peer identity mismatch: " + ",".join(mismatches)
+            "parallel batch peer identity mismatch: " + ",".join(mismatches)
         )
 
     peer_state = ""
@@ -557,7 +573,7 @@ def _validate_batch_peer(
     if fields[1] in {"open", "running"}:
         process = attempt_process_quiescence(metadata)
         if process.state != "live":
-            raise ValueError(f"replica batch peer is not live: {process.reason}")
+            raise ValueError(f"parallel batch peer is not live: {process.reason}")
         peer_state, proof_reason = "active", process.reason
     elif fields[1] == "done" and metadata.get("note") == "completed-marker":
         node = next(
@@ -574,19 +590,19 @@ def _validate_batch_peer(
         try:
             marker = json.loads(marker_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            raise ValueError(f"replica batch peer marker unreadable: {exc}") from exc
+            raise ValueError(f"parallel batch peer marker unreadable: {exc}") from exc
         if not isinstance(node, dict) or not completion_marker_is_current(
             route, node, marker_path, marker
         ):
-            raise ValueError("replica batch peer marker is not current")
+            raise ValueError("parallel batch peer marker is not current")
         readiness = completion_attempt_readiness(
             route, node, marker, jobs, registry_lines=lines
         )
         if readiness.state != "ready":
-            raise ValueError(f"replica batch peer completion not ready: {readiness.reason}")
+            raise ValueError(f"parallel batch peer completion not ready: {readiness.reason}")
         peer_state, proof_reason = "completed", readiness.reason
     else:
-        raise ValueError("replica batch peer is terminal without completion")
+        raise ValueError("parallel batch peer is terminal without completion")
 
     proof = {
         "agent_home": str(paths["agent_home"]),
@@ -604,6 +620,43 @@ def _validate_batch_peer(
         "batch_peer_proof": proof,
         "batch_peer_proof_sha256": "sha256:" + hashlib.sha256(encoded).hexdigest(),
     }
+
+
+def _validate_batch_peers(
+    peers: object,
+    manifest: dict[str, object],
+    manifest_digest: str,
+    leg_digests: dict[str, str],
+    selected_attempt_ids: list[str],
+) -> dict[str, object]:
+    """Prove the exact N-1 peer set for a single missing-leg recovery."""
+
+    members = {str(member["attempt_id"]) for member in manifest["members"]}
+    expected = members - set(selected_attempt_ids)
+    if not isinstance(peers, list) or len(peers) != len(expected):
+        raise ValueError("parallel batch recovery requires the exact N-1 peer set")
+    supplied = [peer.get("attempt_id") if isinstance(peer, dict) else None for peer in peers]
+    if len(set(supplied)) != len(supplied) or set(supplied) != expected:
+        raise ValueError("parallel batch recovery peer membership mismatch")
+    proofs = [
+        _validate_batch_peer(
+            peer, manifest, manifest_digest, leg_digests, selected_attempt_ids
+        )
+        for peer in peers
+    ]
+    normalized = sorted(
+        (proof["batch_peer_proof"] for proof in proofs),
+        key=lambda proof: str(proof["attempt_id"]),
+    )
+    encoded = json.dumps(normalized, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    result = {
+        "batch_peer_count": len(normalized),
+        "batch_peer_set": normalized,
+        "batch_peer_set_sha256": "sha256:" + hashlib.sha256(encoded).hexdigest(),
+    }
+    if int(manifest.get("schema_version", 1)) == 1 and len(proofs) == 1:
+        result.update(proofs[0])
+    return result
 
 
 def reserve(
@@ -629,10 +682,10 @@ def reserve(
         _consume_batch_issuer_capability(batch_issuer, pid)
         if (
             not isinstance(batch, dict)
-            or set(batch) - {"manifest", "selected_attempt_ids", "peer"}
+            or set(batch) - {"manifest", "selected_attempt_ids", "peers"}
             or not {"manifest", "selected_attempt_ids"}.issubset(batch)
         ):
-            raise ValueError("invalid replica batch reservation metadata")
+            raise ValueError("invalid parallel batch reservation metadata")
         try:
             manifest, manifest_digest, leg_digests = verify_manifest(batch["manifest"])
         except ReplicaBatchContractError as exc:
@@ -644,28 +697,32 @@ def reserve(
             or any(not isinstance(value, str) or not value for value in selected)
             or len(set(selected)) != count
         ):
-            raise ValueError("replica batch selected member count mismatch")
+            raise ValueError("parallel batch selected member count mismatch")
         member_by_attempt = {
             str(member["attempt_id"]): member for member in manifest["members"]
         }
         if any(attempt_id not in member_by_attempt for attempt_id in selected):
-            raise ValueError("replica batch selected member is not declared")
+            raise ValueError("parallel batch selected member is not declared")
         members = [member_by_attempt[attempt_id] for attempt_id in selected]
         peer_proof: dict[str, object] = {}
         if count == int(manifest["declared_size"]):
-            if batch.get("peer") is not None:
-                raise ValueError("full replica batch reservation cannot include peer proof")
+            if batch.get("peers") is not None:
+                raise ValueError("full parallel batch reservation cannot include peer proof")
         elif count == 1:
-            peer_proof = _validate_batch_peer(
-                batch.get("peer"), manifest, manifest_digest, leg_digests, selected
+            peer_proof = _validate_batch_peers(
+                batch.get("peers"), manifest, manifest_digest, leg_digests, selected
             )
         else:
-            raise ValueError("replica batch reservation count must be one or declared size")
+            raise ValueError("parallel batch reservation count must be one or declared size")
+        group = manifest.get("parallel_group") or manifest.get("replica_group")
         batch_common = {
-            "reservation_kind": "replica-batch",
+            "reservation_kind": (
+                "parallel-batch" if int(manifest.get("schema_version", 1)) == 2
+                else "replica-batch"
+            ),
             "batch_declared_size": manifest["declared_size"],
             "batch_admission_count": count,
-            "batch_group": manifest["replica_group"],
+            "batch_group": group,
             "batch_route_id": manifest["route_id"],
             "batch_parent_attempt_id": manifest["parent_attempt_id"],
             "batch_independence": manifest["independence"],
@@ -698,6 +755,12 @@ def reserve(
                     "batch_assignment_sha256": members[index]["assignment_sha256"],
                     "batch_leg_sha256": leg_digests[str(members[index]["attempt_id"])],
                 })
+                if int(manifest.get("schema_version", 1)) == 2:
+                    reservation.update({
+                        "batch_model_profile": members[index]["model_profile"],
+                        "batch_perspective": members[index]["perspective"],
+                        "batch_parallel_leg_index": members[index]["parallel_leg_index"],
+                    })
             data["reservations"][token] = reservation
             tokens.append(token)
         return tokens
@@ -851,6 +914,7 @@ def main() -> int:
     reserve_parser.add_argument("--batch-peer-attempt-id")
     reserve_parser.add_argument("--batch-peer-jobs")
     reserve_parser.add_argument("--batch-peer-route")
+    reserve_parser.add_argument("--batch-peers-json")
     reservation_check_parser = commands.add_parser("reservation-check")
     reservation_check_parser.add_argument("--token", required=True)
     reservation_check_parser.add_argument("--class", dest="worker_class")
@@ -881,28 +945,39 @@ def main() -> int:
             args.batch_manifest,
             args.batch_attempt_id,
             *peer_values,
+            args.batch_peers_json,
         )
         batch = None
         if any(batch_values):
             if not args.batch_manifest or not args.batch_attempt_id:
-                raise ValueError("incomplete replica batch reservation metadata")
+                raise ValueError("incomplete parallel batch reservation metadata")
             try:
                 manifest = json.loads(args.batch_manifest)
             except json.JSONDecodeError as exc:
-                raise ValueError("invalid replica batch manifest JSON") from exc
+                raise ValueError("invalid parallel batch manifest JSON") from exc
             batch = {
                 "manifest": manifest,
                 "selected_attempt_ids": args.batch_attempt_id,
             }
-            if any(peer_values):
+            if args.batch_peers_json and any(peer_values):
+                raise ValueError("plural and legacy singular peer proof surfaces are exclusive")
+            if args.batch_peers_json:
+                try:
+                    peers = json.loads(args.batch_peers_json)
+                except json.JSONDecodeError as exc:
+                    raise ValueError("invalid parallel batch peers JSON") from exc
+                if not isinstance(peers, list):
+                    raise ValueError("parallel batch peers JSON must be a list")
+                batch["peers"] = peers
+            elif any(peer_values):
                 if not all(peer_values):
                     raise ValueError("incomplete replica batch peer proof")
-                batch["peer"] = {
+                batch["peers"] = [{
                     "agent_home": args.batch_peer_agent_home,
                     "attempt_id": args.batch_peer_attempt_id,
                     "jobs": args.batch_peer_jobs,
                     "route": args.batch_peer_route,
-                }
+                }]
             batch_issuer = _issue_batch_issuer_capability(args.pid)
         else:
             batch_issuer = None

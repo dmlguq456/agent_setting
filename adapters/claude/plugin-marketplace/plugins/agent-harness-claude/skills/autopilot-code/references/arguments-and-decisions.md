@@ -24,9 +24,9 @@ Intensity selects the stage graph; see [CONVENTIONS §1](../../../core/CONVENTIO
 
 - `direct`: intake → produce → sanity/report; no code-plan, plan-check, or durable plan.
 - `quick`: intake → orient-lite → micro-plan → plan-check-lite → produce → verify-lite → report; no independent QA after every stage.
-- `standard`: exact cross-harness 2-way framing (`frame` + `frame-replica`) → direction synthesis → durable code-plan → plan-check → optional bounded non-replica verifier → code-execute → impl-review → code-test → code-report.
-- `strong`: standard's exact 2-way framing plus a separate exact 2-way plan group (`plan` + `plan-replica`) arbitrated by plan-check and a separate exact 2-way implementation-review group (`impl-review` + `impl-review-replica`) merged at verdict level (CONVENTIONS §3.12).
-- `thorough` and `adversarial`: retain all three exact 2-way anchor groups. Additional independent non-replica planning, verification, or adversarial perspectives run only as explicitly declared compose-on-demand nodes; the base recipe does not auto-add them, and no replica group widens to N-way.
+- `standard`: cross-harness-first 2-way framing (`frame` + `frame-alternative`) with asymmetric `balanced-deep`/`light` profiles → direction synthesis → durable code-plan → plan-check → code-execute → impl-review → code-test → code-report.
+- `strong`: widen framing to three perspectives, then run separate 2-way plan (`plan` + `plan-alternative`) and implementation-review (`impl-review` + `impl-review-alternative`) groups before their declared convergence points.
+- `thorough` and `adversarial`: retain 3-way framing and widen plan plus implementation review to three legs by adding the sealed implementation-risk and failure-mode perspectives. Every width/profile/perspective comes from registry-v5; no owner invents a leg.
 
 Every non-direct graph has a plan-check, but expensive independent QA does not repeat after every substage.
 

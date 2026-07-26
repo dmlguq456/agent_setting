@@ -638,7 +638,7 @@ def run_worker(prompt, model=None, timeout=WORKER_TIMEOUT, capacity_held=False):
         # that for free (script dir → sys.path[0]); this in-process `spec_from_file_location` load
         # does not. Without it, `exec_module` raises ModuleNotFoundError, the whole block is swallowed
         # by the `except` below, and EVERY title worker returns "" — the live subtitle (NOW summary)
-        # silently vanishes fleet-wide (regression once the governor grew its replica-batch import).
+        # silently vanishes fleet-wide (regression once the governor grew its parallel-batch import).
         governor_dir = str(governor.parent)
         if governor_dir not in sys.path:
             sys.path.insert(0, governor_dir)

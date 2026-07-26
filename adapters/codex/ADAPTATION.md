@@ -425,11 +425,11 @@ Codex-native counterpart today.
 | loop guidance | Run `adapters/codex/bin/preflight.sh loop-info <oncall|note|study|drill|runtime-watch>` before following loop guides; Codex reports manual contracts, missing implementations, and drill auto-run restrictions without executing loop scripts. The `note` loop is an external scheduler/worklog-board contract; use the related `autopilot-note` Skill/plugin projection only for on-demand note routing |
 | memory distill | Transcript delta extraction exists via `adapters/codex/bin/preflight.sh distill-delta <session-id>`. The user-facing `distill-propose` stays an explicit opt-in preview (reports `status=tool-contract`, exits 69 until `CODEX_DISTILL_ENABLE=1`). Automatic session-end and turn-nudge distillation is enabled by default: the `codex exec --sandbox read-only` worker is verified tool-free (see Distillation Boundary) and applies through `apply-distill-actions.py`; the Stop hook schedules session-end distillation detached to avoid foreground hook timeouts; opt out with `CODEX_DISTILL_ENABLE=0` |
 | worklog state signal | Run `adapters/codex/bin/preflight.sh worklog [cwd]` to inspect configured `<agent-notes-root>` / `<worklog-board-app>` paths read-only before Codex updates notes or diagnoses board state |
-| role profiles | Read `roles/README.md`, then run `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` to resolve Codex model/reasoning-effort settings or pipeline profile aliases to native custom agents |
+| role profiles | Read `roles/README.md`, then run `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` for behavioral-role or native-agent profile resolution. Registered routes separately seal `model_profile=deep|balanced-deep|light|mini`, resolved from the adapter config |
 | permission mapping | Run `adapters/codex/bin/preflight.sh permissions` to inspect the Codex approval/sandbox contract and confirm Claude `allowedTools` is unsupported |
 | MCP mapping | Run `adapters/codex/bin/preflight.sh mcp --check` to inspect Codex's native MCP CLI/config surface; do not copy Claude `settings.json` MCP registrations or project `tools/design-mcp` wholesale |
-| headless dispatch | Run `preflight.sh headless --check <worktree>` before launch; it verifies native Skills, native Agents, and native Modes. Use `dispatch --dry-run|--register|--start [--require-hook-trust]` for registered work. Standard+ dispatch-depth-1 owners use `--completion-delivery auto`: a checked App Server probe selects an ephemeral same-thread supervisor, forced `supervised` fails before registration when unavailable, and explicit/unavailable fallback is reported as `poll-fallback`. Quick and dispatch-depth-2 workers stay one-shot `codex exec`. The wrapper validates the capability catalog's scalar `capability_mode`, validates an optional non-owner `worker_mode` through `mode-info`, and requires that projection to equal the portable `unit`; `_kernel/owner` rejects a worker mode before prompt or registry writes. Current rows emit `capability_mode=` and optional `worker_mode=` separately. Registry writes and harvest rewrites are serialized with a `.lock` file. Registration materializes the portable kernel, one worker type, route metadata, and assigned Skill/unit. Route, model, approval, hook-trust, harvest, and cleanup contracts are unchanged |
-| parent completion park | The App Server supervisor owns exact-batch waiting and emits no model/tool activity between the owner's intermediate turn and join readiness. It resumes the same thread once per batch with child identities/status enums only, withholds intermediate `turn.completed`, and exposes exactly one final terminal handoff. Before each turn it writes an atomic attempt-scoped delivered-set state: an undelivered pending batch admits only another exact same-parent dispatch start, so the first child cannot block sibling registration; a delivered pending batch admits only exact typed harvest. Waits and unrelated tools are denied in both phases, missing state is harvest-only recovery, and normal exit or the exact owner watcher removes the state file. The 300–600 second `dispatch-wait` path is an explicitly reported fallback and preserves terminal-nonquiescent parking, not normal parity. Without a registered completion-delivery mode, the interactive global hook parks only exact latest `open|running` rows; terminal live/unverifiable rows remain readiness/cleanup blockers but do not block unrelated tools. Native subagents remain outside this registry policy |
+| headless dispatch | Run `preflight.sh headless --check <worktree>` before launch; it verifies native Skills, native Agents, and native Modes. Use `dispatch --dry-run|--register|--start [--require-hook-trust]` for registered work. Standard+ dispatch-depth-1 owners use `--completion-delivery auto`: a checked App Server probe selects an ephemeral same-thread supervisor, forced `supervised` fails before registration when unavailable, and explicit/unavailable fallback is reported as `poll-fallback`. Quick and dispatch-depth-2 workers stay one-shot `codex exec`. The wrapper validates the capability catalog's scalar `capability_mode`, validates an optional non-owner `worker_mode` through `mode-info`, and keeps behavioral `model_role` plus execution `model_profile` separate; `_kernel/owner` rejects a worker mode before prompt or registry writes and accepts its sealed owner profile without a role. The profile resolves through `config/models.conf`, caller model/reasoning replacement is denied, and substantive registered `mini` is denied. Rows expose resolved tier and profile granularity for Fleet. Registry writes and harvest rewrites are serialized with a `.lock` file. Registration materializes the portable kernel, one worker type, route metadata, and assigned Skill/unit. Approval, hook-trust, harvest, and cleanup contracts remain unchanged |
+| parent completion park | The App Server supervisor owns exact-batch waiting and emits no model/tool activity between the owner's intermediate turn and join readiness. It resumes the same thread once per batch with child identities/status enums only, withholds intermediate `turn.completed`, and exposes exactly one final terminal handoff. A route-declared 2–4-way `parallel_group` uses one atomic `dispatch-batch --parallel-group`; the undelivered phase admits only a manifest-bound one-missing-leg recovery with all N-1 peers proved and rejects direct member starts. A delivered pending batch admits only exact typed harvest. Waits and unrelated tools are denied in both phases, missing state is harvest-only recovery, and normal exit or the exact owner watcher removes the state file. The 300–600 second `dispatch-wait` path is an explicitly reported fallback and preserves terminal-nonquiescent parking, not normal parity. Without a registered completion-delivery mode, the interactive global hook parks only exact latest `open|running` rows; terminal live/unverifiable rows remain readiness/cleanup blockers but do not block unrelated tools. Native subagents remain outside this registry policy |
 | role modes | Read `roles/MODES.md`, then run `adapters/codex/bin/preflight.sh mode-info <family/mode>`; read the reported `native_mode_path`, obey `fallback=reference-only` only for unsupported modes, and satisfy any named `tool_contract` / `tool_contract_check` before claiming tool-contract modes |
 | mode guides | Use `adapters/codex/modes/<family>/<mode>.md` as the Codex-native realization guide reported by `mode-info`; satisfy named tool contracts or report unavailable before claiming support |
 | design modes | Use `adapters/codex/modes/design/<mode>.md` as the Codex-native realization guide; satisfy `visual-harness` or report unavailable before claiming rendered visual verification |
@@ -438,8 +438,17 @@ Codex-native counterpart today.
 
 ## Model Mapping
 
-Codex exposes concrete choices through environment or config and resolves them
-with `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>`:
+`adapters/codex/config/models.conf` is the sole concrete source. Behavioral
+roles resolve through `preflight.sh role`; registered route profiles resolve as:
+
+| Model profile | Concrete realization |
+|---|---|
+| `deep` | configured deep tier / `xhigh` |
+| `balanced-deep` | configured deep tier / `medium` |
+| `light` | configured light tier / `medium` |
+| `mini` | configured mini tier / `medium`, lifecycle/micro-only |
+
+Non-route role compatibility overrides remain explicit and config-derived:
 
 ```text
 AGENT_MODEL_FAST
@@ -453,28 +462,14 @@ AGENT_REASONING_ORCHESTRATOR
 AGENT_EXTERNAL_CMD
 ```
 
-When no override is configured, the adapter reports defaults for non-external
-roles from `adapters/codex/config/models.conf` (the sole source of concrete model
-IDs): fast reviewer/fact-checker/writer/tool = light tier, fast implementer = deep
-tier at the fast-implementer effort, deep roles including `deep orchestrator` = deep
-tier, and balanced `orchestrator` = light tier through the named `AGENT_MODEL_BALANCED`
-override. `external adversary` remains unavailable
-unless `AGENT_MODEL_EXTERNAL` or `AGENT_EXTERNAL_CMD` is configured, because
-the independent-adversary contract is stronger than the existence of a
-generated `external-adversary.toml` projection. `AGENT_EXTERNAL_CMD` can route
-an external adversary to a separate external process when stronger independence
-is required.
-
-model-tier caveat: static Codex projections use Luna for QA/material fast paths,
-Terra for implementation, and Sol for plan/research/design/editorial/deep-review
-paths. Runtime measurement
-(2026-07-04) confirmed these static TOML `model`/`model_reasoning_effort` pins
-are actually applied to the spawned child process, not merely declared in the
-file — verified against child rollout JSONL, with 5 static-pin/role-map
-mismatches confirmed. This is therefore a confirmed effective gap:
-`adapters/codex/bin/preflight.sh role`/role-map resolution does not
-automatically escalate these three roles to a stronger tier at spawn time; the
-projection is a static default, not a validated model-tier equivalence.
+The profile is route-sealed and does not rename a role, worker type, or mode.
+Fast roles, including implementation, default to light; deep roles default to
+deep. Environment overrides remain available to non-route role selection and
+checked capacity substitution, but not as a route-profile replacement.
+`external adversary` remains unavailable unless `AGENT_MODEL_EXTERNAL` or
+`AGENT_EXTERNAL_CMD` establishes an independent execution path. Generated
+native-agent TOML pins are separate static role projections; route-bound
+registered execution receives the compiled profile explicitly.
 
 ## Current Projection Boundary
 

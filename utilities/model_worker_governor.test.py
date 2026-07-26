@@ -35,6 +35,9 @@ class GovernorTest(unittest.TestCase):
                     "harness": "codex",
                     "fallback_hop": "same-harness-headless",
                     "fallback_ordinal": 1,
+                    "model_profile": "balanced-deep",
+                    "perspective": "primary-plan",
+                    "parallel_leg_index": 0,
                 },
                 {
                     "assignment_sha256": "sha256:" + "a" * 64,
@@ -43,8 +46,13 @@ class GovernorTest(unittest.TestCase):
                     "harness": "claude",
                     "fallback_hop": "cross-harness-headless",
                     "fallback_ordinal": 2,
+                    "model_profile": "light",
+                    "perspective": "independent-plan",
+                    "parallel_leg_index": 1,
                 },
             ],
+            required_independence_axes=["cross-harness", "model-profile", "perspective"],
+            realized_independence_axes=["cross-harness", "model-profile", "perspective"],
         )
 
     def reserve_batch(self, root, count, batch):
@@ -64,8 +72,8 @@ class GovernorTest(unittest.TestCase):
 
     def test_caps_release_and_kill_switch(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            tokens = [GOVERNOR.acquire(temp_dir, "dispatch") for _ in range(3)]
-            with self.assertRaisesRegex(ValueError, "class cap"):
+            tokens = [GOVERNOR.acquire(temp_dir, "dispatch") for _ in range(5)]
+            with self.assertRaisesRegex(ValueError, "global model-worker cap|class cap"):
                 GOVERNOR.acquire(temp_dir, "dispatch")
             GOVERNOR.release(temp_dir, tokens.pop())
             tokens.append(GOVERNOR.acquire(temp_dir, "dispatch"))
@@ -82,7 +90,7 @@ class GovernorTest(unittest.TestCase):
                     admitted += 1
                 except ValueError:
                     pass
-            self.assertEqual(admitted, 3)
+            self.assertEqual(admitted, 5)
 
     def test_check_does_not_consume_start_budget(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -128,7 +136,7 @@ class GovernorTest(unittest.TestCase):
                 "--class",
                 "dispatch",
                 "--count",
-                "2",
+                "3",
                 "--pid",
                 str(os.getpid()),
             ]
@@ -146,9 +154,9 @@ class GovernorTest(unittest.TestCase):
                 if process.returncode == 0
             ]
             self.assertEqual(len(admitted), 1)
-            self.assertEqual(admitted[0]["count"], 2)
+            self.assertEqual(admitted[0]["count"], 3)
             state = json.loads(Path(temp_dir, "state.json").read_text())
-            self.assertEqual(len(state["reservations"]), 2)
+            self.assertEqual(len(state["reservations"]), 3)
 
     def test_claim_transfers_reserved_capacity_and_cancel_never_releases_it(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -196,7 +204,7 @@ class GovernorTest(unittest.TestCase):
             )
             first = GOVERNOR.reservation_check(temp_dir, tokens[0])
             second = GOVERNOR.reservation_check(temp_dir, tokens[1])
-            self.assertEqual(first["reservation_kind"], "replica-batch")
+            self.assertEqual(first["reservation_kind"], "parallel-batch")
             self.assertEqual(first["batch_declared_size"], 2)
             self.assertEqual(first["batch_admission_count"], 2)
             self.assertEqual(first["batch_manifest_sha256"], digest)
@@ -217,8 +225,8 @@ class GovernorTest(unittest.TestCase):
                 "route_id": "rt-governor",
                 "cwd": temp_dir,
                 "nodes": [
-                    {"id": "plan", "replica_group": "plan"},
-                    {"id": "plan-replica", "replica_group": "plan"},
+                    {"id": "plan", "parallel_group": "plan", "replica_group": "plan"},
+                    {"id": "plan-replica", "parallel_group": "plan", "replica_group": "plan"},
                 ],
             }), encoding="utf-8")
             jobs = Path(temp_dir, "jobs.log")
@@ -230,10 +238,13 @@ class GovernorTest(unittest.TestCase):
                 "fallback_hop=same-harness-headless,harness=codex,child_harness=codex,"
                 "route_id=rt-governor,route_node=plan,parent_attempt_id=att-parent-governor,"
                 "fallback_ordinal=1,attempt_id=att-plan-one,launch_claimed=1,"
-                "reservation_kind=replica-batch,batch_declared_size=2,batch_group=plan,"
+                "parallel_group=plan,replica_group=plan,"
+                "reservation_kind=parallel-batch,batch_declared_size=2,batch_group=plan,"
                 "batch_route_id=rt-governor,batch_parent_attempt_id=att-parent-governor,"
                 "batch_attempt_id=att-plan-one,batch_route_node=plan,batch_harness=codex,"
                 "batch_fallback_hop=same-harness-headless,batch_fallback_ordinal=1,"
+                "batch_model_profile=balanced-deep,batch_perspective=primary-plan,"
+                "batch_parallel_leg_index=0,"
                 "batch_independence=cross-harness,batch_assignment_sha256=sha256:" + "a" * 64 + ","
                 f"batch_manifest_sha256={digest},batch_leg_sha256={legs['att-plan-one']},"
                 f"pid={os.getpid()},pid_start={start},"
@@ -249,12 +260,12 @@ class GovernorTest(unittest.TestCase):
                 {
                     "manifest": manifest,
                     "selected_attempt_ids": ["att-plan-two"],
-                    "peer": {
+                    "peers": [{
                         "agent_home": temp_dir,
                         "attempt_id": "att-plan-one",
                         "jobs": str(jobs),
                         "route": str(route_path),
-                    },
+                    }],
                 },
             )[0]
             receipt = GOVERNOR.reservation_check(temp_dir, token)
@@ -263,24 +274,23 @@ class GovernorTest(unittest.TestCase):
             self.assertEqual(receipt["batch_manifest_sha256"], digest)
             self.assertEqual(receipt["batch_leg_sha256"], legs["att-plan-two"])
             self.assertEqual(receipt["batch_attempt_id"], "att-plan-two")
-            self.assertEqual(receipt["batch_peer_attempt_id"], "att-plan-one")
-            self.assertEqual(receipt["batch_peer_state"], "active")
-            proof = receipt["batch_peer_proof"]
+            self.assertEqual(receipt["batch_peer_count"], 1)
+            proof = receipt["batch_peer_set"][0]
             self.assertEqual(proof["attempt_id"], "att-plan-one")
             self.assertEqual(proof["manifest_sha256"], digest)
             self.assertEqual(proof["state"], "active")
             encoded = json.dumps(
-                proof, separators=(",", ":"), sort_keys=True
+                [proof], separators=(",", ":"), sort_keys=True
             ).encode("utf-8")
             self.assertEqual(
-                receipt["batch_peer_proof_sha256"],
+                receipt["batch_peer_set_sha256"],
                 "sha256:" + __import__("hashlib").sha256(encoded).hexdigest(),
             )
 
     def test_bound_replica_partial_recovery_without_peer_proof_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             manifest, _digest, _legs = self.manifest()
-            with self.assertRaisesRegex(ValueError, "peer proof"):
+            with self.assertRaisesRegex(ValueError, "N-1 peer set"):
                 self.reserve_batch(
                     temp_dir,
                     1,

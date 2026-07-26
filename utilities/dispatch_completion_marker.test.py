@@ -124,7 +124,7 @@ class CompletionMarkerTest(unittest.TestCase):
         }
 
     def wrapper_command(self, harness, action, route_path, route, node_id):
-        wrapper, model = ADAPTERS[harness]
+        wrapper, _ = ADAPTERS[harness]
         node = next(n for n in route["nodes"] if n["id"] == node_id)
         return wrapper + [
             f"--{action}", "--worktree", str(self.repo), "--slug", f"{harness}-{node_id}",
@@ -141,7 +141,9 @@ class CompletionMarkerTest(unittest.TestCase):
             "--registry-digest", route["registry_digest"],
             "--write-scope", ";".join(node["write_scope"]),
             "--unit", node.get("unit", ""),
-        ] + model
+            "--model-role", node["role"],
+            "--model-profile", node["model_profile"],
+        ]
 
     def complete(self, route_path, node_id, evidence_path, jobs=None, attempt_id=None, attempt_axes=None):
         if jobs is None and attempt_id is None:

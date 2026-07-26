@@ -124,11 +124,11 @@ class FallbackTest(unittest.TestCase):
   path=self.route(); first=self.run_chain(path); second=self.run_chain(path)
   def attempt(out): return next(line.split("=",1)[1] for line in out.splitlines() if line.startswith("attempt_id="))
   self.assertEqual(attempt(first.stdout),attempt(second.stdout))
- def test_replica_register_is_rejected_without_creating_a_row(self):
+ def test_parallel_register_is_rejected_without_creating_a_row(self):
   path=self.route(); first=self.run_register(path); second=self.run_register(path)
   self.assertEqual(first.returncode,65,first.stdout+first.stderr)
   self.assertEqual(second.returncode,65,second.stdout+second.stderr)
-  self.assertIn("reason=replica-group-batch-required",first.stdout)
+  self.assertIn("reason=parallel-group-batch-required",first.stdout)
   self.assertEqual(len(self.jobs.read_text().splitlines()),1)
   self.assertIn("att-fallback-parent",self.jobs.read_text())
  def test_registry_prevents_unchanged_same_harness_retry(self):
@@ -140,10 +140,9 @@ class FallbackTest(unittest.TestCase):
   path=self.route(same_status="supported")
   cross="codex/headless/workspace-write/claude/conductor"
   result=self.run_chain(path,"--model-role","not-a-role","--failed-tuple",cross)
-  self.assertEqual(result.returncode,79,result.stdout+result.stderr)
-  self.assertIn("last_direct_failure_exit=64",result.stdout)
-  self.assertIn("last_direct_failure_reason=invalid-dispatch-model-role",result.stdout)
-  self.assertIn("last_direct_failure_detail=codex model-map: unknown role: not-a-role",result.stdout)
+  self.assertEqual(result.returncode,64,result.stdout+result.stderr)
+  self.assertIn("reason=route-model-role-override",result.stdout)
+  self.assertIn("expected=deep maker",result.stdout)
   self.assertNotIn("Traceback",result.stdout+result.stderr)
  def test_legacy_route_is_read_only(self):
   path=self.route(); route=json.loads(path.read_text()); route["broker_contract_version"]=2; route.pop("dispatch_contract_version")

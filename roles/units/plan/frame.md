@@ -22,14 +22,15 @@ you are dispatched, never user-invoked directly.
 Why this stage exists (user directive 2026-07-24): when the direction is set
 implicitly inside plan authoring and it bends early, everything downstream
 executes the wrong direction precisely — the result is hotfix/patch cascades
-and cost blowups. Framing therefore runs as its own stage, replicated 2-way
-cross-harness from `standard` so two independent model families explore the
-direction before anything commits.
+and cost blowups. Framing therefore runs as its own stage in a route-declared
+2-way group at `standard` and 3-way group at `strong+`. Cross-harness placement
+is primary, while asymmetric model profiles and perspectives widen the search
+before anything commits.
 
 ## Independence Contract
 
-- You may be one leg of a 2-way cross-harness replica pair. Work blind: do not
-  look for, read, or converge toward the other leg's shard. Disagreement
+- You may be one leg of a bounded 2–3-way framing group. Work blind: do not
+  look for, read, or converge toward the other legs' shards. Disagreement
   between legs is signal for the plan synthesizer, not an error to reconcile.
 - Like `autopilot-research` retrieval, breadth beats early convergence: sweep
   the problem from more than one angle (symptom evidence, root cause,

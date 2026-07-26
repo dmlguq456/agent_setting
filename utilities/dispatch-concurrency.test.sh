@@ -51,17 +51,24 @@ mkdir -p "$AH/.dispatch"
 printf '2026-07-23T00:00:00Z\topen\t%s\t%s\t%s\tattempt_schema_version=2,dispatch_depth=1,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless,worker_type=owner,harness=claude,runtime_sandbox=fixture,attempt_id=%s,pid=%s,pid_start=%s\n' \
   "$wt" "$wt" "$PARENT" "$parent_attempt" "$parent_pid" "$parent_start" > "$AH/.dispatch/jobs.log"
 i=0
+launch_failures=""
 for r in $roles; do
   i=$((i + 1))
+  launch_log="$tmp/launch-$r.log"
   AGENT_HOME="$AH" AGENT_DISPATCH_JOBS="$AH/.dispatch/jobs.log" \
     AGENT_DISPATCH_ATTEMPT_ID="$parent_attempt" \
     CLAUDE_CONFIG_DIR="$RT" PATH="$bin:$PATH" python3 "$WRAP" --start \
-    --worktree "$wt" --slug "thr-$r" --capability autopilot-code --mode dev --qa thorough \
+    --worktree "$wt" --slug "thr-$r" --capability autopilot-code --capability-mode dev \
+    --worker-mode qa/code-review --unit qa/code-review --qa thorough \
     --intensity thorough --dispatch-depth 2 --parent "$PARENT" --worker-type review \
     --assigned-contract audit --owner autopilot-code \
     --parent-harness claude --parent-transport headless --parent-sandbox fixture \
     --launch-authority conductor --nested-eligibility supported --eligibility-source concurrency-fixture \
-    --model sonnet --effort medium --early-exit-watch 0 >/dev/null 2>&1
+    --model sonnet --effort medium --early-exit-watch 0 >"$launch_log" 2>&1
+  launch_rc=$?
+  if [ "$launch_rc" -ne 0 ]; then
+    launch_failures="${launch_failures}${r}(exit=${launch_rc}):$(tr '\n' ' ' < "$launch_log"); "
+  fi
 done
 kill "$parent_pid" 2>/dev/null || true
 wait "$parent_pid" 2>/dev/null || true
@@ -70,7 +77,7 @@ jobs="$AH/.dispatch/jobs.log"
 # (1) 동시 open row 3개, 동일 parent, distinct slug.
 open_n=$(awk -F'\t' -v p="parent=$PARENT" '$2=="open" && $6 ~ p {print $5}' "$jobs" | sort -u | wc -l)
 [ "$open_n" -eq 3 ] && ok "(1) 3 concurrent open rows, same parent (병렬 분사 성립)" \
-  || bad "(1) expected 3 concurrent open rows, got $open_n"
+  || bad "(1) expected 3 concurrent open rows, got $open_n. launch=[$launch_failures]"
 
 # (2) liveness: 3대 모두 ALIVE.
 live=$(AGENT_HOME="$AH" CLAUDE_CONFIG_DIR="$RT" DISPATCH_RUNTIME_ROOT="$RT" bash "$LIVE" "$jobs" 2>&1 || true)

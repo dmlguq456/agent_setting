@@ -53,11 +53,16 @@ class DispatchV20ConformanceTest(unittest.TestCase):
         return result, output
 
     def wrapper_command(self, adapter, intensity, jobs, logs, *extra):
-        model = {
+        explicit_model = {
             "claude": ["--model", "claude-test", "--effort", "low"],
             "codex": ["--model", "gpt-test", "--reasoning", "low"],
             "opencode": ["--model", "provider/test", "--variant", "low"],
         }[adapter]
+        model = (
+            ["--model-profile", "light"]
+            if "--route-file" in extra
+            else explicit_model
+        )
         return [
             sys.executable,
             str(ROOT / f"adapters/{adapter}/bin/dispatch-headless.py"),
@@ -190,6 +195,7 @@ class DispatchV20ConformanceTest(unittest.TestCase):
                     metadata["execution_surface"], "registered-headless"
                 )
                 self.assertEqual(metadata["registered_worker"], "1")
+                self.assertEqual(metadata["model_profile"], "light")
                 self.assertEqual(
                     metadata["fallback_hop"], "same-harness-headless"
                 )

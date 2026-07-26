@@ -54,6 +54,11 @@ from worker_bootstrap import (  # noqa: E402
     render_worker_bootstrap,
     resolve_worker_type,
 )
+from model_profile import (  # noqa: E402
+    ModelProfileError,
+    resolve_profile,
+    validate_registered_profile,
+)
 INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "adversarial"}
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 # Verification rigor is derived from intensity — CONVENTIONS §1.1 mapping table (SoT).
@@ -185,6 +190,7 @@ def parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--agent", default="build")
     p.add_argument("--model-role", default=os.environ.get("OPENCODE_DISPATCH_MODEL_ROLE"))
+    p.add_argument("--model-profile", default=os.environ.get("OPENCODE_DISPATCH_MODEL_PROFILE"))
     p.add_argument("--model", default=os.environ.get("OPENCODE_DISPATCH_MODEL"))
     p.add_argument("--variant", default=os.environ.get("OPENCODE_DISPATCH_VARIANT"))
     p.add_argument(
@@ -263,13 +269,56 @@ def role_map(role: str) -> dict[str, str]:
 
 
 def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
+    try:
+        validate_registered_profile(
+            args.model_profile,
+            registered_worker=bool(args.registered_worker),
+            dispatch_depth=args.dispatch_depth,
+            worker_type=args.worker_type,
+        )
+    except ModelProfileError as exc:
+        raise ModelSelectionError("invalid-dispatch-model-profile", str(exc)) from exc
     if args.inherit_model_settings:
-        if args.model_role or args.model or args.variant:
+        if args.model_profile or args.model_role or args.model or args.variant:
             raise ModelSelectionError(
                 "invalid-dispatch-model-selection",
-                "--inherit-model-settings is mutually exclusive with --model-role, --model, and --variant",
+                "--inherit-model-settings is mutually exclusive with --model-profile, --model-role, --model, and --variant",
             )
-        return {"source": "inherit", "role": "inherit", "model": "inherit", "variant": "inherit"}
+        return {
+            "source": "inherit", "role": "inherit", "profile": "unsealed",
+            "tier": "inherit", "granularity": "legacy", "model": "inherit", "variant": "inherit",
+        }
+    if args.model_profile:
+        if not args.model_role and args.worker_type != "owner":
+            raise ModelSelectionError(
+                "model-profile-role-required",
+                "route-bound --model-profile requires the independently sealed --model-role",
+            )
+        if bool(args.model) != bool(args.variant):
+            raise ModelSelectionError(
+                "invalid-dispatch-model-selection",
+                "capacity override requires --model and --variant together",
+            )
+        if (args.model or args.variant) and not args.capacity_retry:
+            raise ModelSelectionError(
+                "model-profile-override-forbidden",
+                "a route-sealed model profile may use a concrete override only on a checked capacity retry",
+            )
+        try:
+            resolved = resolve_profile(
+                "opencode", ROOT / "adapters" / "opencode" / "config" / "models.conf", args.model_profile
+            )
+        except ModelProfileError as exc:
+            raise ModelSelectionError("invalid-dispatch-model-profile", str(exc)) from exc
+        return {
+            "source": "profile+capacity" if args.model else "profile",
+            "role": args.model_role or "_kernel/owner",
+            "profile": resolved["profile"],
+            "tier": resolved["tier"],
+            "granularity": resolved["granularity"],
+            "model": args.model or resolved["model"],
+            "variant": args.variant or resolved["budget"],
+        }
     if args.model_role and args.model:
         raise ModelSelectionError(
             "invalid-dispatch-model-selection",
@@ -289,8 +338,14 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
             )
         # 역할 티어 고정 + 상황별 variant 오버라이드 (2026-07-22 사용자 원칙).
         if args.variant:
-            return {"source": "role+effort", "role": args.model_role, "model": model, "variant": args.variant}
-        return {"source": "role", "role": args.model_role, "model": model, "variant": variant}
+            return {
+                "source": "role+effort", "role": args.model_role, "profile": "unsealed",
+                "tier": "legacy", "granularity": "legacy", "model": model, "variant": args.variant,
+            }
+        return {
+            "source": "role", "role": args.model_role, "profile": "unsealed",
+            "tier": "legacy", "granularity": "legacy", "model": model, "variant": variant,
+        }
     if not args.model and not args.variant:
         raise ModelSelectionError(
             "missing-dispatch-model-selection",
@@ -301,7 +356,10 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
             "invalid-dispatch-model-selection",
             "--model and --variant must be provided together",
         )
-    return {"source": "explicit", "role": "-", "model": args.model, "variant": args.variant}
+    return {
+        "source": "explicit", "role": "-", "profile": "unsealed",
+        "tier": "explicit", "granularity": "legacy", "model": args.model, "variant": args.variant,
+    }
 
 
 def resolve_artifact_root(worktree: str) -> str:
@@ -420,6 +478,7 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
         f"- assigned_contract: {args.assigned_contract}\n"
         f"- route_node: {args.route_node or '-'}\n"
         f"- model_role: {getattr(args, 'resolved_model_settings', {}).get('role') or args.model_role or '-'}\n"
+        f"- model_profile: {getattr(args, 'resolved_model_settings', {}).get('profile') or getattr(args, 'model_profile', None) or '-'}\n"
         f"- parent: {args.parent_slug or '-'}\n"
         f"- parent_session_id: {args.parent_session_id or '-'}\n"
         f"- owner: {args.capability_owner or '-'}\n"
@@ -452,12 +511,9 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
         args.agent,
     ]
     if args.resolved_model_settings["source"] != "inherit":
-        cmd += [
-            "--model",
-            args.resolved_model_settings["model"],
-            "--variant",
-            args.resolved_model_settings["variant"],
-        ]
+        cmd += ["--model", args.resolved_model_settings["model"]]
+        if args.resolved_model_settings["variant"] != "runtime-default":
+            cmd += ["--variant", args.resolved_model_settings["variant"]]
     prompt_arg = f'"$(cat -- {shlex.quote(str(prompt_path))})"'
     return " ".join(shlex.quote(x) for x in cmd) + f" {prompt_arg} >> {shlex.quote(str(log_path))} 2>&1"
 
@@ -535,7 +591,12 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         if value:
             pipe += f",{key}={value}"
     settings = args.resolved_model_settings
-    pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},variant={settings['variant']}"
+    pipe += (
+        f",model_source={settings['source']},model_role={settings['role']}"
+        f",model_profile={settings['profile']},model_tier={settings['tier']}"
+        f",profile_granularity={settings['granularity']}"
+        f",model={settings['model']},variant={settings['variant']}"
+    )
     pipe += f",artifact_root={args.artifact_root},log_file={args.log_path}"
     if args.attempt_id:
         pipe += (
@@ -904,7 +965,8 @@ def validate_route_record(args: argparse.Namespace) -> int:
         "--artifact-root",args.artifact_root,"--capability",args.capability,
         "--intensity",args.intensity,"--write-scope",args.write_scope,
         "--route-id",args.route_id,"--route-hash",args.route_hash,
-        "--registry-digest",args.registry_digest,"--unit",args.unit]
+        "--registry-digest",args.registry_digest,"--unit",args.unit,
+        "--model-role",args.model_role or "","--model-profile",args.model_profile or ""]
     if args.attempt_id:
         command += ["--current-attempt", args.attempt_id]
     result=subprocess.run(command,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -1315,6 +1377,9 @@ def main(argv: list[str]) -> int:
     settings = args.resolved_model_settings
     print(f"model_source={settings['source']}")
     print(f"model_role={settings['role']}")
+    print(f"model_profile={settings['profile']}")
+    print(f"model_tier={settings['tier']}")
+    print(f"profile_granularity={settings['granularity']}")
     print(f"model={settings['model']}")
     print(f"variant={settings['variant']}")
     print(f"job_registry={jobs}")

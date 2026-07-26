@@ -204,6 +204,21 @@ class ReplicaCollapseTest(unittest.TestCase):
         self.assertEqual(merged["depends_on"], ["execute"])
         self.assertEqual(collapsed[2]["depends_on"], ["impl-review(2-way)"])
 
+    def test_canonical_parallel_group_collapses_three_asymmetric_legs(self):
+        nodes = [
+            {"id": "frame", "state": "active", "level": 0, "depends_on": [],
+             "parallel_group": "frame", "model_profile": "balanced-deep"},
+            {"id": "frame-alternative", "state": "active", "level": 0, "depends_on": [],
+             "parallel_group": "frame", "model_profile": "light"},
+            {"id": "frame-contrarian", "state": "active", "level": 0, "depends_on": [],
+             "parallel_group": "frame", "model_profile": "deep"},
+            {"id": "plan", "state": "pending", "level": 1,
+             "depends_on": ["frame", "frame-alternative", "frame-contrarian"]},
+        ]
+        collapsed = render._collapse_parallel_nodes(nodes)
+        self.assertEqual([node["id"] for node in collapsed], ["frame(3-way)", "plan"])
+        self.assertEqual(collapsed[1]["depends_on"], ["frame(3-way)"])
+
     def test_collapse_state_is_strictest_of_the_group(self):
         cases = (
             (("failed", "active"), "failed"),

@@ -24,25 +24,23 @@ ATTEMPT_ID=$(printf '%s\n' "$STAGE_OUTPUT" | sed -n 's/^attempt_id=//p' | tail -
 test -n "$ATTEMPT_ID"
 ```
 
-For an exact two-node `replica_group`, replace the two per-node launches with one
-atomic batch call; the command returns both stable attempt IDs in its bounded JSON receipt:
+For a sealed 2–4-node `parallel_group`, replace every member-level launch with one
+atomic batch call; the command returns all stable attempt IDs in its bounded JSON receipt:
 
 ```bash
 BATCH_OUTPUT=$(python3 "$AGENT_HOME/utilities/dispatch-batch.py" \
-  --route "$ROUTE_FILE" --replica-group "$REPLICA_GROUP" --action start \
+  --route "$ROUTE_FILE" --parallel-group "$PARALLEL_GROUP" --action start \
   --slug-prefix "$CONDUCTOR_SLUG" --parent "$CONDUCTOR_SLUG" --qa "$QA" \
   --jobs "$CANONICAL_JOBS" --prompt-text "$STAGE_PROMPT")
 printf '%s\n' "$BATCH_OUTPUT"
 ```
 
-A pair of sequential `dispatch-node.py` or `dispatch-chain` calls is not a
-replica batch, because the two slots and wrapper starts are no longer one transaction.
-Individual replica `register`/`start` calls therefore fail closed. The batch seals
-the complete pair and exact parent attempt into one manifest, binds each opaque
-governor reservation to its route/node/attempt/harness/fallback leg, and copies that
-provenance into the registry row. On an idempotent repeat it consumes no capacity for
-an exact active/completed leg and may reserve only a missing declared peer; a failed
-terminal leg blocks a new peer.
+Sequential `dispatch-node.py` or `dispatch-chain` calls are not a parallel batch:
+admission and wrapper starts would no longer be one transaction. Individual group-member
+`register`/`start` calls therefore fail closed. The batch seals the complete N-way group,
+exact parent generation, profile, perspective, leg index, and required/realized independence
+axes. On an idempotent repeat it consumes no capacity for exact active/completed legs. A
+single missing-leg recovery proves every other N-1 member; any larger partial launch is denied.
 
 Keep `ROUTE_FILE`, `CANONICAL_JOBS`, `NODE_ID`, and the captured `ATTEMPT_ID` together until
 that node's completion transaction succeeds. Never dispatch standard+ with a raw wrapper
@@ -107,40 +105,35 @@ When implementation or reporting requires result plots, experiment-log visualiza
 
 ### Higher-Intensity Perspective Extensions
 
-The enumerated base recipe does not add extra perspective nodes when intensity rises
-from `strong` to `thorough` or `adversarial`; it keeps the same exact `frame`, `plan`,
-and `impl-review` 2-way groups and raises rigor inside the declared nodes. When the
-task actually selects an additional non-replica planner, verifier, security reviewer,
-or adversary, compile it as a compose-on-demand extension with its own disjoint output,
-dependency, completion gate, and dispatch-depth-2 identity. It stays outside every
-`replica_group`; never create an undeclared child or widen an anchor beyond two legs.
+Registry-v5 widens only selected leverage points. `strong` uses a 3-way frame group and
+2-way plan/implementation-review groups. `thorough|adversarial` keep the 3-way frame and
+widen plan plus implementation review to three legs. Their model profiles and perspectives
+are deliberately asymmetric. Any additional security/material/specialist node still needs
+a validated compose-on-demand extension with disjoint output and a completion gate; never
+create an undeclared child or alter a sealed group width.
 
-### Step 0: frame (direction briefs, 2-way from standard)
+### Step 0: frame (2-way at standard, 3-way at strong+)
 
 Skip for direct and quick (orient-lite carries the framing posture inline). Every
-compiled standard+ route opens with the `frame` map-worker pair: `frame` and
-`frame-replica` (`replica_group=frame`, `independence_axis=cross-harness`, unit
-`plan/frame`, completion gate `code-frame`). Framing replicates from `standard` —
+compiled standard+ route opens with `parallel_group=frame`: `frame` and
+`frame-alternative` at standard, plus `frame-contrarian` at strong+. Framing expands from `standard` —
 not `strong` — because the direction decision is the point of maximum downstream
 leverage (user directive 2026-07-24: an early direction error cascades into
 hotfix/patch work and cost blowups).
 
-Dispatch both legs with one checked `utilities/dispatch-batch.py --action start
---replica-group frame` call. The batch resolves `frame` and `frame-replica`
-from the immutable route, atomically reserves both slots, and starts their
-wrappers concurrently; two sequential `dispatch-chain` calls do not satisfy
-this transaction. Place the legs on different harness/model families; prefer
-the GPT/Codex family for the root-cause-leaning
-leg per the root-cause-first routing practice, and when only one harness is
-live, fall back to a same-harness independent session and record the reduced
-independence. The legs work blind to each other and each writes its own
-direction brief (`shards/frame/direction-brief.md`,
-`shards/frame/direction-brief.replica.md`) containing a problem statement,
+Dispatch the group with one checked `utilities/dispatch-batch.py --action start
+--parallel-group frame` call. It atomically reserves every absent first-start leg and
+starts wrappers concurrently. Cross-harness requires at least two harness families across
+the group; `balanced-deep`, `light`, and (at strong+) `deep` profiles plus distinct framing
+perspectives provide asymmetric exploration. A typed same-harness degradation must be
+explicit and recorded. The legs work blind and write separate direction briefs
+(`direction-brief.md`, `direction-brief.alternative.md`, and when selected
+`direction-brief.contrarian.md`) containing a problem statement,
 root-cause/essence evidence, 2–3 direction options with trade-offs, and a
 committed direction verdict with rejected alternatives.
 
 Publish each leg's exact completion from its brief. There is no conductor-level
-merge for framing: `plan` is record-bound to both markers, reads both briefs,
+merge for framing: `plan` is record-bound to every group marker, reads every brief,
 and must record which direction it adopts (and why, when the legs disagree —
 disagreement between briefs is signal, not an error).
 
@@ -167,11 +160,11 @@ sh "$AGENT_HOME/utilities/dispatch-wait.sh" --parent <cycle-slug>
 
 After the typed receipt (or fallback exit 0), read only plan status and paths. A terminal recovery receipt permits checked exact-attempt diagnosis; raw transcript inspection still requires a terminal/closed row or explicit operator recovery. For direct, quick, or unavailable headless runtime, invoke `code-plan` in-session.
 
-At `strong` and above the compiled route also contains `plan-replica`
-(`replica_group=plan`, outputs `plan.replica.md`/`checklist.replica.md`): two
-independent cross-harness planning legs, each reading both direction briefs.
-Dispatch both legs through one `dispatch-batch --replica-group plan` call on
-different harness/model families. Neither leg is "the" plan until Step 2
+At `strong` the compiled route contains `plan` (`deep`) and `plan-alternative`
+(`balanced-deep`). At `thorough|adversarial` it also contains the light
+`plan-implementation-risk` scout. Every leg reads all direction briefs and writes
+its suffix-isolated plan/checklist. Dispatch the sealed group through one
+`dispatch-batch --parallel-group plan` call. No leg is the final plan until Step 2
 arbitrates.
 
 ### Step 2: plan-check and Optional Refinement
@@ -181,10 +174,9 @@ Only durable standard+ graphs use this step. direct has none; quick already comp
 The compiled standard+ route contains the `plan-check` review node unconditionally (default unit `qa/plan-review`, completion gate `code-plan-check`); `execute` is record-bound to its completion marker and cannot start without it. Intensity scales the review's depth and reviewer role/family, never whether the node runs.
 
 At `strong` and above `plan-check` is additionally the plan arbiter: it is
-record-bound to both plan legs, reads `plan.md`/`checklist.md` and
-`plan.replica.md`/`checklist.replica.md`, and its memo names the winning leg
-plus any grafts worth taking from the other. When the replica leg wins or a
-graft is required, materialize the final `plan.md` through the existing bounded
+record-bound to every declared plan leg, reads their suffix-isolated plan/checklist
+artifacts, and its memo names the winning leg plus any grafts worth taking from the
+others. When a non-anchor leg wins or a graft is required, materialize the final `plan.md` through the existing bounded
 `code-refine` path before `execute` — `plan-check` itself stays read-only, and
 `execute` consumes `plan.md` only.
 
@@ -214,16 +206,14 @@ diff, and dev logs, writes `_internal/dev_reviews/phase_review.md`, and stays re
 Publish its exact completion, read only the memo verdict, and route blocking findings
 through the bounded refine/retry path in Step 4 — never an inline hotfix.
 
-At `strong` and above the compiled route additionally contains `impl-review-replica`
-(`replica_group=impl-review`, `independence_axis=cross-harness`, output
-`_internal/dev_reviews/phase_review.replica.md`): the 2-way independent replicate-and-merge
-that is the default from `strong` (CONVENTIONS §3.12). Dispatch both legs through one
-`dispatch-batch --replica-group impl-review` call and place the replica on a different
-harness or model family than the primary leg; when only
-one harness is live, fall back to a same-harness independent session and record the
-reduced independence in the decision record. Merge at verdict level only — the stricter
-verdict wins and blocking findings are unioned — and do not proceed past the
-`code-impl-review` gate until both legs' verdicts are read and the merge is recorded.
+At `strong` the route runs `impl-review` (`balanced-deep`) plus
+`impl-review-alternative` (`light`). At `thorough|adversarial` it adds the deep
+`impl-review-failure-mode` perspective. Dispatch the sealed group through one
+`dispatch-batch --parallel-group impl-review` call. Cross-harness-first placement and the
+profile/perspective axes are independently reported; a same-harness fallback is typed
+degradation, not silent parity. Merge at verdict level only — the stricter verdict wins and
+blocking findings are unioned — and do not proceed past the gate until every selected leg's
+verdict is read and the merge is recorded.
 
 ### Step 4: code-test
 

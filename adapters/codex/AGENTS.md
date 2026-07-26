@@ -76,8 +76,8 @@ tool to claim Codex parity.
 
 ## Dispatch
 
-Route by `core/WORKFLOW.md §0.2`, apply its §0.3 gate, and obtain the §0.4
-five-field approval before material work unless scope and route are already
+Route by `core/WORKFLOW.md §0.2`, apply its §0.3 gate, and present the
+five-field card in §0.4 before material work unless scope and route are already
 approved. Load full capability detail only in the acting owner or worker.
 
 Check `preflight.sh headless [--check] [--require-hook-trust] <worktree>`.
@@ -88,10 +88,10 @@ Launch registered jobs only through `preflight.sh dispatch
 `_kernel/owner` with no worker mode. `worker_role` and legacy `mode` are
 read-only metadata, not bootstrap identity. Monitor with
 `preflight.sh liveness [jobs.log]`; harvest with `preflight.sh harvest`.
-Conductors use `dispatch-chain` to invoke checked same/cross-harness dispatch-depth-2
-adapter wrappers directly. A two-way `replica_group` uses one `dispatch-batch`
-call so both checked wrappers are admitted atomically and launched concurrently;
-do not serialize the two legs through separate `dispatch-chain` calls. Dispatch contract v3 atomically claims one stable
+Conductors use `dispatch-chain` for ordinary checked dispatch-depth-2 nodes. A sealed
+2–4-way `parallel_group` uses one `dispatch-batch --parallel-group` call so all
+absent first-start legs are admitted atomically and launched concurrently; do not
+serialize members through separate `dispatch-chain` calls. Dispatch contract v3 atomically claims one stable
 attempt row before spawn and starts no child for a duplicate claim. A standard+
 Codex dispatch-depth-1 owner receives workspace-write network access for this purpose;
 dispatch-depth-2 workers do not. The retired broker exposes only legacy `status`/`stop`.

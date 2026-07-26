@@ -1017,8 +1017,11 @@ def _session_stage_segs(entity, working, max_width):
     return [(text or "-", "g_work" if text and working else "dim")]
 
 
-def _collapse_replica_nodes(nodes):
-    """Fold replica legs (shared ``replica_group``) into one ``<group>(N-way)`` node.
+def _collapse_parallel_nodes(nodes):
+    """Fold parallel legs into one ``<group>(N-way)`` node.
+
+    ``parallel_group`` is canonical; ``replica_group`` remains a read-only
+    one-window alias for prior route records.
 
     The individual legs already render as their own dispatch rows under the
     conductor (user 2026-07-24: "병렬 leg를 굳이 표현을 안해도 되잖아"), so every
@@ -1028,7 +1031,7 @@ def _collapse_replica_nodes(nodes):
     nodes = list(nodes or ())
     groups = {}
     for node in nodes:
-        group = node.get("replica_group")
+        group = node.get("parallel_group") or node.get("replica_group")
         if isinstance(group, str) and group:
             groups.setdefault(group, []).append(node)
     groups = {gid: members for gid, members in groups.items() if len(members) > 1}
@@ -1070,7 +1073,7 @@ def _collapse_replica_nodes(nodes):
                 merged_id_of[m["id"]] = merged["id"]
     out, emitted = [], set()
     for node in nodes:
-        group = node.get("replica_group")
+        group = node.get("parallel_group") or node.get("replica_group")
         if group in merged_by_group:
             if group not in emitted:
                 emitted.add(group)
@@ -1088,6 +1091,10 @@ def _collapse_replica_nodes(nodes):
     return out
 
 
+# One-window callable compatibility for existing Fleet extensions/tests.
+_collapse_replica_nodes = _collapse_parallel_nodes
+
+
 def _projection_route_seq(entity):
     """Return the attached route's record-order node sequence, if validated."""
     projection = getattr(entity, "work_projection", None)
@@ -1096,7 +1103,7 @@ def _projection_route_seq(entity):
     backing = getattr(projection, "_route_view", None) or {}
     view = backing.get("view") or {}
     return [(node.get("id"), node.get("state"))
-            for node in _collapse_replica_nodes(view.get("nodes") or ())]
+            for node in _collapse_parallel_nodes(view.get("nodes") or ())]
 
 
 def _projection_stage_for_dispatch(entity):
@@ -1445,6 +1452,15 @@ def _dispatch_profile(j):
     profile = getattr(j, "profile", None)
     return _compact_dispatch_name(profile, _PROFILE_MAX) if profile else None
 
+
+def _dispatch_model_profile(j):
+    profile = getattr(j, "model_profile", None)
+    if not profile or profile == "unsealed":
+        return None
+    reduced = getattr(j, "profile_granularity", None) not in {None, "", "full"}
+    label = "mp:" + str(profile) + ("~" if reduced else "")
+    return _compact_dispatch_name(label, _PROFILE_MAX)
+
 def _dispatch_stage_label(j):
     """(label_prefix, is_stage_worker) — the dispatch-depth-2 stage-role label ('exec', 'plan'...) that
     now identifies a dispatch-depth-2 child in the NAME zone (F-15a P0-1: identity lives here, not in a
@@ -1492,7 +1508,9 @@ def _opts_segs(j):
     if role:
         knob_items.append(role)
     knobs = "·".join(knob_items)
-    tail = _dispatch_profile(j)
+    tail = " / ".join(
+        value for value in (_dispatch_model_profile(j), _dispatch_profile(j)) if value
+    ) or None
     unit = getattr(j, "unit", None)
     projected_unit = unit or (
         None if _is_owner_mode_row(j) else getattr(j, "worker_mode", None)
@@ -2398,7 +2416,7 @@ def _projection_stage_detail_rows(entity, depth=0, term_width=None):
         return []
     backing = getattr(projection, "_route_view", None) or {}
     view = backing.get("view") or {}
-    nodes = _collapse_replica_nodes(view.get("nodes") or ())
+    nodes = _collapse_parallel_nodes(view.get("nodes") or ())
     # A fully-complete route needs no detail row on the owning session: the pipeline is
     # done, and a finished (often dead-conductor) route's whole DAG lingering under the
     # live dispatcher session is noise (user 2026-07-24 "stage 설명 여전히 뜨는데 이거

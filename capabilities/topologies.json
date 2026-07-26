@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "intensities": [
     "direct",
     "quick",
@@ -84,7 +84,8 @@
           "apply-log/**"
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 1
+        "max_dispatch_depth": 1,
+        "model_profile": "light"
       },
       "standard_plus": {
         "topology": "staged",
@@ -114,7 +115,8 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "dev/refactor"
+            "unit": "dev/refactor",
+            "model_profile": "light"
           },
           {
             "id": "verify",
@@ -142,7 +144,8 @@
               "native-subagent",
               "inline"
             ],
-            "unit": "qa/code-review"
+            "unit": "qa/code-review",
+            "model_profile": "light"
           },
           {
             "id": "handback",
@@ -168,17 +171,41 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "_kernel/owner"
+            "unit": "_kernel/owner",
+            "model_profile": "balanced-deep"
           }
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replications": [
+        "parallel_groups": [
           {
+            "id": "verify",
             "node": "verify",
+            "kind": "verify",
             "min_intensity": "strong",
-            "ways": 2,
-            "independence_axis": "cross-harness"
+            "width_by_intensity": {
+              "strong": 2,
+              "thorough": 2,
+              "adversarial": 2
+            },
+            "join_policy": "all",
+            "independence_axes": [
+              "cross-harness",
+              "model-profile",
+              "perspective"
+            ],
+            "legs": [
+              {
+                "suffix": "anchor",
+                "perspective": "primary-verify",
+                "model_profile": "light"
+              },
+              {
+                "suffix": "alternative",
+                "perspective": "independent-verify",
+                "model_profile": "balanced-deep"
+              }
+            ]
           }
         ]
       },
@@ -229,7 +256,8 @@
           "plans/<cycle>/**"
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 1
+        "max_dispatch_depth": 1,
+        "model_profile": "light"
       },
       "standard_plus": {
         "topology": "staged",
@@ -259,7 +287,8 @@
               "native-subagent",
               "inline"
             ],
-            "unit": "plan/frame"
+            "unit": "plan/frame",
+            "model_profile": "balanced-deep"
           },
           {
             "id": "plan",
@@ -289,7 +318,8 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "plan/plan-author"
+            "unit": "plan/plan-author",
+            "model_profile": "balanced-deep"
           },
           {
             "id": "plan-check",
@@ -317,7 +347,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "model_profile": "light"
           },
           {
             "id": "execute",
@@ -353,7 +384,8 @@
               "dev/frontend",
               "dev/new-lib",
               "dev/refactor"
-            ]
+            ],
+            "model_profile": "light"
           },
           {
             "id": "impl-review",
@@ -382,7 +414,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "model_profile": "light"
           },
           {
             "id": "test",
@@ -412,7 +445,8 @@
               "native-subagent",
               "inline"
             ],
-            "unit": "qa/test"
+            "unit": "qa/test",
+            "model_profile": "light"
           },
           {
             "id": "report",
@@ -444,29 +478,115 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "editorial/report"
+            "unit": "editorial/report",
+            "model_profile": "light"
           }
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replications": [
+        "parallel_groups": [
           {
+            "id": "frame",
             "node": "frame",
+            "kind": "explore",
             "min_intensity": "standard",
-            "ways": 2,
-            "independence_axis": "cross-harness"
+            "width_by_intensity": {
+              "standard": 2,
+              "strong": 3,
+              "thorough": 3,
+              "adversarial": 3
+            },
+            "join_policy": "all",
+            "independence_axes": [
+              "cross-harness",
+              "model-profile",
+              "perspective"
+            ],
+            "legs": [
+              {
+                "suffix": "anchor",
+                "perspective": "primary-framing",
+                "model_profile": "balanced-deep"
+              },
+              {
+                "suffix": "alternative",
+                "perspective": "cross-harness-alternative",
+                "model_profile": "light"
+              },
+              {
+                "suffix": "contrarian",
+                "perspective": "contrarian-framing",
+                "model_profile": "deep"
+              }
+            ]
           },
           {
+            "id": "plan",
             "node": "plan",
+            "kind": "explore",
             "min_intensity": "strong",
-            "ways": 2,
-            "independence_axis": "cross-harness"
+            "width_by_intensity": {
+              "strong": 2,
+              "thorough": 3,
+              "adversarial": 3
+            },
+            "join_policy": "all",
+            "independence_axes": [
+              "cross-harness",
+              "model-profile",
+              "perspective"
+            ],
+            "legs": [
+              {
+                "suffix": "anchor",
+                "perspective": "primary-plan",
+                "model_profile": "deep"
+              },
+              {
+                "suffix": "alternative",
+                "perspective": "independent-plan",
+                "model_profile": "balanced-deep"
+              },
+              {
+                "suffix": "implementation-risk",
+                "perspective": "implementation-risk-scout",
+                "model_profile": "light"
+              }
+            ]
           },
           {
+            "id": "impl-review",
             "node": "impl-review",
+            "kind": "verify",
             "min_intensity": "strong",
-            "ways": 2,
-            "independence_axis": "cross-harness"
+            "width_by_intensity": {
+              "strong": 2,
+              "thorough": 3,
+              "adversarial": 3
+            },
+            "join_policy": "all",
+            "independence_axes": [
+              "cross-harness",
+              "model-profile",
+              "perspective"
+            ],
+            "legs": [
+              {
+                "suffix": "anchor",
+                "perspective": "primary-code-review",
+                "model_profile": "balanced-deep"
+              },
+              {
+                "suffix": "alternative",
+                "perspective": "independent-code-review",
+                "model_profile": "light"
+              },
+              {
+                "suffix": "failure-mode",
+                "perspective": "failure-mode-review",
+                "model_profile": "deep"
+              }
+            ]
           }
         ]
       },
@@ -518,7 +638,8 @@
           "design-scoped/**"
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 1
+        "max_dispatch_depth": 1,
+        "model_profile": "light"
       },
       "standard_plus": {
         "topology": "staged",
@@ -547,7 +668,8 @@
               "native-subagent",
               "inline"
             ],
-            "unit": "material/web-image-search"
+            "unit": "material/web-image-search",
+            "model_profile": "light"
           },
           {
             "id": "build",
@@ -578,7 +700,8 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "design/maker"
+            "unit": "design/maker",
+            "model_profile": "balanced-deep"
           },
           {
             "id": "visual-verify",
@@ -607,7 +730,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "model_profile": "light"
           },
           {
             "id": "critic-review",
@@ -636,7 +760,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "model_profile": "light"
           },
           {
             "id": "handoff",
@@ -666,23 +791,71 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "editorial/report"
+            "unit": "editorial/report",
+            "model_profile": "light"
           }
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replications": [
+        "parallel_groups": [
           {
+            "id": "refs",
             "node": "refs",
+            "kind": "explore",
             "min_intensity": "standard",
-            "ways": 2,
-            "independence_axis": "cross-harness"
+            "width_by_intensity": {
+              "standard": 2,
+              "strong": 2,
+              "thorough": 2,
+              "adversarial": 2
+            },
+            "join_policy": "all",
+            "independence_axes": [
+              "cross-harness",
+              "model-profile",
+              "perspective"
+            ],
+            "legs": [
+              {
+                "suffix": "anchor",
+                "perspective": "primary-refs",
+                "model_profile": "light"
+              },
+              {
+                "suffix": "alternative",
+                "perspective": "independent-refs",
+                "model_profile": "balanced-deep"
+              }
+            ]
           },
           {
+            "id": "critic-review",
             "node": "critic-review",
+            "kind": "verify",
             "min_intensity": "strong",
-            "ways": 2,
-            "independence_axis": "cross-harness"
+            "width_by_intensity": {
+              "strong": 2,
+              "thorough": 2,
+              "adversarial": 2
+            },
+            "join_policy": "all",
+            "independence_axes": [
+              "cross-harness",
+              "model-profile",
+              "perspective"
+            ],
+            "legs": [
+              {
+                "suffix": "anchor",
+                "perspective": "primary-critic-review",
+                "model_profile": "light"
+              },
+              {
+                "suffix": "alternative",
+                "perspective": "independent-critic-review",
+                "model_profile": "balanced-deep"
+              }
+            ]
           }
         ]
       },
@@ -734,7 +907,8 @@
           "documents/<cycle>/**"
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 1
+        "max_dispatch_depth": 1,
+        "model_profile": "light"
       },
       "standard_plus": {
         "topology": "staged",
@@ -765,7 +939,8 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "research/research-survey"
+            "unit": "research/research-survey",
+            "model_profile": "balanced-deep"
           },
           {
             "id": "strategy-review",
@@ -793,7 +968,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "model_profile": "light"
           },
           {
             "id": "draft-production",
@@ -820,7 +996,8 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "research/research-survey"
+            "unit": "research/research-survey",
+            "model_profile": "balanced-deep"
           },
           {
             "id": "quality-review",
@@ -848,7 +1025,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "model_profile": "light"
           },
           {
             "id": "fact-verify",
@@ -876,7 +1054,8 @@
               "cross-harness-headless",
               "native-subagent",
               "inline"
-            ]
+            ],
+            "model_profile": "light"
           },
           {
             "id": "finalize",
@@ -907,23 +1086,71 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "editorial/report"
+            "unit": "editorial/report",
+            "model_profile": "light"
           }
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replications": [
+        "parallel_groups": [
           {
+            "id": "material-strategy",
             "node": "material-strategy",
+            "kind": "replicate",
             "min_intensity": "standard",
-            "ways": 2,
-            "independence_axis": "cross-harness"
+            "width_by_intensity": {
+              "standard": 2,
+              "strong": 2,
+              "thorough": 2,
+              "adversarial": 2
+            },
+            "join_policy": "all",
+            "independence_axes": [
+              "cross-harness",
+              "model-profile",
+              "perspective"
+            ],
+            "legs": [
+              {
+                "suffix": "anchor",
+                "perspective": "primary-material-strategy",
+                "model_profile": "balanced-deep"
+              },
+              {
+                "suffix": "alternative",
+                "perspective": "independent-material-strategy",
+                "model_profile": "light"
+              }
+            ]
           },
           {
+            "id": "fact-verify",
             "node": "fact-verify",
+            "kind": "verify",
             "min_intensity": "strong",
-            "ways": 2,
-            "independence_axis": "cross-harness"
+            "width_by_intensity": {
+              "strong": 2,
+              "thorough": 2,
+              "adversarial": 2
+            },
+            "join_policy": "all",
+            "independence_axes": [
+              "cross-harness",
+              "model-profile",
+              "perspective"
+            ],
+            "legs": [
+              {
+                "suffix": "anchor",
+                "perspective": "primary-fact-verify",
+                "model_profile": "light"
+              },
+              {
+                "suffix": "alternative",
+                "perspective": "independent-fact-verify",
+                "model_profile": "balanced-deep"
+              }
+            ]
           }
         ]
       },
@@ -976,7 +1203,8 @@
           "experiments/<cycle>/**"
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 1
+        "max_dispatch_depth": 1,
+        "model_profile": "light"
       },
       "standard_plus": {
         "topology": "staged+resource",
@@ -1011,7 +1239,8 @@
               "dev/new-lib",
               "dev/backend",
               "dev/refactor"
-            ]
+            ],
+            "model_profile": "light"
           },
           {
             "id": "smoke",
@@ -1039,7 +1268,8 @@
               "native-subagent",
               "inline"
             ],
-            "unit": "qa/ml-debug"
+            "unit": "qa/ml-debug",
+            "model_profile": "balanced-deep"
           },
           {
             "id": "full-run",
@@ -1069,12 +1299,35 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replications": [
+        "parallel_groups": [
           {
+            "id": "smoke",
             "node": "smoke",
+            "kind": "verify",
             "min_intensity": "strong",
-            "ways": 2,
-            "independence_axis": "cross-harness"
+            "width_by_intensity": {
+              "strong": 2,
+              "thorough": 2,
+              "adversarial": 2
+            },
+            "join_policy": "all",
+            "independence_axes": [
+              "cross-harness",
+              "model-profile",
+              "perspective"
+            ],
+            "legs": [
+              {
+                "suffix": "anchor",
+                "perspective": "primary-smoke",
+                "model_profile": "balanced-deep"
+              },
+              {
+                "suffix": "alternative",
+                "perspective": "independent-smoke",
+                "model_profile": "deep"
+              }
+            ]
           }
         ]
       },
@@ -1123,7 +1376,8 @@
           "experiments/<cycle>/**"
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 1
+        "max_dispatch_depth": 1,
+        "model_profile": "light"
       },
       "standard_plus": {
         "topology": "staged+resource",
@@ -1179,7 +1433,8 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "material/data-script"
+            "unit": "material/data-script",
+            "model_profile": "balanced-deep"
           },
           {
             "id": "media",
@@ -1208,7 +1463,8 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "material/figure-gen"
+            "unit": "material/figure-gen",
+            "model_profile": "balanced-deep"
           },
           {
             "id": "report",
@@ -1238,7 +1494,8 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "editorial/report"
+            "unit": "editorial/report",
+            "model_profile": "light"
           },
           {
             "id": "independent-verify",
@@ -1267,7 +1524,8 @@
               "native-subagent",
               "inline"
             ],
-            "unit": "qa/test"
+            "unit": "qa/test",
+            "model_profile": "light"
           },
           {
             "id": "sync",
@@ -1293,17 +1551,41 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "_kernel/owner"
+            "unit": "_kernel/owner",
+            "model_profile": "balanced-deep"
           }
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replications": [
+        "parallel_groups": [
           {
+            "id": "independent-verify",
             "node": "independent-verify",
+            "kind": "verify",
             "min_intensity": "strong",
-            "ways": 2,
-            "independence_axis": "cross-harness"
+            "width_by_intensity": {
+              "strong": 2,
+              "thorough": 2,
+              "adversarial": 2
+            },
+            "join_policy": "all",
+            "independence_axes": [
+              "cross-harness",
+              "model-profile",
+              "perspective"
+            ],
+            "legs": [
+              {
+                "suffix": "anchor",
+                "perspective": "primary-independent-verify",
+                "model_profile": "light"
+              },
+              {
+                "suffix": "alternative",
+                "perspective": "independent-independent-verify",
+                "model_profile": "balanced-deep"
+              }
+            ]
           }
         ]
       },
@@ -1355,7 +1637,8 @@
           "routing-log/**"
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 1
+        "max_dispatch_depth": 1,
+        "model_profile": "light"
       },
       "standard_plus": {
         "topology": "map-reduce",
@@ -1383,7 +1666,8 @@
               "native-subagent",
               "inline"
             ],
-            "unit": "qa/data-curate"
+            "unit": "qa/data-curate",
+            "model_profile": "light"
           },
           {
             "id": "route-apply",
@@ -1413,7 +1697,8 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "_kernel/owner"
+            "unit": "_kernel/owner",
+            "model_profile": "balanced-deep"
           }
         ],
         "owner_dispatch_depth": 1,
@@ -1458,7 +1743,8 @@
           "_internal/versions/**"
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 1
+        "max_dispatch_depth": 1,
+        "model_profile": "light"
       },
       "standard_plus": {
         "topology": "transactional-owner",
@@ -1492,7 +1778,8 @@
               "editorial/review",
               "research/claim-verify",
               "qa/code-review"
-            ]
+            ],
+            "model_profile": "light"
           },
           {
             "id": "transaction",
@@ -1523,17 +1810,41 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "_kernel/owner"
+            "unit": "_kernel/owner",
+            "model_profile": "balanced-deep"
           }
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replications": [
+        "parallel_groups": [
           {
+            "id": "review",
             "node": "review",
+            "kind": "verify",
             "min_intensity": "strong",
-            "ways": 2,
-            "independence_axis": "cross-harness"
+            "width_by_intensity": {
+              "strong": 2,
+              "thorough": 2,
+              "adversarial": 2
+            },
+            "join_policy": "all",
+            "independence_axes": [
+              "cross-harness",
+              "model-profile",
+              "perspective"
+            ],
+            "legs": [
+              {
+                "suffix": "anchor",
+                "perspective": "primary-review",
+                "model_profile": "light"
+              },
+              {
+                "suffix": "alternative",
+                "perspective": "independent-review",
+                "model_profile": "balanced-deep"
+              }
+            ]
           }
         ]
       },
@@ -1579,7 +1890,8 @@
           "research/<topic>/**"
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 1
+        "max_dispatch_depth": 1,
+        "model_profile": "light"
       },
       "standard_plus": {
         "topology": "map-reduce",
@@ -1608,7 +1920,8 @@
               "native-subagent",
               "inline"
             ],
-            "unit": "research/research-survey"
+            "unit": "research/research-survey",
+            "model_profile": "balanced-deep"
           },
           {
             "id": "synthesis",
@@ -1636,7 +1949,8 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "research/research-survey"
+            "unit": "research/research-survey",
+            "model_profile": "balanced-deep"
           },
           {
             "id": "report",
@@ -1663,7 +1977,8 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "research/research-survey"
+            "unit": "research/research-survey",
+            "model_profile": "balanced-deep"
           },
           {
             "id": "claim-verify",
@@ -1691,23 +2006,71 @@
               "native-subagent",
               "inline"
             ],
-            "unit": "research/claim-verify"
+            "unit": "research/claim-verify",
+            "model_profile": "light"
           }
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replications": [
+        "parallel_groups": [
           {
+            "id": "retrieval",
             "node": "retrieval",
+            "kind": "explore",
             "min_intensity": "standard",
-            "ways": 2,
-            "independence_axis": "cross-harness"
+            "width_by_intensity": {
+              "standard": 2,
+              "strong": 2,
+              "thorough": 2,
+              "adversarial": 2
+            },
+            "join_policy": "all",
+            "independence_axes": [
+              "cross-harness",
+              "model-profile",
+              "perspective"
+            ],
+            "legs": [
+              {
+                "suffix": "anchor",
+                "perspective": "primary-retrieval",
+                "model_profile": "balanced-deep"
+              },
+              {
+                "suffix": "alternative",
+                "perspective": "independent-retrieval",
+                "model_profile": "light"
+              }
+            ]
           },
           {
+            "id": "claim-verify",
             "node": "claim-verify",
+            "kind": "verify",
             "min_intensity": "strong",
-            "ways": 2,
-            "independence_axis": "cross-harness"
+            "width_by_intensity": {
+              "strong": 2,
+              "thorough": 2,
+              "adversarial": 2
+            },
+            "join_policy": "all",
+            "independence_axes": [
+              "cross-harness",
+              "model-profile",
+              "perspective"
+            ],
+            "legs": [
+              {
+                "suffix": "anchor",
+                "perspective": "primary-claim-verify",
+                "model_profile": "light"
+              },
+              {
+                "suffix": "alternative",
+                "perspective": "independent-claim-verify",
+                "model_profile": "balanced-deep"
+              }
+            ]
           }
         ]
       },
@@ -1754,7 +2117,8 @@
           "ship-checklist"
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 1
+        "max_dispatch_depth": 1,
+        "model_profile": "light"
       },
       "standard_plus": {
         "topology": "transactional-owner",
@@ -1784,7 +2148,8 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "_kernel/owner"
+            "unit": "_kernel/owner",
+            "model_profile": "balanced-deep"
           },
           {
             "id": "security-review",
@@ -1812,7 +2177,8 @@
               "native-subagent",
               "inline"
             ],
-            "unit": "qa/security-review"
+            "unit": "qa/security-review",
+            "model_profile": "balanced-deep"
           },
           {
             "id": "release-review",
@@ -1840,17 +2206,41 @@
               "native-subagent",
               "inline"
             ],
-            "unit": "qa/code-review"
+            "unit": "qa/code-review",
+            "model_profile": "light"
           }
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replications": [
+        "parallel_groups": [
           {
+            "id": "release-review",
             "node": "release-review",
+            "kind": "verify",
             "min_intensity": "strong",
-            "ways": 2,
-            "independence_axis": "cross-harness"
+            "width_by_intensity": {
+              "strong": 2,
+              "thorough": 2,
+              "adversarial": 2
+            },
+            "join_policy": "all",
+            "independence_axes": [
+              "cross-harness",
+              "model-profile",
+              "perspective"
+            ],
+            "legs": [
+              {
+                "suffix": "anchor",
+                "perspective": "primary-release-review",
+                "model_profile": "light"
+              },
+              {
+                "suffix": "alternative",
+                "perspective": "independent-release-review",
+                "model_profile": "balanced-deep"
+              }
+            ]
           }
         ]
       },
@@ -1905,7 +2295,8 @@
           "spec/pipeline_summary.md"
         ],
         "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 1
+        "max_dispatch_depth": 1,
+        "model_profile": "light"
       },
       "standard_plus": {
         "topology": "transactional-owner",
@@ -1934,7 +2325,8 @@
               "native-subagent",
               "inline"
             ],
-            "unit": "research/research-survey"
+            "unit": "research/research-survey",
+            "model_profile": "balanced-deep"
           },
           {
             "id": "review",
@@ -1962,7 +2354,8 @@
               "native-subagent",
               "inline"
             ],
-            "unit": "research/plan-review"
+            "unit": "research/plan-review",
+            "model_profile": "balanced-deep"
           },
           {
             "id": "prd-transaction",
@@ -1996,23 +2389,71 @@
               "cross-harness-headless",
               "inline"
             ],
-            "unit": "_kernel/owner"
+            "unit": "_kernel/owner",
+            "model_profile": "balanced-deep"
           }
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 2,
-        "replications": [
+        "parallel_groups": [
           {
+            "id": "research",
             "node": "research",
+            "kind": "explore",
             "min_intensity": "standard",
-            "ways": 2,
-            "independence_axis": "cross-harness"
+            "width_by_intensity": {
+              "standard": 2,
+              "strong": 2,
+              "thorough": 2,
+              "adversarial": 2
+            },
+            "join_policy": "all",
+            "independence_axes": [
+              "cross-harness",
+              "model-profile",
+              "perspective"
+            ],
+            "legs": [
+              {
+                "suffix": "anchor",
+                "perspective": "primary-research",
+                "model_profile": "balanced-deep"
+              },
+              {
+                "suffix": "alternative",
+                "perspective": "independent-research",
+                "model_profile": "light"
+              }
+            ]
           },
           {
+            "id": "review",
             "node": "review",
+            "kind": "verify",
             "min_intensity": "strong",
-            "ways": 2,
-            "independence_axis": "cross-harness"
+            "width_by_intensity": {
+              "strong": 2,
+              "thorough": 2,
+              "adversarial": 2
+            },
+            "join_policy": "all",
+            "independence_axes": [
+              "cross-harness",
+              "model-profile",
+              "perspective"
+            ],
+            "legs": [
+              {
+                "suffix": "anchor",
+                "perspective": "primary-review",
+                "model_profile": "balanced-deep"
+              },
+              {
+                "suffix": "alternative",
+                "perspective": "independent-review",
+                "model_profile": "deep"
+              }
+            ]
           }
         ]
       },
@@ -2256,5 +2697,53 @@
       "kind": "custom",
       "doc": "owner atomic PRD transaction with version snapshot; conductor-owned"
     }
-  }
+  },
+  "model_profiles": {
+    "deep": {
+      "rank": 4,
+      "tier": "deep",
+      "effort": "xhigh",
+      "registered_topology": true
+    },
+    "balanced-deep": {
+      "rank": 3,
+      "tier": "deep",
+      "effort": "medium",
+      "registered_topology": true
+    },
+    "light": {
+      "rank": 2,
+      "tier": "light",
+      "effort": "medium",
+      "registered_topology": true
+    },
+    "mini": {
+      "rank": 1,
+      "tier": "mini",
+      "effort": "medium",
+      "registered_topology": false
+    }
+  },
+  "owner_profile_by_intensity": {
+    "quick": "light",
+    "standard": "balanced-deep",
+    "strong": "deep",
+    "thorough": "deep",
+    "adversarial": "deep"
+  },
+  "parallel_group_kinds": [
+    "replicate",
+    "explore",
+    "adversarial",
+    "verify"
+  ],
+  "parallel_join_policies": [
+    "all"
+  ],
+  "parallel_independence_axes": [
+    "cross-harness",
+    "model-profile",
+    "perspective"
+  ],
+  "parallel_group_max_width": 4
 }

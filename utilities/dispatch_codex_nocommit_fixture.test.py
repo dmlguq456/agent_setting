@@ -117,7 +117,8 @@ class CodexNoCommitFixtureTest(unittest.TestCase):
             "--write-scope", ";".join(node["write_scope"]),
             "--completion-gate", node["completion_gate"],
             "--unit", node.get("unit", ""),
-            "--model", "gpt-test", "--reasoning", "low",
+            "--model-role", node["role"],
+            "--model-profile", node["model_profile"],
             "--jobs", str(self.jobs), "--log-dir", str(self.logs),
         ]
         result = subprocess.run(args, text=True, capture_output=True, env=self.base_env())

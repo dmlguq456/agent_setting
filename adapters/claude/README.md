@@ -85,12 +85,21 @@ The Claude Code adapter maps portable roles from `core/CONVENTIONS.md §2` to co
 | `deep orchestrator` | `opus` xhigh | Stage gates, failover, and evidence judgment for standard+ dispatch-depth-1 ownership |
 | `fast implementer` | `sonnet` | Routine implementation and refactoring; escalate complex API/library design |
 | `orchestrator` | `sonnet` high | Balanced mechanical coordination of decided calls, paths, and states |
-| `external adversary` | Codex CLI via `codex-review-team` | Independent hostile review for the `adversarial` intensity pass. The same Codex engine also runs the neutral cross-harness reviewer used for the `strong`+ replica, but that is a reviewer role (different family), not this hostile role. |
+| `external adversary` | Codex CLI via `codex-review-team` | Independent hostile review for the `adversarial` intensity pass. The same Codex engine may host a neutral cross-harness parallel leg, but that is a reviewer role, not this hostile role. |
 | `external adversary orchestrator` | `sonnet` wrapper | Invoke and summarize the external engine rather than perform the review |
 
-This mapping reproduces the intensity-derived rigor tiers from `CONVENTIONS §1.1`; there is no separate `--qa` axis. Wrappers never choose automatically: main or the orchestrator selects `--model-role` or concrete `--model --effort` for every job. Registered headless inheritance and config-declared interactive-main-only models are rejected before launch; interactive usage/status telemetry remains visible.
+Route-bound registered work uses a second, independent execution-budget axis:
 
-Two `CONVENTIONS §1.1` properties are intensity-independent and this adapter honors them: every review the `품질관리팀` runs carries the refute-by-default adversarial stance (anchored in `CONVENTIONS §1.1` / `roles/MODES.md`; `agent-modes/qa/_review_rules.md` is the single source for the code-review, plan-review, and test modes that load it), and an independent pass replicates across a different harness family: at `strong`+ the riskiest-point reviewer runs cross-harness on the Codex `codex-review-team` family as a 2-way replica/merge (a reviewer role on a different family, not the hostile `external adversary`), while the hostile `external adversary` pass stays reserved for `adversarial`. When Codex is unavailable, fail loudly if the cross-harness pass was explicitly requested; otherwise fall back to a same-family independent reviewer and report the reduced independence.
+| Model profile | Claude realization | Registered topology use |
+|---|---|---|
+| `deep` | `opus` / `xhigh` | strong+ ownership, convergence, and highest-risk legs |
+| `balanced-deep` | `opus` / `medium` | standard ownership and deep-model judgment at lower coordination cost |
+| `light` | `sonnet` / `medium` | quick ownership, routine implementation, verification, reporting, and breadth legs |
+| `mini` | `haiku` / `medium` | lifecycle and micro-semantic helpers only; substantive dispatch-depth-1/2 work is rejected |
+
+The route compiler seals `model_profile`; the wrapper resolves it through `config/models.conf` and may also receive the independently sealed `model_role`. A dispatch-depth-1 `_kernel/owner` is valid with a profile and no stage `worker_mode`. Non-route jobs retain explicit role/concrete-model selection. Registered inheritance and config-declared interactive-main-only models are rejected before launch; `fable` therefore remains available only to the interactive main session, while its usage/status telemetry stays visible.
+
+Two `CONVENTIONS §1.1` properties are intensity-independent and this adapter honors them: every review the `품질관리팀` runs carries the refute-by-default adversarial stance (anchored in `CONVENTIONS §1.1` / `roles/MODES.md`; `agent-modes/qa/_review_rules.md` is the single source for the code-review, plan-review, and test modes that load it), and every declared independent group records its realized independence. Registry-v5 groups launch 2–4 blind dispatch-depth-2 siblings atomically, use at least two harness families when `cross-harness` is required, and add asymmetric model profiles and perspectives to reduce correlated error. The hostile `external adversary` pass stays reserved for `adversarial`. If an explicitly requested cross-harness axis cannot be realized, fail loudly; an auto-selected group may use typed same-family degradation while preserving and reporting profile/perspective diversity.
 
 ## Compatibility
 

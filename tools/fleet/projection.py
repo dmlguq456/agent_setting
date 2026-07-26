@@ -154,6 +154,9 @@ def _record_nodes(record, route_id, jobs, node_evidence=None, now=None):
             unit_choices=tuple(node.get("unit_choices") or ()), gate=node.get("gate"),
             write_scope=node.get("write_scope"), state=node.get("state"),
             progress=node.get("progress"),
+            parallel_group=node.get("parallel_group") or node.get("replica_group"),
+            replica_group=node.get("replica_group"),
+            model_profile=node.get("model_profile"), perspective=node.get("perspective"),
         ))
     return tuple(projections), view.get("progress")
 
@@ -165,7 +168,8 @@ def _active_stage_label(active_nodes):
     represents the whole active route level.  Keeping this derivation here makes
     the owner projection independent of collector/job iteration order.
 
-    Replica legs (shared ``replica_group``) collapse into one ``<group>(N-way)``
+    Parallel legs (shared ``parallel_group``; legacy ``replica_group`` alias)
+    collapse into one ``<group>(N-way)``
     label — the individual legs already surface as their own dispatch rows
     (user 2026-07-24), so the owner label names the group once.
     """
@@ -174,7 +178,7 @@ def _active_stage_label(active_nodes):
     for node in active_nodes:
         if not node.id:
             continue
-        group = getattr(node, "replica_group", None)
+        group = getattr(node, "parallel_group", None) or getattr(node, "replica_group", None)
         if not group:
             ids.append(node.id)
             continue
@@ -182,7 +186,7 @@ def _active_stage_label(active_nodes):
             continue
         seen_groups.add(group)
         members = [n for n in active_nodes
-                   if getattr(n, "replica_group", None) == group and n.id]
+                   if (getattr(n, "parallel_group", None) or getattr(n, "replica_group", None)) == group and n.id]
         ids.append("%s(%d-way)" % (group, len(members)) if len(members) > 1
                    else node.id)
     if not ids:
@@ -233,7 +237,9 @@ def _projection_from_record(entity, record, route_id, jobs, node_evidence=None, 
         level=node.get("level"), unit=node.get("unit"),
         unit_choices=tuple(node.get("unit_choices") or ()), gate=node.get("gate"),
         write_scope=node.get("write_scope"), state=node.get("state"), progress=None,
+        parallel_group=node.get("parallel_group") or node.get("replica_group"),
         replica_group=node.get("replica_group"),
+        model_profile=node.get("model_profile"), perspective=node.get("perspective"),
     ) for node in nodes)
     selected = next((node for node in projections if node.id == route_node), None)
     contract = _field(entity, "assigned_contract")

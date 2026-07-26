@@ -129,16 +129,23 @@ main/orchestrator chooses per job and the wrapper only reflects that choice:
   the parent. This extra
   settings object applies only to the spawned command and never edits the user's
   Claude settings.
-- The headless wrapper does not choose a default model. The main/orchestrator
-  selects `--model-role <portable-role>` or `--model <model> --effort <level>`
-  per job; that is where simple jobs are downshifted and complex jobs are
-  escalated. Headless inheritance is rejected because it cannot prove that an
-  interactive-main-only model will not leak into a registered worker.
+- A route-bound headless job carries a sealed `model_profile` independently of
+  its behavioral `model_role`. The wrapper resolves `deep`, `balanced-deep`,
+  `light`, or `mini` through `config/models.conf`; it rejects caller replacement
+  with a trailing concrete model/effort and rejects `mini` for substantive
+  registered dispatch-depth-1/2 work. A `_kernel/owner` may therefore be profile-only and
+  never needs a stage `worker_mode`. Non-route jobs retain explicit role or
+  concrete-model selection. Headless inheritance is rejected because it cannot
+  prove that interactive-main-only `fable` will not leak into a worker.
 - Dispatch prompts and jobs.log rows must spell out capability, mode, QA,
-  intensity, depth, parent slug/session, worker role, owner capability, and owner
-  harness. Cross-harness launches from Codex pass `CODEX_THREAD_ID` through
-  `parent_sid`, so fleet can render the Claude worker under the Codex orchestrator
-  instead of as an orphan.
+  intensity, depth, parent slug/session, worker type, model role/profile,
+  profile tier/granularity, owner capability, and owner harness. Route-declared
+  parallel groups are bounded 2–4-way atomic batches with sealed perspective and
+  leg indexes; cross-harness means at least two realized harness families, with
+  typed reduced-independence reporting when auto-selected fallback is allowed.
+  Cross-harness launches from Codex pass `CODEX_THREAD_ID` through `parent_sid`,
+  so fleet can render the Claude worker under the Codex orchestrator instead of
+  as an orphan.
 - `utilities/dispatch-liveness.sh` first inspects the exact wrapper JSONL for a
   final Claude `result` envelope, then uses process identity and legacy Claude
   session transcript mtimes as lower-precedence liveness evidence.

@@ -41,11 +41,18 @@ def candidate(adapter: str, hop: str, ordinal: int) -> dict[str, object]:
 
 
 def replica_node(node_id: str, affinity: str = "unspecified") -> dict[str, object]:
+    index = 0 if node_id == "plan" else 1
     return {
         "id": node_id,
         "dispatch_depth": 2,
         "depends_on": ["frame", "frame-replica"],
         "replica_group": "plan",
+        "parallel_group": "plan",
+        "parallel_leg_index": index,
+        "parallel_leg_count": 2,
+        "parallel_independence_axes": ["cross-harness", "model-profile", "perspective"],
+        "model_profile": "balanced-deep" if index == 0 else "light",
+        "perspective": "primary-plan" if index == 0 else "independent-plan",
         "harness_affinity": affinity,
         "fallback_hops": [
             candidate("codex", "same-harness-headless", 1),
@@ -132,6 +139,9 @@ class DispatchBatchTest(unittest.TestCase):
                     BATCH.DEFAULT_PROMPT.encode("utf-8")
                 ).hexdigest(),
                 "independence": "cross-harness",
+                "model_profile": str(node["model_profile"]),
+                "perspective": str(node["perspective"]),
+                "parallel_leg_index": int(node["parallel_leg_index"]),
             })
         return legs
 
@@ -152,7 +162,12 @@ class DispatchBatchTest(unittest.TestCase):
                 "harness": str(item["adapter"]),
                 "fallback_hop": str(item["hop"]),
                 "fallback_ordinal": int(item["ordinal"]),
+                "model_profile": str(item["model_profile"]),
+                "perspective": str(item["perspective"]),
+                "parallel_leg_index": int(item["parallel_leg_index"]),
             } for item in all_legs],
+            required_independence_axes=["cross-harness", "model-profile", "perspective"],
+            realized_independence_axes=["cross-harness", "model-profile", "perspective"],
         )
         metadata = (
             "attempt_schema_version=2,dispatch_depth=2,transport=headless,"
@@ -162,8 +177,8 @@ class DispatchBatchTest(unittest.TestCase):
             f"route_node={leg['node']},parent=owner,"
             "parent_attempt_id=att-parent-fixture,launch_authority=conductor,"
             f"fallback_ordinal={leg['ordinal']},attempt_id={leg['attempt_id']},"
-            f"launch_claimed={claimed},launch_fence=registry-v1,replica_group=plan,"
-            "reservation_kind=replica-batch,batch_declared_size=2,"
+            f"launch_claimed={claimed},launch_fence=registry-v1,parallel_group=plan,replica_group=plan,"
+            "reservation_kind=parallel-batch,batch_declared_size=2,"
             "batch_admission_count=2,"
             f"batch_group=plan,batch_route_id={self.route['route_id']},"
             "batch_parent_attempt_id=att-parent-fixture,"
@@ -171,6 +186,9 @@ class DispatchBatchTest(unittest.TestCase):
             f"batch_harness={leg['adapter']},batch_fallback_hop={leg['hop']},"
             f"batch_fallback_ordinal={leg['ordinal']},"
             "batch_independence=cross-harness,"
+            f"batch_model_profile={leg['model_profile']},"
+            f"batch_perspective={leg['perspective']},"
+            f"batch_parallel_leg_index={leg['parallel_leg_index']},"
             f"batch_assignment_sha256={leg['assignment_sha256']},"
             f"batch_manifest_sha256={manifest_digest},"
             f"batch_leg_sha256={leg_digests[str(leg['attempt_id'])]}"
@@ -213,20 +231,20 @@ class DispatchBatchTest(unittest.TestCase):
         )
         self.assertEqual(first, second)
 
-    def test_group_requires_exactly_two_depth_two_nodes_with_same_dependencies(self):
+    def test_group_requires_two_to_four_depth_two_nodes_with_same_dependencies(self):
         self.assertEqual(
             [node["id"] for node in BATCH.replica_nodes(self.route, "plan")],
             ["plan", "plan-replica"],
         )
         for mutation, reason in (
-            (lambda route: route["nodes"].pop(), "replica-group-cardinality"),
+            (lambda route: route["nodes"].pop(), "parallel-group-cardinality"),
             (
                 lambda route: route["nodes"][1].update(dispatch_depth=1),
-                "replica-group-depth-invalid",
+                "parallel-group-depth-invalid",
             ),
             (
                 lambda route: route["nodes"][1].update(depends_on=["other"]),
-                "replica-group-dependency-mismatch",
+                "parallel-group-dependency-mismatch",
             ),
         ):
             altered = json.loads(json.dumps(self.route))
@@ -388,7 +406,7 @@ class DispatchBatchTest(unittest.TestCase):
         self.assertEqual(receipt["state"], "partial-failure")
         self.assertEqual(receipt["admitted"], 2)
         self.assertEqual(receipt["legs"][0]["child_spawned"], "1")
-        self.assertEqual(receipt["legs"][1]["reason"], "replica-wrapper-spawn-failed")
+        self.assertEqual(receipt["legs"][1]["reason"], "parallel-wrapper-spawn-failed")
 
     def test_slug_truncation_preserves_distinct_node_identity(self):
         prefix = "x" * 300
@@ -683,7 +701,12 @@ class DispatchBatchTest(unittest.TestCase):
                 "harness": str(leg["adapter"]),
                 "fallback_hop": str(leg["hop"]),
                 "fallback_ordinal": int(leg["ordinal"]),
+                "model_profile": str(leg["model_profile"]),
+                "perspective": str(leg["perspective"]),
+                "parallel_leg_index": int(leg["parallel_leg_index"]),
             } for leg in self.legs()],
+            required_independence_axes=["cross-harness", "model-profile", "perspective"],
+            realized_independence_axes=["cross-harness", "model-profile", "perspective"],
         )
         self.assertEqual(manifest["replica_group"], "plan")
         result = BATCH.existing_leg_result(
@@ -693,7 +716,8 @@ class DispatchBatchTest(unittest.TestCase):
             repo=str(self.base),
             parent="owner",
             parent_attempt_id="att-parent-fixture",
-            replica_group="plan",
+            parallel_group="plan",
+            declared_size=2,
             manifest_digest=manifest_digest,
             leg_digest=leg_digests[str(first["attempt_id"])],
             agent_home=self.base,
@@ -752,7 +776,7 @@ class DispatchBatchTest(unittest.TestCase):
         receipt = json.loads(output.getvalue())
         self.assertEqual(len(receipt["legs"]), 2)
         self.assertTrue(any(
-            leg["reason"] == "replica-wrapper-collect-failed:RuntimeError"
+            leg["reason"] == "parallel-wrapper-collect-failed:RuntimeError"
             for leg in receipt["legs"]
         ))
 
@@ -895,14 +919,14 @@ class DispatchBatchIntegrationTest(unittest.TestCase):
             route = json.loads(route_path.read_text(encoding="utf-8"))
             frame_nodes = {
                 node["id"] for node in route["nodes"]
-                if node.get("replica_group") == "frame"
+                if (node.get("parallel_group") or node.get("replica_group")) == "frame"
             }
             plan_nodes = {
                 node["id"] for node in route["nodes"]
-                if node.get("replica_group") == "plan"
+                if (node.get("parallel_group") or node.get("replica_group")) == "plan"
             }
-            self.assertEqual(frame_nodes, {"frame", "frame-replica"})
-            self.assertEqual(plan_nodes, {"plan", "plan-replica"})
+            self.assertEqual(frame_nodes, {"frame", "frame-alternative", "frame-contrarian"})
+            self.assertEqual(plan_nodes, {"plan", "plan-alternative"})
 
             agent_home = base / "agent-home"
             agent_home.mkdir()
@@ -979,7 +1003,7 @@ class DispatchBatchIntegrationTest(unittest.TestCase):
                 return subprocess.Popen(
                     [
                         sys.executable, str(PATH), "--route", str(route_path),
-                        "--replica-group", group, "--action", "start",
+                        "--parallel-group", group, "--action", "start",
                         "--slug-prefix", f"integration-{group}", "--parent", "owner",
                         "--qa", "standard", "--jobs", str(jobs),
                         "--log-dir", str(base / "logs"),
@@ -1002,7 +1026,7 @@ class DispatchBatchIntegrationTest(unittest.TestCase):
                     if sum(
                         row.get("event") == "start" and row.get("node") in frame_nodes
                         for row in events
-                    ) == 2:
+                    ) == len(frame_nodes):
                         break
                     if process.poll() is not None:
                         break
@@ -1011,10 +1035,10 @@ class DispatchBatchIntegrationTest(unittest.TestCase):
                     row for row in self._events(events_path)
                     if row.get("event") == "start" and row.get("node") in frame_nodes
                 ]
-                if len(starts) != 2 and process.poll() is not None:
+                if len(starts) != len(frame_nodes) and process.poll() is not None:
                     stdout, stderr = process.communicate(timeout=5)
                 self.assertEqual(
-                    len(starts), 2,
+                    len(starts), len(frame_nodes),
                     f"batch exited={process.poll()} stdout={stdout} stderr={stderr} "
                     f"jobs={jobs.read_text(encoding='utf-8')}",
                 )
@@ -1042,7 +1066,7 @@ class DispatchBatchIntegrationTest(unittest.TestCase):
                     and job.route_node in frame_nodes
                 ]
                 self.assertEqual(
-                    len(visible), 2,
+                    len(visible), len(frame_nodes),
                     [(job.slug, job.route_node, job.liveness) for job in fleet_jobs],
                 )
                 self.assertEqual({job.harness for job in visible}, {"codex", "claude"})
@@ -1051,7 +1075,7 @@ class DispatchBatchIntegrationTest(unittest.TestCase):
                 self.assertTrue(all(job.attempt_contract_status == "current" for job in visible))
                 self.assertTrue(all(job.liveness == "working" for job in visible))
                 route_rows = [job for job in fleet_jobs if job.route_id == route["route_id"]]
-                self.assertEqual(len(route_rows), 2)
+                self.assertEqual(len(route_rows), len(frame_nodes))
                 self.assertTrue(all(job.parent_slug == "owner" for job in route_rows))
 
                 stdout, stderr = process.communicate(timeout=25)
@@ -1069,7 +1093,7 @@ class DispatchBatchIntegrationTest(unittest.TestCase):
             self.assertEqual(receipt["state"], "launched")
             self.assertEqual(receipt["independence"], "cross-harness")
             self.assertEqual(receipt["concurrent_launch"], 1)
-            self.assertEqual((receipt["admitted"], receipt["newly_started"]), (2, 2))
+            self.assertEqual((receipt["admitted"], receipt["newly_started"]), (3, 3))
             self.assertEqual({leg["adapter"] for leg in receipt["legs"]}, {"codex", "claude"})
 
             for leg in receipt["legs"]:
@@ -1135,7 +1159,7 @@ class DispatchBatchIntegrationTest(unittest.TestCase):
                     metadata = BATCH.parse_registry_metadata(fields[5])
                     if metadata.get("route_id") == route["route_id"]:
                         registered.append((fields[1], fields[4], metadata))
-                self.assertEqual(len(registered), 4)
+                self.assertEqual(len(registered), len(frame_nodes | plan_nodes))
                 self.assertEqual(
                     {metadata["route_node"] for _status, _slug, metadata in registered},
                     frame_nodes | plan_nodes,
@@ -1174,8 +1198,8 @@ class DispatchBatchIntegrationTest(unittest.TestCase):
                     row for row in events
                     if row.get("event") == "end" and row.get("node") in nodes
                 ]
-                self.assertEqual(len(starts_for_group), 2)
-                self.assertEqual(len(ends_for_group), 2)
+                self.assertEqual(len(starts_for_group), len(nodes))
+                self.assertEqual(len(ends_for_group), len(nodes))
                 self.assertEqual(
                     {row["harness"] for row in starts_for_group}, {"codex", "claude"}
                 )

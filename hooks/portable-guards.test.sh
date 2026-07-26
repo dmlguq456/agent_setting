@@ -709,7 +709,7 @@ if "$CODEX" headless >/tmp/codex_headless.out 2>/tmp/codex_headless.err \
   && grep -q '^runtime_projection_requires=agent-harness,AGENTS.md,hooks.json,native-skills,native-agents,native-modes$' /tmp/codex_headless.out \
   && grep -q '^runtime_projection_strict_requires=complete-codex-hook-trust$' /tmp/codex_headless.out \
   && grep -q '^model_selection_policy=main-orchestrator-must-select-per-job$' /tmp/codex_headless.out \
-  && grep -q '^model_selection_surface=--model-role <portable-role>|--model <model> --reasoning <effort>|--inherit-model-settings$' /tmp/codex_headless.out \
+  && grep -q '^model_selection_surface=--model-profile <deep|balanced-deep|light|mini> \[--model-role <portable-role>\]|--model-role <portable-role>|--model <model> --reasoning <effort>|--inherit-model-settings$' /tmp/codex_headless.out \
   && grep -q '^claude_headless=unsupported$' /tmp/codex_headless.out \
   && grep -q '^liveness_surface=codex-session-jsonl-mtime$' /tmp/codex_headless.out \
   && grep -q '^liveness_check=adapters/codex/bin/preflight.sh liveness \[jobs.log\]$' /tmp/codex_headless.out \
@@ -3002,7 +3002,7 @@ if "$OPENCODE" headless >/tmp/opencode_headless.out 2>/tmp/opencode_headless.err
   && grep -q '^runtime_surface=opencode-run-headless$' /tmp/opencode_headless.out \
   && grep -q '^tool_contract=headless-dispatch$' /tmp/opencode_headless.out \
   && grep -q '^model_selection_policy=main-orchestrator-must-select-per-job$' /tmp/opencode_headless.out \
-  && grep -q '^model_selection_surface=--model-role <portable-role>|--model <model> --variant <variant>|--inherit-model-settings$' /tmp/opencode_headless.out \
+  && grep -q '^model_selection_surface=--model-profile <deep|balanced-deep|light|mini> \[--model-role <portable-role>\]|--model-role <portable-role>|--model <model> --variant <variant>|--inherit-model-settings$' /tmp/opencode_headless.out \
   && grep -q '^claude_headless=unsupported$' /tmp/opencode_headless.out \
   && grep -q '^liveness_surface=opencode-sqlite-session-mtime+plugin-heartbeat$' /tmp/opencode_headless.out \
   && grep -q '^liveness_heartbeat=<agent-home>/.dispatch/logs/<slug>.heartbeat$' /tmp/opencode_headless.out \

@@ -65,8 +65,8 @@ partial. OpenCode native UI/config owns model and context fields.
 
 ## Dispatch
 
-Route by `core/WORKFLOW.md §0.2`, apply its §0.3 gate, and obtain the §0.4
-five-field approval before material work unless scope and route are already
+Route by `core/WORKFLOW.md §0.2`, apply its §0.3 gate, and present the
+five-field card in §0.4 before material work unless scope and route are already
 approved. Load full capability detail only in the acting owner or worker.
 
 Check `preflight.sh headless [--check] <worktree>`. Launch only registered jobs
@@ -76,9 +76,9 @@ tuple in `core/OPERATIONS.md`. Keep `capability_mode` separate from a non-owner
 `_kernel/owner` with no worker mode. `worker_role` and legacy `mode` are
 read-only metadata, not bootstrap identity. Monitor
 `preflight.sh liveness [jobs.log]`; harvest via `preflight.sh harvest`.
-Conductors use `dispatch-chain` to invoke checked same/cross-harness dispatch-depth-2
-adapter wrappers directly. A two-way `replica_group` uses one `dispatch-batch`
-call; OpenCode remains ineligible for that registered standard+ dispatch-depth-2 path
+Conductors use `dispatch-chain` for ordinary checked dispatch-depth-2 nodes. A sealed
+2–4-way `parallel_group` uses one `dispatch-batch --parallel-group` call;
+OpenCode remains ineligible for that registered standard+ dispatch-depth-2 path
 until exact parent, foreground lifecycle, and supervisor parity are verified.
 Dispatch contract v3 atomically claims one stable
 attempt row before spawn and starts no child for a duplicate claim. Broker v1/v2

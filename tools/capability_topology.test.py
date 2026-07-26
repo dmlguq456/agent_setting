@@ -93,52 +93,60 @@ class TestTopology(unittest.TestCase):
                     T._validate_unit_ref({"capability":"t"},node,self.r)
             finally:
                 T.UNITS=old; T._UNIT_CACHE.clear()
-    def test_replication_anchor_declarations(self):
+    def test_parallel_group_declarations(self):
         code=next(x for x in self.r["recipes"] if x["capability"]=="autopilot-code")
-        self.assertEqual(code["standard_plus"]["replications"],[
-            {"node":"frame","min_intensity":"standard","ways":2,"independence_axis":"cross-harness"},
-            {"node":"plan","min_intensity":"strong","ways":2,"independence_axis":"cross-harness"},
-            {"node":"impl-review","min_intensity":"strong","ways":2,"independence_axis":"cross-harness"}])
+        groups=code["standard_plus"]["parallel_groups"]
+        self.assertEqual([g["id"] for g in groups],["frame","plan","impl-review"])
+        self.assertEqual(groups[0]["width_by_intensity"],{
+            "standard":2,"strong":3,"thorough":3,"adversarial":3})
+        self.assertEqual(groups[1]["width_by_intensity"],{
+            "strong":2,"thorough":3,"adversarial":3})
+        self.assertEqual(groups[2]["width_by_intensity"],{
+            "strong":2,"thorough":3,"adversarial":3})
+        for group in groups:
+            self.assertEqual(group["join_policy"],"all")
+            self.assertEqual(group["independence_axes"],["cross-harness","model-profile","perspective"])
+            self.assertEqual(group["legs"][0]["suffix"],"anchor")
         # Framing anchors (2-way from standard) exist exactly on the generative
         # recipes whose direction is set in-pipeline; prescriptive/bounded
         # recipes keep review-only strong anchors (user directive 2026-07-24).
         framing={"autopilot-code":"frame","autopilot-spec":"research","autopilot-draft":"material-strategy",
                  "autopilot-design":"refs","autopilot-research":"retrieval"}
         for recipe in self.r["recipes"]:
-            anchors=recipe["standard_plus"].get("replications",[])
+            anchors=recipe["standard_plus"].get("parallel_groups",[])
             standard_anchors=[a["node"] for a in anchors if a["min_intensity"]=="standard"]
             expected=framing.get(recipe["capability"])
             with self.subTest(capability=recipe["capability"],modes=recipe["modes"]):
-                self.assertNotIn("replication",recipe["standard_plus"])
+                self.assertNotIn("replications",recipe["standard_plus"])
                 self.assertEqual(standard_anchors,[expected] if expected else [])
         note=next(x for x in self.r["recipes"] if x["capability"]=="autopilot-note")
-        self.assertNotIn("replications",note["standard_plus"])
-    def test_replication_validation_fails_closed(self):
+        self.assertEqual(note["standard_plus"].get("parallel_groups",[]),[])
+    def test_parallel_group_validation_fails_closed(self):
         def broken(mutate,capability="autopilot-code"):
             r=copy.deepcopy(self.r)
             recipe=next(x for x in r["recipes"] if x["capability"]==capability)
             mutate(recipe["standard_plus"])
             return r
-        def legacy_singular(g): g["replication"]=g.pop("replications")[2]
+        def legacy_singular(g): g["replication"]=g.pop("parallel_groups")[2]
         code_cases={
-            "under 'replications'": legacy_singular,
-            "non-empty list": lambda g: g.update(replications=[]),
-            "require exactly": lambda g: g["replications"][2].update(extra=True),
-            "duplicate replication anchor": lambda g: g["replications"].append(dict(g["replications"][0])),
-            "not in graph": lambda g: g["replications"][2].update(node="missing-node"),
-            "requires a downstream consumer": lambda g: g["replications"][2].update(node="report"),
-            "requires a direct review-worker arbiter": lambda g: g["replications"][2].update(node="test"),
-            "standard\\+ tier": lambda g: g["replications"][2].update(min_intensity="quick"),
-            "ways must be 2": lambda g: g["replications"][2].update(ways=3),
-            "independence_axis must be cross-harness":
-                lambda g: g["replications"][2].update(independence_axis="same-harness"),
+            "legacy replication keys": legacy_singular,
+            "non-empty list": lambda g: g.update(parallel_groups=[]),
+            "require exactly": lambda g: g["parallel_groups"][2].update(extra=True),
+            "duplicate parallel group/anchor": lambda g: g["parallel_groups"].append(dict(g["parallel_groups"][0])),
+            "not in graph": lambda g: g["parallel_groups"][2].update(node="missing-node"),
+            "requires a downstream consumer": lambda g: g["parallel_groups"][0].update(node="report"),
+            "requires a direct review arbiter": lambda g: g["parallel_groups"][0].update(node="test"),
+            "standard\\+ tier": lambda g: g["parallel_groups"][2].update(min_intensity="quick"),
+            "widths must be monotonic integers": lambda g: g["parallel_groups"][2]["width_by_intensity"].update(strong=5),
+            "cross-harness axis required":
+                lambda g: g["parallel_groups"][2].update(independence_axes=["model-profile","perspective"]),
         }
         for pattern,mutate in code_cases.items():
             with self.subTest(pattern=pattern):
                 self.assertRaisesRegex(T.TopologyError,pattern,T.validate_registry,broken(mutate))
-        # kind vocabulary: a capability-owner node can never anchor a replica pair
-        r=broken(lambda g: g["replications"][0].update(node="handback"),capability="autopilot-apply")
-        self.assertRaisesRegex(T.TopologyError,"review-worker, map-worker, or pipeline-stage",
+        # kind vocabulary: a capability-owner node can never anchor a parallel group
+        r=broken(lambda g: g["parallel_groups"][0].update(node="handback"),capability="autopilot-apply")
+        self.assertRaisesRegex(T.TopologyError,"review, map, or pipeline worker",
             T.validate_registry,r)
         # anchor output shape: concrete files for stage anchors, '<dir>/**' only for map anchors
         r=broken(lambda g: next(n for n in g["nodes"] if n["id"]=="plan").update(outputs=["plan/**"]))
@@ -146,6 +154,10 @@ class TestTopology(unittest.TestCase):
         r=broken(lambda g: next(n for n in g["nodes"] if n["id"]=="research").update(
             outputs=["shards/spec-*/**"]),capability="autopilot-spec")
         self.assertRaisesRegex(T.TopologyError,"concrete",T.validate_registry,r)
+    def test_registered_nodes_reject_mini_profile(self):
+        r=copy.deepcopy(self.r)
+        r["recipes"][0]["standard_plus"]["nodes"][0]["model_profile"]="mini"
+        self.assertRaisesRegex(T.TopologyError,"mini/unregistered",T.validate_registry,r)
     def test_gate_contract_missing_entry(self):
         r=copy.deepcopy(self.r); del r["completion_gate_contracts"]["apply-hash"]
         self.assertRaisesRegex(T.TopologyError,"completion_gate_contracts entry",T.validate_registry,r)

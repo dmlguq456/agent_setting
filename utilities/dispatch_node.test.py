@@ -41,6 +41,7 @@ def make_node(depth=2, dispatch_fallback=None):
         "id": "execute",
         "kind": "pipeline-stage",
         "role": "fast implementer",
+        "model_profile": "light",
         "unit": "dev/backend",
         "dispatch_depth": depth,
         "write_scope": ["source/**"],
@@ -252,19 +253,20 @@ class MainMaterializationTest(unittest.TestCase):
                     pass
         return captured.get("argv")
 
-    def test_depth1_materialization_emits_no_evidence_and_preserves_adapter_args(self):
+    def test_depth1_materialization_emits_no_evidence_and_preserves_safe_adapter_args(self):
         node = make_node(depth=1, dispatch_fallback=[])
         route = make_route(node, tuples=[])
         argv = self._run_main(
-            ["--node", "execute", "--adapter", "claude", "--slug", "s1", "--", "--model", "test-model"],
+            ["--node", "execute", "--adapter", "claude", "--slug", "s1", "--", "--log-dir", "/tmp/logs"],
             route,
         )
         self.assertIsNotNone(argv)
         for flag in N.EVIDENCE_FLAG_MAP.values():
             self.assertNotIn(flag, argv)
         self.assertNotIn(N.FAILURE_CLASS_FLAG, argv)
-        self.assertIn("--model", argv)
-        self.assertIn("test-model", argv)
+        self.assertIn("--log-dir", argv)
+        self.assertIn("/tmp/logs", argv)
+        self.assertEqual(argv[argv.index("--model-profile") + 1], "light")
 
     def test_depth2_materialization_binds_evidence_into_wrapper_argv(self):
         node = make_node()
@@ -283,6 +285,7 @@ class MainMaterializationTest(unittest.TestCase):
         self.assertEqual(argv[argv.index("--worker-mode") + 1], "dev/backend")
         self.assertEqual(argv[argv.index("--assigned-contract") + 1], "code-execute")
         self.assertEqual(argv[argv.index("--model-role") + 1], "fast implementer")
+        self.assertEqual(argv[argv.index("--model-profile") + 1], "light")
         self.assertNotIn("--worker-role", argv)
 
     def test_harness_affinity_field_forwarded_into_wrapper_argv(self):

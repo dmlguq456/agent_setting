@@ -108,6 +108,12 @@ REPLICA_RESERVATION_ROW_KEYS = (
     "batch_fallback_ordinal",
     "batch_independence",
     "batch_assignment_sha256",
+    "batch_model_profile",
+    "batch_perspective",
+    "batch_parallel_leg_index",
+    "batch_peer_count",
+    "batch_peer_set_sha256",
+    # Schema-v1 two-way recovery compatibility.
     "batch_peer_attempt_id",
     "batch_peer_state",
     "batch_peer_proof_sha256",
@@ -829,11 +835,12 @@ def replica_batch_expectation(
     fallback_ordinal: int | str | None = None,
     assignment_sha256: str = "",
 ) -> dict[str, object] | None:
-    """Return the exact governor binding required by a replicated route leg.
+    """Return the exact governor binding required by a parallel route leg.
 
-    A replica row has no standalone registered form. ``start`` is authorized
+    A parallel row has no standalone registered form. ``start`` is authorized
     only by a live opaque governor reservation whose immutable provenance was
-    created from the complete two-leg manifest by ``dispatch-batch``.
+    created from the complete 2..4-leg manifest by ``dispatch-batch``. The
+    function name remains as a one-window adapter import alias.
     """
 
     if not route_file or not route_node:
@@ -851,21 +858,22 @@ def replica_batch_expectation(
     if len(matches) != 1:
         raise DispatchContractError("route-node-not-unique", str(route_node))
     node = matches[0]
-    group = node.get("replica_group")
+    group = node.get("parallel_group") or node.get("replica_group")
     if not group:
         return None
     members = [
         candidate for candidate in route["nodes"]
-        if isinstance(candidate, dict) and candidate.get("replica_group") == group
+        if isinstance(candidate, dict)
+        and (candidate.get("parallel_group") or candidate.get("replica_group")) == group
     ]
-    if len(members) != 2 or any(candidate.get("dispatch_depth") != 2 for candidate in members):
+    if not 2 <= len(members) <= 4 or any(candidate.get("dispatch_depth") != 2 for candidate in members):
         raise DispatchContractError(
-            "replica-group-contract-invalid", f"group={group} count={len(members)}"
+            "parallel-group-contract-invalid", f"group={group} count={len(members)}"
         )
     if action != "start":
         raise DispatchContractError(
-            "replica-group-batch-required",
-            f"group={group} action={action}; use dispatch-batch --action start",
+            "parallel-group-batch-required",
+            f"group={group} action={action}; use dispatch-batch --parallel-group {group} --action start",
         )
     values = {
         "attempt_id": attempt_id,
@@ -877,18 +885,18 @@ def replica_batch_expectation(
     missing = [key for key, value in values.items() if not value]
     if missing:
         raise DispatchContractError(
-            "replica-group-batch-binding-missing", ",".join(missing)
+            "parallel-group-batch-binding-missing", ",".join(missing)
         )
     try:
         ordinal = int(str(fallback_ordinal))
     except (TypeError, ValueError) as exc:
         raise DispatchContractError(
-            "replica-group-batch-binding-invalid",
+            "parallel-group-batch-binding-invalid",
             f"fallback_ordinal={fallback_ordinal}",
         ) from exc
     if ordinal < 1:
         raise DispatchContractError(
-            "replica-group-batch-binding-invalid",
+            "parallel-group-batch-binding-invalid",
             f"fallback_ordinal={fallback_ordinal}",
         )
     allowed_members: dict[str, list[dict[str, object]]] = {}
@@ -915,12 +923,12 @@ def replica_batch_expectation(
                 })
         if not allowed:
             raise DispatchContractError(
-                "replica-group-route-binding-invalid", f"node={member_id}"
+                "parallel-group-route-binding-invalid", f"node={member_id}"
             )
         allowed_members[member_id] = allowed
     expected = {
-        "reservation_kind": "replica-batch",
-        "batch_declared_size": 2,
+        "reservation_kind": "parallel-batch" if node.get("parallel_group") else "replica-batch",
+        "batch_declared_size": len(members),
         "batch_group": str(group),
         "batch_route_id": str(route.get("route_id", "")),
         "batch_parent_attempt_id": parent_attempt_id,
@@ -929,13 +937,16 @@ def replica_batch_expectation(
         "batch_harness": harness,
         "batch_fallback_hop": fallback_hop,
         "batch_fallback_ordinal": ordinal,
+        "batch_model_profile": node.get("model_profile"),
+        "batch_perspective": node.get("perspective"),
+        "batch_parallel_leg_index": node.get("parallel_leg_index"),
         "_batch_route_nodes": sorted(str(member.get("id", "")) for member in members),
         "_batch_allowed_members": allowed_members,
     }
     if assignment_sha256:
         if not DIGEST.fullmatch(assignment_sha256):
             raise DispatchContractError(
-                "replica-group-assignment-invalid", assignment_sha256
+                "parallel-group-assignment-invalid", assignment_sha256
             )
         expected["batch_assignment_sha256"] = assignment_sha256
     return expected
@@ -945,10 +956,10 @@ def _validate_replica_reservation(
     payload: dict[str, object], expected: dict[str, object] | None
 ) -> None:
     if expected is None:
-        if payload.get("reservation_kind") == "replica-batch":
+        if payload.get("reservation_kind") in {"replica-batch", "parallel-batch"}:
             raise DispatchContractError(
-                "replica-group-reservation-mismatch",
-                "replica batch token cannot authorize a non-replica start",
+                "parallel-group-reservation-mismatch",
+                "parallel batch token cannot authorize a non-group start",
             )
         return
     public_expected = {
@@ -976,10 +987,14 @@ def _validate_replica_reservation(
         )
     if verified:
         common = {
-            "replica_group": public_expected.get("batch_group"),
             "route_id": public_expected.get("batch_route_id"),
             "parent_attempt_id": public_expected.get("batch_parent_attempt_id"),
         }
+        manifest_group = verified.get("parallel_group") or verified.get("replica_group")
+        if manifest_group != public_expected.get("batch_group"):
+            mismatches["manifest.parallel_group"] = (
+                public_expected.get("batch_group"), manifest_group
+            )
         for key, value in common.items():
             if verified.get(key) != value:
                 mismatches[f"manifest.{key}"] = (value, verified.get(key))
@@ -1019,6 +1034,12 @@ def _validate_replica_reservation(
                 "fallback_hop": public_expected.get("batch_fallback_hop"),
                 "fallback_ordinal": public_expected.get("batch_fallback_ordinal"),
             }
+            if int(verified.get("schema_version", 1)) == 2:
+                member_expected.update({
+                    "model_profile": public_expected.get("batch_model_profile"),
+                    "perspective": public_expected.get("batch_perspective"),
+                    "parallel_leg_index": public_expected.get("batch_parallel_leg_index"),
+                })
             for key, value in member_expected.items():
                 if member.get(key) != value:
                     mismatches[f"manifest.member.{key}"] = (value, member.get(key))
@@ -1036,9 +1057,14 @@ def _validate_replica_reservation(
             mismatches["batch_independence"] = (
                 verified.get("independence"), payload.get("batch_independence")
             )
+    declared_size = public_expected.get("batch_declared_size")
     admission = payload.get("batch_admission_count")
-    if isinstance(admission, bool) or admission not in {1, 2}:
-        mismatches["batch_admission_count"] = ("1|2", admission)
+    if (isinstance(declared_size, bool) or not isinstance(declared_size, int)
+            or not 2 <= declared_size <= 4):
+        mismatches["batch_declared_size"] = ("integer 2..4", declared_size)
+        declared_size = 0
+    if isinstance(admission, bool) or admission not in {1, declared_size}:
+        mismatches["batch_admission_count"] = (f"1|{declared_size}", admission)
     elif admission == 1:
         selected_attempt = str(public_expected.get("batch_attempt_id", ""))
         peer_members = (
@@ -1049,59 +1075,43 @@ def _validate_replica_reservation(
             if verified
             else []
         )
-        expected_peer = (
-            str(peer_members[0].get("attempt_id", ""))
-            if len(peer_members) == 1
-            else ""
-        )
-        if not expected_peer or payload.get("batch_peer_attempt_id") != expected_peer:
-            mismatches["batch_peer_attempt_id"] = (
-                expected_peer or "exact non-selected manifest member",
-                payload.get("batch_peer_attempt_id"),
-            )
-        peer_state = payload.get("batch_peer_state")
-        if peer_state not in {"active", "completed"}:
-            mismatches["batch_peer_state"] = ("active|completed", peer_state)
-        proof = payload.get("batch_peer_proof")
+        expected_peers = sorted(str(member.get("attempt_id", "")) for member in peer_members)
         proof_keys = {
             "agent_home", "attempt_id", "jobs", "manifest_sha256",
             "reason", "route", "state",
         }
-        if not isinstance(proof, dict) or set(proof) != proof_keys:
-            mismatches["batch_peer_proof"] = (
-                "exact canonical peer proof", proof
-            )
+        proofs = payload.get("batch_peer_set")
+        if payload.get("batch_peer_count") != len(expected_peers):
+            mismatches["batch_peer_count"] = (len(expected_peers), payload.get("batch_peer_count"))
+        if not isinstance(proofs, list) or len(proofs) != len(expected_peers):
+            mismatches["batch_peer_set"] = ("exact N-1 canonical proofs", proofs)
         else:
-            proof_expected = {
-                "attempt_id": expected_peer,
-                "manifest_sha256": manifest_digest,
-                "state": peer_state,
-            }
-            for key, value in proof_expected.items():
-                if proof.get(key) != value:
-                    mismatches[f"batch_peer_proof.{key}"] = (
-                        value, proof.get(key)
-                    )
-            for key in ("agent_home", "jobs", "route"):
-                value = proof.get(key)
-                if not isinstance(value, str) or not Path(value).is_absolute():
-                    mismatches[f"batch_peer_proof.{key}"] = (
-                        "absolute path", value
-                    )
-            if not isinstance(proof.get("reason"), str) or not proof.get("reason"):
-                mismatches["batch_peer_proof.reason"] = (
-                    "non-empty observation reason", proof.get("reason")
-                )
-            encoded = json.dumps(
-                proof, separators=(",", ":"), sort_keys=True
-            ).encode("utf-8")
-            proof_digest = "sha256:" + hashlib.sha256(encoded).hexdigest()
-            if payload.get("batch_peer_proof_sha256") != proof_digest:
-                mismatches["batch_peer_proof_sha256"] = (
-                    proof_digest, payload.get("batch_peer_proof_sha256")
-                )
-    elif admission == 2:
+            actual_peers=[]
+            for index, proof in enumerate(proofs):
+                label=f"batch_peer_set[{index}]"
+                if not isinstance(proof, dict) or set(proof) != proof_keys:
+                    mismatches[label] = ("canonical peer proof", proof)
+                    continue
+                actual_peers.append(str(proof.get("attempt_id", "")))
+                if proof.get("manifest_sha256") != manifest_digest:
+                    mismatches[f"{label}.manifest_sha256"] = (manifest_digest, proof.get("manifest_sha256"))
+                if proof.get("state") not in {"active", "completed"}:
+                    mismatches[f"{label}.state"] = ("active|completed", proof.get("state"))
+                for key in ("agent_home", "jobs", "route"):
+                    value=proof.get(key)
+                    if not isinstance(value,str) or not Path(value).is_absolute():
+                        mismatches[f"{label}.{key}"] = ("absolute path", value)
+                if not isinstance(proof.get("reason"),str) or not proof.get("reason"):
+                    mismatches[f"{label}.reason"] = ("non-empty observation reason", proof.get("reason"))
+            if actual_peers != expected_peers:
+                mismatches["batch_peer_set.attempts"] = (expected_peers, actual_peers)
+            encoded=json.dumps(proofs,separators=(",",":"),sort_keys=True).encode("utf-8")
+            proof_digest="sha256:"+hashlib.sha256(encoded).hexdigest()
+            if payload.get("batch_peer_set_sha256") != proof_digest:
+                mismatches["batch_peer_set_sha256"] = (proof_digest,payload.get("batch_peer_set_sha256"))
+    elif admission == declared_size:
         for key in (
+            "batch_peer_count", "batch_peer_set", "batch_peer_set_sha256",
             "batch_peer_attempt_id", "batch_peer_state",
             "batch_peer_proof", "batch_peer_proof_sha256",
         ):
@@ -1112,7 +1122,7 @@ def _validate_replica_reservation(
             f"{key}:expected={wanted}:actual={actual}"
             for key, (wanted, actual) in sorted(mismatches.items())
         )
-        raise DispatchContractError("replica-group-reservation-mismatch", detail)
+        raise DispatchContractError("parallel-group-reservation-mismatch", detail)
 
 
 def reserve_governor_token(
@@ -1148,8 +1158,8 @@ def reserve_governor_token(
         return provided_token, payload
     if expected_reservation is not None:
         raise DispatchContractError(
-            "replica-group-batch-required",
-            "replica start requires an exact bound batch reservation",
+            "parallel-group-batch-required",
+            "parallel start requires an exact bound batch reservation",
         )
     payload = _governor_json(
         [

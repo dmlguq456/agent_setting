@@ -46,6 +46,39 @@ def row(
     return f"2026-07-23T00:00:00Z\t{status}\t/repo\t/wt\t{slug}\t{meta}\n"
 
 
+def parallel_row(
+    *,
+    attempt: str,
+    parent: str,
+    node: str,
+    group: str,
+    declared_size: int,
+    route_id: str,
+    route_file: Path,
+) -> str:
+    return row(
+        "open",
+        attempt,
+        parent,
+        node,
+        process_metadata={
+            "worktree": str(route_file.parent),
+            "route_file": str(route_file),
+            "route_id": route_id,
+            "route_node": node,
+            "parallel_group": group,
+            "replica_group": group,
+            "reservation_kind": "parallel-batch",
+            "batch_declared_size": str(declared_size),
+            "batch_group": group,
+            "batch_route_id": route_id,
+            "batch_parent_attempt_id": parent,
+            "batch_attempt_id": attempt,
+            "batch_route_node": node,
+        },
+    )
+
+
 class DispatchCompletionJoinTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
@@ -312,6 +345,144 @@ class DispatchCompletionJoinTest(unittest.TestCase):
                         parent_slug="owner",
                     )
                 )
+
+    def test_strict_supervisor_admits_only_one_missing_leg_of_three_way_group(self):
+        parent = "att-parent"
+        route_id = "route-n3"
+        group = "frame"
+        route_file = self.root / "route.json"
+        route_file.write_text(
+            json.dumps(
+                {
+                    "route_id": route_id,
+                    "nodes": [
+                        {
+                            "id": node,
+                            "dispatch_depth": 2,
+                            "parallel_group": group,
+                            "replica_group": group,
+                        }
+                        for node in ("frame-a", "frame-b", "frame-c")
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        def command() -> str:
+            return (
+                "adapters/codex/bin/preflight.sh dispatch-batch "
+                f"--route {route_file} --parallel-group {group} --action start "
+                f"--slug-prefix frame --parent owner --jobs {self.jobs}"
+            )
+
+        rows = [
+            parallel_row(
+                attempt=f"att-{suffix}",
+                parent=parent,
+                node=f"frame-{suffix}",
+                group=group,
+                declared_size=3,
+                route_id=route_id,
+                route_file=route_file,
+            )
+            for suffix in ("a", "b", "c")
+        ]
+
+        self.jobs.write_text(rows[0], encoding="utf-8")
+        self.assertIsNone(
+            JOIN.classify_supervised_shell_command(
+                base=JOIN.ROOT,
+                command=command(),
+                open_attempt_ids={"att-a"},
+                parent_slug="owner",
+                jobs=self.jobs,
+                parent_attempt_id=parent,
+                route_file=route_file,
+                route_id=route_id,
+            )
+        )
+
+        self.jobs.write_text("".join(rows[:2]), encoding="utf-8")
+        self.assertEqual(
+            JOIN.classify_supervised_shell_command(
+                base=JOIN.ROOT,
+                command=command(),
+                open_attempt_ids={"att-a", "att-b"},
+                parent_slug="owner",
+                jobs=self.jobs,
+                parent_attempt_id=parent,
+                route_file=route_file,
+                route_id=route_id,
+            ),
+            JOIN.SupervisorShellAction("dispatch-batch"),
+        )
+
+        self.jobs.write_text("".join(rows), encoding="utf-8")
+        self.assertIsNone(
+            JOIN.classify_supervised_shell_command(
+                base=JOIN.ROOT,
+                command=command(),
+                open_attempt_ids={"att-a", "att-b", "att-c"},
+                parent_slug="owner",
+                jobs=self.jobs,
+                parent_attempt_id=parent,
+                route_file=route_file,
+                route_id=route_id,
+            )
+        )
+
+    def test_strict_supervisor_rejects_direct_dispatch_of_parallel_leg(self):
+        parent = "att-parent"
+        route_id = "route-n2"
+        group = "plan"
+        route_file = self.root / "route.json"
+        route_file.write_text(
+            json.dumps(
+                {
+                    "route_id": route_id,
+                    "nodes": [
+                        {
+                            "id": node,
+                            "dispatch_depth": 2,
+                            "parallel_group": group,
+                            "replica_group": group,
+                        }
+                        for node in ("plan-a", "plan-b")
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.jobs.write_text(
+            parallel_row(
+                attempt="att-a",
+                parent=parent,
+                node="plan-a",
+                group=group,
+                declared_size=2,
+                route_id=route_id,
+                route_file=route_file,
+            ),
+            encoding="utf-8",
+        )
+        command = (
+            f"python3 utilities/dispatch-node.py --route {route_file} "
+            "--node plan-b --adapter claude --action start --slug plan-b "
+            f"--parent owner -- --jobs {self.jobs}"
+        )
+        self.assertIsNone(
+            JOIN.classify_supervised_shell_command(
+                base=JOIN.ROOT,
+                command=command,
+                open_attempt_ids={"att-a"},
+                parent_slug="owner",
+                jobs=self.jobs,
+                parent_attempt_id=parent,
+                route_file=route_file,
+                route_id=route_id,
+            )
+        )
 
 
 if __name__ == "__main__":

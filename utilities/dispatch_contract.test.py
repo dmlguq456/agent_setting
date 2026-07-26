@@ -306,13 +306,15 @@ class DispatchContractTest(unittest.TestCase):
              {"fallback_hop":"cross-harness-headless","ordinal":2,
               "candidates":[{"child_harness":"claude","status":"supported"}]}]
    route={"route_id":"rt-replica","nodes":[
-    {"id":"plan","dispatch_depth":2,"replica_group":"plan","fallback_hops":fallback},
-    {"id":"plan-replica","dispatch_depth":2,"replica_group":"plan","fallback_hops":fallback},
+    {"id":"plan","dispatch_depth":2,"parallel_group":"plan","replica_group":"plan",
+     "model_profile":"deep","perspective":"primary-plan","parallel_leg_index":0,"fallback_hops":fallback},
+    {"id":"plan-alternative","dispatch_depth":2,"parallel_group":"plan","replica_group":"plan",
+     "model_profile":"balanced-deep","perspective":"independent-plan","parallel_leg_index":1,"fallback_hops":fallback},
    ]}
    route_path.write_text(__import__("json").dumps(route))
    with self.assertRaises(D.DispatchContractError) as caught:
     D.replica_batch_expectation(route_path,"plan","register")
-   self.assertEqual(caught.exception.reason,"replica-group-batch-required")
+   self.assertEqual(caught.exception.reason,"parallel-group-batch-required")
    expected=D.replica_batch_expectation(
     route_path,"plan","start",attempt_id="att-replica-start",
     parent_attempt_id="att-parent",harness="codex",
@@ -325,12 +327,15 @@ class DispatchContractTest(unittest.TestCase):
     replica_group="plan",route_id="rt-replica",parent_attempt_id="att-parent",
     independence="cross-harness",members=[
      {"assignment_sha256":"sha256:"+"a"*64,"attempt_id":"att-replica-start",
-      "route_node":"plan","harness":"codex",
-      "fallback_hop":"same-harness-headless","fallback_ordinal":1},
+     "route_node":"plan","harness":"codex",
+      "fallback_hop":"same-harness-headless","fallback_ordinal":1,
+      "model_profile":"deep","perspective":"primary-plan","parallel_leg_index":0},
      {"assignment_sha256":"sha256:"+"a"*64,"attempt_id":"att-replica-peer",
-      "route_node":"plan-replica","harness":"claude",
-      "fallback_hop":"cross-harness-headless","fallback_ordinal":2},
-    ])
+      "route_node":"plan-alternative","harness":"claude",
+      "fallback_hop":"cross-harness-headless","fallback_ordinal":2,
+      "model_profile":"balanced-deep","perspective":"independent-plan","parallel_leg_index":1},
+    ],required_independence_axes=["cross-harness","model-profile","perspective"],
+    realized_independence_axes=["cross-harness","model-profile","perspective"])
    expected=D.replica_batch_expectation(
     route_path,"plan","start",attempt_id="att-replica-start",
     parent_attempt_id="att-parent",harness="codex",
@@ -351,20 +356,20 @@ class DispatchContractTest(unittest.TestCase):
     "manifest_sha256":manifest_digest,"reason":"host-pid-live",
     "route":"/route.json","state":"active",
    }
+   proof_set=[proof]
    proof_digest="sha256:"+__import__("hashlib").sha256(
     __import__("json").dumps(
-     proof,separators=(",",":"),sort_keys=True).encode()).hexdigest()
+     proof_set,separators=(",",":"),sort_keys=True).encode()).hexdigest()
    partial={
     **payload,"batch_admission_count":1,
-    "batch_peer_attempt_id":"att-replica-peer",
-    "batch_peer_state":"active","batch_peer_proof":proof,
-    "batch_peer_proof_sha256":proof_digest,
+    "batch_peer_count":1,"batch_peer_set":proof_set,
+    "batch_peer_set_sha256":proof_digest,
    }
    D._validate_replica_reservation(partial,expected)
    for mutation in (
-    lambda value:value.pop("batch_peer_proof"),
-    lambda value:value.update(batch_peer_attempt_id="att-wrong-peer"),
-    lambda value:value["batch_peer_proof"].update(reason="tampered"),
+    lambda value:value.pop("batch_peer_set"),
+    lambda value:value["batch_peer_set"][0].update(attempt_id="att-wrong-peer"),
+    lambda value:value["batch_peer_set"][0].update(reason="tampered"),
    ):
     broken=__import__("copy").deepcopy(partial)
     mutation(broken)
@@ -373,12 +378,12 @@ class DispatchContractTest(unittest.TestCase):
 
  def test_replica_token_cannot_authorize_non_replica_start(self):
   with self.assertRaises(D.DispatchContractError) as caught:
-   D._validate_replica_reservation({"reservation_kind":"replica-batch"},None)
-  self.assertEqual(caught.exception.reason,"replica-group-reservation-mismatch")
+   D._validate_replica_reservation({"reservation_kind":"parallel-batch"},None)
+  self.assertEqual(caught.exception.reason,"parallel-group-reservation-mismatch")
 
  def test_replica_reservation_mismatch_is_rejected_before_claim(self):
   expected={
-   "reservation_kind":"replica-batch","batch_declared_size":2,
+   "reservation_kind":"parallel-batch","batch_declared_size":2,
    "batch_group":"plan","batch_route_id":"rt-replica",
    "batch_parent_attempt_id":"att-parent","batch_attempt_id":"att-leg",
    "batch_route_node":"plan","batch_harness":"codex",
@@ -395,7 +400,7 @@ class DispatchContractTest(unittest.TestCase):
     D.reserve_governor_token(
      Path("/governor"),Path("/root"),"dispatch",
      provided_token="a"*32,expected_reservation=expected)
-  self.assertEqual(caught.exception.reason,"replica-group-reservation-mismatch")
+  self.assertEqual(caught.exception.reason,"parallel-group-reservation-mismatch")
 
  def test_process_group_descendant_keeps_attempt_live_after_leader_exit(self):
   proc=subprocess.Popen(

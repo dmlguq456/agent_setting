@@ -17,6 +17,7 @@ REGISTRY = ROOT / "capabilities" / "topologies.json"
 MANIFEST = ROOT / "harness-manifest.json"
 UNITS = ROOT / "roles" / "units"
 UNIT_REF_RE = re.compile(r"^[a-z-]+/[a-z-]+$")
+PARALLEL_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _UNIT_CACHE: dict = {}
 
 
@@ -76,6 +77,16 @@ def _validate_guard_scope(recipe, scopes, preconditions, registry, node_id):
                 f"{recipe['capability']}:{node_id}: spec write scope requires sole owner "
                 "or artifact-order-prechecked"
             )
+
+
+def _validate_model_profile(registry, profile, context, *, registered=True):
+    profiles = registry.get("model_profiles", {})
+    row = profiles.get(profile)
+    if not isinstance(row, dict):
+        raise TopologyError(f"{context}: unknown model_profile {profile!r}")
+    if registered and row.get("registered_topology") is not True:
+        raise TopologyError(f"{context}: mini/unregistered model_profile is forbidden")
+    return row
 
 
 def _unit_frontmatter(unit):
@@ -210,6 +221,9 @@ def _validate_recipe(recipe, registry):
         raise TopologyError(f"{recipe['capability']}: bare quick dispatch-depth fields are forbidden")
     if quick.get("owner_dispatch_depth") != 1 or quick.get("max_dispatch_depth") != 1:
         raise TopologyError(f"{recipe['capability']}: quick topology must be dispatch depth 1")
+    _validate_model_profile(
+        registry, quick.get("model_profile"), f"{recipe['capability']}:quick"
+    )
     for scope in quick.get("write_scope", []): _scope_root(scope)
     _validate_guard_scope(recipe, quick.get("write_scope", []), quick.get("guard_preconditions", []), registry, "quick")
     graph = recipe["standard_plus"]
@@ -241,6 +255,10 @@ def _validate_recipe(recipe, registry):
             raise TopologyError(f"{recipe['capability']}:{node['id']}: invalid worker kind")
         _validate_unit_ref(recipe, node, registry)
         if node["kind"] == "resource-runner":
+            if "model_profile" in node:
+                raise TopologyError(
+                    f"{recipe['capability']}:{node['id']}: resource runner cannot carry model_profile"
+                )
             if any(
                 key in node
                 for key in (
@@ -256,6 +274,9 @@ def _validate_recipe(recipe, registry):
                     f"{recipe['capability']}:{node['id']}: detached resource transport required"
                 )
         else:
+            _validate_model_profile(
+                registry, node.get("model_profile"), f"{recipe['capability']}:{node['id']}"
+            )
             if any(key in node for key in bare_depth_keys) or node.get("dispatch_depth") not in (1, 2):
                 raise TopologyError(f"{recipe['capability']}:{node['id']}: dispatch_depth must be 1 or 2")
             unknown_hops = set(node.get("fallback_hops", [])) - FALLBACK_HOPS
@@ -276,69 +297,113 @@ def _validate_recipe(recipe, registry):
             raise TopologyError(f"{recipe['capability']}:{node['id']}: reviewer may write isolated verdicts only")
         if node["kind"] == "map-worker" and any(not s.startswith("shards/") for s in scopes):
             raise TopologyError(f"{recipe['capability']}:{node['id']}: map worker may write shards only")
-    if "replication" in graph:
+    if "replication" in graph or "replications" in graph:
         raise TopologyError(
-            f"{recipe['capability']}: v4 declares replication anchors under 'replications'"
+            f"{recipe['capability']}: v5 uses parallel_groups; legacy replication keys are read-only"
         )
-    replications = graph.get("replications")
-    if replications is not None:
-        # v4 multi-anchor 2-way cross-harness replicate-and-merge (CONVENTIONS
-        # §3.12, strengthened 2026-07-21; framing anchors added 2026-07-24 on
-        # the user directive that direction-setting points get independent
-        # cross-model exploration from `standard`, because early direction
-        # errors cascade into hotfix/patch work). The compiler expands each
-        # anchor; the registry only names the nodes and the independence axis.
-        if not isinstance(replications, list) or not replications:
+    parallel_groups = graph.get("parallel_groups")
+    if parallel_groups is not None:
+        if not isinstance(parallel_groups, list) or not parallel_groups:
             raise TopologyError(
-                f"{recipe['capability']}: replications must be a non-empty list of anchors"
+                f"{recipe['capability']}: parallel_groups must be a non-empty list"
             )
-        required_rep = {"node", "min_intensity", "ways", "independence_axis"}
-        anchored = set()
-        for replication in replications:
-            if not isinstance(replication, dict) or set(replication) != required_rep:
+        required_group = {
+            "id", "node", "kind", "min_intensity", "width_by_intensity",
+            "join_policy", "independence_axes", "legs",
+        }
+        required_leg = {"suffix", "perspective", "model_profile"}
+        anchored, group_ids = set(), set()
+        tiers = registry["intensities"]
+        max_allowed = registry["parallel_group_max_width"]
+        for group in parallel_groups:
+            if not isinstance(group, dict) or set(group) != required_group:
                 raise TopologyError(
-                    f"{recipe['capability']}: replication anchors require exactly {sorted(required_rep)}"
+                    f"{recipe['capability']}: parallel groups require exactly {sorted(required_group)}"
                 )
-            if replication["node"] in anchored:
+            group_id, target_id = group["id"], group["node"]
+            if not PARALLEL_ID_RE.fullmatch(group_id or ""):
+                raise TopologyError(f"{recipe['capability']}: invalid parallel group id {group_id!r}")
+            if group_id in group_ids or target_id in anchored:
                 raise TopologyError(
-                    f"{recipe['capability']}: duplicate replication anchor {replication['node']!r}"
+                    f"{recipe['capability']}: duplicate parallel group/anchor {group_id!r}/{target_id!r}"
                 )
-            anchored.add(replication["node"])
-            target = by_id.get(replication["node"])
+            group_ids.add(group_id); anchored.add(target_id)
+            target = by_id.get(target_id)
             if target is None:
                 raise TopologyError(
-                    f"{recipe['capability']}: replication node {replication['node']!r} not in graph"
+                    f"{recipe['capability']}: parallel group node {target_id!r} not in graph"
                 )
             kind = target.get("kind")
             if kind not in ("review-worker", "map-worker", "pipeline-stage"):
                 raise TopologyError(
-                    f"{recipe['capability']}: replication target {replication['node']} "
-                    "must be a review-worker, map-worker, or pipeline-stage"
+                    f"{recipe['capability']}: parallel target {target_id} must be a review, map, or pipeline worker"
                 )
-            dependents = [n for n in nodes if replication["node"] in n.get("depends_on", [])]
+            if group["kind"] not in registry["parallel_group_kinds"]:
+                raise TopologyError(f"{recipe['capability']}:{group_id}: invalid parallel group kind")
+            if group["join_policy"] not in registry["parallel_join_policies"]:
+                raise TopologyError(f"{recipe['capability']}:{group_id}: invalid parallel join policy")
+            axes = group["independence_axes"]
+            if (not isinstance(axes, list) or len(axes) != len(set(axes))
+                    or not set(axes) <= set(registry["parallel_independence_axes"])):
+                raise TopologyError(f"{recipe['capability']}:{group_id}: invalid independence axes")
+            if "cross-harness" not in axes:
+                raise TopologyError(f"{recipe['capability']}:{group_id}: cross-harness axis required")
+            minimum = group["min_intensity"]
+            if minimum not in tiers or tiers.index(minimum) < tiers.index("standard"):
+                raise TopologyError(
+                    f"{recipe['capability']}:{group_id}: min_intensity must be a standard+ tier"
+                )
+            expected_width_tiers = tiers[tiers.index(minimum):]
+            widths = group["width_by_intensity"]
+            if not isinstance(widths, dict) or list(widths) != expected_width_tiers:
+                raise TopologyError(
+                    f"{recipe['capability']}:{group_id}: width_by_intensity must cover ordered tiers {expected_width_tiers}"
+                )
+            values = list(widths.values())
+            if (any(isinstance(value, bool) or not isinstance(value, int)
+                    or value < 2 or value > max_allowed for value in values)
+                    or values != sorted(values)):
+                raise TopologyError(
+                    f"{recipe['capability']}:{group_id}: widths must be monotonic integers in 2..{max_allowed}"
+                )
+            legs = group["legs"]
+            if not isinstance(legs, list) or len(legs) != max(values):
+                raise TopologyError(
+                    f"{recipe['capability']}:{group_id}: legs must equal maximum declared width"
+                )
+            suffixes, perspectives, profiles = [], [], []
+            for leg in legs:
+                if not isinstance(leg, dict) or set(leg) != required_leg:
+                    raise TopologyError(
+                        f"{recipe['capability']}:{group_id}: legs require exactly {sorted(required_leg)}"
+                    )
+                suffix, perspective, profile = (
+                    leg["suffix"], leg["perspective"], leg["model_profile"]
+                )
+                if not PARALLEL_ID_RE.fullmatch(suffix or ""):
+                    raise TopologyError(f"{recipe['capability']}:{group_id}: invalid leg suffix")
+                if not isinstance(perspective, str) or not perspective.strip():
+                    raise TopologyError(f"{recipe['capability']}:{group_id}: perspective required")
+                _validate_model_profile(
+                    registry, profile, f"{recipe['capability']}:{group_id}:{suffix}"
+                )
+                suffixes.append(suffix); perspectives.append(perspective); profiles.append(profile)
+            if suffixes[0] != "anchor" or len(suffixes) != len(set(suffixes)):
+                raise TopologyError(f"{recipe['capability']}:{group_id}: ordered unique suffixes must start with anchor")
+            if "perspective" in axes and len(perspectives) != len(set(perspectives)):
+                raise TopologyError(f"{recipe['capability']}:{group_id}: perspective axis requires unique legs")
+            if "model-profile" in axes and len(set(profiles)) < 2:
+                raise TopologyError(f"{recipe['capability']}:{group_id}: model-profile axis lacks diversity")
+            dependents = [n for n in nodes if target_id in n.get("depends_on", [])]
             if kind != "review-worker" and not dependents:
                 raise TopologyError(
-                    f"{recipe['capability']}: non-review replication anchor "
-                    f"{replication['node']} requires a downstream consumer"
+                    f"{recipe['capability']}:{group_id}: non-review parallel anchor requires a downstream consumer"
                 )
             if kind == "pipeline-stage" and not any(
-                d.get("kind") == "review-worker" for d in dependents
+                dependent.get("kind") == "review-worker" for dependent in dependents
             ):
                 raise TopologyError(
-                    f"{recipe['capability']}: pipeline-stage replication anchor "
-                    f"{replication['node']} requires a direct review-worker arbiter"
-                )
-            tiers = registry["intensities"]
-            if (replication["min_intensity"] not in tiers
-                    or tiers.index(replication["min_intensity"]) < tiers.index("standard")):
-                raise TopologyError(
-                    f"{recipe['capability']}: replication min_intensity must be a standard+ tier"
-                )
-            if replication["ways"] != 2:
-                raise TopologyError(f"{recipe['capability']}: replication ways must be 2")
-            if replication["independence_axis"] != "cross-harness":
-                raise TopologyError(
-                    f"{recipe['capability']}: replication independence_axis must be cross-harness"
+                    f"{recipe['capability']}:{group_id}: pipeline anchor requires a direct review arbiter"
                 )
             for out in target.get("outputs", []):
                 if "*" not in out:
@@ -346,8 +411,8 @@ def _validate_recipe(recipe, registry):
                 if kind == "map-worker" and out.endswith("/**") and "*" not in out[:-3]:
                     continue
                 raise TopologyError(
-                    f"{recipe['capability']}: replication target outputs must be concrete "
-                    "files (or a map-worker '<dir>/**' shard tree)"
+                    f"{recipe['capability']}:{group_id}: target outputs must be concrete files "
+                    "or a map-worker '<dir>/**' shard tree"
                 )
     visiting, done = set(), set()
     def visit(node_id):
@@ -373,8 +438,29 @@ def _validate_recipe(recipe, registry):
 
 
 def validate_registry(registry, manifest=None):
-    if registry.get("schema_version") != 4:
+    if registry.get("schema_version") != 5:
         raise TopologyError("legacy topology registry is read-only")
+    expected_profiles = {
+        "deep": {"rank": 4, "tier": "deep", "effort": "xhigh", "registered_topology": True},
+        "balanced-deep": {"rank": 3, "tier": "deep", "effort": "medium", "registered_topology": True},
+        "light": {"rank": 2, "tier": "light", "effort": "medium", "registered_topology": True},
+        "mini": {"rank": 1, "tier": "mini", "effort": "medium", "registered_topology": False},
+    }
+    if registry.get("model_profiles") != expected_profiles:
+        raise TopologyError("model_profiles must declare the four portable execution profiles")
+    if registry.get("owner_profile_by_intensity") != {
+        "quick": "light", "standard": "balanced-deep", "strong": "deep",
+        "thorough": "deep", "adversarial": "deep",
+    }:
+        raise TopologyError("owner_profile_by_intensity does not match the portable policy")
+    if registry.get("parallel_group_kinds") != ["replicate", "explore", "adversarial", "verify"]:
+        raise TopologyError("parallel group kind vocabulary mismatch")
+    if registry.get("parallel_join_policies") != ["all"]:
+        raise TopologyError("parallel join policy must currently be all")
+    if registry.get("parallel_independence_axes") != ["cross-harness", "model-profile", "perspective"]:
+        raise TopologyError("parallel independence-axis vocabulary mismatch")
+    if registry.get("parallel_group_max_width") != 4:
+        raise TopologyError("parallel_group_max_width must be 4")
     if set(registry.get("transports", [])) != WRAPPER_TRANSPORTS:
         raise TopologyError("transport vocabulary differs from portable dispatch contract")
     if set(registry.get("execution_surfaces", [])) != EXECUTION_SURFACES:

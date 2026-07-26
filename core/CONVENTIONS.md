@@ -27,12 +27,12 @@ Pipeline intensity controls which orchestration shape an autopilot entry uses. V
 |---|---|---|---|---|
 | `direct` | `intake → produce → sanity/report` | No plan, plan check, or durable plan; final sanity only | Inline | none/light |
 | `quick` | `intake → orient-lite → micro-plan → plan-check-lite → produce → verify-lite → report` | One dispatch-depth-1 session; 3–4 focused plan questions and one concrete sanity check | One-shot owner; no dispatch depth 2 | quick |
-| `standard` | `intake → orient → declared 2-way framing anchor → synth/owner-plan → plan-check → optional verifier/planner → produce → verify → report` | Durable plan where the capability owns a work cycle; when it declares a framing anchor, that anchor is one exact cross-harness 2-way independent replica group | Thin conductor dispatches each durable stage as dispatch depth 2 with file-only handoff | standard |
-| `strong` | Standard plus every declared strong-tier 2-way anchor and an optional fix loop | Retain each standard exact pair, then run every declared plan-committal, implementation-review, or other risk anchor as its own exact cross-harness 2-way group and merge that pair before continuing; the code track has framing, plan, and implementation-review groups | Stage dispatch plus the declared bounded replica/merge anchors; every replica group has exactly two independent sessions | standard/thorough |
-| `thorough` | Strong anchors, deeper synthesis/verification, and any explicitly composed perspectives | Keep every framing, plan, and implementation-review replica group exact 2-way; a deeper independent non-replica planning or verification perspective requires a declared composed-route node outside those groups | The base recipe keeps the strong topology; an immutable composed route may add bounded dispatch-depth-2 perspectives without widening a replica group | thorough |
-| `adversarial` | Thorough plus adversarial failure-mode/security verification and any explicitly composed adversary | Keep every replicated anchor exact 2-way; an independent non-replica contradiction, hostile, or security perspective runs only when a declared composed-route node selects it | The base recipe keeps the strong topology; a bounded composed adversary/verifier may run alongside the unchanged 2-way anchors | adversarial |
+| `standard` | `intake → orient → declared framing group → synth/owner-plan → plan-check → optional verifier/planner → produce → verify → report` | Durable plan where the capability owns a work cycle; a declared framing anchor normally opens two asymmetric legs and merges them before planning | Thin conductor dispatches each durable stage as dispatch depth 2 with file-only handoff | standard |
+| `strong` | Standard plus every declared strong-tier group and an optional fix loop | Retain framing breadth and open the declared plan-committal, implementation-review, or other risk groups; a registry `width_by_intensity` may widen a high-value group to three legs | Stage dispatch plus bounded parallel-group fan-out/fan-in; exact width is route-sealed | standard/thorough |
+| `thorough` | Strong groups plus deeper synthesis/verification | A declared group may add a third implementation-risk, failure-mode, or contrarian leg; unchanged groups remain width two | The base recipe realizes only registry-declared 2–4-way siblings; composed routes may add other bounded dispatch-depth-2 perspectives | thorough |
+| `adversarial` | Thorough plus adversarial failure-mode/security verification | Use the route-declared width and adversarial perspective; no undeclared fan-out | Bounded declared group or composed adversary/verifier; dispatch depth remains at most 2 | adversarial |
 
-Stage-local gates stay cheap and ask only whether output can feed the next stage. An independent QA pass uses another role, model, or harness and runs only where the selected intensity calls for it; each `standard`+ cross-harness replica anchor of §1.1 specifically requires a different harness or model family, so a same-family role-only swap does not satisfy it. Final verification remains capability-specific. Every non-direct graph includes at least a small plan check because a bad plan corrupts every downstream stage.
+Stage-local gates stay cheap and ask only whether output can feed the next stage. An independent QA pass uses another harness, execution profile, perspective, or model family and runs only where selected intensity calls for it. A declared `cross-harness` group must realize at least two eligible harnesses; N greater than the harness count gains additional independence through profile and perspective diversity. Final verification remains capability-specific. Every non-direct graph includes at least a small plan check because a bad plan corrupts every downstream stage.
 
 Dispatch depth is portable route topology, not process ancestry, runtime-native
 agent nesting, or proof of registry membership. Dispatch dispatch depth 0 is user-facing
@@ -53,14 +53,14 @@ Rigor is an assurance budget inside the graph selected by intensity. It does not
 |---|---|---|---|---|---|
 | `quick` | `quick` | Self-check or 3–4 focused questions | None by default; the self-check itself carries the adversarial stance below | One concrete sanity check | None automatically |
 | `light`/none | `direct` | Focused self-check if present, held to the adversarial stance below | At most one fast reviewer at an already selected review point | Focused command, render, or source check | One pass |
-| `standard` | `standard`, `strong` | Lightweight independent review where planning exists | A declared framing anchor is exact 2-way from `standard`; `strong` additionally makes every declared strong-tier anchor exact 2-way. For the code track those are plan-committal and implementation-review, yielding three exact pairs including framing. Each pair is merged independently and no anchor group exceeds two legs | Normal capability verification; source check when relevant | At most one correction |
-| `thorough` | `thorough` | Deeper or multi-axis review | Retain the exact 2-way replicated anchors; add bounded independent non-replica perspectives only when the immutable route explicitly declares them | Broader evidence and adequacy review | Up to two corrections |
-| `adversarial` | `adversarial` | Hostile owner-plan critique | Retain the exact 2-way replicated anchors; run an independent non-replica adversary, security, contradiction, or failure-mode pass only when the immutable route explicitly selects it | Verification plus adversarial evidence | Two corrections plus one selected adversary pass |
+| `standard` | `standard`, `strong` | Lightweight independent review where planning exists | A framing group normally starts at width two; `strong` opens every declared strong-tier group and may widen selected high-value anchors according to the sealed registry policy | Normal capability verification; source check when relevant | At most one correction |
+| `thorough` | `thorough` | Deeper or multi-axis review | Keep declared groups and realize their thorough width, commonly adding an implementation-risk, failure-mode, or contrarian third leg | Broader evidence and adequacy review | Up to two corrections |
+| `adversarial` | `adversarial` | Hostile owner-plan critique | Realize the adversarial route width and any selected security, contradiction, or failure-mode perspective | Verification plus adversarial evidence | Two corrections plus one selected adversary pass |
 
 Two properties cut across every rigor tier and do not scale away at low intensity:
 
 1. **Adversarial stance is universal (all tiers, including `direct` and `quick`).** Any review or self-check that runs adopts a refute-by-default posture: it actively tries to falsify the artifact's correctness claims, enumerates the concrete failure modes it can substantiate, and treats inadequate evidence as *not proven* rather than a pass. This is a stance inside whatever check already runs, not an added stage, so it adds no dispatch at `direct`/`quick`. It is what makes review adversarial before any separate adversary *pass* exists.
-2. **Independent replication is cross-harness, exact 2-way, and promoted from thorough-only to a general case.** When a tier selects an independent pass, its independence axis is a **different harness or model family** (for example Claude ↔ Codex/GPT), because same-engine replicas share systematic blind spots. Each replica group is exactly two blind sessions whose results are merged; higher intensity never widens that group. At each capability's declared **framing anchor** — the direction-setting node ahead of plan-like committal — exact 2-way replication begins at `standard` (2026-07-24 user directive: independent dual-model exploration belongs where the direction is set, because an early direction error cascades into hotfix/patch work and cost blowups downstream). At `strong` and above, the declared plan-committal and implementation-review anchors also become separate exact 2-way replica groups; for the code track these are `frame`, `plan`, and `impl-review`, with plan-check arbitrating the plan pair and verdict synthesis merging the implementation-review pair. `thorough`/`adversarial` retain those exact pairs; any additional independent **non-replica** planning, verification, or adversarial perspective must be an explicitly selected node in an immutable composed route, because the base recipe does not auto-fan-out it. When only one harness is available, apply the same two-branch rule as an unavailable external adversary below: if the cross-harness pass was explicitly requested, fail loudly; if it was auto-selected, fall back to two same-harness independent sessions and report the reduced independence. `direct`/`quick` stay single-session but keep the adversarial stance from (1).
+2. **Independent exploration is bounded, asymmetric, and cross-harness first.** Registry-v5 `parallel_groups` declare exactly which direction, plan, review, or verification anchors fan out, their intensity-specific width, and ordered execution-profile/perspective legs. Width is 2–4 and is never inferred from reviewer count. `cross-harness` means the group realizes at least two eligible harnesses; `model-profile` and `perspective` axes reduce correlated failure when N exceeds available harness families. For the code track, framing starts at width two for `standard` and adds a deep contrarian leg at `strong+`; plan and implementation review start at width two for `strong` and add a light implementation-risk or deep failure-mode leg at `thorough+`. Other capabilities keep their migrated width-two groups unless their own registry/spec explicitly widens them. All legs are blind siblings at dispatch depth 2, write disjoint artifacts, and join before continuation; evidence synthesis is not a majority vote. When only one harness is available, an explicitly requested cross-harness pass fails loudly; an auto-selected group may use typed same-harness degradation while retaining profile/perspective diversity. `direct`/`quick` stay single-session but keep the adversarial stance from (1).
 
 Track rules:
 
@@ -77,7 +77,7 @@ An external adversary is required only when an adversarial graph actually select
 
 ### §1.2. Token and Context Pressure
 
-The portable invariant is **token pressure ⊥ intensity**. Pressure is an observed response-shaping signal, not a pipeline selector or assurance budget. It may shorten user-facing explanation and defer unrequested optional extras, but never changes graph, depth, dispatch, model role, reasoning effort, plan check, reviewer budget, verification, retry contract, or definition of done.
+The portable invariant is **token pressure ⊥ intensity**. Pressure is an observed response-shaping signal, not a pipeline selector or assurance budget. It may shorten user-facing explanation and defer unrequested optional extras, but never changes graph, depth, dispatch, model role/profile, effort, plan check, parallel-group width, reviewer budget, verification, retry contract, or definition of done.
 
 Portable telemetry distinguishes active context, cumulative session counters, and a response-policy score. Never reuse a generic adapter field with different runtime meaning. Unknown, stale, malformed, unsupported, or decreasing counters fail open to the selected pipeline and report degraded availability. Forks and subagents have separate denominators.
 
@@ -100,26 +100,26 @@ Shared contracts use model roles rather than concrete model names. Vendor-specif
 
 ### §2.1. Dispatch Routing
 
-The default role for a standard+ conductor is `deep orchestrator`. Do not alias the retained balanced `orchestrator` to it. Dispatch selection order is explicit choice, hard eligibility, stage affinity, maker/checker family diversity, then capacity, cost, and latency. Portable core records only `gpt`, `claude`, or `unknown` family plus a role. Planning, architecture, and decomposition use `deep maker` and prefer eligible GPT-family affinity without hard pinning. Adapters own exact model IDs, reasoning profiles, runtime probes, and eligibility. Reviewers prefer a different family from makers where available.
+The default role for a standard+ conductor is `deep orchestrator`. Do not alias the retained balanced `orchestrator` to it. A role names behavior and responsibility, not execution budget. Dispatch selection order is explicit route profile, hard eligibility, stage affinity, required group diversity, then capacity, cost, and latency. Portable core records role, model profile, and any required harness-family axis separately. Adapters own exact model IDs, effort/variant realization, runtime probes, and eligibility.
 
 `utilities/dispatch-route.sh` is read-only and emits stable key/value trace, rejected, fallback, and unknown records. It does not register, launch, or mutate caches or worktrees. Without an adapter probe, OpenCode remains `unknown` rather than guessed.
 
 ### §2.2. Adapter Mapping
 
-Every adapter maps portable roles to concrete runtime models, tools, and prompt profiles as a quality-reproduction contract. Main or the parent orchestrator explicitly chooses a role or concrete model/effort for every dispatched job; wrappers do not silently choose a default. Update and read core before changing adapter maps or generated agents.
+Every adapter maps portable roles and execution profiles to runtime models, tools, and prompt profiles as a quality-reproduction contract. A route-bound dispatch always carries both axes; wrappers do not infer the execution budget from role wording or silently inherit the interactive model. Update and read core before changing adapter maps or generated agents.
 
-Tier discipline (user principle, 2026-07-22): a role's tier — and therefore its model — is
-fixed; the adapter config values are *defaults*, and **situational tuning adjusts effort
-only, within that tier** (an easier orchestration still runs the deep model at lowered
-effort; a simple repetitive task still runs light at medium). Per-job dispatch realizes
-this as `--model-role <role> [--effort|--reasoning|--variant <level>]`; combining
-`--model-role` with `--model` is rejected as tier-hopping. Cross-tier per-role special
-cases in config are equally forbidden.
+The portable execution profiles are:
 
-Deep-tier effort ladder (user, 2026-07-22): the step below the `xhigh` default is
-`high`; `medium` on a deep role is **exceptional — genuinely easy work only** (the
-wrappers emit a caution); the hardest work steps **up to `max`** (both claude and codex
-engines accept it, probe-verified).
+| Profile | Intent | Portable default | Registered topology |
+|---|---|---|---|
+| `deep` | Highest-confidence convergence, critical planning, failure-mode/security judgment | deep tier at `xhigh` | allowed |
+| `balanced-deep` | Deep-model judgment at a lower coordination budget | deep tier at `medium` | allowed |
+| `light` | Low-latency/cost production, structured checking, and broad exploration | light tier at `medium` | allowed |
+| `mini` | Lifecycle, classification, title, or explicitly micro-semantic help | mini tier at `medium` | forbidden for substantive registered dispatch-depth-1/2 owner, stage, and review nodes |
+
+`standard` owners use `balanced-deep`; `strong|thorough|adversarial` owners use `deep`; `quick` uses `light`. Node meaning and risk—not dispatch depth alone—select the profile. Route compilation seals `owner_model_profile` and every node/parallel leg `model_profile`; a caller cannot replace a sealed profile with a trailing concrete model or effort. Capacity failover may choose a checked eligible substitute while preserving and reporting the profile intent. Claude and Codex must distinguish all four mappings. An adapter without a verified effort/variant axis may collapse `balanced-deep` to `deep` only while reporting reduced profile granularity; it must not claim four-step parity.
+
+Effort labels are model-relative budgets, not portable performance scores. `deep/xhigh`, `balanced-deep/deep-medium`, and `light/medium` are deliberate distinct operating points. `high|max|low` remain explicit checked overrides or fallback values, not hidden default tiers.
 
 ### §2.3. Unit Catalog and Role Binding
 
@@ -133,13 +133,13 @@ harness; per-harness native agents are reduced to kernel helpers (e.g. `memory-s
 Role binding rules:
 
 - Every topology node references a catalog unit; the node's `role` must equal the unit's
-  `role` frontmatter, and concrete models still resolve per adapter through
-  `models.conf` — a unit never names a model.
+  `role` frontmatter. The topology separately declares `model_profile`, and concrete
+  models resolve per adapter through `models.conf` — a unit never names a model or profile.
 - Cross-harness review (including the hostile external-adversary pass) is realized by
   dispatching the relevant review unit to a different harness through the standard
   transport; there is no separate wrapper-team agent.
 
-For standard+ code stage dispatch, choose explicitly: code-plan uses deep maker; code-execute uses fast implementer unless complexity warrants deep maker; code-test uses the variable reviewer/verifier budget derived from intensity; and code-report uses fast writer (`editorial/report`).
+For standard+ code stage dispatch, role and profile are explicit: ordinary frame/plan use `deep maker + balanced-deep`, execute uses `fast implementer + light`, test/report use their fast roles with `light`, and route-selected high-risk or parallel legs override only the profile declared for that leg. Strong plan convergence uses `deep`; thorough implementation-risk exploration may deliberately use `light` while a failure-mode review uses `deep`.
 
 ---
 
@@ -149,14 +149,14 @@ For standard+ code stage dispatch, choose explicitly: code-plan uses deep maker;
 2. Quick means one-session micro-plan, plan-check-lite, and verify-lite carrying the adversarial stance (§1.1). Requiring a durable plan, an added independent pass, or parallel/cross-harness reviewer fan-out for a small `direct`/`quick` task is still drift; the universal adversarial stance is a posture inside the existing check, not a new stage or session.
 3. Adversarial means thorough plus a selected external adversary, failure-mode, security, or claim-verification pass. `standard + external/Codex` is not the definition.
 4. Code has no fact-checker.
-5. Do not hardcode code-test to thorough or parallel QA on every call; scale final verification from intensity-derived rigor. A capability's registry `replications` declare exact 2-way anchors: framing begins at `standard`, while the plan-committal and implementation-review anchors begin at `strong` where declared. `thorough`/`adversarial` retain those exact pairs; bounded non-replica perspectives require explicit composed-route nodes rather than an automatic fan-out or an increase in `ways`. Replication is never forced onto `direct`/`quick`.
+5. Do not hardcode code-test to thorough or parallel QA on every call; scale final verification from intensity-derived rigor. Registry-v5 `parallel_groups` alone declare an anchor's intensity-specific width, profile, perspective, join, and independence axes. Width stays 2–4, is selective rather than universal, and never applies to `direct`/`quick`.
 6. `--no-fact-check` and `--no-style-audit` must not leak to unrelated capabilities.
 7. An external review wrapper is not the reviewer; separate the independent engine from the mechanical orchestrator.
 8. New or strengthened instructions, rules, and hooks preserve why, including the motivating incident and date, inline or in the commit message. Drills are the strongest executable preservation of intent.
 9. Never reduce a semantic requirement to token or regex rules without verifying that meaning is preserved; see `DESIGN_PRINCIPLES §0.7`.
-10. Token pressure is orthogonal to intensity and cannot reduce graph, depth, dispatch, model role, assurance, required guards, or input context.
+10. Token pressure is orthogonal to intensity and cannot reduce graph, depth, dispatch, model role/profile, assurance, required guards, or input context.
 11. Primary routing is semantic (`WORKFLOW §0.2`): new empirical work keeps the execution capability primary, and secondary capabilities never substitute for it. Native sub-agent restrictions and registered headless-dispatch restrictions are separate delegation surfaces (`OPERATIONS §5.10`); extending one to the other requires verified runtime evidence, and the fallback is inline execution with the reason recorded.
-12. Two assurance properties are intensity-independent (strengthened 2026-07-21 on the user directive that review was too weak and independent parallelism too gated behind `thorough`): (a) every review that actually runs carries the refute-by-default adversarial **stance** of §1.1, which is distinct from and prior to a separately selected external adversary **pass**; (b) an independent pass's independence axis is a different harness or model family, and the registry declares exact 2-way anchors per capability (`replications`): framing anchors — direction-setting nodes ahead of plan-like committal — begin at `standard`, and the declared plan-committal and implementation-review anchors begin at `strong` (strengthened 2026-07-24 on the user directive that the original dual-model intent was complementary independent *direction exploration*, not review redundancy alone; early direction errors cascade into hotfix/patch work). Higher intensities keep those pairs exact; any additional non-replica perspective must be explicitly selected through an immutable composed route rather than widening or silently extending the base graph. Neither property may be reduced by token pressure (§1.2), and neither converts a small `direct`/`quick` task into added stages or sessions (§3.2).
+12. Two assurance properties are intensity-independent: (a) every review that actually runs carries the refute-by-default adversarial **stance** of §1.1; (b) an independent pass declares and records its actual independence axes. Cross-harness remains primary, while model-profile and perspective asymmetry generalize dual-model direction exploration into bounded N-way groups. Only the registry may select or widen a group, and neither property converts `direct`/`quick` into added sessions.
 
 Token-budget accounting is observation, not attribution. Hook invocations,
 zero/emission outcomes, exact inserted-directive UTF-8 bytes, and monotonic

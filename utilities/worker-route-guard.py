@@ -100,7 +100,10 @@ def validate_route_contract(route_path: str | Path, node_id: str, cwd: str | Pat
                             intensity: str | None = None, write_scope: str | None = None,
                             route_id: str | None = None, route_hash: str | None = None,
                             registry_digest: str | None = None,
-                            current_attempt: str | None = None) -> tuple[dict, dict, dict]:
+                            current_attempt: str | None = None,
+                            model_role: str | None = None,
+                            model_profile: str | None = None,
+                            enforce_model_binding: bool = False) -> tuple[dict, dict, dict]:
     path = Path(route_path)
     if not path.is_absolute() or not path.is_file():
         raise _fail("route-record-missing", f"route path must be an existing absolute file: {path}")
@@ -126,6 +129,13 @@ def validate_route_contract(route_path: str | Path, node_id: str, cwd: str | Pat
         if observed is not None and observed != expected: raise _fail(reason, f"expected={expected} observed={observed}", rid)
     if write_scope is not None and _scopes(write_scope) != sorted(node["write_scope"]):
         raise _fail("route-node-scope-mismatch", f"expected={sorted(node['write_scope'])} observed={_scopes(write_scope)}", rid)
+    if enforce_model_binding:
+        for reason, observed, expected in (
+            ("route-node-model-role-mismatch", model_role or None, node.get("model_role")),
+            ("route-node-model-profile-mismatch", model_profile or None, node.get("model_profile")),
+        ):
+            if expected is not None and observed != expected:
+                raise _fail(reason, f"expected={expected} observed={observed}", rid)
     if route["tracking"] == "tracked":
         gate = route["tracked_gate_evidence"]
         if not gate["spec_read"]["satisfied"] or not gate["artifact_guard"]["satisfied"]:
@@ -150,6 +160,7 @@ def main() -> int:
     parser.add_argument("--cwd", required=True); parser.add_argument("--artifact-root", required=True)
     parser.add_argument("--capability"); parser.add_argument("--intensity"); parser.add_argument("--write-scope")
     parser.add_argument("--route-id"); parser.add_argument("--route-hash"); parser.add_argument("--registry-digest")
+    parser.add_argument("--model-role"); parser.add_argument("--model-profile")
     parser.add_argument("--unit", default=None,
                         help="catalog unit the caller intends to run; must match the sealed node")
     parser.add_argument("--current-attempt")
@@ -157,7 +168,8 @@ def main() -> int:
     try:
         route, node, git = validate_route_contract(args.route, args.node, args.cwd, args.artifact_root,
             args.capability, args.intensity, args.write_scope, args.route_id, args.route_hash, args.registry_digest,
-            args.current_attempt)
+            current_attempt=args.current_attempt, model_role=args.model_role,
+            model_profile=args.model_profile, enforce_model_binding=True)
         # Unit binding: a worker may not run a bare or substituted persona against a
         # sealed node (2026-07-22 verify finding). Empty/None observed == unbound claim.
         expected_unit = node.get("unit") or None

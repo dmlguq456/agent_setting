@@ -77,7 +77,7 @@ full masking.
 | harness status snapshot | Run `adapters/opencode/bin/preflight.sh status [cwd] [session-id]` for read-only artifact, notes, worktree, and git-risk signals. This does not replace OpenCode native model/context/session UI |
 | token self-regulation v2 | Phase 2 automatic hook accounting and the Phase 3 isolated experiment CLI are deferred. Shared Fleet modules may be inspected as portable source, but OpenCode projects no token-budget utility, production hook, activation flag, or runtime-config mutation |
 | adapter readiness | Run `adapters/opencode/bin/preflight.sh doctor` to check manifest freshness, native projections, and boundary rules in one command |
-| headless dispatch | Tool-contract check: `adapters/opencode/bin/preflight.sh headless --check <worktree>` verifies the worktree, `opencode run` availability, and installed OpenCode runtime projection (`agent-harness`, native Skills path, native Agents, native Commands, and guard plugin). Use `adapters/opencode/bin/preflight.sh dispatch --dry-run|--register|--start --worktree <path> --slug <slug> --capability <name> --capability-mode <mode> [--worker-mode <family/mode>] --qa <level> [--agent <agent>] (--model-role <portable-role>|--model <model> --variant <variant>|--inherit-model-settings)` to build the OpenCode command and register open jobs before launch. The optional worker mode is a non-owner projection that must equal the selected portable unit; `_kernel/owner` accepts only the capability mode. Current registry rows store both axes separately. The wrapper does not choose a default model; main/orchestrator selects per job and simple jobs are downshifted there. `--start` reruns the same runtime projection check before launching. Use `adapters/opencode/bin/preflight.sh liveness [jobs.log]` while waiting on dispatched work; it matches open jobs to OpenCode SQLite sessions by `session.directory` and latest session/message/part update time. Use `adapters/opencode/bin/preflight.sh harvest --slug <slug> --mark-done` after main-session harvest to mark registry rows done only; it does not merge or clean worktrees |
+| headless dispatch | Tool-contract check: `adapters/opencode/bin/preflight.sh headless --check <worktree>` verifies the worktree, `opencode run` availability, and installed OpenCode runtime projection (`agent-harness`, native Skills path, native Agents, native Commands, and guard plugin). Use `adapters/opencode/bin/preflight.sh dispatch --dry-run|--register|--start --worktree <path> --slug <slug> --capability <name> --capability-mode <mode> [--worker-mode <family/mode>] --qa <level> [--agent <agent>] (--model-profile <deep|balanced-deep|light|mini> [--model-role <portable-role>]|--model-role <portable-role>|--model <model> --variant <variant>|--inherit-model-settings)` to build the command and register open jobs. The optional worker mode is a non-owner projection that must equal the selected portable unit; `_kernel/owner` rejects a stage mode and accepts a route-sealed owner profile alone. Route-bound profiles resolve through `config/models.conf`, caller model/variant replacement is rejected, and substantive registered `mini` is denied. OpenCode currently collapses `balanced-deep` to `deep`, records `profile_granularity=collapsed-balanced-deep`, and omits `--variant` when the resolved value is `runtime-default`. Registry/Fleet rows keep capability mode, worker mode, role, profile, tier, and granularity separate. `--start` reruns the same runtime projection check before launching. Use `liveness` while waiting and `harvest --mark-done` after main-session harvest; merge and cleanup remain outside the wrapper |
 | QA policy mapping | `adapters/opencode/bin/preflight.sh qa-policy <level> [code|research|doc|general]` maps portable QA levels from `core/CONVENTIONS.md` to OpenCode assurance scope, selected-pass reviewer budgets, external-adversary requirements, max rounds, and inline fallback reporting. `stage_graph_selector=intensity-not-qa` means these budgets do not open stages or depth by themselves |
 | artifact-order gate | `core/HOOKS.md` defines the invariant; run `adapters/opencode/bin/preflight.sh write <file> [session-id]` before writes |
 | core-first gate | `core/HOOKS.md` defines marker/check semantics; plugin read markers plus `preflight.sh write` deny ungrounded `adapters/**` edits. Run `preflight.sh read <core-doc.md>` manually after core reads when plugins are unavailable |
@@ -261,32 +261,38 @@ projected bootstrap file:
 Further OpenCode-specific files can be added under `adapters/opencode/` and
 symlinked or generated into the config home as the adapter matures.
 
-## Model Role Mapping
+## Model Role and Execution-Profile Mapping
 
-OpenCode adapter maps `core/CONVENTIONS.md §2` portable roles to OpenCode
-runtime model/variant tiers. OpenCode uses `provider/model-id` strings and a
-`variant` field for reasoning profile selection; there is no numeric
-reasoning-effort config field.
+OpenCode uses `provider/model-id` strings and an optional `variant`; there is no
+verified numeric effort axis. Behavioral roles resolve through `preflight.sh
+role`, while route-bound registered work carries one of these sealed profiles:
 
-| Portable role | OpenCode adapter expectation |
-|---|---|
-| `fast reviewer` / `fast fact-checker` / `fast writer` | Low-cost, low-latency model or `small_model` with a low variant for surface, coverage, format, and verbatim matching |
-| `fast implementer` | Configured balanced model/variant; concrete default remains unknown until runtime inventory exists |
-| `deep reviewer` / `deep maker` | Higher variant or stronger model for methodology, domain, architecture, and safety judgment |
-| `external adversary` | Prefer a model, configuration, or process different from the primary OpenCode session; otherwise report unavailable and fall back to thorough |
-| `deep orchestrator` | Standard+ dispatch-depth-1 conductor; concrete model remains unknown until runtime inventory or probe exists |
-| `orchestrator` | Balanced mechanical coordination; concrete model remains unknown until runtime inventory or probe exists |
+| Model profile | OpenCode realization | Granularity |
+|---|---|---|
+| `deep` | configured deep tier / runtime default | distinct |
+| `balanced-deep` | configured deep tier / runtime default | collapsed to `deep` |
+| `light` | configured light tier / runtime default | distinct |
+| `mini` | configured mini tier / runtime default | lifecycle/micro-only; substantive dispatch-depth-1/2 work is rejected |
 
-OpenCode wrappers expose the mapping through `AGENT_MODEL_FAST`, `AGENT_MODEL_BALANCED`, `AGENT_MODEL_DEEP`,
-`AGENT_MODEL_EXTERNAL`, `AGENT_MODEL_ORCHESTRATOR`,
-`AGENT_VARIANT_FAST`, `AGENT_VARIANT_BALANCED`, `AGENT_VARIANT_DEEP`,
-`AGENT_VARIANT_EXTERNAL`, and `AGENT_VARIANT_ORCHESTRATOR`. Shared Skills require role meaning rather than concrete model names.
+Non-route role compatibility overrides remain explicit and config-derived:
 
-`adapters/opencode/bin/preflight.sh role <portable-role>` is the executable
-mapping surface. When no concrete model is configured it reports
-`opencode-default` and `runtime-default`; for `external adversary`, it reports
-unavailable unless `AGENT_MODEL_EXTERNAL` or `AGENT_EXTERNAL_CMD` is
-configured.
+```text
+AGENT_MODEL_FAST
+AGENT_MODEL_DEEP
+AGENT_MODEL_EXTERNAL
+AGENT_MODEL_ORCHESTRATOR
+AGENT_VARIANT_FAST
+AGENT_VARIANT_DEEP
+AGENT_VARIANT_EXTERNAL
+AGENT_VARIANT_ORCHESTRATOR
+AGENT_EXTERNAL_CMD
+```
+
+The adapter reports reduced profile granularity instead of claiming four-step
+parity, and it omits a `--variant` argument for `runtime-default`. Environment
+role overrides remain available outside a route; they cannot replace a sealed
+profile. `external adversary` remains unavailable unless
+`AGENT_MODEL_EXTERNAL` or `AGENT_EXTERNAL_CMD` provides independent execution.
 
 ## Compatibility
 

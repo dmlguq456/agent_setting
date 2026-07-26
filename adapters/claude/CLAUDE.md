@@ -28,8 +28,8 @@ touches the named domain.
 
 ## Routing and Execution
 
-Route by `core/WORKFLOW.md §0.2`, apply its §0.3 gate, and obtain the §0.4
-five-field approval before material work unless scope and route are already
+Route by `core/WORKFLOW.md §0.2`, apply its §0.3 gate, and present the
+five-field card in §0.4 before material work unless scope and route are already
 approved. Load full capability detail only in the acting owner or worker; spec
 work also requires the spec-read gate.
 
@@ -41,8 +41,8 @@ Checked wrappers keep `capability_mode` separate from a non-owner
 `worker_mode`, which must equal its portable `unit`. A dispatch-depth-1 owner is
 `_kernel/owner` with no worker mode; contradictory owner/stage tuples fail
 before prompt, registry, or spawn. Legacy `mode` is read-only compatibility
-data. Use `stage-dispatch-fallback.py` for standard+ dispatch-depth-2 work and one
-`dispatch-batch.py` call for a two-way `replica_group`. Contract v3 claims one
+data. Use `stage-dispatch-fallback.py` for ordinary standard+ dispatch-depth-2 work and one
+`dispatch-batch.py --parallel-group` call for each sealed 2–4-way group. Contract v3 claims one
 stable attempt before spawn; the retired broker only supports `status`/`stop`.
 
 Keep native agents distinct from registered headless worker dispatch; a restriction on one surface never silently extends to the other. Preserve model role, intensity, depth, tests, safety, and validation on fallback. Do not run drill automatically.

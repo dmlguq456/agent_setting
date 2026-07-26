@@ -219,6 +219,13 @@ def _parse_depth(value):
     return max(1, depth)
 
 
+def _parse_optional_int(value):
+    try:
+        return int(value) if value not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
 _KNOWN_HARNESSES = {"claude", "codex", "opencode"}
 _TRANSPORTS = {"headless", "interactive"}
 _EXECUTION_SURFACES = {
@@ -1576,7 +1583,15 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None, registry_priority=0):
             unit=unit,
             worker_role=worker_role,
             capability_owner=meta.get("owner") or meta.get("capability_owner"),
-            effort=meta.get("effort"), model_role=meta.get("model_role"),
+            effort=meta.get("effort") or meta.get("reasoning") or meta.get("variant"),
+            model_role=meta.get("model_role"),
+            model_profile=meta.get("model_profile"), model_tier=meta.get("model_tier"),
+            profile_granularity=meta.get("profile_granularity"),
+            parallel_group=meta.get("parallel_group") or meta.get("replica_group"),
+            replica_group=meta.get("replica_group"),
+            perspective=meta.get("perspective") or meta.get("batch_perspective"),
+            parallel_leg_index=_parse_optional_int(meta.get("batch_parallel_leg_index")),
+            parallel_leg_count=_parse_optional_int(meta.get("batch_declared_size")),
             route_file=meta.get("route_file"), route_id=meta.get("route_id"),
             route_hash=meta.get("route_hash"), route_node=meta.get("route_node"),
             attempt_id=meta.get("attempt_id"),

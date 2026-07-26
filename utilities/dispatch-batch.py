@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Atomically admit and concurrently launch one immutable two-way replica group."""
+"""Atomically admit and concurrently launch one immutable 2..4-way group."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ SUPPORTED_BATCH_HARNESSES = ("codex", "claude")
 SAFE_SLUG = re.compile(r"[^A-Za-z0-9._-]+")
 RESERVATION_TOKEN = re.compile(r"[0-9a-f]{32}")
 OUTPUT_TAIL_BYTES = 65536
-DEFAULT_PROMPT = "Execute the selected immutable replica node and emit its completion evidence."
+DEFAULT_PROMPT = "Execute the selected immutable parallel leg and emit its completion evidence."
 
 
 class BatchError(RuntimeError):
@@ -92,20 +92,40 @@ def load_route(route_path: Path) -> dict[str, object]:
     return route
 
 
-def replica_nodes(route: dict[str, object], group: str) -> list[dict[str, object]]:
+def parallel_nodes(route: dict[str, object], group: str) -> list[dict[str, object]]:
     nodes = [
         node
         for node in route.get("nodes", [])
-        if isinstance(node, dict) and node.get("replica_group") == group
+        if isinstance(node, dict)
+        and (node.get("parallel_group") or node.get("replica_group")) == group
     ]
-    if len(nodes) != 2:
-        raise BatchError("replica-group-cardinality", f"group={group} count={len(nodes)}")
+    if not 2 <= len(nodes) <= 4:
+        raise BatchError("parallel-group-cardinality", f"group={group} count={len(nodes)}")
+    if any("parallel_leg_index" in node for node in nodes):
+        nodes.sort(key=lambda node: int(node.get("parallel_leg_index", -1)))
+        if [node.get("parallel_leg_index") for node in nodes] != list(range(len(nodes))):
+            raise BatchError("parallel-group-leg-index-invalid", group)
+        if any(node.get("parallel_leg_count") != len(nodes) for node in nodes):
+            raise BatchError("parallel-group-width-mismatch", group)
     if any(node.get("dispatch_depth") != 2 for node in nodes):
-        raise BatchError("replica-group-depth-invalid", group)
+        raise BatchError("parallel-group-depth-invalid", group)
     dependencies = {tuple(node.get("depends_on", [])) for node in nodes}
     if len(dependencies) != 1:
-        raise BatchError("replica-group-dependency-mismatch", group)
+        raise BatchError("parallel-group-dependency-mismatch", group)
+    summaries = [
+        row for row in route.get("parallel_groups", [])
+        if isinstance(row, dict) and row.get("id") == group
+    ]
+    if summaries:
+        summary = summaries[0]
+        if (len(summaries) != 1 or summary.get("width") != len(nodes)
+                or summary.get("members") != [node.get("id") for node in nodes]):
+            raise BatchError("parallel-group-summary-mismatch", group)
     return nodes
+
+
+# One-window import compatibility. New callers and CLI diagnostics use parallel_nodes.
+replica_nodes = parallel_nodes
 
 
 def candidate(node: dict[str, object], adapter: str) -> tuple[str, int] | None:
@@ -143,18 +163,18 @@ def assign_harnesses(
                 continue
             choices.append((adapter, selected[0], selected[1]))
         if not choices:
-            raise BatchError("replica-headless-unavailable", str(node.get("id", "-")))
+            raise BatchError("parallel-headless-unavailable", str(node.get("id", "-")))
         options.append(choices)
 
     combinations = list(itertools.product(*options))
-    distinct = [rows for rows in combinations if len({row[0] for row in rows}) == len(nodes)]
+    distinct = [rows for rows in combinations if len({row[0] for row in rows}) >= 2]
     independence = "cross-harness"
     if distinct:
         combinations = distinct
     elif allow_degraded:
         independence = "degraded-same-harness"
     else:
-        raise BatchError("replica-cross-harness-unavailable")
+        raise BatchError("parallel-cross-harness-unavailable")
 
     def score(rows: tuple[tuple[str, str, int], ...]) -> tuple[int, int, tuple[str, ...]]:
         affinity_misses = sum(
@@ -162,7 +182,8 @@ def assign_harnesses(
             for node, row in zip(nodes, rows)
             if node.get("harness_affinity") not in {None, "", "unspecified", row[0]}
         )
-        return affinity_misses, sum(row[2] for row in rows), tuple(row[0] for row in rows)
+        return (-len({row[0] for row in rows}), affinity_misses,
+                sum(row[2] for row in rows), tuple(row[0] for row in rows))
 
     chosen = min(combinations, key=score)
     return [
@@ -192,7 +213,7 @@ def stable_attempt_id(
     return "att-" + digest[:48]
 
 
-def replica_slug(prefix: str, node_id: str) -> str:
+def parallel_slug(prefix: str, node_id: str) -> str:
     """Keep the node identity after truncation and avoid sanitized collisions."""
 
     safe_prefix = SAFE_SLUG.sub("-", prefix).strip("-") or "replica"
@@ -203,6 +224,10 @@ def replica_slug(prefix: str, node_id: str) -> str:
     return f"{safe_prefix[:prefix_limit]}-{node_component}"
 
 
+# One-window callable compatibility.
+replica_slug = parallel_slug
+
+
 def reserve_batch(
     governor: Path,
     governor_root: Path,
@@ -210,7 +235,7 @@ def reserve_batch(
     *,
     manifest: dict[str, object],
     manifest_digest: str,
-    peer: dict[str, str] | None = None,
+    peers: list[dict[str, str]] | None = None,
 ) -> list[str]:
     count = len(pending_legs)
     encoded_manifest = json.dumps(manifest, separators=(",", ":"), sort_keys=True)
@@ -235,14 +260,8 @@ def reserve_batch(
                 for value in ("--batch-attempt-id", str(leg["attempt_id"]))
             ],
             *(
-                [
-                    "--batch-peer-agent-home", peer["agent_home"],
-                    "--batch-peer-attempt-id", peer["attempt_id"],
-                    "--batch-peer-jobs", peer["jobs"],
-                    "--batch-peer-route", peer["route"],
-                ]
-                if peer is not None
-                else []
+                ["--batch-peers-json", json.dumps(peers, separators=(",", ":"), sort_keys=True)]
+                if peers is not None else []
             ),
         ],
         text=True,
@@ -462,7 +481,8 @@ def existing_leg_result(
     repo: str,
     parent: str,
     parent_attempt_id: str,
-    replica_group: str,
+    parallel_group: str,
+    declared_size: int,
     manifest_digest: str,
     leg_digest: str,
     agent_home: Path,
@@ -520,10 +540,11 @@ def existing_leg_result(
         "dispatch_depth": "2",
         "fallback_hop": str(leg["hop"]),
         "fallback_ordinal": str(leg["ordinal"]),
-        "replica_group": replica_group,
-        "reservation_kind": "replica-batch",
-        "batch_declared_size": "2",
-        "batch_group": replica_group,
+        "parallel_group": parallel_group,
+        "replica_group": parallel_group,
+        "reservation_kind": "parallel-batch",
+        "batch_declared_size": str(declared_size),
+        "batch_group": parallel_group,
         "batch_route_id": str(route["route_id"]),
         "batch_parent_attempt_id": parent_attempt_id,
         "batch_attempt_id": str(leg["attempt_id"]),
@@ -541,23 +562,21 @@ def existing_leg_result(
         for key, value in expected.items()
         if metadata.get(key) != value
     }
-    if metadata.get("batch_admission_count") not in {"1", "2"}:
+    if metadata.get("batch_admission_count") not in {"1", str(declared_size)}:
         mismatches["batch_admission_count"] = (
-            "1|2", metadata.get("batch_admission_count", "")
+            f"1|{declared_size}", metadata.get("batch_admission_count", "")
         )
     if metadata.get("batch_admission_count") == "1":
-        for key in (
-            "batch_peer_attempt_id", "batch_peer_state", "batch_peer_proof_sha256"
-        ):
+        for key in ("batch_peer_count", "batch_peer_set_sha256"):
             if not metadata.get(key):
                 mismatches[key] = ("partial-recovery-peer-proof", "")
-        if metadata.get("batch_peer_state") not in {"active", "completed"}:
-            mismatches["batch_peer_state"] = (
-                "active|completed", metadata.get("batch_peer_state", "")
+        if metadata.get("batch_peer_count") != str(declared_size - 1):
+            mismatches["batch_peer_count"] = (
+                str(declared_size - 1), metadata.get("batch_peer_count", "")
             )
-        proof = metadata.get("batch_peer_proof_sha256", "")
+        proof = metadata.get("batch_peer_set_sha256", "")
         if not DIGEST.fullmatch(proof):
-            mismatches["batch_peer_proof_sha256"] = (
+            mismatches["batch_peer_set_sha256"] = (
                 "sha256:<64 lowercase hex>", proof
             )
     if (
@@ -666,6 +685,9 @@ def batch_receipt(
     args: argparse.Namespace,
     lifecycle: str,
     independence: str,
+    required_axes: list[str],
+    realized_axes: list[str],
+    degradation_reason: str,
     legs: list[dict[str, object]],
     results: list[dict[str, object]],
     admitted: int,
@@ -689,11 +711,15 @@ def batch_receipt(
     else:
         state = "launched"
     receipt = {
-        "schema_version": 1,
+        "schema_version": 2,
         "state": state,
         "action": "start",
-        "replica_group": args.replica_group,
+        "parallel_group": args.parallel_group,
+        "replica_group": args.parallel_group,
         "independence": independence,
+        "required_independence_axes": required_axes,
+        "realized_independence_axes": realized_axes,
+        "degradation_reason": degradation_reason,
         "concurrent_launch": int(started_count == len(legs)),
         "launch_lifecycle": lifecycle,
         "requested": len(legs),
@@ -710,7 +736,8 @@ def batch_receipt(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--route", type=Path, required=True)
-    parser.add_argument("--replica-group", required=True)
+    parser.add_argument("--parallel-group")
+    parser.add_argument("--replica-group")
     parser.add_argument("--action", choices=("dry-run", "start"), default="dry-run")
     parser.add_argument("--slug-prefix", required=True)
     parser.add_argument("--parent", required=True)
@@ -723,11 +750,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--allow-degraded-independence", action="store_true")
     args = parser.parse_args(argv)
+    if args.parallel_group and args.replica_group and args.parallel_group != args.replica_group:
+        parser.error("--parallel-group and --replica-group aliases must match")
+    args.parallel_group = args.parallel_group or args.replica_group
+    if not args.parallel_group:
+        parser.error("one of --parallel-group or --replica-group is required")
+    args.replica_group = args.parallel_group
 
     try:
         route_path = args.route.resolve()
         route = load_route(route_path)
-        nodes = replica_nodes(route, args.replica_group)
+        nodes = parallel_nodes(route, args.parallel_group)
         parent_identity = DISPATCH_NODE.current_parent_identity()
         if parent_identity is None:
             raise BatchError("parent-runtime-identity-missing")
@@ -778,13 +811,25 @@ def main(argv: list[str] | None = None) -> int:
         return fail(reason, 78 if reason.startswith("predecessor-process-") else 65, detail=detail)
 
     lifecycle = select_launch_lifecycle()
+    required_axes = list(nodes[0].get("parallel_independence_axes", ["cross-harness"]))
+    realized_axes = []
+    if len({adapter for _, adapter, _, _ in assignments}) >= 2:
+        realized_axes.append("cross-harness")
+    if len({str(node.get("model_profile")) for node, _, _, _ in assignments}) >= 2:
+        realized_axes.append("model-profile")
+    if len({str(node.get("perspective")) for node, _, _, _ in assignments}) == len(nodes):
+        realized_axes.append("perspective")
+    degradation_reason = (
+        "" if independence == "cross-harness"
+        else "cross-harness-unavailable-user-allowed"
+    )
     assignment_digest = "sha256:" + hashlib.sha256(
         args.prompt_text.encode("utf-8")
     ).hexdigest()
     legs = []
     for node, adapter, hop, ordinal in assignments:
         node_id = str(node["id"])
-        slug = replica_slug(args.slug_prefix, node_id)
+        slug = parallel_slug(args.slug_prefix, node_id)
         attempt_id = stable_attempt_id(
             route,
             node,
@@ -804,13 +849,19 @@ def main(argv: list[str] | None = None) -> int:
                 "attempt_id": attempt_id,
                 "assignment_sha256": assignment_digest,
                 "independence": independence,
+                "model_profile": str(node.get("model_profile")),
+                "perspective": str(node.get("perspective")),
+                "parallel_leg_index": int(node.get("parallel_leg_index", len(legs))),
             }
         )
     manifest, manifest_digest, leg_digests = build_manifest(
-        replica_group=args.replica_group,
+        parallel_group=args.parallel_group,
         route_id=str(route["route_id"]),
         parent_attempt_id=parent_attempt,
         independence=independence,
+        required_independence_axes=required_axes,
+        realized_independence_axes=realized_axes,
+        degradation_reason=degradation_reason,
         members=[
             {
                 "assignment_sha256": assignment_digest,
@@ -819,6 +870,9 @@ def main(argv: list[str] | None = None) -> int:
                 "harness": str(leg["adapter"]),
                 "fallback_hop": str(leg["hop"]),
                 "fallback_ordinal": int(leg["ordinal"]),
+                "model_profile": str(leg["model_profile"]),
+                "perspective": str(leg["perspective"]),
+                "parallel_leg_index": int(leg["parallel_leg_index"]),
             }
             for leg in legs
         ],
@@ -826,11 +880,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.action != "start":
         print(json.dumps({
-            "schema_version": 1,
+            "schema_version": 2,
             "state": "validated",
             "action": args.action,
-            "replica_group": args.replica_group,
+            "parallel_group": args.parallel_group,
+            "replica_group": args.parallel_group,
             "independence": independence,
+            "required_independence_axes": required_axes,
+            "realized_independence_axes": realized_axes,
+            "degradation_reason": degradation_reason,
             "launch_lifecycle": lifecycle,
             "legs": legs,
         }, separators=(",", ":"), sort_keys=True))
@@ -855,7 +913,8 @@ def main(argv: list[str] | None = None) -> int:
                 repo=repo,
                 parent=args.parent,
                 parent_attempt_id=parent_attempt,
-                replica_group=args.replica_group,
+                parallel_group=args.parallel_group,
+                declared_size=len(legs),
                 manifest_digest=manifest_digest,
                 leg_digest=leg_digests[str(leg["attempt_id"])],
                 agent_home=agent_home,
@@ -885,6 +944,9 @@ def main(argv: list[str] | None = None) -> int:
             args=args,
             lifecycle=lifecycle,
             independence=independence,
+            required_axes=required_axes,
+            realized_axes=realized_axes,
+            degradation_reason=degradation_reason,
             legs=legs,
             results=results,
             admitted=0,
@@ -897,30 +959,33 @@ def main(argv: list[str] | None = None) -> int:
     with BatchSignalRelay() as relay:
         if pending_legs:
             try:
-                peer = None
+                peers = None
                 if len(pending_legs) == 1:
                     existing_peers = [
                         result for result in results
                         if result.get("launch_state") == "existing"
                     ]
-                    if len(existing_peers) != 1:
+                    if len(existing_peers) != len(legs) - 1:
                         raise BatchError(
-                            "replica-partial-peer-proof-missing",
+                            "parallel-partial-peer-set-missing",
                             f"existing={len(existing_peers)}",
                         )
-                    peer = {
-                        "agent_home": str(agent_home.resolve(strict=False)),
-                        "attempt_id": str(existing_peers[0]["attempt_id"]),
-                        "jobs": str(jobs.resolve(strict=False)),
-                        "route": str(route_path),
-                    }
+                    peers = [
+                        {
+                            "agent_home": str(agent_home.resolve(strict=False)),
+                            "attempt_id": str(existing_peer["attempt_id"]),
+                            "jobs": str(jobs.resolve(strict=False)),
+                            "route": str(route_path),
+                        }
+                        for existing_peer in existing_peers
+                    ]
                 tokens = reserve_batch(
                     governor,
                     governor_root,
                     pending_legs,
                     manifest=manifest,
                     manifest_digest=manifest_digest,
-                    peer=peer,
+                    peers=peers,
                 )
             except BatchError as exc:
                 return fail(
@@ -1011,7 +1076,7 @@ def main(argv: list[str] | None = None) -> int:
                         "duplicate_attempt": "0",
                         "check": "failed",
                         "launch_state": "failed",
-                        "reason": "replica-wrapper-spawn-failed",
+                        "reason": "parallel-wrapper-spawn-failed",
                     }
                 )
 
@@ -1034,7 +1099,8 @@ def main(argv: list[str] | None = None) -> int:
                                 repo=repo,
                                 parent=args.parent,
                                 parent_attempt_id=parent_attempt,
-                                replica_group=args.replica_group,
+                                parallel_group=args.parallel_group,
+                                declared_size=len(legs),
                                 manifest_digest=manifest_digest,
                                 leg_digest=leg_digests[str(leg["attempt_id"])],
                                 agent_home=agent_home,
@@ -1057,7 +1123,7 @@ def main(argv: list[str] | None = None) -> int:
                             "duplicate_attempt": "unknown",
                             "check": "failed",
                             "launch_state": "failed",
-                            "reason": "replica-wrapper-collect-failed:" + type(exc).__name__,
+                            "reason": "parallel-wrapper-collect-failed:" + type(exc).__name__,
                         })
                     finally:
                         cancel_unclaimed(governor, governor_root, token)
@@ -1068,6 +1134,9 @@ def main(argv: list[str] | None = None) -> int:
         args=args,
         lifecycle=lifecycle,
         independence=independence,
+        required_axes=required_axes,
+        realized_axes=realized_axes,
+        degradation_reason=degradation_reason,
         legs=legs,
         results=results,
         admitted=len(tokens),

@@ -143,7 +143,10 @@ class ActiveNodeProjection:
     write_scope: Optional[str] = None
     state: Optional[str] = None
     progress: Optional[dict] = None
-    replica_group: Optional[str] = None
+    parallel_group: Optional[str] = None
+    replica_group: Optional[str] = None  # one-window route compatibility alias
+    model_profile: Optional[str] = None
+    perspective: Optional[str] = None
 
     def to_dict(self):
         return _public_value(self)
@@ -387,6 +390,14 @@ class DispatchJob:
     capability_owner: Optional[str] = None  # owning capability slug/name for sub-workers
     effort: Optional[str] = None        # dispatch runtime effort (pipe `effort=`; None = parent-inherit)
     model_role: Optional[str] = None    # Portable model role from pipe model_role=.
+    model_profile: Optional[str] = None  # route-sealed portable execution profile
+    model_tier: Optional[str] = None     # adapter-resolved concrete tier
+    profile_granularity: Optional[str] = None  # full | collapsed-balanced-deep | legacy
+    parallel_group: Optional[str] = None
+    replica_group: Optional[str] = None  # one-window registry compatibility alias
+    perspective: Optional[str] = None
+    parallel_leg_index: Optional[int] = None
+    parallel_leg_count: Optional[int] = None
     state_evidence: Optional[dict] = None  # F-25 classifier verdict + inputs (additive; --json via asdict)
     # F-28a (v10, prd.md:302) — immutable route-record link, read-only. route_file is the
     # record's on-disk path (may be /tmp and already gone by the time fleet reads it — tolerant,

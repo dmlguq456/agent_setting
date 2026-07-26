@@ -120,27 +120,30 @@ class TestRoute(unittest.TestCase):
      self.assertTrue(route["nodes"][0]["registered_worker"])
  def test_promotion_standard(self):
   evidence=self.dispatch(self.nested())
-  a=R.compile_route(**self.args(signals=["public-api"],transport="headless",inline_reason=None,dispatch_evidence=evidence)); self.assertEqual([x["id"] for x in a["nodes"]],["frame","frame-replica","plan","plan-check","execute","impl-review","test","report"])
- def test_strong_expands_replica_pair_and_standard_does_not(self):
+  a=R.compile_route(**self.args(signals=["public-api"],transport="headless",inline_reason=None,dispatch_evidence=evidence)); self.assertEqual([x["id"] for x in a["nodes"]],["frame","frame-alternative","plan","plan-check","execute","impl-review","test","report"])
+  self.assertEqual(a["owner_model_profile"],"balanced-deep")
+ def test_strong_expands_asymmetric_parallel_groups(self):
   evidence=self.dispatch(self.nested())
   standard=R.compile_route(**self.args(signals=["public-api"],transport="headless",inline_reason=None,dispatch_evidence=evidence))
-  self.assertNotIn("impl-review-replica",[x["id"] for x in standard["nodes"]])
-  self.assertNotIn("plan-replica",[x["id"] for x in standard["nodes"]])
+  self.assertNotIn("impl-review-alternative",[x["id"] for x in standard["nodes"]])
+  self.assertNotIn("plan-alternative",[x["id"] for x in standard["nodes"]])
   strong=self.compile_v3(evidence)
   self.assertEqual([x["id"] for x in strong["nodes"]],
-   ["frame","frame-replica","plan","plan-replica","plan-check","execute","impl-review","impl-review-replica","test","report"])
+   ["frame","frame-alternative","frame-contrarian","plan","plan-alternative","plan-check","execute","impl-review","impl-review-alternative","test","report"])
   base=next(n for n in strong["nodes"] if n["id"]=="impl-review")
-  replica=next(n for n in strong["nodes"] if n["id"]=="impl-review-replica")
-  self.assertEqual(base["replica_group"],"impl-review")
-  self.assertEqual(replica["replica_group"],"impl-review")
-  self.assertEqual(replica["independence_axis"],"cross-harness")
-  self.assertEqual(replica["dispatch_depth"],2)
-  self.assertEqual(replica["unit"],base["unit"])
-  self.assertEqual(replica["outputs"],["_internal/dev_reviews/phase_review.replica.md"])
-  self.assertNotEqual(replica["outputs"],base["outputs"])
+  alternative=next(n for n in strong["nodes"] if n["id"]=="impl-review-alternative")
+  self.assertEqual(base["parallel_group"],"impl-review")
+  self.assertEqual(alternative["parallel_group"],"impl-review")
+  self.assertEqual(alternative["parallel_independence_axes"],["cross-harness","model-profile","perspective"])
+  self.assertEqual(alternative["dispatch_depth"],2)
+  self.assertEqual(alternative["unit"],base["unit"])
+  self.assertEqual(alternative["outputs"],["_internal/dev_reviews/phase_review.alternative.md"])
+  self.assertNotEqual(alternative["outputs"],base["outputs"])
+  self.assertEqual((base["model_profile"],alternative["model_profile"]),("balanced-deep","light"))
+  self.assertNotEqual(base["perspective"],alternative["perspective"])
   test_node=next(n for n in strong["nodes"] if n["id"]=="test")
   self.assertIn("impl-review",test_node["depends_on"])
-  self.assertIn("impl-review-replica",test_node["depends_on"])
+  self.assertIn("impl-review-alternative",test_node["depends_on"])
   R.verify_route(strong,R.ROOT)
  def test_framing_anchor_expands_from_standard_and_feeds_plan(self):
   # user directive 2026-07-24: direction-setting points get independent
@@ -150,22 +153,22 @@ class TestRoute(unittest.TestCase):
   evidence=self.dispatch(self.nested())
   standard=R.compile_route(**self.args(signals=["public-api"],transport="headless",inline_reason=None,dispatch_evidence=evidence))
   frame=next(n for n in standard["nodes"] if n["id"]=="frame")
-  frame_replica=next(n for n in standard["nodes"] if n["id"]=="frame-replica")
-  self.assertEqual(frame["replica_group"],"frame")
-  self.assertEqual(frame_replica["replica_group"],"frame")
-  self.assertEqual(frame_replica["independence_axis"],"cross-harness")
-  self.assertEqual(frame_replica["outputs"],["shards/frame/direction-brief.replica.md"])
+  frame_replica=next(n for n in standard["nodes"] if n["id"]=="frame-alternative")
+  self.assertEqual(frame["parallel_group"],"frame")
+  self.assertEqual(frame_replica["parallel_group"],"frame")
+  self.assertEqual(frame_replica["parallel_independence_axes"],["cross-harness","model-profile","perspective"])
+  self.assertEqual(frame_replica["outputs"],["shards/frame/direction-brief.alternative.md"])
   plan=next(n for n in standard["nodes"] if n["id"]=="plan")
-  self.assertIn("frame",plan["depends_on"]); self.assertIn("frame-replica",plan["depends_on"])
+  self.assertIn("frame",plan["depends_on"]); self.assertIn("frame-alternative",plan["depends_on"])
   self.assertIn("shards/frame/direction-brief.md",plan["inputs"])
-  self.assertIn("shards/frame/direction-brief.replica.md",plan["inputs"])
+  self.assertIn("shards/frame/direction-brief.alternative.md",plan["inputs"])
   strong=self.compile_v3(evidence)
-  plan_replica=next(n for n in strong["nodes"] if n["id"]=="plan-replica")
-  self.assertEqual(plan_replica["outputs"],["plan.replica.md","checklist.replica.md"])
-  self.assertIn("shards/frame/direction-brief.replica.md",plan_replica["inputs"])
+  plan_replica=next(n for n in strong["nodes"] if n["id"]=="plan-alternative")
+  self.assertEqual(plan_replica["outputs"],["plan.alternative.md","checklist.alternative.md"])
+  self.assertIn("shards/frame/direction-brief.alternative.md",plan_replica["inputs"])
   check=next(n for n in strong["nodes"] if n["id"]=="plan-check")
-  self.assertIn("plan",check["depends_on"]); self.assertIn("plan-replica",check["depends_on"])
-  self.assertIn("plan.replica.md",check["inputs"]); self.assertIn("checklist.replica.md",check["inputs"])
+  self.assertIn("plan",check["depends_on"]); self.assertIn("plan-alternative",check["depends_on"])
+  self.assertIn("plan.alternative.md",check["inputs"]); self.assertIn("checklist.alternative.md",check["inputs"])
   R.verify_route(strong,R.ROOT)
  def test_map_worker_shard_replica_gets_disjoint_tree(self):
   # spec research shards replicate as a sibling '-replica' tree; the review
@@ -174,30 +177,31 @@ class TestRoute(unittest.TestCase):
    capability="autopilot-spec",capability_mode="update",requested_intensity="standard",
    predicates=[],signals=["shared-contract"],transport="headless",inline_reason=None,
    dispatch_evidence=self.dispatch(self.nested())))
-  replica=next(n for n in route["nodes"] if n["id"]=="research-replica")
-  self.assertEqual(replica["outputs"],["shards/spec-research-replica/**"])
+  replica=next(n for n in route["nodes"] if n["id"]=="research-alternative")
+  self.assertEqual(replica["outputs"],["shards/spec-research-alternative/**"])
   review=next(n for n in route["nodes"] if n["id"]=="review")
-  self.assertIn("research-replica",review["depends_on"])
-  self.assertIn("shards/spec-research-replica/**",review["inputs"])
+  self.assertIn("research-alternative",review["depends_on"])
+  self.assertIn("shards/spec-research-alternative/**",review["inputs"])
   R.verify_route(route,R.ROOT)
  def test_replica_carries_fallback_chain_and_seal(self):
   strong=self.compile_v3(self.dispatch(self.nested()))
-  replica=next(n for n in strong["nodes"] if n["id"]=="impl-review-replica")
+  replica=next(n for n in strong["nodes"] if n["id"]=="impl-review-alternative")
   self.assertEqual([h["fallback_hop"] for h in replica["fallback_hops"]],
    ["same-harness-headless","cross-harness-headless","native-subagent","inline"])
   self.assertIn(replica.get("harness_affinity"),{"claude","codex","opencode","diverse","unspecified"})
- def test_thorough_and_adversarial_also_expand_replica(self):
+ def test_thorough_and_adversarial_expand_three_way_groups(self):
   for tier in ("thorough","adversarial"):
    route=R.compile_route(**self.args(requested_intensity=tier,predicates=[],signals=["shared-contract"],transport="headless",inline_reason=None,dispatch_evidence=self.dispatch(self.nested())))
-   self.assertIn("impl-review-replica",[x["id"] for x in route["nodes"]])
+   self.assertIn("impl-review-failure-mode",[x["id"] for x in route["nodes"]])
+   self.assertIn("plan-implementation-risk",[x["id"] for x in route["nodes"]])
  def test_nodes_carry_sealed_unit_refs(self):
   route=self.compile_v3(self.dispatch(self.nested()))
   units={n["id"]:n.get("unit") for n in route["nodes"]}
   self.assertEqual(units,{
-   "frame":"plan/frame","frame-replica":"plan/frame",
-   "plan":"plan/plan-author","plan-replica":"plan/plan-author",
+   "frame":"plan/frame","frame-alternative":"plan/frame","frame-contrarian":"plan/frame",
+   "plan":"plan/plan-author","plan-alternative":"plan/plan-author",
    "plan-check":"qa/plan-review","execute":"dev/backend",
-   "impl-review":"qa/code-review","impl-review-replica":"qa/code-review",
+   "impl-review":"qa/code-review","impl-review-alternative":"qa/code-review",
    "test":"qa/test","report":"editorial/report"})
   tampered=json.loads(json.dumps(route)); tampered["nodes"][0]["unit"]="dev/backend"
   with self.assertRaisesRegex(ValueError,"stale or modified route hash"):
@@ -274,7 +278,7 @@ class TestRoute(unittest.TestCase):
   with dispatch_defaults_config(DD_CONFIG_A):
    route=self._standard()
   by_id={n["id"]:n["harness_affinity"] for n in route["nodes"]}
-  self.assertEqual(set(by_id),{"frame","frame-replica","plan","plan-check","execute","impl-review","test","report"})
+  self.assertEqual(set(by_id),{"frame","frame-alternative","plan","plan-check","execute","impl-review","test","report"})
   for value in by_id.values(): self.assertIn(value,R.VALID_AFFINITY)
   self.assertEqual(by_id["frame"],"unspecified")
   self.assertEqual(by_id["plan"],"unspecified")

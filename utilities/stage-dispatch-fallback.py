@@ -480,6 +480,8 @@ def wrapper_command(
         command += ["--launch-lifecycle", lifecycle]
         if lifecycle == FOREGROUND_SCOPED:
             command += ["--foreground-timeout", str(args.foreground_timeout)]
+    command += ["--model-role", _unit_role(node.get("unit")) or node.get("role", "fast implementer")]
+    command += ["--model-profile", node["model_profile"]]
     if capacity_settings:
         model, paired = capacity_settings
         command += ["--model", model]
@@ -491,8 +493,6 @@ def wrapper_command(
                 "--cooled-model", capacity_prior.get("model", "unknown"),
                 "--selection-source", "orchestrator-explicit",
             ]
-    else:
-        command += ["--model-role", args.model_role or _unit_role(node.get("unit")) or node.get("role", "fast implementer")]
     optional = (
         (args.prompt_file, "--prompt-file"),
         (os.environ.get("AGENT_DISPATCH_PARENT_SESSION_ID"), "--parent-session-id"),
@@ -764,13 +764,20 @@ def main() -> int:
         return fail("invalid-dispatch-worker-type", 64, detail=str(exc), child_spawned="0")
     args.capability_mode = mode_args.capability_mode
     args.worker_mode = mode_args.worker_mode
+    sealed_role = _unit_role(node.get("unit")) or node.get("role", "fast implementer")
+    if args.model_role and args.model_role != sealed_role:
+        return fail(
+            "route-model-role-override", 64,
+            expected=sealed_role, explicit=args.model_role, child_spawned="0",
+        )
     if args.broker_root is not None or args.broker_timeout is not None:
         return fail("retired-broker-option", 64, child_spawned="0")
-    if node.get("replica_group") and args.action in {"register", "start"}:
+    group = node.get("parallel_group") or node.get("replica_group")
+    if group and args.action in {"register", "start"}:
         return fail(
-            "replica-group-batch-required",
+            "parallel-group-batch-required",
             65,
-            replica_group=str(node["replica_group"]),
+            parallel_group=str(group),
             child_spawned="0",
         )
 

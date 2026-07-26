@@ -67,6 +67,11 @@ from worker_bootstrap import (  # noqa: E402
     render_worker_bootstrap,
     resolve_worker_type,
 )
+from model_profile import (  # noqa: E402
+    ModelProfileError,
+    resolve_profile,
+    validate_registered_profile,
+)
 from codex_dispatch_terminal import inspect_terminal_attempt  # noqa: E402
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "adversarial"}
@@ -211,6 +216,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--log-dir")
     p.add_argument("--profile", help="profiles/<name>.yaml masked config home to attach via CLAUDE_CONFIG_DIR")
     p.add_argument("--model-role", default=os.environ.get("CLAUDE_DISPATCH_MODEL_ROLE"))
+    p.add_argument("--model-profile", default=os.environ.get("CLAUDE_DISPATCH_MODEL_PROFILE"))
     p.add_argument("--model", default=os.environ.get("CLAUDE_DISPATCH_MODEL"))
     p.add_argument("--effort", default=os.environ.get("CLAUDE_DISPATCH_EFFORT"))
     p.add_argument(
@@ -305,21 +311,63 @@ def _require_headless_model(model: str, source: str) -> None:
     if _main_session_only_model(model):
         raise ModelSelectionError(
             "headless-main-session-only-model",
-            f"model selected by {source} is interactive depth-0 main-session only",
+            f"model selected by {source} is interactive dispatch-depth-0 main-session only",
         )
 
 
 def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
+    try:
+        validate_registered_profile(
+            args.model_profile,
+            registered_worker=bool(args.registered_worker),
+            dispatch_depth=args.dispatch_depth,
+            worker_type=args.worker_type,
+        )
+    except ModelProfileError as exc:
+        raise ModelSelectionError("invalid-dispatch-model-profile", str(exc)) from exc
     if args.inherit_model_settings:
-        if args.model_role or args.model or args.effort:
+        if args.model_profile or args.model_role or args.model or args.effort:
             raise ModelSelectionError(
                 "invalid-dispatch-model-selection",
-                "--inherit-model-settings is mutually exclusive with --model-role, --model, and --effort",
+                "--inherit-model-settings is mutually exclusive with --model-profile, --model-role, --model, and --effort",
             )
         raise ModelSelectionError(
             "headless-model-inheritance-ineligible",
             "registered headless Claude dispatch cannot prove that inherited main-session settings exclude a main-only model; select --model-role or --model with --effort",
         )
+    if args.model_profile:
+        if not args.model_role and args.worker_type != "owner":
+            raise ModelSelectionError(
+                "model-profile-role-required",
+                "route-bound --model-profile requires the independently sealed --model-role",
+            )
+        if bool(args.model) != bool(args.effort):
+            raise ModelSelectionError(
+                "invalid-dispatch-model-selection",
+                "capacity override requires --model and --effort together",
+            )
+        if (args.model or args.effort) and not args.capacity_retry:
+            raise ModelSelectionError(
+                "model-profile-override-forbidden",
+                "a route-sealed model profile may use a concrete override only on a checked capacity retry",
+            )
+        try:
+            resolved = resolve_profile(
+                "claude", ROOT / "adapters" / "claude" / "config" / "models.conf", args.model_profile
+            )
+        except ModelProfileError as exc:
+            raise ModelSelectionError("invalid-dispatch-model-profile", str(exc)) from exc
+        model = args.model or resolved["model"]
+        _require_headless_model(model, f"profile:{args.model_profile}")
+        return {
+            "source": "profile+capacity" if args.model else "profile",
+            "role": args.model_role or "_kernel/owner",
+            "profile": resolved["profile"],
+            "tier": resolved["tier"],
+            "granularity": resolved["granularity"],
+            "model": model,
+            "effort": args.effort or resolved["budget"],
+        }
     if args.model_role and args.model:
         raise ModelSelectionError(
             "invalid-dispatch-model-selection",
@@ -341,7 +389,10 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
                 "(step-down is high; medium/low is for genuinely easy work only)",
                 file=sys.stderr,
             )
-        return {"source": source, "role": args.model_role, "model": fields["model"], "effort": effort}
+        return {
+            "source": source, "role": args.model_role, "profile": "unsealed",
+            "tier": "legacy", "granularity": "legacy", "model": fields["model"], "effort": effort,
+        }
     if not args.model and not args.effort:
         raise ModelSelectionError(
             "missing-dispatch-model-selection",
@@ -353,7 +404,10 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
             "--model and --effort must be provided together",
         )
     _require_headless_model(args.model, "explicit")
-    return {"source": "explicit", "role": "-", "model": args.model, "effort": args.effort}
+    return {
+        "source": "explicit", "role": "-", "profile": "unsealed",
+        "tier": "explicit", "granularity": "legacy", "model": args.model, "effort": args.effort,
+    }
 
 
 def task_prompt(args: argparse.Namespace) -> tuple[str, str]:
@@ -472,6 +526,7 @@ def dispatch_prompt(
         f"- assigned_contract: {args.assigned_contract}\n"
         f"- route_node: {args.route_node or '-'}\n"
         f"- model_role: {getattr(args, 'resolved_model_settings', {}).get('role') or args.model_role or '-'}\n"
+        f"- model_profile: {getattr(args, 'resolved_model_settings', {}).get('profile') or getattr(args, 'model_profile', None) or '-'}\n"
         f"- parent: {args.parent_slug or '-'}\n"
         f"- parent_session_id: {args.parent_session_id or '-'}\n"
         f"- owner: {args.capability_owner or '-'}\n"
@@ -723,7 +778,12 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         if value:
             pipe += f",{key}={value}"
     settings = args.resolved_model_settings
-    pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},effort={settings['effort']}"
+    pipe += (
+        f",model_source={settings['source']},model_role={settings['role']}"
+        f",model_profile={settings['profile']},model_tier={settings['tier']}"
+        f",profile_granularity={settings['granularity']}"
+        f",model={settings['model']},effort={settings['effort']}"
+    )
     pipe += f",async_wait_policy={_async_wait_policy(args)}"
     pipe += f",completion_delivery={args.resolved_completion_delivery}"
     if args.profile:
@@ -736,7 +796,10 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         )
     replica_reservation = getattr(args, "replica_batch_reservation", {})
     if replica_reservation:
-        pipe += f",replica_group={replica_reservation['batch_group']}"
+        pipe += (
+            f",parallel_group={replica_reservation['batch_group']}"
+            f",replica_group={replica_reservation['batch_group']}"
+        )
         for key in REPLICA_RESERVATION_ROW_KEYS:
             if key in replica_reservation:
                 pipe += f",{key}={replica_reservation[key]}"
@@ -1072,7 +1135,9 @@ def validate_route_record(args: argparse.Namespace) -> int:
         "--intensity", args.intensity, "--write-scope", args.write_scope,
         "--route-id", args.route_id, "--route-hash", args.route_hash,
         "--registry-digest", args.registry_digest,
-        "--unit", args.unit]
+        "--unit", args.unit,
+        "--model-role", args.model_role or "",
+        "--model-profile", args.model_profile or ""]
     if args.attempt_id:
         command += ["--current-attempt", args.attempt_id]
     result=subprocess.run(command,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -1215,9 +1280,9 @@ def main(argv: list[str]) -> int:
             and not os.environ.get(GOVERNOR_RESERVATION_ENV)
         ):
             return fail(
-                "replica-group-batch-required",
+                "parallel-group-batch-required",
                 65,
-                detail="replica start requires dispatch-batch admission",
+                detail="parallel-group start requires dispatch-batch admission",
                 child_spawned="0",
             )
     try:
@@ -1729,6 +1794,9 @@ def main(argv: list[str]) -> int:
     settings = args.resolved_model_settings
     print(f"model_source={settings['source']}")
     print(f"model_role={settings['role']}")
+    print(f"model_profile={settings['profile']}")
+    print(f"model_tier={settings['tier']}")
+    print(f"profile_granularity={settings['granularity']}")
     print(f"model={settings['model']}")
     print(f"effort={settings['effort']}")
     print(f"profile={args.profile or '-'}")

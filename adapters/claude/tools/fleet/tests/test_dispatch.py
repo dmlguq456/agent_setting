@@ -1211,7 +1211,11 @@ class DepthTwoRegistryMetadataTest(unittest.TestCase):
                 "capability=autopilot-code,mode=verify,qa=adversarial,"
                 "depth=2,harness=codex,parent=owner-job,parent_sid=codex-main,intensity=adversarial,"
                 "worker_type=review,assigned_contract=code-test,"
-                "worker_role=verifier,owner=autopilot-code",
+                "worker_role=verifier,owner=autopilot-code,"
+                "model_profile=balanced-deep,model_tier=deep,profile_granularity=full,"
+                "parallel_group=impl-review,replica_group=impl-review,"
+                "batch_perspective=failure-mode-review,batch_parallel_leg_index=2,"
+                "batch_declared_size=3,reasoning=medium",
             ])
             with open(jobs_log, "w") as f:
                 f.write(row + "\n")
@@ -1238,6 +1242,13 @@ class DepthTwoRegistryMetadataTest(unittest.TestCase):
             self.assertEqual(job.assigned_contract, "code-test")
             self.assertEqual(job.worker_role, "verifier")
             self.assertEqual(job.capability_owner, "autopilot-code")
+            self.assertEqual(job.model_profile, "balanced-deep")
+            self.assertEqual(job.model_tier, "deep")
+            self.assertEqual(job.profile_granularity, "full")
+            self.assertEqual(job.parallel_group, "impl-review")
+            self.assertEqual(job.perspective, "failure-mode-review")
+            self.assertEqual((job.parallel_leg_index, job.parallel_leg_count), (2, 3))
+            self.assertEqual(job.effort, "medium")
 
     def test_legacy_jobs_log_infers_harness_from_runtime_model_fields(self):
         with tempfile.TemporaryDirectory() as tmp:

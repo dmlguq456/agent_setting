@@ -49,13 +49,13 @@ An adapter that supports role delegation must document:
 - how a role is invoked;
 - what tools are available to that role;
 - how mode personas under `roles/modes/` are loaded or approximated;
-- which concrete model or reasoning profile maps to the portable model role — declared in a single adapter config source of truth (`adapters/<adapter>/config/models.conf`) that every other adapter surface derives from, with a fail-closed guard rejecting concrete model IDs outside that config and its generated regions;
+- how portable behavior roles and route-sealed execution profiles map independently to concrete model/effort or variant settings through the single adapter config source (`adapters/<adapter>/config/models.conf`), including reduced-granularity reporting and the substantive-`mini` deny;
 - where role output is written when a skill requires durable review logs;
 - what happens when a role is unavailable.
 
 Concrete model names do not belong in this directory. Use the portable model
-roles from `core/ADAPTATION.md` and let adapter documents define concrete
-mapping.
+roles and execution profiles from `core/CONVENTIONS.md` and let adapter config
+define concrete mapping.
 
 ## Behavior Contract (separate from the role catalog)
 

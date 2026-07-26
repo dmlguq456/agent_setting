@@ -59,9 +59,9 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh headless [--check] [--require-hook-trust] <worktree>
        preflight.sh nested-headless --parent-harness <h> --parent-transport <t> --parent-sandbox <s> --child-harness <h> --launch-authority <authority> --worktree <path> [--json]
        preflight.sh broker <status|stop> --jobs <jobs.log> [--root <broker-root>]  # legacy drain only
-       preflight.sh dispatch [--dry-run|--register|--start] [--require-hook-trust] --worktree <path> --slug <slug> --capability <name> --capability-mode <mode> [--worker-mode <family/mode>] --qa <level> [--intensity <level>] [--dispatch-depth 1|2] [--parent <slug>] [--worker-type owner|stage|review|support] [--unit <unit>] [--assigned-contract <capability>] [--owner <capability>] (--model-role <role>|--model <model> --reasoning <effort>|--inherit-model-settings) [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
+       preflight.sh dispatch [--dry-run|--register|--start] [--require-hook-trust] --worktree <path> --slug <slug> --capability <name> --capability-mode <mode> [--worker-mode <family/mode>] --qa <level> [--intensity <level>] [--dispatch-depth 1|2] [--parent <slug>] [--worker-type owner|stage|review|support] [--unit <unit>] [--assigned-contract <capability>] [--owner <capability>] (--model-profile <deep|balanced-deep|light|mini> [--model-role <role>]|--model-role <role>|--model <model> --reasoning <effort>|--inherit-model-settings) [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
        preflight.sh dispatch-chain --route <route.json> --node <id> --slug <slug> --parent <slug> [--capability-mode <mode>] [--worker-mode <family/mode>] [--model-role <role>] [--capacity-model <id> --capacity-reasoning|--capacity-effort|--capacity-variant <level>] [--progress-window-seconds N --watchdog-max-windows M] [--dry-run|--register|--start]
-       preflight.sh dispatch-batch --route <route.json> --replica-group <id> --slug-prefix <slug> --parent <slug> --action dry-run|start [--qa <level>] [--jobs <jobs.log>] [--prompt-text <text>] [--allow-degraded-independence]
+       preflight.sh dispatch-batch --route <route.json> --parallel-group <id> --slug-prefix <slug> --parent <slug> --action dry-run|start [--qa <level>] [--jobs <jobs.log>] [--prompt-text <text>] [--allow-degraded-independence]
        preflight.sh stage-heartbeat --attempt-id <id> --route-id <id> --route-node <id> --jobs <jobs.log> --phase <phase> --kind <kind> --evidence <ref>
        preflight.sh dispatch-current --jobs <jobs.log> (--session <id>|--route <id>|--node <id>|--attempt <id>|--job <slug>) [--all]
        preflight.sh dispatch-reconcile --jobs <jobs.log> (--session <id>|--route <id>|--node <id>|--attempt <id>|--job <slug>) [--apply]
@@ -481,7 +481,7 @@ tool_contract_check=adapters/codex/bin/preflight.sh headless --check <worktree>
 strict_tool_contract_check=adapters/codex/bin/preflight.sh headless --check --require-hook-trust <worktree>
 command_template=codex exec --cd <worktree> --sandbox workspace-write (--model <main-selected-model> -c model_reasoning_effort=<main-selected-reasoning>|inherit) -c approval_policy=never --json -
 model_selection_policy=main-orchestrator-must-select-per-job
-model_selection_surface=--model-role <portable-role>|--model <model> --reasoning <effort>|--inherit-model-settings
+model_selection_surface=--model-profile <deep|balanced-deep|light|mini> [--model-role <portable-role>]|--model-role <portable-role>|--model <model> --reasoning <effort>|--inherit-model-settings
 runtime_projection_requires=agent-harness,AGENTS.md,hooks.json,native-skills,native-agents,native-modes
 runtime_projection_strict_requires=complete-codex-hook-trust
 job_registry=<agent-home>/.dispatch/jobs.log (immutable AGENT_DISPATCH_JOBS for descendants)

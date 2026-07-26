@@ -26,9 +26,14 @@ SPEC.loader.exec_module(WRAPPER)
 def selection(**values):
     return SimpleNamespace(
         inherit_model_settings=values.get("inherit", False),
+        model_profile=values.get("profile"),
         model_role=values.get("role"),
         model=values.get("model"),
         effort=values.get("effort"),
+        registered_worker=values.get("registered_worker", 1),
+        dispatch_depth=values.get("dispatch_depth", 1),
+        worker_type=values.get("worker_type", "owner"),
+        capacity_retry=values.get("capacity_retry", 0),
     )
 
 
@@ -72,7 +77,15 @@ class ClaudeDispatchModelEligibilityTest(unittest.TestCase):
         )
         self.assertEqual(
             result,
-            {"source": "explicit", "role": "-", "model": "sonnet", "effort": "high"},
+            {
+                "source": "explicit",
+                "role": "-",
+                "profile": "unsealed",
+                "tier": "explicit",
+                "granularity": "legacy",
+                "model": "sonnet",
+                "effort": "high",
+            },
         )
 
     def test_cli_rejects_fable_before_registry_prompt_log_or_child(self):

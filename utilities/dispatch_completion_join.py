@@ -349,41 +349,52 @@ def _row_matches_current_route(
     )
 
 
-def _declared_replica_nodes(
+def _declared_parallel_nodes(
     route: dict[str, object], group: str
-) -> dict[str, dict[str, object]] | None:
+) -> tuple[dict[str, dict[str, object]], bool] | None:
+    """Return a bounded group and whether it uses the canonical v2 axis."""
+
     raw_nodes = route.get("nodes")
     if not isinstance(raw_nodes, list):
         return None
     nodes = {
         str(node.get("id")): node
         for node in raw_nodes
-        if isinstance(node, dict) and node.get("replica_group") == group
+        if isinstance(node, dict)
+        and (node.get("parallel_group") or node.get("replica_group")) == group
     }
     if (
-        len(nodes) != 2
+        not 2 <= len(nodes) <= 4
         or "" in nodes
         or any(node.get("dispatch_depth") != 2 for node in nodes.values())
     ):
         return None
-    return nodes
+    canonical = any(node.get("parallel_group") == group for node in nodes.values())
+    if canonical and any(node.get("parallel_group") != group for node in nodes.values()):
+        return None
+    return nodes, canonical
 
 
-def _replica_row_matches(
+def _parallel_row_matches(
     row: ChildRow,
     *,
     context: SupervisedDispatchContext,
     group: str,
     node_ids: set[str],
+    declared_size: int,
+    canonical: bool,
 ) -> bool:
     metadata = row.metadata
     node = metadata.get("route_node", "")
+    row_group = metadata.get("parallel_group") or metadata.get("replica_group")
+    expected_kind = "parallel-batch" if canonical else "replica-batch"
     return (
         _row_matches_current_route(row, context)
         and node in node_ids
-        and metadata.get("replica_group") == group
-        and metadata.get("reservation_kind") == "replica-batch"
-        and metadata.get("batch_declared_size") == "2"
+        and row_group == group
+        and (not canonical or metadata.get("parallel_group") == group)
+        and metadata.get("reservation_kind") == expected_kind
+        and metadata.get("batch_declared_size") == str(declared_size)
         and metadata.get("batch_group") == group
         and metadata.get("batch_route_id") == context.route_id
         and metadata.get("batch_parent_attempt_id") == context.parent_attempt_id
@@ -396,6 +407,7 @@ def _bound_batch_start(
     *,
     base: Path,
     options: dict[str, list[str]],
+    group: str,
     open_attempt_ids: set[str],
     context: SupervisedDispatchContext,
 ) -> bool:
@@ -406,17 +418,23 @@ def _bound_batch_start(
         context=context,
     ):
         return False
-    group = options["--replica-group"][0]
-    declared = _declared_replica_nodes(context.route, group)
-    if declared is None:
+    declaration = _declared_parallel_nodes(context.route, group)
+    if declaration is None:
         return False
+    declared, canonical = declaration
     node_ids = set(declared)
+    declared_size = len(node_ids)
     pending_rows = [
         row for row in context.rows if row.attempt_id in open_attempt_ids
     ]
     if not pending_rows or any(
-        not _replica_row_matches(
-            row, context=context, group=group, node_ids=node_ids
+        not _parallel_row_matches(
+            row,
+            context=context,
+            group=group,
+            node_ids=node_ids,
+            declared_size=declared_size,
+            canonical=canonical,
         )
         for row in pending_rows
     ):
@@ -426,23 +444,30 @@ def _bound_batch_start(
         row
         for row in context.rows
         if row.metadata.get("route_node") in node_ids
+        or row.metadata.get("parallel_group") == group
         or row.metadata.get("replica_group") == group
         or row.metadata.get("batch_group") == group
     ]
     exact_rows = [
         row
         for row in route_group_rows
-        if _replica_row_matches(
-            row, context=context, group=group, node_ids=node_ids
+        if _parallel_row_matches(
+            row,
+            context=context,
+            group=group,
+            node_ids=node_ids,
+            declared_size=declared_size,
+            canonical=canonical,
         )
     ]
-    # The only parked recovery admission is one exact manifest-bound leg. A
-    # second exact row means the whole two-way group has already been claimed;
-    # zero or malformed rows cannot authorize a fresh batch from this phase.
+    # A parked recovery may fill exactly one missing leg. Fewer than N-1 rows
+    # would create a partial new batch; N rows means the group was already
+    # claimed. Duplicate/malformed rows cannot authorize recovery either.
     return (
-        len(route_group_rows) == 1
-        and len(exact_rows) == 1
-        and len({row.metadata.get("route_node") for row in exact_rows}) == 1
+        len(route_group_rows) == declared_size - 1
+        and len(exact_rows) == declared_size - 1
+        and len({row.metadata.get("route_node") for row in exact_rows})
+        == declared_size - 1
     )
 
 
@@ -501,6 +526,7 @@ def _bound_dispatch_node_start(
     if (
         len(matches) != 1
         or matches[0].get("dispatch_depth") != 2
+        or matches[0].get("parallel_group")
         or matches[0].get("replica_group")
     ):
         return False
@@ -598,6 +624,7 @@ def classify_supervised_shell_command(
             dispatch_tokens[1:],
             {
                 "--route",
+                "--parallel-group",
                 "--replica-group",
                 "--action",
                 "--slug-prefix",
@@ -610,23 +637,34 @@ def classify_supervised_shell_command(
         )
         required = {
             "--route",
-            "--replica-group",
             "--action",
             "--slug-prefix",
             "--parent",
         }
+        canonical_groups = options.get("--parallel-group", []) if options else []
+        legacy_groups = options.get("--replica-group", []) if options else []
+        group_values = canonical_groups or legacy_groups
+        aliases_match = not (
+            canonical_groups
+            and legacy_groups
+            and canonical_groups != legacy_groups
+        )
         if (
             options is None
             or not parent_slug
             or any(len(values) != 1 for values in options.values())
             or not required.issubset(options)
+            or len(group_values) != 1
+            or not aliases_match
             or options["--action"] != ["start"]
             or options["--parent"] != [parent_slug]
         ):
             return None
+        group = group_values[0]
         if context is not None and not _bound_batch_start(
             base=base,
             options=options,
+            group=group,
             open_attempt_ids=open_attempt_ids,
             context=context,
         ):

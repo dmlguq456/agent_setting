@@ -37,6 +37,8 @@ PROTECTED_ADAPTER_FLAGS = frozenset({
     "--owner", "--route-file", "--route-id", "--route-hash", "--route-node",
     "--registry-digest", "--write-scope", "--completion-gate", "--prompt-text",
     "--harness-affinity", "--parent", "--start", "--register", "--dry-run",
+    "--model-role", "--model-profile", "--model", "--reasoning", "--effort",
+    "--variant", "--inherit-model-settings",
 })
 
 
@@ -242,11 +244,12 @@ def main():
   print("check=failed"); print(f"reason={e.reason}")
   for k,v in e.fields.items(): print(f"{k}={v}")
   raise SystemExit(65)
- if node.get("replica_group") and a.action in {"register", "start"}:
+ group=node.get("parallel_group") or node.get("replica_group")
+ if group and a.action in {"register", "start"}:
   if a.action == "register" or not os.environ.get(GOVERNOR_RESERVATION_ENV):
    print("check=failed")
-   print("reason=replica-group-batch-required")
-   print(f"replica_group={node['replica_group']}")
+   print("reason=parallel-group-batch-required")
+   print(f"parallel_group={group}")
    print("child_spawned=0")
    raise SystemExit(65)
  if node["kind"]=="resource-runner": print("resource_runner="+str(ROOT/"utilities/resource-runner.py")+"\nroute_node="+a.node); return
@@ -275,7 +278,8 @@ def main():
    print("check=failed"); print(f"reason={e.reason}")
    for k,v in e.fields.items(): print(f"{k}={v}")
    raise SystemExit(65)
- if not has_model_selection(a.adapter_args):
-  argv += ["--model-role",node.get("role","fast implementer")]
+ argv += ["--model-role",node.get("role","fast implementer")]
+ if node.get("model_profile"):
+  argv += ["--model-profile",node["model_profile"]]
  argv += strip_leading_separator(a.adapter_args); raise SystemExit(subprocess.run(argv).returncode)
 if __name__=="__main__": main()

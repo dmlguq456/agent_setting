@@ -67,6 +67,11 @@ from worker_bootstrap import (  # noqa: E402
     render_worker_bootstrap,
     resolve_worker_type,
 )
+from model_profile import (  # noqa: E402
+    ModelProfileError,
+    resolve_profile,
+    validate_registered_profile,
+)
 from codex_dispatch_terminal import inspect_terminal_attempt  # noqa: E402
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 # Verification rigor is derived from intensity — CONVENTIONS §1.1 mapping table (SoT).
@@ -227,6 +232,7 @@ def parser() -> argparse.ArgumentParser:
         default=os.environ.get("CODEX_DISPATCH_APPROVAL", "never"),
     )
     p.add_argument("--model-role", default=os.environ.get("CODEX_DISPATCH_MODEL_ROLE"))
+    p.add_argument("--model-profile", default=os.environ.get("CODEX_DISPATCH_MODEL_PROFILE"))
     p.add_argument("--model", default=os.environ.get("CODEX_DISPATCH_MODEL"))
     p.add_argument("--reasoning", default=os.environ.get("CODEX_DISPATCH_REASONING"))
     p.add_argument(
@@ -382,13 +388,56 @@ class ModelSelectionError(ValueError):
 
 
 def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
+    try:
+        validate_registered_profile(
+            args.model_profile,
+            registered_worker=bool(args.registered_worker),
+            dispatch_depth=args.dispatch_depth,
+            worker_type=args.worker_type,
+        )
+    except ModelProfileError as exc:
+        raise ModelSelectionError("invalid-dispatch-model-profile", str(exc)) from exc
     if args.inherit_model_settings:
-        if args.model_role or args.model or args.reasoning:
+        if args.model_profile or args.model_role or args.model or args.reasoning:
             raise ModelSelectionError(
                 "invalid-dispatch-model-selection",
-                "--inherit-model-settings is mutually exclusive with --model-role, --model, and --reasoning",
+                "--inherit-model-settings is mutually exclusive with --model-profile, --model-role, --model, and --reasoning",
             )
-        return {"source": "inherit", "role": "inherit", "model": "inherit", "reasoning": "inherit"}
+        return {
+            "source": "inherit", "role": "inherit", "profile": "unsealed",
+            "tier": "inherit", "granularity": "legacy", "model": "inherit", "reasoning": "inherit",
+        }
+    if args.model_profile:
+        if not args.model_role and args.worker_type != "owner":
+            raise ModelSelectionError(
+                "model-profile-role-required",
+                "route-bound --model-profile requires the independently sealed --model-role",
+            )
+        if bool(args.model) != bool(args.reasoning):
+            raise ModelSelectionError(
+                "invalid-dispatch-model-selection",
+                "capacity override requires --model and --reasoning together",
+            )
+        if (args.model or args.reasoning) and not args.capacity_retry:
+            raise ModelSelectionError(
+                "model-profile-override-forbidden",
+                "a route-sealed model profile may use a concrete override only on a checked capacity retry",
+            )
+        try:
+            resolved = resolve_profile(
+                "codex", ROOT / "adapters" / "codex" / "config" / "models.conf", args.model_profile
+            )
+        except ModelProfileError as exc:
+            raise ModelSelectionError("invalid-dispatch-model-profile", str(exc)) from exc
+        return {
+            "source": "profile+capacity" if args.model else "profile",
+            "role": args.model_role or "_kernel/owner",
+            "profile": resolved["profile"],
+            "tier": resolved["tier"],
+            "granularity": resolved["granularity"],
+            "model": args.model or resolved["model"],
+            "reasoning": args.reasoning or resolved["budget"],
+        }
     if args.model_role and args.model:
         raise ModelSelectionError(
             "invalid-dispatch-model-selection",
@@ -421,8 +470,14 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
                     "(step-down is high; medium/low is for genuinely easy work only)",
                     file=sys.stderr,
                 )
-            return {"source": "role+effort", "role": args.model_role, "model": model, "reasoning": args.reasoning}
-        return {"source": "role", "role": args.model_role, "model": model, "reasoning": reasoning}
+            return {
+                "source": "role+effort", "role": args.model_role, "profile": "unsealed",
+                "tier": "legacy", "granularity": "legacy", "model": model, "reasoning": args.reasoning,
+            }
+        return {
+            "source": "role", "role": args.model_role, "profile": "unsealed",
+            "tier": "legacy", "granularity": "legacy", "model": model, "reasoning": reasoning,
+        }
     if not args.model and not args.reasoning:
         raise ModelSelectionError(
             "missing-dispatch-model-selection",
@@ -433,7 +488,10 @@ def resolve_model_settings(args: argparse.Namespace) -> dict[str, str]:
             "invalid-dispatch-model-selection",
             "--model and --reasoning must be provided together",
         )
-    return {"source": "explicit", "role": "-", "model": args.model, "reasoning": args.reasoning}
+    return {
+        "source": "explicit", "role": "-", "profile": "unsealed",
+        "tier": "explicit", "granularity": "legacy", "model": args.model, "reasoning": args.reasoning,
+    }
 
 
 def _worktree_mutating_write_scope(write_scope: str | None) -> bool:
@@ -574,6 +632,7 @@ def dispatch_prompt(
         f"- assigned_contract: {args.assigned_contract}\n"
         f"- route_node: {args.route_node or '-'}\n"
         f"- model_role: {getattr(args, 'resolved_model_settings', {}).get('role') or args.model_role or '-'}\n"
+        f"- model_profile: {getattr(args, 'resolved_model_settings', {}).get('profile') or getattr(args, 'model_profile', None) or '-'}\n"
         f"- parent: {args.parent_slug or '-'}\n"
         f"- parent_session_id: {args.parent_session_id or '-'}\n"
         f"- owner: {args.capability_owner or '-'}\n"
@@ -878,7 +937,12 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         if value:
             pipe += f",{key}={value}"
     settings = args.resolved_model_settings
-    pipe += f",model_source={settings['source']},model_role={settings['role']},model={settings['model']},reasoning={settings['reasoning']}"
+    pipe += (
+        f",model_source={settings['source']},model_role={settings['role']}"
+        f",model_profile={settings['profile']},model_tier={settings['tier']}"
+        f",profile_granularity={settings['granularity']}"
+        f",model={settings['model']},reasoning={settings['reasoning']}"
+    )
     if args.approval != "inherit":
         pipe += f",approval={args.approval}"
     if args.profile:
@@ -891,7 +955,10 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         )
     replica_reservation = getattr(args, "replica_batch_reservation", {})
     if replica_reservation:
-        pipe += f",replica_group={replica_reservation['batch_group']}"
+        pipe += (
+            f",parallel_group={replica_reservation['batch_group']}"
+            f",replica_group={replica_reservation['batch_group']}"
+        )
         for key in REPLICA_RESERVATION_ROW_KEYS:
             if key in replica_reservation:
                 pipe += f",{key}={replica_reservation[key]}"
@@ -1352,7 +1419,9 @@ def validate_route_record(args: argparse.Namespace) -> int:
         "--intensity", args.intensity, "--write-scope", args.write_scope,
         "--route-id", args.route_id, "--route-hash", args.route_hash,
         "--registry-digest", args.registry_digest,
-        "--unit", args.unit]
+        "--unit", args.unit,
+        "--model-role", args.model_role or "",
+        "--model-profile", args.model_profile or ""]
     if args.attempt_id:
         command += ["--current-attempt", args.attempt_id]
     result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -1486,9 +1555,9 @@ def main(argv: list[str]) -> int:
             and not os.environ.get(GOVERNOR_RESERVATION_ENV)
         ):
             return fail(
-                "replica-group-batch-required",
+                "parallel-group-batch-required",
                 65,
-                detail="replica start requires dispatch-batch admission",
+                detail="parallel-group start requires dispatch-batch admission",
                 child_spawned="0",
             )
     try:
@@ -2032,6 +2101,9 @@ def main(argv: list[str]) -> int:
     settings = args.resolved_model_settings
     print(f"model_source={settings['source']}")
     print(f"model_role={settings['role']}")
+    print(f"model_profile={settings['profile']}")
+    print(f"model_tier={settings['tier']}")
+    print(f"profile_granularity={settings['granularity']}")
     print(f"model={settings['model']}")
     print(f"reasoning={settings['reasoning']}")
     print(f"approval={args.approval}")

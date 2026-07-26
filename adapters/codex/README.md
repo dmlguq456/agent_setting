@@ -82,8 +82,8 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | UI boundary | Run `adapters/codex/bin/preflight.sh ui-info` to report the Codex-native UI boundary. Codex `/statusline` and `/title` configure built-in footer/title items; arbitrary Claude-style live statusline scripts are unsupported, so harness signals use `preflight.sh status`. Codex hooks run silently (no `statusMessage` labels), matching Claude Code's quiet hooks. `/statusline` persists choices in runtime-owned `$CODEX_HOME/config.toml`; `codex_setting/codex-config/tui-statusline.toml` records the harness-recommended footer fragment without projecting the full config file. Run `adapters/codex/bin/preflight.sh tui-config` only when explicitly applying that fragment to the runtime-owned config |
 | adapter readiness | Run `adapters/codex/bin/preflight.sh doctor` to check manifest freshness, native skill/plugin/agent/mode projections, native subagent feature availability, hook bridge syntax, and boundary rules in one command. Add `--runtime` to include the installed `$CODEX_HOME` projection check; use `--runtime-strict` when complete hook trust must be proven |
 | runtime projection install | Run `adapters/codex/bin/install-runtime-projection.sh [--install-plugin] [--skills-mode native|plugin|both]` to wire `$CODEX_HOME` (default `$HOME/.codex`) to the harness projection: `agent-*` pointers for bootstrap, common docs, capabilities, roles, bin/tools/utilities, scaffolds, hooks, selected native skill discovery, native agents/modes/plugin marketplace, `hooks.json`, native agent symlinks, and the read-only `agent-config` fragment pointer. Idempotent; never touches Codex credentials, sessions, history, logs, caches, `config.toml`, or local databases (a pre-existing real `hooks.json` is backed up to `hooks.json.pre-harness`). Default skill discovery is native symlinks; with `--install-plugin`, the default is plugin discovery to avoid duplicate skill metadata. Run `adapters/codex/bin/check-runtime-projection.sh`, `adapters/codex/bin/preflight.sh runtime-projection`, or `adapters/codex/bin/preflight.sh doctor --runtime` for a read-only `status=ok|failed` validation of the wiring, skill discovery mode, exact per-agent symlink targets, bootstrap discovery, plugin presence, and hook trust records. `check=hook-trust:review-needed` means run `/hooks` in Codex and trust the changed harness hooks; `check=hook-trust:ok session_end=stop-alias` means Codex trusted `Stop`, which enters the same session-end bridge as `SessionEnd` but detaches the timeout-prone work; use `adapters/codex/bin/preflight.sh runtime-projection --require-hook-trust` or `adapters/codex/bin/preflight.sh doctor --runtime-strict` when missing hook trust must fail runtime checks |
-| headless dispatch | Tool-contract check: `adapters/codex/bin/preflight.sh headless --check <worktree>` verifies the worktree, Codex CLI/App Server availability, and installed runtime projection with native Skills, native Agents, and native Modes. Standard+ dispatch-depth-1 owners default to `--completion-delivery auto`: a successful `codex app-server --help` probe selects `app-server-supervised`; forced `supervised` fails before registration when unavailable, and `poll` or an unavailable auto probe reports `poll-fallback`. Quick/stage/review workers remain one-shot `codex exec`. The wrapper validates the capability catalog's scalar `capability_mode`, validates an optional non-owner `worker_mode` through `mode-info`, and requires that projection to equal the portable `unit`; `_kernel/owner` rejects a worker mode before prompt or registry writes. Current rows emit `capability_mode=` and optional `worker_mode=` separately. Registry writes and harvest rewrites are serialized with a `.lock` file. `--register` and `--start` materialize the minimal typed worker prompt. `--start` rechecks the projection, and missing hook trust fails before registry writes. Model, approval, route, liveness, harvest, and cleanup boundaries remain unchanged |
-| parent completion park | Under `app-server-supervised`, the owner yields `runtime_wait: registered-children`; `utilities/dispatch_completion_join.py` waits outside the model for every exact `parent_attempt_id` child and the supervisor resumes the same ephemeral App Server thread once with a bounded typed receipt. Intermediate turns never become terminal JSONL events. An atomic attempt-scoped phase state lets an undelivered batch issue only additional exact same-parent dispatch starts, preserving parallel sibling registration; after receipt, delivered pending rows allow only exact typed harvest. Model waits, raw child output, source/artifact/git inspection, redundant liveness, unrelated work, and compound shell commands remain blocked. Missing state permits recovery harvest only, and normal exit or the exact owner watcher removes it. `poll-fallback` retains the long exact `dispatch-wait` and terminal-nonquiescent park. An ordinary interactive parent has no completion-delivery phase: its global pre-tool park selects only exact latest `open|running` registered children, so terminal live/unverifiable rows still fail readiness/cleanup without freezing unrelated tools. Native Codex subagents are not registered-child candidates. `AGENT_PARENT_PARK_BYPASS=1` remains an explicit operator recovery override |
+| headless dispatch | Tool-contract check: `adapters/codex/bin/preflight.sh headless --check <worktree>` verifies the worktree, Codex CLI/App Server availability, and installed runtime projection with native Skills, native Agents, and native Modes. Standard+ dispatch-depth-1 owners default to `--completion-delivery auto`: a successful `codex app-server --help` probe selects `app-server-supervised`; forced `supervised` fails before registration when unavailable, and `poll` or an unavailable auto probe reports `poll-fallback`. Quick/stage/review workers remain one-shot `codex exec`. The wrapper validates the capability catalog's scalar `capability_mode`, validates an optional non-owner `worker_mode` through `mode-info`, and keeps both separate; `_kernel/owner` rejects a worker mode before prompt or registry writes and is valid with its route-sealed owner profile alone. Route-bound jobs resolve `--model-profile deep|balanced-deep|light|mini` through `config/models.conf`, keep `model_role` independent, reject caller model/reasoning replacement, and reject substantive registered `mini`. Registry/Fleet rows emit capability/worker mode plus model profile, resolved tier, and profile granularity as separate fields. Registry writes and harvest rewrites are serialized with a `.lock` file. `--register` and `--start` materialize the minimal typed worker prompt. `--start` rechecks the projection, and missing hook trust fails before registry writes. Approval, route, liveness, harvest, and cleanup boundaries remain unchanged |
+| parent completion park | Under `app-server-supervised`, the owner yields `runtime_wait: registered-children`; `utilities/dispatch_completion_join.py` waits outside the model for every exact `parent_attempt_id` child and the supervisor resumes the same ephemeral App Server thread once with a bounded typed receipt. Intermediate turns never become terminal JSONL events. A declared 2–4-way `parallel_group` starts through one atomic `dispatch-batch --parallel-group`; the phase policy admits exactly one missing-leg recovery only after all N-1 peers are manifest-bound, and rejects direct member starts. After receipt, delivered pending rows allow only exact typed harvest. Model waits, raw child output, source/artifact/git inspection, redundant liveness, unrelated work, and compound shell commands remain blocked. Missing state permits recovery harvest only, and normal exit or the exact owner watcher removes it. `poll-fallback` retains the long exact `dispatch-wait` and terminal-nonquiescent park. An ordinary interactive parent has no completion-delivery phase: its global pre-tool park selects only exact latest `open|running` registered children, so terminal live/unverifiable rows still fail readiness/cleanup without freezing unrelated tools. Native Codex subagents are not registered-child candidates. `AGENT_PARENT_PARK_BYPASS=1` remains an explicit operator recovery override |
 | autopilot routing | Codex exposes `autopilot-*` as native Skills/plugin entries and can select matching Skills from descriptions, but the adapter does not emulate Claude slash-command routing. `prompt-signal` emits the portable routing contract and Codex-native entrypoint surface; for spec-backed work, rely on spec-read/capability gates plus the relevant Skill or explicit dispatch wrapper |
 | subagent delegation | Codex supports native subagent workflows, but they are explicit or main-dispatched. Run `adapters/codex/bin/preflight.sh subagent-info --check` to verify the `multi_agent` runtime feature and projected custom agents before claiming delegation parity. Use prompt-directed subagents or `preflight.sh dispatch`; do not treat UI/status state as an automatic delegation trigger |
 | artifact-order gate | `core/HOOKS.md` defines the invariant; run `adapters/codex/bin/preflight.sh write <file> [session-id]` before writes |
@@ -111,7 +111,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | loop guidance | `adapters/codex/bin/preflight.sh loop-info <oncall|note|study|drill|runtime-watch>` reports whether a loop has a Codex manual contract, unsupported executable projection, or missing native implementation; `note` remains an external scheduler loop while the related `autopilot-note` capability is available on demand through Codex-native Skill/plugin projections |
 | capability mapping | `adapters/codex/bin/preflight.sh capability-info <capability>` reports Codex's native Skill realization and instruction-only or tool-contract status; an optional marketplace copy is informational only, and root Skill compatibility references report `compat_reference=not-projected` |
 | autopilot-code pipeline | `capability-info autopilot-code` and `route autopilot-code` additionally report `stage_graph_contract=core/CONVENTIONS.md#pipeline-intensity-stage-graph-and-assurance`, `plan_policy=direct=no-plan;quick=registered-headless-dispatch-depth-1-one-shot-micro-plan+plan-check-lite;standard+=durable-plan`, the `standard+` `pipeline_contract=code-plan>code-execute>code-test>code-report`, optional `code-refine`, required plan artifacts, role mapping, and the dispatch fallback |
-| model role mapping | `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` resolves portable model roles through Codex adapter environment variables and maps pipeline/profile aliases to Codex-native custom agents |
+| model role/profile mapping | `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` resolves behavioral roles and legacy native-agent profiles. Registered topology additionally carries a sealed execution `model_profile`; the headless wrapper resolves it through `adapters/codex/config/models.conf` without conflating it with bootstrap mode or role |
 | mode mapping | `adapters/codex/bin/preflight.sh mode-info <family/mode>` reports whether a mode is portable, tool-contract, or unsupported for Codex; tool-contract and unsupported adapter-coupled modes include machine-readable `tool_contract`, optional `tool_contract_check`, `runtime_surface`, and `fallback` fields |
 | QA policy mapping | `adapters/codex/bin/preflight.sh qa-policy <level> [code|research|doc|general]` maps portable QA levels from `core/CONVENTIONS.md` to Codex assurance scope, selected-pass reviewer budgets, external-adversary requirements, max rounds, and inline fallback reporting. `stage_graph_selector=intensity-not-qa` means these budgets do not open stages or depth by themselves |
 | memory distill delta | Codex session transcript extraction is available through `adapters/codex/bin/preflight.sh distill-delta <session-id>` |
@@ -341,38 +341,42 @@ $HOME/.codex/agent-harness -> $HOME/agent_setting
 
 Further Codex-specific files can be added under `adapters/codex/` and symlinked or generated into `$HOME/.codex` as the adapter matures.
 
-## Model Role Mapping
+## Model Role and Execution-Profile Mapping
 
-The Codex adapter maps portable roles from `core/CONVENTIONS.md §2` to equivalent runtime capability tiers. Defaults mirror generated custom-agent TOML and remain overridable through environment variables.
+The Codex adapter keeps behavioral role and execution budget separate. Role
+resolution remains available through `preflight.sh role`; a compiled registered
+route additionally seals one of these profiles from the single
+`adapters/codex/config/models.conf` source:
 
-| Portable role | Codex adapter expectation |
-|---|---|
-| `fast reviewer` / `fast fact-checker` / `fast writer` / fast tool worker | light tier (`config/models.conf`) for surface, coverage, format, and verbatim matching |
-| `fast implementer` | deep tier model at the fast-implementer effort (`config/models.conf`) |
-| `deep reviewer` / `deep maker` / deep editor / `deep orchestrator` | deep tier (`config/models.conf`) for methodology, domain, architecture, and safety judgment |
-| `external adversary` | Prefer a model, configuration, or process different from the primary Codex session; otherwise report unavailable and fall back to thorough |
-| `orchestrator` | light tier for balanced mechanical coordination, via the named `AGENT_MODEL_BALANCED` override |
+| Model profile | Codex realization | Registered topology use |
+|---|---|---|
+| `deep` | configured deep tier / `xhigh` | strong+ ownership, convergence, and highest-risk legs |
+| `balanced-deep` | configured deep tier / `medium` | standard ownership and deep-model judgment at a lower coordination budget |
+| `light` | configured light tier / `medium` | quick ownership, routine implementation, verification, reporting, and breadth legs |
+| `mini` | configured mini tier / `medium` | lifecycle and micro-semantic helpers only; substantive dispatch-depth-1/2 work is rejected |
 
-Codex wrappers expose this mapping through `AGENT_MODEL_TERRA`, `AGENT_MODEL_LUNA`, `AGENT_MODEL_DEEP`, `AGENT_MODEL_BALANCED`, `AGENT_MODEL_EXTERNAL`, and matching reasoning variables.
-Compatibility knobs `AGENT_MODEL_FAST`, `AGENT_REASONING_FAST`,
-`AGENT_MODEL_ORCHESTRATOR`, and `AGENT_REASONING_ORCHESTRATOR` remain accepted;
-the named balanced knobs take precedence. `AGENT_REASONING_DEEP` and
-`AGENT_REASONING_EXTERNAL` retain their respective deep/external contracts.
-`CODEX_DISTILL_MODEL` is an optional override only for the distillation proposal worker. Shared Skills require role meaning rather than concrete model names.
+Non-route role compatibility overrides remain explicit and config-derived:
 
-`adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` is the executable mapping
-surface. When no override is configured it reports adapter defaults:
-Luna/medium for fast review/tool roles, Terra/medium for implementation and the
-balanced orchestrator, and Sol/high for deep roles and the standard+ deep
-orchestrator. `external adversary` remains
-unavailable unless `AGENT_MODEL_EXTERNAL` or `AGENT_EXTERNAL_CMD` is configured,
-because the independent-adversary contract is stronger than the existence of a
-generated `external-adversary.toml` projection. `AGENT_EXTERNAL_CMD` can replace
-the Codex-native external-adversary model with a separate external command when
-stronger process/runtime independence is required. Pipeline stages such as
-`planning`, `implementation`, `verification`, and `report` map to the
-Codex-native role profiles `plan-team`, `dev-team`, `qa-team`, and
-`editorial-team`.
+```text
+AGENT_MODEL_FAST
+AGENT_MODEL_DEEP
+AGENT_MODEL_EXTERNAL
+AGENT_MODEL_ORCHESTRATOR
+AGENT_REASONING_FAST
+AGENT_REASONING_DEEP
+AGENT_REASONING_EXTERNAL
+AGENT_REASONING_ORCHESTRATOR
+AGENT_EXTERNAL_CMD
+```
+
+Fast roles, including `fast implementer`, resolve to the light tier by default;
+deep roles, including `deep orchestrator`, resolve to the deep tier. The balanced
+`orchestrator` remains light/medium. `external adversary` is unavailable unless
+`AGENT_MODEL_EXTERNAL` or `AGENT_EXTERNAL_CMD` supplies genuine independent
+execution. Environment compatibility knobs remain accepted for non-route role
+selection, but they cannot replace a route-sealed profile. Native custom-agent
+TOML profiles retain their explicit static settings; registered topology uses
+the route profile passed by the wrapper.
 
 ## Compatibility
 
