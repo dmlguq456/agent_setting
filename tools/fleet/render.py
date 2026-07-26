@@ -770,7 +770,7 @@ def _route_stage_segs(route_seq, working, max_width):
     """F-28b route-aware breadcrumb (prd.md:303). `route_seq` = [(node_id, state), ...] in the
     route's own DAG order (flattened level order — route.py's `view["nodes"]` is already in
     that order, one entry per node). `state` comes from `route.py`'s §3.3 single judge
-    (active/done/failed/pending) — this function ONLY renders what was already decided
+    (active/done/reconciling/failed/pending) — this function ONLY renders what was already decided
     (SD-F2: node lit-ness is the child's live evidence, never re-derived here)."""
     def _cur_key(i):
         if working and not _BLINK_ON:
@@ -778,12 +778,17 @@ def _route_stage_segs(route_seq, working, max_width):
         return "stg%d_on" % (i % 5)
     cur_i = next((i for i, (_nid, st) in enumerate(route_seq) if st == "active"), None)
     if cur_i is None:
+        cur_i = next((i for i, (_nid, st) in enumerate(route_seq)
+                      if st == "reconciling"), None)
+    if cur_i is None:
         done_idx = [i for i, (_nid, st) in enumerate(route_seq) if st == "done"]
         cur_i = min((done_idx[-1] + 1) if done_idx else 0, max(0, len(route_seq) - 1))
     items = []
     for i, (nid, st) in enumerate(route_seq):
         if st == "failed":
             items.append((i, nid + "✕", "lvl_r"))
+        elif st == "reconciling":
+            items.append((i, nid + "…", "lvl_y"))
         elif st == "done":
             items.append((i, nid + "✓", "stg%d_off" % (i % 5)))
         elif st == "active":
@@ -1026,7 +1031,7 @@ def _collapse_parallel_nodes(nodes):
     The individual legs already render as their own dispatch rows under the
     conductor (user 2026-07-24: "병렬 leg를 굳이 표현을 안해도 되잖아"), so every
     route-projection surface names the group once. State is the group's strictest
-    liveness (failed > any-live > all-done > all-pending); downstream
+    liveness (failed > active > reconciling > all-done > all-pending); downstream
     ``depends_on`` references to a member are rewritten to the merged id."""
     nodes = list(nodes or ())
     groups = {}
@@ -1042,6 +1047,10 @@ def _collapse_parallel_nodes(nodes):
         states = [m.get("state") for m in members]
         if "failed" in states:
             state = "failed"
+        elif "active" in states:
+            state = "active"
+        elif "reconciling" in states:
+            state = "reconciling"
         elif all(s == "done" for s in states):
             state = "done"
         elif all(s == "pending" for s in states):
@@ -2342,6 +2351,7 @@ def _stage_detail_rows(nodes, depth=0, term_width=None, indent=None):
         mark, key = {
             "done": ("✓", "dim"),
             "active": ("●", "g_work" if _BLINK_ON else "g_work_off"),
+            "reconciling": ("…", "lvl_y"),
             "failed": ("✕", "lvl_r"),
             "pending": ("○", "dim"),
         }.get(state, ("○", "dim"))
@@ -2457,7 +2467,7 @@ def _route_node_text(n):
 
     `mark` is `_GATE_MARK` or "" and the caller emits it as its OWN segment in `gate_t` (the
     green-dim key the spec-gate word already uses), never folded into `text`: prd.md:308 makes
-    gate-passed a dimension INDEPENDENT of the ✓●○✕ state glyph, and most passed nodes are
+    gate-passed a dimension INDEPENDENT of the ✓●…○✕ state glyph, and most passed nodes are
     `done` (= all-dim) nodes, where a dim mark would melt into the node's own dim phrase — the
     exact merge render.py:101 warns about. `gate_passed` is True|None only, so there is no
     "not passed" mark to render: absence of evidence draws nothing."""
@@ -2480,6 +2490,9 @@ def _route_node_text(n):
         if model and model != "—":
             extra = " (%s%s)" % (model, ("·" + n["effort"]) if n.get("effort") else "")
         return "%s ●%s%s%s" % (nid, tail, extra, deps), ("g_work" if _BLINK_ON else "g_work_off"), mark
+    if st == "reconciling":
+        tail = (" " + fmt_min(elapsed)) if elapsed is not None else ""
+        return "%s …gate%s%s" % (nid, tail, deps), "lvl_y", mark
     if st == "failed":
         tail = (" " + fmt_min(elapsed)) if elapsed is not None else ""
         return "%s ✕%s%s" % (nid, tail, deps), "lvl_r", mark

@@ -260,6 +260,40 @@ class BuildViewsTest(unittest.TestCase):
         node = next(n for n in views[0]["nodes"] if n["id"] == "eval-sep")
         self.assertEqual(node["state"], "failed")
 
+    def test_exact_reconcile_needed_is_not_failed_or_complete(self):
+        job = DispatchJob(
+            key="eval-sep", slug="lab-eval-sep", route_id=self.route_id,
+            route_node="eval-sep", attempt_id="att-reconcile", liveness="stale",
+            elapsed_min=3, note="reconcile-needed",
+        )
+        job.state_evidence = {"attempt": {
+            "state": "stale", "source": "shared-observer",
+            "rule": "terminal-observed/reconcile-needed",
+            "attempt_id": job.attempt_id, "route_id": self.route_id,
+            "route_node": "eval-sep",
+            "observed_liveness": {
+                "state": "reconcile-needed", "reason": "terminal-observed",
+                "process_state": "quiescent",
+            },
+        }}
+        views = route.build_views([job], {}, {self.route_id: self.record}, self.now)
+        node = next(n for n in views[0]["nodes"] if n["id"] == "eval-sep")
+        self.assertEqual(node["state"], "reconciling")
+        self.assertIsNone(node["gate_passed"])
+        self.assertEqual(views[0]["progress"]["done"], 0)
+        public = route.summary(views)[0]
+        public_node = next(n for n in public["nodes"] if n["id"] == "eval-sep")
+        self.assertEqual(public_node["state"], "reconciling")
+
+    def test_reconcile_note_without_exact_evidence_remains_failed(self):
+        job = DispatchJob(
+            key="eval-sep", slug="lab-eval-sep", route_id=self.route_id,
+            route_node="eval-sep", liveness="stale", note="reconcile-needed",
+        )
+        views = route.build_views([job], {}, {self.route_id: self.record}, self.now)
+        node = next(n for n in views[0]["nodes"] if n["id"] == "eval-sep")
+        self.assertEqual(node["state"], "failed")
+
     def test_pending_when_no_evidence(self):
         views = route.build_views([], {}, {self.route_id: self.record}, self.now)
         node = next(n for n in views[0]["nodes"] if n["id"] == "report")

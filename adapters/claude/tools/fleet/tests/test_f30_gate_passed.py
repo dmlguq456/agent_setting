@@ -347,7 +347,7 @@ class GateMarkRenderTest(unittest.TestCase):
     def test_mark_never_shares_the_state_glyph_colour(self):
         """The regression this guards: a dim `⊸` on a dim `done` node melts into one phrase
         (the merge render.py:101 warns about), which is why the mark owns `gate_t`."""
-        for state in ("done", "pending", "failed"):
+        for state in ("done", "pending", "reconciling", "failed"):
             with self.subTest(state=state):
                 lines = render._route_card_l2({"nodes": [self._node(state=state,
                                                                     gate_passed=True)]})
@@ -355,7 +355,7 @@ class GateMarkRenderTest(unittest.TestCase):
                 self.assertEqual(marks, ["gate_t"])
 
     def test_mark_survives_every_state(self):
-        for state in ("done", "active", "failed", "pending"):
+        for state in ("done", "active", "reconciling", "failed", "pending"):
             with self.subTest(state=state):
                 lines = render._route_card_l2({"nodes": [self._node(state=state,
                                                                     gate_passed=True)]})
@@ -443,11 +443,25 @@ class NodeStateMarkerSupersedesTest(unittest.TestCase):
     the done/no-claim/marker-outlives-job cases."""
 
     class _Row:
-        def __init__(self, node, liveness):
+        def __init__(self, node, liveness, state_evidence=None):
             self.route_node, self.liveness = node, liveness
             self.elapsed_min, self.model, self.harness = 5, "m", "claude"
             self.effort, self.pid = "high", 111
             self.registry_priority = self.registry_order = None
+            self.attempt_id = self.route_id = self.note = None
+            self.state_evidence = state_evidence
+
+    @staticmethod
+    def _reconcile_evidence():
+        return {"attempt": {
+            "state": "stale", "source": "shared-observer",
+            "rule": "terminal-observed/reconcile-needed",
+            "attempt_id": None, "route_id": None, "route_node": "execute",
+            "observed_liveness": {
+                "state": "reconcile-needed", "reason": "terminal-observed",
+                "process_state": "quiescent",
+            },
+        }}
 
     def test_dead_attempt_with_marker_is_done(self):
         st = route._node_state("execute", [self._Row("execute", "dead")], {}, 100.0,
@@ -460,6 +474,46 @@ class NodeStateMarkerSupersedesTest(unittest.TestCase):
         st = route._node_state("execute", [self._Row("execute", "dead")], {}, 100.0,
                                completion_marked=False)
         self.assertEqual(st["state"], "failed")
+
+    def test_exact_reconcile_attempt_without_marker_is_reconciling(self):
+        row = self._Row("execute", "stale", self._reconcile_evidence())
+        st = route._node_state("execute", [row], {}, 100.0, completion_marked=False)
+        self.assertEqual(st["state"], "reconciling")
+        self.assertEqual(st["note"], "reconcile-needed")
+        self.assertIs(st["job"], row)
+
+    def test_exact_reconcile_attempt_with_marker_is_done(self):
+        row = self._Row("execute", "stale", self._reconcile_evidence())
+        st = route._node_state("execute", [row], {}, 100.0, completion_marked=True)
+        self.assertEqual(st["state"], "done")
+        self.assertIsNone(st["job"])
+
+    def test_mismatched_attempt_axis_cannot_mint_reconciling(self):
+        row = self._Row("execute", "stale", self._reconcile_evidence())
+        row.attempt_id = "att-current"
+        row.state_evidence["attempt"]["attempt_id"] = "att-other"
+        st = route._node_state("execute", [row], {}, 100.0, completion_marked=False)
+        self.assertEqual(st["state"], "failed")
+
+    def test_newer_reconcile_attempt_supersedes_older_failed_retry(self):
+        old = self._Row("execute", "dead")
+        old.registry_order = 1
+        current = self._Row("execute", "stale", self._reconcile_evidence())
+        current.registry_order = 2
+        st = route._node_state("execute", [old, current], {}, 100.0,
+                               completion_marked=False)
+        self.assertEqual(st["state"], "reconciling")
+        self.assertIs(st["job"], current)
+
+    def test_newer_generic_failure_supersedes_older_reconcile_attempt(self):
+        old = self._Row("execute", "stale", self._reconcile_evidence())
+        old.registry_order = 1
+        current = self._Row("execute", "dead")
+        current.registry_order = 2
+        st = route._node_state("execute", [old, current], {}, 100.0,
+                               completion_marked=False)
+        self.assertEqual(st["state"], "failed")
+        self.assertIs(st["job"], current)
 
     def test_dead_note_evidence_with_marker_is_done(self):
         ev = {"execute": {"status": "done", "note": "dead-no-progress"}}
@@ -475,6 +529,42 @@ class NodeStateMarkerSupersedesTest(unittest.TestCase):
         st = route._node_state("execute", [self._Row("execute", "working")], {}, 100.0,
                                completion_marked=True)
         self.assertEqual(st["state"], "active")
+
+
+class ReconciliationRenderTest(unittest.TestCase):
+    def _node(self, state="reconciling"):
+        return {"id": "frame", "state": state, "level": 0, "elapsed_min": 3,
+                "gate_passed": None, "depends_on": []}
+
+    def test_process_node_uses_yellow_gate_pending_label(self):
+        text, key, mark = render._route_node_text(self._node())
+        self.assertEqual((text, key, mark), ("frame …gate 3m", "lvl_y", ""))
+
+    def test_breadcrumb_and_detail_use_yellow_ellipsis(self):
+        breadcrumb = render._route_stage_segs([("frame", "reconciling"),
+                                                ("plan", "pending")], True, 80)
+        self.assertIn(("frame…", "lvl_y"), breadcrumb)
+        for width in (168, 120, 100, 60):
+            with self.subTest(width=width):
+                detail = render._stage_detail_rows([self._node()], term_width=width)
+                self.assertIn(("frame …", "lvl_y"), detail[0])
+                self.assertTrue(all(render._dw("".join(t for t, _k in row)) <= width
+                                    for row in detail))
+
+    def test_parallel_group_precedence_preserves_failure_and_reconciliation(self):
+        def legs(a, b):
+            return [
+                {"id": "frame", "state": a, "level": 0, "depends_on": [],
+                 "parallel_group": "frame"},
+                {"id": "frame-alt", "state": b, "level": 0, "depends_on": [],
+                 "parallel_group": "frame"},
+            ]
+        self.assertEqual(render._collapse_parallel_nodes(legs("reconciling", "done"))[0]["state"],
+                         "reconciling")
+        self.assertEqual(render._collapse_parallel_nodes(legs("reconciling", "active"))[0]["state"],
+                         "active")
+        self.assertEqual(render._collapse_parallel_nodes(legs("reconciling", "failed"))[0]["state"],
+                         "failed")
 
 
 class ProjectionMarkThreadingTest(GateMarkBase):

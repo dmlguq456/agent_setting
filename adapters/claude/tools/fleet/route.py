@@ -457,12 +457,43 @@ def node_order(record):
 
 
 # --- node state (§3.3 single source — Step 2 breadcrumb AND Step 3 card both call this) ---
+def _is_reconciling_attempt(job):
+    """True only for the exact F-41 completion-marker reconciliation shape.
+
+    The dispatch classifier deliberately projects a shared-observer
+    ``reconcile-needed`` verdict to job liveness ``stale`` so the open registry row remains
+    visible until its owner publishes the exact completion marker. Route state must retain
+    that fail-closed lifecycle without mislabeling it as an established failure. Require the
+    classifier-owned nested evidence and matching attempt axes; a note, stage label, or generic
+    stale row can never mint this state.
+    """
+    evidence = getattr(job, "state_evidence", None)
+    attempt = evidence.get("attempt") if isinstance(evidence, dict) else None
+    observed = attempt.get("observed_liveness") if isinstance(attempt, dict) else None
+    if not isinstance(observed, dict):
+        return False
+    if not (
+        getattr(job, "liveness", None) == "stale"
+        and attempt.get("state") == "stale"
+        and attempt.get("source") == "shared-observer"
+        and attempt.get("rule") == "terminal-observed/reconcile-needed"
+        and observed.get("state") == "reconcile-needed"
+    ):
+        return False
+    for field in ("attempt_id", "route_id", "route_node"):
+        expected = getattr(job, field, None)
+        if expected is not None and attempt.get(field) != expected:
+            return False
+    return True
+
+
 def _node_state(node_id, route_jobs, ev_by_node, now, completion_marked=False):
-    """One node's state, per the priority table (plan §3.3): active (live job) beats a
-    published completion marker (done) beats failed (dead/stale live job, or a
-    killed/cancelled/fail-noted registry row) beats done (a clean registry row) beats
-    pending (no evidence at all). `now` is the ONLY clock input — never read internally,
-    so this stays hermetically testable (T1-14/T1-15).
+    """One node's state, per the priority table (PRD F-41): active (live job) beats a
+    published completion marker (done); explicit killed/cancelled/fail-note evidence beats
+    exact reconciliation; the current exact ``reconcile-needed`` attempt becomes
+    ``reconciling``; generic dead/stale becomes failed; a clean registry row becomes done;
+    no evidence is pending. `now` is the ONLY clock input — never read internally, so this
+    stays hermetically testable (T1-14/T1-15).
 
     `completion_marked` (2026-07-24): an immutable completion marker is authoritative proof
     the node's completion gate passed, so it SUPERSEDES a dead/stale EARLIER attempt row or
@@ -495,7 +526,11 @@ def _node_state(node_id, route_jobs, ev_by_node, now, completion_marked=False):
     note = ev.get("note")
     fail_note = bool(note) and (str(note).startswith("fleet-kill") or str(note).startswith("dead-"))
     ev_status = ev.get("status")
-    is_failed = bool(failed_live) or ev_status in ("killed", "cancelled") or (ev_status == "done" and fail_note)
+    explicit_failure = (
+        ev_status in ("killed", "cancelled")
+        or (ev_status == "done" and fail_note)
+    )
+    is_failed = bool(failed_live) or explicit_failure
     if is_failed and completion_marked:
         # Marker supersedes the SUPERSEDED dead attempt -> done. Narrowed to the failed case
         # ONLY: a `pending` node with a marker stays pending (prd.md:308 keeps `state` and
@@ -510,7 +545,7 @@ def _node_state(node_id, route_jobs, ev_by_node, now, completion_marked=False):
         return {"state": "done", "elapsed_min": _ev_elapsed(ev, now), "model": ev.get("model"),
                 "harness": ev.get("harness"), "effort": ev.get("effort"), "pid": None,
                 "note": note, "job": None}
-    if is_failed:
+    if explicit_failure:
         if failed_live:
             j = _best(failed_live)
             return {"state": "failed", "elapsed_min": j.elapsed_min, "model": j.model,
@@ -519,6 +554,18 @@ def _node_state(node_id, route_jobs, ev_by_node, now, completion_marked=False):
         return {"state": "failed", "elapsed_min": _ev_elapsed(ev, now), "model": ev.get("model"),
                 "harness": ev.get("harness"), "effort": ev.get("effort"), "pid": ev.get("pid"),
                 "note": note, "job": None}
+    if failed_live:
+        # Choose the same canonical/newest attempt used for telemetry. An older failed retry
+        # must not turn a newer exact reconciliation attempt back into a red failure, while a
+        # newer generic stale/dead attempt still wins and remains failed.
+        j = _best(failed_live)
+        if _is_reconciling_attempt(j):
+            return {"state": "reconciling", "elapsed_min": j.elapsed_min, "model": j.model,
+                    "harness": j.harness, "effort": j.effort, "pid": j.pid,
+                    "note": getattr(j, "note", None) or note or "reconcile-needed", "job": j}
+        return {"state": "failed", "elapsed_min": j.elapsed_min, "model": j.model,
+                "harness": j.harness, "effort": j.effort, "pid": j.pid,
+                "note": note, "job": j}
     if ev_status == "done":
         return {"state": "done", "elapsed_min": _ev_elapsed(ev, now), "model": ev.get("model"),
                 "harness": ev.get("harness"), "effort": ev.get("effort"), "pid": ev.get("pid"),
