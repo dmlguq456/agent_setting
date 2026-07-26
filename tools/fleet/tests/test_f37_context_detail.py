@@ -281,7 +281,7 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                 self.assertTrue(all(render._dw(text([row])) <= width for row in stage_rows))
                 for node_id in ("survey", "claim-a", "claim-b", "synth"):
                     self.assertEqual(
-                        len(re.findall(r"\b%s [✓●○✕]" % re.escape(node_id), rendered)), 1)
+                        len(re.findall(r"\b%s [✓●…○✕]" % re.escape(node_id), rendered)), 1)
                 self.assertIn("claim-a ● ←{survey}", rendered)
                 self.assertIn("claim-b ● ←{survey}", rendered)
                 self.assertIn("synth ○ ←{claim-a,claim-b}", rendered)
@@ -304,7 +304,7 @@ class ContextDetailTruthTableTest(unittest.TestCase):
             with self.subTest(width=width):
                 self.assertTrue(all(render._dw(text([row])) <= width for row in rows))
                 for node in nodes:
-                    primary = r"\b%s [✓●○✕]" % re.escape(node["id"])
+                    primary = r"\b%s [✓●…○✕]" % re.escape(node["id"])
                     self.assertEqual(len(re.findall(primary, rendered)), 1)
                 for relation in ("a1 ● ←{root-a}", "a2 ○ ←{a1}",
                                  "partial ○ ←{a1,root-b}",

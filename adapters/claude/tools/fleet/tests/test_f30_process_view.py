@@ -176,6 +176,27 @@ class RenderContentTest(ProcessViewEnv):
         # auto-expanded — the DAG line (not just the 1-line header) must be present
         self.assertIn("setup", text)
 
+    def test_exact_reconcile_needed_uses_gate_pending_not_failed(self):
+        jobs = self._lab_route_jobs(sep_liveness="stale")
+        sep = jobs[2]
+        sep.attempt_id = "att-reconcile-sep"
+        sep.note = "reconcile-needed"
+        sep.state_evidence = {"attempt": {
+            "state": "stale", "source": "shared-observer",
+            "rule": "terminal-observed/reconcile-needed",
+            "attempt_id": sep.attempt_id, "route_id": sep.route_id,
+            "route_node": sep.route_node,
+            "observed_liveness": {
+                "state": "reconcile-needed", "reason": "terminal-observed",
+                "process_state": "quiescent",
+            },
+        }}
+        render.set_process_view(True)
+        text = _joined(render._build_lines([], jobs, section="both", narrow=False,
+                                            malformed=0, layout="wide", term_width=168))
+        self.assertIn("…gate", text)
+        self.assertNotIn("⚠ failed node", text)
+
     def test_t3_5_all_done_route_defaults_to_one_line_fold(self):
         # code-test verification.md §10 — a job whose registry row is already `done` NEVER
         # becomes a live DispatchJob (`_scan_jobs_log` drops terminal rows BEFORE
