@@ -105,6 +105,25 @@ class LifecycleTest(unittest.TestCase):
                 child.kill()
             child.wait()
 
+    def test_foreground_parent_callback_loss_terminates_child_group(self):
+        child = subprocess.Popen(["sleep", "60"], start_new_session=True)
+        checks = iter((True, True, False))
+        try:
+            outcome = L.wait_foreground(
+                child,
+                3,
+                parent_pid=999999,
+                parent_pid_start="unobservable",
+                parent_is_live=lambda: next(checks, False),
+                poll_interval=0.01,
+            )
+            self.assertEqual(outcome.failure, "parent-terminated")
+            self.assertIsNotNone(child.poll())
+        finally:
+            if child.poll() is None:
+                child.kill()
+            child.wait()
+
     def test_unverifiable_group_is_never_reported_empty(self):
         observation = type("Observation", (), {"state": "unverifiable"})()
         with mock.patch.object(L, "process_group_observation", return_value=observation):

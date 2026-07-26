@@ -38,6 +38,7 @@ from dispatch_contract import (  # noqa: E402
     launch_orphan_watch,
     new_attempt_id,
     parse_registry_metadata,
+    parent_attempt_binding_is_live,
     resolve_global_registry,
     resolve_live_parent_attempt,
     resolve_model_governor_root,
@@ -741,6 +742,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
             f",parent_attempt_id={binding.attempt_id}"
             f",parent_pid={binding.pid},parent_pid_start={binding.pid_start}"
             f",parent_pid_scope={binding.pid_scope}"
+            f",parent_liveness_source={binding.liveness_source}"
         )
         if binding.pid_host is not None:
             pipe += (
@@ -1704,6 +1706,11 @@ def main(argv: list[str]) -> int:
                 args.foreground_timeout,
                 parent_pid=binding.observed_pid if binding else None,
                 parent_pid_start=binding.observed_pid_start if binding else None,
+                parent_is_live=(
+                    (lambda: parent_attempt_binding_is_live(jobs, binding))
+                    if binding
+                    else None
+                ),
             )
             annotate_attempt_row(
                 jobs,

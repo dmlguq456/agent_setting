@@ -18,6 +18,16 @@ sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import CANONICAL_PARENT_TRANSPORTS  # noqa: E402
 
 
+def codex_login_status(output: str) -> bool:
+    """Accept a valid status line without letting unrelated warnings reorder it."""
+
+    return any(
+        line.strip().startswith("Logged in")
+        for line in output.splitlines()
+        if line.strip()
+    )
+
+
 def auth_check(child_harness: str, worktree: str | Path | None = None) -> tuple[bool, str]:
     """Check that the target CLI has a usable local authentication profile.
 
@@ -27,7 +37,7 @@ def auth_check(child_harness: str, worktree: str | Path | None = None) -> tuple[
     """
     if child_harness == "codex":
         command = ["codex", "login", "status"]
-        accepted = lambda output: output.lstrip().startswith("Logged in")
+        accepted = codex_login_status
     elif child_harness == "claude":
         command = ["claude", "auth", "status"]
         def accepted(output):

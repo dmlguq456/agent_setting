@@ -10,7 +10,13 @@ import subprocess
 import sys
 import time
 
-from dispatch_contract import parse_registry_metadata, process_start_ticks
+from dispatch_contract import (
+    SUPERVISOR_LEASE_KIND,
+    parse_registry_metadata,
+    process_start_ticks,
+    remove_supervisor_lease,
+    supervisor_lease_path,
+)
 from dispatch_completion_join import remove_supervisor_state
 from dispatch_supervisor_terminal import (
     classify_supervisor_log,
@@ -71,6 +77,13 @@ def _remove_supervisor_state(args) -> None:
             / "supervisor-state"
             / f"{args.attempt_id}.json"
         )
+        _status, metadata = attempt_record(args.jobs, args.attempt_id)
+        lease = supervisor_lease_path(args.jobs, args.attempt_id)
+        if (
+            metadata.get("supervisor_lease") == SUPERVISOR_LEASE_KIND
+            and metadata.get("supervisor_lease_file") == str(lease)
+        ):
+            remove_supervisor_lease(lease)
 
 
 def reconcile_orphan_cascade(args) -> int:

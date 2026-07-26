@@ -86,19 +86,22 @@ class AdapterV11Test(unittest.TestCase):
      self.assertFalse(jobs.exists() and jobs.read_text().strip())
  def test_codex_owner_gets_scoped_nested_network_only_at_depth_one(self):
   with tempfile.TemporaryDirectory() as td:
-   root=Path(td); repo,art=self.fixture(root); logs=root/"logs"
+   root=Path(td); repo,art=self.fixture(root); logs=root/"logs";jobs=root/"jobs.log"
    claude_config=root/"claude"; (claude_config/"session-env").mkdir(parents=True)
    command=[sys.executable,str(ROOT/"adapters/codex/bin/dispatch-headless.py"),"--dry-run",
             "--worktree",str(repo),"--slug","codex-owner","--capability","autopilot-code",
             "--capability-mode","dev","--intensity","standard","--dispatch-depth","1","--worker-type","owner",
             "--unit","_kernel/owner","--assigned-contract","autopilot-code",
-            "--model","gpt-test","--reasoning","low","--log-dir",str(logs)]
+            "--model","gpt-test","--reasoning","low","--log-dir",str(logs),
+            "--jobs",str(jobs)]
    env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),
         "CLAUDE_CONFIG_DIR":str(claude_config)}
    result=subprocess.run(command,text=True,capture_output=True,env=env)
    self.assertEqual(result.returncode,0,result.stdout+result.stderr)
    self.assertIn("nested_headless_network=1",result.stdout)
    self.assertIn("completion_delivery=app-server-supervised",result.stdout)
+   self.assertIn(f"supervisor_lease_file={root / 'supervisor-state' / 'att-dry-run-placeholder.lease'}",result.stdout)
+   self.assertIn(f"--lease-file {root / 'supervisor-state' / 'att-dry-run-placeholder.lease'}",result.stdout)
    self.assertIn("--network-access",result.stdout)
    self.assertIn(f"--writable-root {ROOT / '.dispatch'}",result.stdout)
    if (ROOT/".core-grounding").is_dir():
@@ -107,6 +110,17 @@ class AdapterV11Test(unittest.TestCase):
    self.assertIn("nested_owner_writable_dirs=",result.stdout)
    self.assertIn("nested_codex_home=",result.stdout)
    self.assertIn("broker_lifecycle=retired",result.stdout)
+   self.assertIn("child_spawned=0",result.stdout)
+   registered_command=command.copy()
+   registered_command[registered_command.index("--dry-run")]="--register"
+   registered=subprocess.run(
+    registered_command,text=True,capture_output=True,
+    env={**env,"AGENT_DISPATCH_JOBS":str(jobs)})
+   self.assertEqual(registered.returncode,0,registered.stdout+registered.stderr)
+   self.assertIn("child_spawned=0",registered.stdout)
+   row=jobs.read_text(encoding="utf-8")
+   self.assertIn("supervisor_lease=flock-v1",row)
+   self.assertRegex(row,r"supervisor_lease_nonce=[0-9a-f]{64}(?:,|$)")
  def test_codex_and_claude_refuse_depth_two_before_any_row_without_live_parent(self):
   for harness in ("codex","claude"):
    with self.subTest(harness=harness),tempfile.TemporaryDirectory() as td:

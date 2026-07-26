@@ -17,12 +17,14 @@ SUPERVISOR = ROOT / "utilities" / "codex-app-server-supervisor.py"
 PARENT = "att-parent"
 
 
-def owner_row(status: str = "open") -> str:
+def owner_row(lease: Path, status: str = "open") -> str:
     return (
         f"2026-07-23T00:00:00Z\t{status}\t/repo\t/wt\towner\t"
         "attempt_schema_version=2,dispatch_depth=1,transport=headless,"
         "execution_surface=registered-headless,registered_worker=1,"
         "fallback_hop=same-harness-headless,worker_type=owner,harness=codex,"
+        "completion_delivery=app-server-supervised,supervisor_lease=flock-v1,"
+        f"supervisor_lease_file={lease},supervisor_lease_nonce={'d' * 64},"
         f"attempt_id={PARENT}\n"
     )
 
@@ -46,13 +48,14 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
         self.artifact_root.mkdir()
         self.jobs = self.base / "jobs.log"
         self.state = self.base / "supervisor-state.json"
+        self.lease = self.base / "supervisor-state" / f"{PARENT}.lease"
         self.trace = self.base / "trace.jsonl"
         self.app = self.base / "fake_app.py"
         self.join = self.base / "fake_join.py"
         self.app.write_text(
             textwrap.dedent(
                 """\
-                import json, os, sys, time
+                import fcntl, json, os, sys, time
                 trace = os.environ['FAKE_TRACE']
                 turns = 0
                 def record(event, **extra):
@@ -72,10 +75,22 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
                     elif method == 'turn/start':
                         turns += 1
                         prompt = value['params']['input'][0]['text']
+                        lease_fd = os.open(os.environ['AGENT_DISPATCH_SUPERVISOR_LEASE_FILE'], os.O_RDWR)
+                        try:
+                            try:
+                                fcntl.flock(lease_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                            except BlockingIOError:
+                                lease_held = True
+                            else:
+                                lease_held = False
+                                fcntl.flock(lease_fd, fcntl.LOCK_UN)
+                        finally:
+                            os.close(lease_fd)
                         state_path = os.environ.get('AGENT_DISPATCH_COMPLETION_STATE_FILE')
                         with open(state_path, encoding='utf-8') as h:
                             delivered = json.load(h)['delivered_attempt_ids']
-                        record('turn-start', turn=turns, prompt=prompt, delivered=delivered)
+                        record('turn-start', turn=turns, prompt=prompt, delivered=delivered,
+                               lease_held=lease_held)
                         turn_id = f'turn-{turns}'
                         send({'jsonrpc':'2.0','id':value['id'],'result':{'turn':{'id':turn_id}}})
                         final_first = os.environ.get('FAKE_NO_CHILD') == '1'
@@ -128,6 +143,7 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
             "--jobs", str(self.jobs),
             "--parent-attempt-id", PARENT,
             "--state-file", str(self.state),
+            "--lease-file", str(self.lease),
             "--sandbox", "danger-full-access",
             "--app-server-command", f"{sys.executable} {app}",
             "--join-command", f"{sys.executable} {self.join}",
@@ -148,7 +164,7 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
 
     def test_runtime_wait_has_no_model_activity_until_exact_join_is_ready(self):
         self.jobs.write_text(
-            owner_row()
+            owner_row(self.lease)
             + child_row("att-child-a", "child-a")
             + child_row("att-child-b", "child-b"),
             encoding="utf-8",
@@ -159,6 +175,7 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
         events = [item["event"] for item in trace]
         self.assertEqual(events, ["turn-start", "join-start", "join-end", "turn-start"])
         self.assertEqual(trace[0]["delivered"], [])
+        self.assertTrue(all(item.get("lease_held") for item in trace if item["event"] == "turn-start"))
         self.assertEqual(
             set(trace[3]["delivered"]), {"att-child-a", "att-child-b"}
         )
@@ -186,6 +203,7 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
         self.assertIn("verdict: PASS", rows[terminal - 1]["item"]["text"])
         self.assertNotIn("RAW_CHILD_SENTINEL", result.stdout)
         self.assertFalse(self.state.exists())
+        self.assertFalse(self.lease.exists())
         registry = self.jobs.read_text(encoding="utf-8")
         self.assertIn("\tdone\t/repo\t/wt\towner\t", registry)
         self.assertIn("note=completed-supervisor", registry)
@@ -207,7 +225,7 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
         self.assertIn("\tvalid\texact-turn-completed\tPASS\tnone\tnone", inspected.stdout)
 
     def test_no_child_finishes_in_one_turn(self):
-        self.jobs.write_text(owner_row(), encoding="utf-8")
+        self.jobs.write_text(owner_row(self.lease), encoding="utf-8")
         result = self.run_supervisor(FAKE_NO_CHILD="1")
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         trace = [json.loads(line) for line in self.trace.read_text().splitlines()]
@@ -219,6 +237,7 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
             1,
         )
         self.assertFalse(self.state.exists())
+        self.assertFalse(self.lease.exists())
 
     def test_protocol_failure_emits_no_false_terminal(self):
         broken = self.base / "broken.py"
@@ -228,7 +247,7 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
             "print(json.dumps({'id':v['id'],'result':{'ok':1}}),flush=True)\n",
             encoding="utf-8",
         )
-        self.jobs.write_text(owner_row(), encoding="utf-8")
+        self.jobs.write_text(owner_row(self.lease), encoding="utf-8")
         env = {**os.environ, "FAKE_TRACE": str(self.trace)}
         result = subprocess.run(
             self.command(broken_app=broken),
@@ -241,6 +260,7 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn('"type":"turn.completed"', result.stdout)
         self.assertFalse(self.state.exists())
+        self.assertFalse(self.lease.exists())
         registry = self.jobs.read_text(encoding="utf-8")
         self.assertIn("\tdone\t/repo\t/wt\towner\t", registry)
         self.assertIn("note=dead-protocol", registry)

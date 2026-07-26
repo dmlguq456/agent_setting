@@ -10,7 +10,7 @@ from pathlib import Path
 import signal
 import subprocess
 import time
-from typing import Mapping
+from typing import Callable, Mapping
 
 from dispatch_contract import (
     process_group_observation,
@@ -160,6 +160,7 @@ def wait_foreground(
     *,
     parent_pid: int | None = None,
     parent_pid_start: str | None = None,
+    parent_is_live: Callable[[], bool] | None = None,
     poll_interval: float = 0.2,
 ) -> ForegroundResult:
     """Wait in scope, forwarding termination and returning a typed outcome."""
@@ -200,11 +201,14 @@ def wait_foreground(
                 return ForegroundResult(
                     exit_code, f"signal-{received[-1]}", group_empty
                 )
-            if (
-                parent_pid is not None
-                and parent_pid_start
-                and not process_identity_is_live(parent_pid, parent_pid_start)
-            ):
+            parent_lost = False
+            if parent_is_live is not None:
+                parent_lost = not parent_is_live()
+            elif parent_pid is not None and parent_pid_start:
+                parent_lost = not process_identity_is_live(
+                    parent_pid, parent_pid_start
+                )
+            if parent_lost:
                 exit_code, group_empty = _bounded_group_stop(
                     proc, leader_start, poll_interval=poll_interval
                 )

@@ -38,6 +38,29 @@ class NestedEligibilityTest(unittest.TestCase):
             self.assertEqual(N.auth_check("codex", worktree), (True, ""))
         self.assertEqual(run.call_args.kwargs["cwd"], Path(worktree).resolve())
 
+    def test_codex_auth_ignores_warnings_before_valid_login_line(self):
+        result = mock.Mock(
+            returncode=0,
+            stdout="",
+            stderr=(
+                "WARNING: failed to clean up stale arg0 temp dirs\n"
+                "Logged in using ChatGPT\n"
+            ),
+        )
+        with mock.patch.object(N.shutil, "which", return_value="/bin/codex"), \
+             mock.patch.object(N.subprocess, "run", return_value=result):
+            self.assertEqual(N.auth_check("codex"), (True, ""))
+
+    def test_codex_auth_still_requires_zero_exit_with_valid_status_line(self):
+        result = mock.Mock(
+            returncode=1,
+            stdout="Logged in using ChatGPT\n",
+            stderr="transient failure\n",
+        )
+        with mock.patch.object(N.shutil, "which", return_value="/bin/codex"), \
+             mock.patch.object(N.subprocess, "run", return_value=result):
+            self.assertEqual(N.auth_check("codex"), (False, "auth-unavailable"))
+
     def test_codex_owner_requires_network_profile_before_command_check(self):
         with tempfile.TemporaryDirectory() as worktree, \
              mock.patch.dict(os.environ, {}, clear=True), \

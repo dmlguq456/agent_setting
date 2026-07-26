@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 import errno
 import fcntl
@@ -12,12 +13,13 @@ import os
 from pathlib import Path
 import re
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
 import time
 import uuid
-from typing import Callable
+from typing import Callable, Iterator
 
 from replica_batch_contract import (
     DIGEST,
@@ -29,6 +31,34 @@ from replica_batch_contract import (
 ELIGIBILITY = {"supported", "unsupported", "unknown"}
 LAUNCH_AUTHORITIES = {"conductor", "ancestor-broker"}
 ATTEMPT_SCHEMA_VERSION = 2
+SUPERVISOR_LEASE_KIND = "flock-v1"
+SUPERVISOR_LEASE_NONCE_RE = re.compile(r"[0-9a-f]{64}")
+PARENT_LIVENESS_METADATA_KEYS = (
+    "attempt_id",
+    "attempt_schema_version",
+    "dispatch_depth",
+    "worker_type",
+    "harness",
+    "transport",
+    "execution_surface",
+    "registered_worker",
+    "runtime_sandbox",
+    "pid",
+    "pid_start",
+    "pid_scope",
+    "pid_host",
+    "pid_host_start",
+    "pid_host_ns",
+    "pid_host_proof",
+    "pid_ns",
+    "pid_observer_ns",
+    "pgid",
+    "pgid_host",
+    "completion_delivery",
+    "supervisor_lease",
+    "supervisor_lease_file",
+    "supervisor_lease_nonce",
+)
 WRAPPER_TRANSPORTS = {"headless", "interactive"}
 CANONICAL_PARENT_TRANSPORTS = WRAPPER_TRANSPORTS
 EXECUTION_SURFACES = {
@@ -241,12 +271,16 @@ class ParentAttemptBinding:
     pid_scope: str
     pid_host: int | None
     pid_host_start: str
-    observed_pid: int
+    observed_pid: int | None
     observed_pid_start: str
+    liveness_source: str
     harness: str
     transport: str
     runtime_sandbox: str
     repository_identity: str
+    worktree: str
+    slug: str
+    liveness_metadata_fingerprint: tuple[tuple[str, str], ...]
 
 
 @dataclass(frozen=True)
@@ -374,6 +408,253 @@ def process_identity_is_live(pid: int, expected_start: str) -> bool:
         and actual_start == expected_start
         and state != "Z"
     )
+
+
+def supervisor_lease_path(jobs: str | Path, attempt_id: str) -> Path:
+    """Return the only canonical liveness-lease path for an owner attempt."""
+
+    if re.fullmatch(r"att-[A-Za-z0-9._-]{1,240}", attempt_id) is None:
+        raise DispatchContractError("supervisor-lease-attempt-invalid", attempt_id)
+    registry = Path(jobs).expanduser().resolve(strict=False)
+    return registry.parent / "supervisor-state" / f"{attempt_id}.lease"
+
+
+def _validated_supervisor_lease_path(
+    jobs: str | Path, attempt_id: str, raw_path: str | Path
+) -> Path:
+    expected = supervisor_lease_path(jobs, attempt_id)
+    candidate = Path(raw_path).expanduser()
+    if not candidate.is_absolute() or str(candidate) != str(expected):
+        raise DispatchContractError(
+            "supervisor-lease-path-noncanonical",
+            f"expected={expected} actual={candidate}",
+        )
+    if candidate.parent.is_symlink() or candidate.is_symlink():
+        raise DispatchContractError("supervisor-lease-path-symlink", str(candidate))
+    return candidate
+
+
+def _open_supervisor_lease(path: Path, *, create: bool) -> int:
+    flags = os.O_RDWR | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    if create:
+        flags |= os.O_CREAT
+    fd = os.open(path, flags, 0o600)
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise DispatchContractError("supervisor-lease-not-regular", str(path))
+    return fd
+
+
+def _supervisor_lease_metadata_valid(
+    jobs: str | Path, metadata: dict[str, str]
+) -> bool:
+    attempt_id = metadata.get("attempt_id", "")
+    if (
+        metadata.get("attempt_schema_version") != "2"
+        or metadata.get("dispatch_depth") != "1"
+        or metadata.get("worker_type") != "owner"
+        or metadata.get("harness") != "codex"
+        or metadata.get("transport") != "headless"
+        or metadata.get("execution_surface") != "registered-headless"
+        or metadata.get("registered_worker") != "1"
+        or metadata.get("completion_delivery") != "app-server-supervised"
+        or metadata.get("supervisor_lease") != SUPERVISOR_LEASE_KIND
+        or SUPERVISOR_LEASE_NONCE_RE.fullmatch(
+            metadata.get("supervisor_lease_nonce", "")
+        )
+        is None
+        or not attempt_id
+    ):
+        return False
+    try:
+        _validated_supervisor_lease_path(
+            jobs, attempt_id, metadata.get("supervisor_lease_file", "")
+        )
+    except DispatchContractError:
+        return False
+    return True
+
+
+def _supervisor_lease_payload(metadata: dict[str, str]) -> bytes:
+    return (
+        f"kind={SUPERVISOR_LEASE_KIND}\n"
+        f"attempt_id={metadata['attempt_id']}\n"
+        f"nonce={metadata['supervisor_lease_nonce']}\n"
+    ).encode("ascii")
+
+
+def _supervisor_lease_payload_matches(fd: int, metadata: dict[str, str]) -> bool:
+    expected = _supervisor_lease_payload(metadata)
+    try:
+        observed = os.pread(fd, len(expected) + 1, 0)
+    except OSError:
+        return False
+    return observed == expected
+
+
+def supervisor_lease_is_held(
+    jobs: str | Path, metadata: dict[str, str]
+) -> bool:
+    """Probe a declared lease without treating an existing stale file as live."""
+
+    if not _supervisor_lease_metadata_valid(jobs, metadata):
+        return False
+    try:
+        path = _validated_supervisor_lease_path(
+            jobs,
+            metadata["attempt_id"],
+            metadata["supervisor_lease_file"],
+        )
+        fd = _open_supervisor_lease(path, create=False)
+    except (DispatchContractError, OSError):
+        return False
+    try:
+        if not _supervisor_lease_payload_matches(fd, metadata):
+            return False
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+        except OSError:
+            return False
+        else:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            return False
+    finally:
+        os.close(fd)
+
+
+def _declared_supervisor_lease_metadata(
+    jobs: Path, attempt_id: str
+) -> dict[str, str]:
+    lock_path = Path(f"{jobs}.lock")
+    with lock_path.open("a", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError as exc:
+            raise DispatchContractError(
+                "supervisor-lease-registry-unreadable", str(exc)
+            ) from exc
+        matches: list[tuple[str, dict[str, str]]] = []
+        for line in lines:
+            fields = line.split("\t")
+            if len(fields) != 6:
+                continue
+            metadata = parse_registry_metadata(fields[5])
+            if metadata.get("attempt_id") == attempt_id:
+                matches.append((fields[1], metadata))
+        if len(matches) != 1 or matches[0][0] not in {"open", "running"}:
+            raise DispatchContractError(
+                "supervisor-lease-attempt-not-open", attempt_id
+            )
+        metadata = matches[0][1]
+        if not _supervisor_lease_metadata_valid(jobs, metadata):
+            raise DispatchContractError(
+                "supervisor-lease-declaration-invalid", attempt_id
+            )
+        return metadata
+
+
+@contextmanager
+def hold_supervisor_lease(
+    jobs: str | Path, attempt_id: str, raw_path: str | Path
+) -> Iterator[Path]:
+    """Hold one exact owner lease until the supervisor finalization boundary."""
+
+    registry = Path(jobs).expanduser().resolve(strict=False)
+    path = _validated_supervisor_lease_path(registry, attempt_id, raw_path)
+    metadata = _declared_supervisor_lease_metadata(registry, attempt_id)
+    if metadata.get("supervisor_lease_file") != str(path):
+        raise DispatchContractError("supervisor-lease-declaration-changed", attempt_id)
+    if path.parent.is_symlink():
+        raise DispatchContractError("supervisor-lease-path-symlink", str(path.parent))
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if path.parent.is_symlink() or path.is_symlink():
+        raise DispatchContractError("supervisor-lease-path-symlink", str(path))
+    try:
+        fd = _open_supervisor_lease(path, create=True)
+    except OSError as exc:
+        raise DispatchContractError("supervisor-lease-open-failed", str(exc)) from exc
+    inode = os.fstat(fd)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as exc:
+        os.close(fd)
+        raise DispatchContractError(
+            "supervisor-lease-already-held", attempt_id
+        ) from exc
+    except OSError:
+        os.close(fd)
+        raise
+    try:
+        try:
+            confirmed = _declared_supervisor_lease_metadata(registry, attempt_id)
+            for key in (
+                "supervisor_lease",
+                "supervisor_lease_file",
+                "supervisor_lease_nonce",
+            ):
+                if confirmed.get(key) != metadata.get(key):
+                    raise DispatchContractError(
+                        "supervisor-lease-declaration-changed", attempt_id
+                    )
+            payload = _supervisor_lease_payload(metadata)
+            os.fchmod(fd, 0o600)
+            os.ftruncate(fd, 0)
+            if os.pwrite(fd, payload, 0) != len(payload):
+                raise OSError("short supervisor lease write")
+            os.fsync(fd)
+        except OSError as exc:
+            raise DispatchContractError(
+                "supervisor-lease-initialize-failed", str(exc)
+            ) from exc
+        yield path
+    finally:
+        try:
+            current = path.lstat()
+            if (current.st_dev, current.st_ino) == (inode.st_dev, inode.st_ino):
+                path.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+
+
+def remove_supervisor_lease(path: str | Path) -> bool:
+    """Remove an unlocked exact lease file without following replacements."""
+
+    lease = Path(path)
+    if lease.parent.is_symlink() or lease.is_symlink():
+        return False
+    try:
+        fd = _open_supervisor_lease(lease, create=False)
+    except FileNotFoundError:
+        return True
+    except (DispatchContractError, OSError):
+        return False
+    inode = os.fstat(fd)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+        current = lease.lstat()
+        if (current.st_dev, current.st_ino) != (inode.st_dev, inode.st_ino):
+            return False
+        lease.unlink()
+        return True
+    except (FileNotFoundError, OSError):
+        return False
+    finally:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
 
 
 def process_namespace_pids(pid: int) -> tuple[int, ...]:
@@ -1359,6 +1640,88 @@ def _abort_fenced_launch(
     return proc.poll() is not None and group.state == "empty"
 
 
+def _parent_liveness_evidence(
+    jobs: Path, metadata: dict[str, str]
+) -> tuple[bool, str, AuthoritativeProcessIdentity | None]:
+    process = attempt_process_quiescence(metadata)
+    if process.state == "live" and process.identity is not None:
+        return True, "process", process.identity
+    if (
+        process.state == "unverifiable"
+        and process.reason == "process-namespace-unverifiable"
+        and supervisor_lease_is_held(jobs, metadata)
+    ):
+        return True, "supervisor-lease", None
+    return False, process.reason, None
+
+
+def _parent_metadata_matches_binding(
+    metadata: dict[str, str], binding: ParentAttemptBinding
+) -> bool:
+    return tuple(
+        (key, metadata.get(key, "")) for key in PARENT_LIVENESS_METADATA_KEYS
+    ) == binding.liveness_metadata_fingerprint
+
+
+def _parent_binding_is_live_from_metadata(
+    jobs: Path,
+    metadata: dict[str, str],
+    binding: ParentAttemptBinding,
+) -> bool:
+    if not _parent_metadata_matches_binding(metadata, binding):
+        return False
+    if (
+        binding.observed_pid is not None
+        and binding.observed_pid_start
+    ):
+        return process_identity_is_live(
+            binding.observed_pid, binding.observed_pid_start
+        )
+    live, _source, _identity = _parent_liveness_evidence(jobs, metadata)
+    return live
+
+
+def parent_attempt_binding_is_live(
+    jobs: str | Path, binding: ParentAttemptBinding
+) -> bool:
+    """Revalidate one exact parent row plus its current liveness evidence."""
+
+    registry = Path(jobs).expanduser().resolve(strict=False)
+    try:
+        with Path(f"{registry}.lock").open("a", encoding="utf-8") as lock:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            lines = registry.read_text(
+                encoding="utf-8", errors="replace"
+            ).splitlines()
+            matches: list[tuple[list[str], dict[str, str]]] = []
+            for line in lines:
+                fields = line.split("\t")
+                if len(fields) != 6 or fields[1] not in {"open", "running"}:
+                    continue
+                metadata = parse_registry_metadata(fields[5])
+                if metadata.get("attempt_id") == binding.attempt_id:
+                    matches.append((fields, metadata))
+            if len(matches) != 1:
+                return False
+            fields, metadata = matches[0]
+            try:
+                validate_attempt_metadata(metadata)
+            except DispatchContractError:
+                return False
+            if (
+                fields[4] != binding.slug
+                or fields[3] != binding.worktree
+                or canonical_repository_identity(fields[2])
+                != binding.repository_identity
+            ):
+                return False
+            return _parent_binding_is_live_from_metadata(
+                registry, metadata, binding
+            )
+    except OSError:
+        return False
+
+
 def spawn_claimed_attempt(
     jobs: Path,
     attempt_id: str,
@@ -1432,24 +1795,16 @@ def spawn_claimed_attempt(
                 and parent_fields[3] == child_fields[3]
                 and parent_fields[4] == child_meta.get("parent")
                 and child_meta.get("parent_attempt_id") == parent_binding.attempt_id
-                and parent_meta.get("pid") == str(parent_binding.pid)
-                and parent_meta.get("pid_start") == parent_binding.pid_start
-                and (parent_meta.get("harness") or "") == parent_binding.harness
-                and (parent_meta.get("transport") or "") == parent_binding.transport
-                and (parent_meta.get("runtime_sandbox") or "") == parent_binding.runtime_sandbox
+                and parent_fields[3] == parent_binding.worktree
+                and parent_fields[4] == parent_binding.slug
+                and _parent_metadata_matches_binding(parent_meta, parent_binding)
             )
-            if parent_binding.pid_host is not None:
-                same_identity = same_identity and (
-                    parent_meta.get("pid_host") == str(parent_binding.pid_host)
-                    and (parent_meta.get("pid_host_start") or parent_meta.get("pid_start"))
-                    == parent_binding.pid_host_start
-                )
             if not same_identity:
                 raise DispatchContractError(
                     "parent-attempt-identity-changed", parent_binding.attempt_id
                 )
-            if not process_identity_is_live(
-                parent_binding.observed_pid, parent_binding.observed_pid_start
+            if not _parent_binding_is_live_from_metadata(
+                jobs, parent_meta, parent_binding
             ):
                 raise DispatchContractError(
                     "parent-attempt-not-live", parent_binding.attempt_id
@@ -1526,8 +1881,8 @@ def spawn_claimed_attempt(
                 ),
                 str(exc),
             ) from exc
-        if parent_binding is not None and not process_identity_is_live(
-            parent_binding.observed_pid, parent_binding.observed_pid_start
+        if parent_binding is not None and not _parent_binding_is_live_from_metadata(
+            jobs, parent_meta, parent_binding
         ):
             cleanup_verified = _abort_fenced_launch(
                 proc, gate_write, identity["pid_start"]
@@ -1584,7 +1939,7 @@ def resolve_live_parent_attempt(
     with Path(f"{jobs}.lock").open("a", encoding="utf-8") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
-        candidates: list[dict[str, str]] = []
+        candidates: list[tuple[list[str], dict[str, str]]] = []
         for line in lines:
             fields = line.split("\t")
             if len(fields) != 6 or fields[1] not in {"open", "running"}:
@@ -1614,7 +1969,7 @@ def resolve_live_parent_attempt(
                 for key, value in expected_runtime.items()
             ):
                 continue
-            candidates.append(metadata)
+            candidates.append((fields, metadata))
 
         if not candidates:
             reason = "parent-attempt-not-found" if expected_attempt_id else "live-parent-not-found"
@@ -1624,7 +1979,7 @@ def resolve_live_parent_attempt(
                 "parent-attempt-ambiguous",
                 f"parent={parent_slug} candidates={len(candidates)}",
             )
-        metadata = candidates[0]
+        parent_fields, metadata = candidates[0]
         attempt_id = metadata.get("attempt_id", "")
         raw_pid = metadata.get("pid", "")
         pid_start = metadata.get("pid_start", "")
@@ -1634,9 +1989,8 @@ def resolve_live_parent_attempt(
             raise DispatchContractError("parent-process-identity-missing", attempt_id or parent_slug)
         pid = int(raw_pid)
         host_pid = int(raw_host) if raw_host.isdigit() else None
-        process = attempt_process_quiescence(metadata)
-        observed = process.identity
-        if process.state != "live" or observed is None:
+        live, liveness_source, observed = _parent_liveness_evidence(jobs, metadata)
+        if not live:
             raise DispatchContractError("parent-attempt-not-live", attempt_id)
         return ParentAttemptBinding(
             attempt_id=attempt_id,
@@ -1645,12 +1999,19 @@ def resolve_live_parent_attempt(
             pid_scope=metadata.get("pid_scope", "host-visible"),
             pid_host=host_pid,
             pid_host_start=host_start,
-            observed_pid=observed.pid,
-            observed_pid_start=observed.expected_start,
+            observed_pid=observed.pid if observed is not None else None,
+            observed_pid_start=observed.expected_start if observed is not None else "",
+            liveness_source=liveness_source,
             harness=metadata.get("harness", ""),
             transport=metadata.get("transport", ""),
             runtime_sandbox=metadata.get("runtime_sandbox", ""),
             repository_identity=requested_repository,
+            worktree=parent_fields[3],
+            slug=parent_fields[4],
+            liveness_metadata_fingerprint=tuple(
+                (key, metadata.get(key, ""))
+                for key in PARENT_LIVENESS_METADATA_KEYS
+            ),
         )
 
 

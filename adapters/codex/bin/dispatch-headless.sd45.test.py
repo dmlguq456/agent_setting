@@ -200,7 +200,8 @@ def _prompt_args(**overrides):
         capability_owner=None, owner_harness=None, write_scope=None,
         completion_gate=None, assigned_contract=None, unit=None, model_role=None,
         agent_home=Path("/tmp/fixture-agent-home"), artifact_root="/tmp/fixture-artifacts",
-        jobs_path=Path("/tmp/jobs.log"), sandbox="workspace-write", approval="never",
+        jobs_path=Path("/tmp/fixture-agent-home/.dispatch/jobs.log"),
+        sandbox="workspace-write", approval="never",
         nested_headless_network=False,
         resolved_model_settings={
             "source": "inherit", "role": "-", "model": None, "reasoning": None
@@ -237,6 +238,10 @@ class CodexSD78CompletionDelivery(unittest.TestCase):
         self.assertIn("--parent-attempt-id att-parent", command)
         self.assertIn(
             "--state-file /tmp/fixture-agent-home/.dispatch/supervisor-state/att-parent.json",
+            command,
+        )
+        self.assertIn(
+            "--lease-file /tmp/fixture-agent-home/.dispatch/supervisor-state/att-parent.lease",
             command,
         )
 

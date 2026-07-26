@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import signal
 import shutil
 import shlex
@@ -26,6 +27,7 @@ from dispatch_contract import (  # noqa: E402
     GROUP_REAP_PROOF,
     GOVERNOR_RESERVATION_ENV,
     REPLICA_RESERVATION_ROW_KEYS,
+    SUPERVISOR_LEASE_KIND,
     anchored_capacity_failure,
     annotate_attempt_row,
     attempt_launch_is_available,
@@ -38,12 +40,14 @@ from dispatch_contract import (  # noqa: E402
     launch_orphan_watch,
     new_attempt_id,
     parse_registry_metadata,
+    parent_attempt_binding_is_live,
     resolve_global_registry,
     resolve_live_parent_attempt,
     resolve_model_governor_root,
     replica_batch_expectation,
     reserve_governor_token,
     spawn_claimed_attempt,
+    supervisor_lease_path,
     validate_nested_eligibility,
     wait_governor_reservation_claim,
 )
@@ -753,6 +757,11 @@ def completion_state_path(args: argparse.Namespace) -> Path:
     return Path(args.agent_home) / ".dispatch" / "supervisor-state" / f"{attempt_id}.json"
 
 
+def completion_lease_path(args: argparse.Namespace) -> Path:
+    attempt_id = args.attempt_id or "att-dry-run-placeholder"
+    return supervisor_lease_path(args.jobs_path, attempt_id)
+
+
 def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -> str:
     if getattr(args, "resolved_completion_delivery", "one-shot") == "app-server-supervised":
         command = [
@@ -762,6 +771,7 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
             "--jobs", str(args.jobs_path),
             "--parent-attempt-id", args.attempt_id or "unassigned",
             "--state-file", str(completion_state_path(args)),
+            "--lease-file", str(completion_lease_path(args)),
             "--sandbox", effective_runtime_sandbox(args),
             "--approval", args.approval,
             "--writable-root", str(args.artifact_root),
@@ -891,6 +901,12 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         f"fallback_hop={args.fallback_hop},harness=codex,"
         f"completion_delivery={args.resolved_completion_delivery}"
     )
+    if args.resolved_completion_delivery == "app-server-supervised":
+        pipe += (
+            f",supervisor_lease={SUPERVISOR_LEASE_KIND}"
+            f",supervisor_lease_file={completion_lease_path(args)}"
+            f",supervisor_lease_nonce={secrets.token_hex(32)}"
+        )
     if args.parent_slug:
         pipe += f",parent={args.parent_slug}"
     if getattr(args, "parent_binding", None) is not None:
@@ -899,6 +915,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
             f",parent_attempt_id={binding.attempt_id}"
             f",parent_pid={binding.pid},parent_pid_start={binding.pid_start}"
             f",parent_pid_scope={binding.pid_scope}"
+            f",parent_liveness_source={binding.liveness_source}"
         )
         if binding.pid_host is not None:
             pipe += (
@@ -1693,6 +1710,7 @@ def main(argv: list[str]) -> int:
         args.resolved_completion_delivery = resolve_completion_delivery(args)
         if args.resolved_completion_delivery == "app-server-supervised":
             completion_state_path(args)
+            completion_lease_path(args)
     except DispatchContractError as e:
         return fail(e.reason, 69, detail=e.detail, child_spawned="0")
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
@@ -1855,8 +1873,12 @@ def main(argv: list[str]) -> int:
             dispatch_env["AGENT_DISPATCH_COMPLETION_STATE_FILE"] = str(
                 completion_state_path(args)
             )
+            dispatch_env["AGENT_DISPATCH_SUPERVISOR_LEASE_FILE"] = str(
+                completion_lease_path(args)
+            )
         else:
             dispatch_env.pop("AGENT_DISPATCH_COMPLETION_STATE_FILE", None)
+            dispatch_env.pop("AGENT_DISPATCH_SUPERVISOR_LEASE_FILE", None)
         if args.nested_codex_home is not None:
             dispatch_env["CODEX_HOME"] = str(args.nested_codex_home)
         elif profile_home is not None:
@@ -2011,6 +2033,11 @@ def main(argv: list[str]) -> int:
                 args.foreground_timeout,
                 parent_pid=binding.observed_pid if binding else None,
                 parent_pid_start=binding.observed_pid_start if binding else None,
+                parent_is_live=(
+                    (lambda: parent_attempt_binding_is_live(jobs, binding))
+                    if binding
+                    else None
+                ),
             )
             annotate_attempt_row(
                 jobs,
@@ -2075,6 +2102,14 @@ def main(argv: list[str]) -> int:
     print("adapter=codex")
     print("runtime_surface=codex-exec-headless")
     print(f"completion_delivery={args.resolved_completion_delivery}")
+    print(
+        "supervisor_lease_file="
+        + (
+            str(completion_lease_path(args))
+            if args.resolved_completion_delivery == "app-server-supervised"
+            else "-"
+        )
+    )
     print(f"status={action}")
     print(f"worktree={args.worktree}")
     print(f"artifact_root={args.artifact_root}")
@@ -2126,6 +2161,16 @@ def main(argv: list[str]) -> int:
     print(f"duplicate_attempt={0 if args.attempt_claimed or action == 'dry-run' else 1}")
     print(f"registered={1 if args.attempt_claimed else 0}")
     print(f"started={1 if action == 'start' and args.attempt_claimed else 0}")
+    print(
+        "child_spawned="
+        + str(
+            int(
+                action == "start"
+                and bool(args.attempt_claimed)
+                and bool(getattr(args, "child_pid", None))
+            )
+        )
+    )
     print(f"child_pid={getattr(args, 'child_pid', None) or '-'}")
     print(f"child_pid_start={getattr(args, 'child_pid_start', None) or '-'}")
     print(f"launch_heartbeat={getattr(args, 'launch_heartbeat', 'not-started')}")

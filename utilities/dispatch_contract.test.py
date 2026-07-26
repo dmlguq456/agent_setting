@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, subprocess, sys, tempfile, time, unittest
+import fcntl, os, subprocess, sys, tempfile, time, unittest
 from unittest import mock
 from pathlib import Path
 
@@ -11,12 +11,12 @@ from replica_batch_contract import build_manifest
 CURRENT="attempt_schema_version=2,dispatch_depth=2,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless"
 
 class DispatchContractTest(unittest.TestCase):
- def owner_row(self,attempt,pid,start,slug="owner"):
+ def owner_row(self,attempt,pid,start,slug="owner",extra=""):
   return (f"2026-07-23T00:00:00Z\topen\t/repo\t/wt\t{slug}\t"
           "attempt_schema_version=2,dispatch_depth=1,transport=headless,"
           "execution_surface=registered-headless,registered_worker=1,"
           "fallback_hop=same-harness-headless,worker_type=owner,"
-          f"attempt_id={attempt},pid={pid},pid_start={start}")
+          f"attempt_id={attempt},pid={pid},pid_start={start}{extra}")
 
  def test_live_parent_binding_is_attempt_exact_and_same_slug_safe(self):
   with tempfile.TemporaryDirectory() as td:
@@ -49,6 +49,105 @@ class DispatchContractTest(unittest.TestCase):
      jobs,parent_slug="owner",repo="/repo",worktree="/wt",
      expected_attempt_id="att-parent-dead")
    self.assertEqual(caught.exception.reason,"parent-attempt-not-live")
+
+ def test_supervised_lease_is_live_only_when_exact_held_and_pid_namespace_unverifiable(self):
+  with tempfile.TemporaryDirectory() as td:
+   base=Path(td);jobs=base/"jobs.log";attempt="att-parent-lease"
+   parent=subprocess.Popen(["sleep","60"])
+   lease=D.supervisor_lease_path(jobs,attempt)
+   lease.parent.mkdir(parents=True)
+   holder=lease.open("a+")
+   fcntl.flock(holder.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+   try:
+    start=D.process_start_ticks(parent.pid)
+    nonce="a"*64
+    extra=(",harness=codex,runtime_sandbox=workspace-write,"
+           "completion_delivery=app-server-supervised,"
+           f"supervisor_lease={D.SUPERVISOR_LEASE_KIND},"
+           f"supervisor_lease_file={lease},supervisor_lease_nonce={nonce},"
+           "pid_scope=namespace-local,"
+           "pid_observer_ns=pid:[outer],pid_ns=pid:[outer]")
+    jobs.write_text(self.owner_row(attempt,parent.pid,start,extra=extra)+"\n")
+    holder.seek(0);holder.truncate()
+    holder.write(f"kind={D.SUPERVISOR_LEASE_KIND}\nattempt_id={attempt}\nnonce={nonce}\n")
+    holder.flush()
+    with mock.patch.object(D,"process_namespace_identity",return_value="pid:[inner]"):
+     binding=D.resolve_live_parent_attempt(
+      jobs,parent_slug="owner",repo="/repo",worktree="/wt",
+      expected_attempt_id=attempt)
+    self.assertEqual(binding.liveness_source,"supervisor-lease")
+    self.assertIsNone(binding.observed_pid)
+    self.assertTrue(D.parent_attempt_binding_is_live(jobs,binding))
+    sealed_row=jobs.read_text()
+    jobs.write_text(sealed_row.replace(
+     f"supervisor_lease_nonce={nonce}",f"supervisor_lease_nonce={'e'*64}"))
+    self.assertFalse(D.parent_attempt_binding_is_live(jobs,binding))
+    jobs.write_text(sealed_row)
+
+    fcntl.flock(holder.fileno(),fcntl.LOCK_UN);holder.close();holder=None
+    with mock.patch.object(D,"process_namespace_identity",return_value="pid:[inner]"):
+     with self.assertRaises(D.DispatchContractError) as released:
+      D.resolve_live_parent_attempt(
+       jobs,parent_slug="owner",repo="/repo",worktree="/wt",
+       expected_attempt_id=attempt)
+    self.assertEqual(released.exception.reason,"parent-attempt-not-live")
+
+    foreign_holder=lease.open("w+")
+    foreign_holder.write("kind=flock-v1\nattempt_id=att-foreign\nnonce="+("f"*64)+"\n")
+    foreign_holder.flush()
+    fcntl.flock(foreign_holder.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+    try:
+     with mock.patch.object(D,"process_namespace_identity",return_value="pid:[inner]"):
+      with self.assertRaises(D.DispatchContractError) as foreign:
+       D.resolve_live_parent_attempt(
+        jobs,parent_slug="owner",repo="/repo",worktree="/wt",
+        expected_attempt_id=attempt)
+     self.assertEqual(foreign.exception.reason,"parent-attempt-not-live")
+    finally:
+     fcntl.flock(foreign_holder.fileno(),fcntl.LOCK_UN);foreign_holder.close()
+
+    target=base/"foreign-lease";target.touch()
+    lease.unlink();lease.symlink_to(target)
+    target_holder=target.open("a+")
+    fcntl.flock(target_holder.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+    try:
+     with mock.patch.object(D,"process_namespace_identity",return_value="pid:[inner]"):
+      with self.assertRaises(D.DispatchContractError) as symlinked:
+       D.resolve_live_parent_attempt(
+        jobs,parent_slug="owner",repo="/repo",worktree="/wt",
+        expected_attempt_id=attempt)
+     self.assertEqual(symlinked.exception.reason,"parent-attempt-not-live")
+    finally:
+     fcntl.flock(target_holder.fileno(),fcntl.LOCK_UN);target_holder.close()
+   finally:
+    if holder is not None:
+     fcntl.flock(holder.fileno(),fcntl.LOCK_UN);holder.close()
+    if parent.poll() is None:parent.kill()
+    parent.wait()
+
+ def test_supervised_lease_never_overrides_positive_pid_reuse(self):
+  with tempfile.TemporaryDirectory() as td:
+   base=Path(td);jobs=base/"jobs.log";attempt="att-parent-reused"
+   lease=D.supervisor_lease_path(jobs,attempt);lease.parent.mkdir(parents=True)
+   holder=lease.open("a+");fcntl.flock(holder.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+   try:
+    nonce="b"*64
+    extra=(",harness=codex,runtime_sandbox=workspace-write,"
+           "completion_delivery=app-server-supervised,"
+           f"supervisor_lease={D.SUPERVISOR_LEASE_KIND},"
+           f"supervisor_lease_file={lease},supervisor_lease_nonce={nonce}")
+    jobs.write_text(self.owner_row(attempt,437,"20",extra=extra)+"\n")
+    holder.write(f"kind={D.SUPERVISOR_LEASE_KIND}\nattempt_id={attempt}\nnonce={nonce}\n")
+    holder.flush()
+    with mock.patch.object(
+        D,"_proc_observation",return_value=("present","different","S")):
+     with self.assertRaises(D.DispatchContractError) as caught:
+      D.resolve_live_parent_attempt(
+       jobs,parent_slug="owner",repo="/repo",worktree="/wt",
+       expected_attempt_id=attempt)
+    self.assertEqual(caught.exception.reason,"parent-attempt-not-live")
+   finally:
+    fcntl.flock(holder.fileno(),fcntl.LOCK_UN);holder.close()
 
  def test_parent_repo_identity_canonicalizes_primary_and_linked_but_keeps_worktree_exact(self):
   with tempfile.TemporaryDirectory() as td:
@@ -580,6 +679,58 @@ class DispatchContractTest(unittest.TestCase):
     if parent.poll() is None:parent.kill()
     parent.wait()
     for proc in child:
+     if proc.poll() is None:proc.kill()
+     proc.wait()
+
+ def test_supervisor_lease_release_after_spawn_prevents_fence_release(self):
+  with tempfile.TemporaryDirectory() as td:
+   base=Path(td);jobs=base/"jobs.log";marker=base/"marker"
+   parent=subprocess.Popen(["sleep","60"]);children=[]
+   attempt="att-parent-lease-race";nonce="c"*64
+   lease=D.supervisor_lease_path(jobs,attempt);lease.parent.mkdir(parents=True)
+   holder=lease.open("w+");fcntl.flock(holder.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+   try:
+    start=D.process_start_ticks(parent.pid)
+    extra=(",harness=codex,runtime_sandbox=workspace-write,"
+           "completion_delivery=app-server-supervised,"
+           f"supervisor_lease={D.SUPERVISOR_LEASE_KIND},"
+           f"supervisor_lease_file={lease},supervisor_lease_nonce={nonce},"
+           "pid_scope=namespace-local,pid_observer_ns=pid:[outer],"
+           "pid_ns=pid:[outer]")
+    jobs.write_text(self.owner_row(attempt,parent.pid,start,extra=extra)+"\n")
+    holder.write(f"kind={D.SUPERVISOR_LEASE_KIND}\nattempt_id={attempt}\nnonce={nonce}\n")
+    holder.flush()
+    with mock.patch.object(D,"process_namespace_identity",return_value="pid:[inner]"):
+     binding=D.resolve_live_parent_attempt(
+      jobs,parent_slug="owner",repo="/repo",worktree="/wt",
+      expected_attempt_id=attempt)
+     child_attempt="att-child-lease-race"
+     row=(f"2026-07-23T00:00:01Z\topen\t/repo\t/wt\tchild\t{CURRENT},"
+          f"worker_type=stage,parent=owner,parent_attempt_id={attempt},"
+          f"attempt_id={child_attempt}")
+     self.assertTrue(D.claim_attempt_row(jobs,child_attempt,row,launch=False))
+     def spawn(gate_fd):
+      proc=subprocess.Popen(
+       [sys.executable,str(Path(__file__).with_name("launch-fence.py")),
+        "--parent-pid",str(os.getpid()),"--gate-fd",str(gate_fd),"--",
+        sys.executable,"-c",f"from pathlib import Path;Path({str(marker)!r}).write_text('bad')"],
+       pass_fds=(gate_fd,),start_new_session=True)
+      children.append(proc)
+      fcntl.flock(holder.fileno(),fcntl.LOCK_UN);holder.close()
+      return proc
+     with self.assertRaises(D.DispatchContractError) as caught:
+      D.spawn_claimed_attempt(
+       jobs,child_attempt,parent_binding=binding,spawn=spawn,
+       launch_metadata={"launch_lifecycle":"foreground-scoped"})
+    self.assertEqual(caught.exception.reason,"parent-attempt-not-live-after-spawn")
+    self.assertFalse(marker.exists())
+    self.assertIsNotNone(children[0].poll())
+   finally:
+    if not holder.closed:
+     fcntl.flock(holder.fileno(),fcntl.LOCK_UN);holder.close()
+    if parent.poll() is None:parent.kill()
+    parent.wait()
+    for proc in children:
      if proc.poll() is None:proc.kill()
      proc.wait()
 

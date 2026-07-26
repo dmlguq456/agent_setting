@@ -18,6 +18,7 @@ from dispatch_completion_join import (
     remove_supervisor_state,
     write_supervisor_state,
 )
+from dispatch_contract import DispatchContractError, hold_supervisor_lease
 from dispatch_supervisor_terminal import (
     SupervisorTerminal,
     classify_codex_result,
@@ -342,6 +343,7 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument("--join-timeout", type=float, default=3600.0)
     value.add_argument("--max-continuations", type=int, default=12)
     value.add_argument("--state-file", default=os.environ.get("AGENT_DISPATCH_COMPLETION_STATE_FILE"))
+    value.add_argument("--lease-file", required=True)
     value.add_argument("--app-server-command", default=os.environ.get("CODEX_APP_SERVER_COMMAND"))
     value.add_argument("--join-command", default=os.environ.get("AGENT_DISPATCH_JOIN_COMMAND"))
     return value
@@ -360,11 +362,19 @@ def main(argv: list[str] | None = None) -> int:
         "codex", "app-server", "--listen", "stdio://"
     ]
     state_path = Path(args.state_file) if args.state_file else None
+    lease_path = Path(args.lease_file)
     runtime_env = dict(os.environ)
     if state_path is not None:
         runtime_env["AGENT_DISPATCH_COMPLETION_STATE_FILE"] = str(state_path)
+    runtime_env["AGENT_DISPATCH_SUPERVISOR_LEASE_FILE"] = str(lease_path)
     server: AppServer | None = None
+    lease = hold_supervisor_lease(
+        args.jobs, args.parent_attempt_id, lease_path
+    )
+    lease_acquired = False
     try:
+        lease.__enter__()
+        lease_acquired = True
         server = AppServer(command, args.worktree, runtime_env)
         server.request(
             "initialize",
@@ -448,11 +458,12 @@ def main(argv: list[str] | None = None) -> int:
                 return 70
             emit({"type": "turn.completed", "thread_id": thread_id})
             return 0 if terminal.failure_class == "pass" else 3
-    except (JoinContractError, SupervisorError) as exc:
-        terminal = classify_supervisor_error("codex", str(exc))
+    except (DispatchContractError, JoinContractError, SupervisorError) as exc:
+        reason = exc.reason if isinstance(exc, DispatchContractError) else str(exc)
+        terminal = classify_supervisor_error("codex", reason)
         if not reconcile(args, terminal):
             return 70
-        emit({"type": "dispatch.supervisor.error", "reason": str(exc)})
+        emit({"type": "dispatch.supervisor.error", "reason": reason})
         return 70
     except Exception as exc:  # fail closed without leaking protocol/model content
         terminal = classify_supervisor_error(
@@ -468,9 +479,15 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 70
     finally:
-        if server is not None:
-            server.close()
-        remove_supervisor_state(state_path)
+        try:
+            if server is not None:
+                server.close()
+        finally:
+            try:
+                if lease_acquired:
+                    lease.__exit__(None, None, None)
+            finally:
+                remove_supervisor_state(state_path)
 
 
 if __name__ == "__main__":

@@ -35,6 +35,11 @@ class OrphanWatchTest(unittest.TestCase):
         )
         self.supervisor_state.parent.mkdir(parents=True)
         self.supervisor_state.write_text("{}", encoding="utf-8")
+        self.supervisor_lease = (
+            self.jobs.parent / "supervisor-state" / "att-watch.lease"
+        )
+        self.supervisor_lease.parent.mkdir(parents=True, exist_ok=True)
+        self.supervisor_lease.write_text("stale", encoding="utf-8")
         self.owner = subprocess.Popen(["sleep", "60"])
         self.owner_start = self.proc_start(self.owner.pid)
         self.children = []
@@ -54,7 +59,7 @@ class OrphanWatchTest(unittest.TestCase):
         raw = (Path("/proc") / str(pid) / "stat").read_text()
         return raw[raw.rfind(")") + 2:].split()[19]
 
-    def write_rows(self, completed_owner=False, child=None):
+    def write_rows(self, completed_owner=False, child=None, supervised=True):
         status = "done" if completed_owner else "open"
         child_pid = child.pid if child is not None else 99999999
         child_start = self.proc_start(child.pid) if child is not None else "1"
@@ -64,10 +69,18 @@ class OrphanWatchTest(unittest.TestCase):
             "execution_surface=registered-headless,registered_worker=1,"
             "fallback_hop=same-harness-headless"
         )
+        supervised_metadata = (
+            ",harness=codex,completion_delivery=app-server-supervised,"
+            "supervisor_lease=flock-v1,"
+            f"supervisor_lease_file={self.supervisor_lease}"
+            if supervised
+            else ""
+        )
         self.jobs.write_text(
             f"2026-07-19T00:00:00Z\t{status}\t/r\t/w\towner\t"
             f"{current},dispatch_depth=1,worker_type=owner,attempt_id=att-watch,"
-            f"pid={self.owner.pid},pid_start={self.owner_start}\n"
+            f"pid={self.owner.pid},pid_start={self.owner_start}"
+            f"{supervised_metadata}\n"
             "2026-07-19T00:00:01Z\topen\t/r\t/w\tchild\t"
             f"{current},dispatch_depth=2,route_id={self.route_id},"
             f"route_file={self.route},route_node=execute,attempt_id=att-child,"
@@ -101,9 +114,10 @@ class OrphanWatchTest(unittest.TestCase):
         self.assertIn("note=dead-parent-terminated", text)
         self.assertIsNotNone(child.poll())
         self.assertFalse(self.supervisor_state.exists())
+        self.assertFalse(self.supervisor_lease.exists())
 
     def test_owner_exit_before_any_child_closes_the_open_row(self):
-        self.write_rows()
+        self.write_rows(supervised=False)
         lines = self.jobs.read_text().splitlines()
         self.jobs.write_text(lines[0] + "\n")
         watcher = self.watcher()
@@ -114,6 +128,7 @@ class OrphanWatchTest(unittest.TestCase):
         self.assertIn("\tdone\t/r\t/w\towner\t", text)
         self.assertIn("note=dead-exact-pid", text)
         self.assertFalse(self.supervisor_state.exists())
+        self.assertTrue(self.supervisor_lease.exists())
 
     def test_terminal_owner_makes_watcher_exit_without_mutation(self):
         self.write_rows(completed_owner=True)
@@ -122,6 +137,7 @@ class OrphanWatchTest(unittest.TestCase):
         self.assertEqual(watcher.wait(timeout=5), 0)
         self.assertEqual(self.jobs.read_text(), before)
         self.assertFalse(self.supervisor_state.exists())
+        self.assertFalse(self.supervisor_lease.exists())
 
     def test_non_orphan_429_exit_is_reconciled_as_capacity(self):
         log = self.base / "owner.claude.jsonl"
@@ -151,6 +167,7 @@ class OrphanWatchTest(unittest.TestCase):
         self.assertIn("\tdone\t/r\t/w\towner\t", registry)
         self.assertIn("note=dead-capacity", registry)
         self.assertIn("failure_class=capacity", registry)
+        self.assertTrue(self.supervisor_lease.exists())
 
     def test_non_orphan_signal_exit_without_envelope_is_still_closed(self):
         current = (
@@ -170,6 +187,7 @@ class OrphanWatchTest(unittest.TestCase):
         registry = self.jobs.read_text(encoding="utf-8")
         self.assertIn("\tdone\t/r\t/w\towner\t", registry)
         self.assertIn("note=dead-protocol", registry)
+        self.assertTrue(self.supervisor_lease.exists())
 
 
 if __name__ == "__main__":
