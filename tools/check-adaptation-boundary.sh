@@ -834,7 +834,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'headless --check <worktree>' adapters/codex/README.md \
     || ! grep -Fq 'headless [--check] [--require-hook-trust]' adapters/codex/AGENTS.md \
     || ! grep -Fq 'dispatch --dry-run|--register|--start [--require-hook-trust]' adapters/codex/ADAPTATION.md \
-    || ! grep -Fq 'missing hook trust fails before registry writes' adapters/codex/README.md \
+    || ! grep -Fq 'fails with `child_spawned=0` before registry writes' adapters/codex/README.md \
     || ! grep -Fq 'Registry writes and harvest rewrites are serialized with a `.lock` file' adapters/codex/README.md \
     || ! grep -Fq 'Registry writes and harvest rewrites are serialized with a `.lock` file' adapters/codex/ADAPTATION.md \
     || ! grep -Fq 'minimal typed worker prompt' adapters/codex/README.md \
@@ -984,6 +984,10 @@ check_codex_bin_wrappers() {
     || ! grep -Fq '"SessionStart"' adapters/codex/hooks/sessionstart-lifecycle.py \
     || ! grep -Fq 'hookSpecificOutput' adapters/codex/hooks/sessionstart-lifecycle.py \
     || ! grep -Fq 'run_preflight("session-end"' adapters/codex/hooks/sessionend-lifecycle.py \
+    || ! grep -Fq 'join_session_batch(' adapters/codex/hooks/sessionend-lifecycle.py \
+    || ! grep -Fq 'CODEX_STOP_JOIN_TIMEOUT' adapters/codex/hooks/sessionend-lifecycle.py \
+    || ! grep -Fq 'parent_completion_harvested' adapters/codex/bin/dispatch-harvest.py \
+    || ! grep -Fq 'register_parent_stop_attempt(args, jobs)' adapters/codex/bin/dispatch-headless.py \
     || grep -Fq 'sys.stdout.write(result.stdout)' adapters/codex/hooks/sessionend-lifecycle.py \
     || ! grep -Fq 'run_preflight("briefing"' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'token_budget_context(current_cwd, sid)' adapters/codex/hooks/userprompt-lifecycle.py \
@@ -1197,7 +1201,8 @@ check_codex_bin_wrappers() {
   fi
   if ! grep -Fq 'loop-info <oncall|note|study|drill|runtime-watch>' adapters/codex/README.md \
     || ! grep -Fq 'preflight.sh loop-info <loop>' adapters/codex/ADAPTATION.md \
-    || ! grep -Fq 'Arbitrary detached shell output and a completed interactive turn still' adapters/codex/AGENTS.md; then
+    || ! grep -Fq 'Arbitrary detached shell output' adapters/codex/AGENTS.md \
+    || ! grep -Fq 'trusted native Stop bridge' adapters/codex/AGENTS.md; then
     fail_msg "Codex docs must document loop-info support/fallback contracts"
   fi
 
@@ -3130,6 +3135,12 @@ check_adaptation_inventory_native_surfaces() {
       fail_msg "adapters/codex/bin/$s must exist and be executable (Codex runtime projection installer/checker)"
     fi
   done
+  if [ ! -x adapters/codex/bin/hook-trust-status.py ] \
+    || [ ! -f adapters/codex/bin/hook-trust-status.test.py ] \
+    || ! grep -Fq 'hooks/list' adapters/codex/bin/hook-trust-status.py \
+    || ! grep -Fq 'current-hash-not-trusted' adapters/codex/bin/hook-trust-status.test.py; then
+    fail_msg "Codex hook trust check must use the authoritative current-hash App Server surface"
+  fi
   if ! grep -Fq 'install-runtime-projection.sh' adapters/codex/README.md \
     || ! grep -Fq 'check-runtime-projection.sh' adapters/codex/README.md \
     || ! grep -Fq 'install-runtime-projection.sh' adapters/codex/AGENTS.md \
@@ -3140,8 +3151,8 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq -- '--require-hook-trust' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'check=runtime-projection:skipped' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'check=hook-trust:review-needed' adapters/codex/bin/check-runtime-projection.sh \
-    || ! grep -Fq 'session_end=stop-alias' adapters/codex/bin/check-runtime-projection.sh \
-    || ! grep -Fq 'session_end_stop_alias()' adapters/codex/bin/check-runtime-projection.sh \
+    || ! grep -Fq 'hook-trust-status.py' adapters/codex/bin/check-runtime-projection.sh \
+    || ! grep -Fq 'current_hash=verified' adapters/codex/bin/check-runtime-projection.sh \
     || ! grep -Fq 'CODEX_REQUIRE_HOOK_TRUST=1' adapters/codex/bin/check-runtime-projection.sh \
     || ! grep -Fq 'agent-harness-readme' adapters/codex/bin/check-runtime-projection.sh \
     || ! grep -Fq 'agent-capabilities' adapters/codex/bin/check-runtime-projection.sh \
@@ -3160,9 +3171,9 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'codex-cli-timeout' adapters/codex/bin/check-runtime-projection.sh \
     || ! grep -Fq 'CODEX_RUNTIME_PROJECTION_SKIP_CLI_DISCOVERY=1' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'check=hook-trust:review-needed' adapters/codex/README.md \
-    || ! grep -Fq 'session_end=stop-alias' adapters/codex/README.md \
-    || ! grep -Fq 'session_end=stop-alias' adapters/codex/ADAPTATION.md \
-    || ! grep -Fq 'session_end=stop-alias' adapters/codex/AGENTS.md \
+    || ! grep -Fq 'authoritative App Server `hooks/list`' adapters/codex/README.md \
+    || ! grep -Fq 'authoritative App Server `hooks/list`' adapters/codex/ADAPTATION.md \
+    || ! grep -Fq 'current-hash hook trust before spawn' adapters/codex/AGENTS.md \
     || ! grep -Fq 'doctor --runtime-strict' adapters/codex/README.md \
     || ! grep -Fq 'runtime-projection --require-hook-trust' adapters/codex/AGENTS.md \
     || ! grep -Fq 'check=hook-trust:review-needed' adapters/codex/ADAPTATION.md; then

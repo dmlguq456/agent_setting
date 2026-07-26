@@ -13,10 +13,20 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "utilities"))
-from dispatch_contract import (DispatchContractError, close_attempt_row,
-                               parse_registry_metadata, reconcile_local_registry,
-                               validate_attempt_metadata)  # noqa: E402
+from dispatch_contract import (  # noqa: E402
+    DispatchContractError,
+    annotate_attempt_row,
+    close_attempt_row,
+    parse_registry_metadata,
+    reconcile_local_registry,
+    validate_attempt_metadata,
+)
 from codex_dispatch_terminal import inspect_terminal_attempt  # noqa: E402
+from dispatch_completion_join import (  # noqa: E402
+    consume_parent_session_attempt,
+    JoinContractError,
+    parent_session_state_path,
+)
 _route_spec = importlib.util.spec_from_file_location(
     "capability_route", ROOT / "utilities" / "capability-route.py"
 )
@@ -122,6 +132,17 @@ def _complete_exact_routed_attempt(jobs: Path, metadata: dict[str, str], complet
         jobs=jobs,
         attempt_id=metadata["attempt_id"],
     )
+
+
+def mark_native_stop_harvest(jobs: Path, attempt_id: str) -> bool:
+    try:
+        return annotate_attempt_row(
+            jobs,
+            attempt_id,
+            {"parent_completion_harvested": "1"},
+        )
+    except (DispatchContractError, OSError):
+        return False
 
 
 def main(argv: list[str]) -> int:
@@ -245,6 +266,40 @@ def main(argv: list[str]) -> int:
             ):
                 if key in terminal:
                     print(f"{key}={terminal[key]}")
+
+    native_rows = []
+    for fields in rows:
+        metadata = parse_registry_metadata(fields[5])
+        if (
+            metadata.get("parent_completion_delivery") == "codex-stop-hook"
+            and metadata.get("attempt_id") == args.attempt_id
+            and metadata.get("parent_sid")
+        ):
+            native_rows.append((fields, metadata))
+    if len(native_rows) == 1:
+        _fields, metadata = native_rows[0]
+        terminal = terminal_results.get(args.attempt_id or "")
+        if terminal is not None and terminal.get("state") == "valid":
+            try:
+                consumed = consume_parent_session_attempt(
+                    parent_session_state_path(
+                        jobs.resolve(), metadata["parent_sid"]
+                    ),
+                    metadata["parent_sid"],
+                    metadata["attempt_id"],
+                    before_consume=lambda: mark_native_stop_harvest(
+                        jobs, metadata["attempt_id"]
+                    ),
+                )
+            except JoinContractError as exc:
+                print("check=failed")
+                print(f"reason={exc}")
+                return 70
+            if not consumed:
+                print("check=failed")
+                print("reason=native-stop-receipt-not-delivered")
+                return 70
+            print("parent_completion_receipt=consumed")
     return 0
 
 

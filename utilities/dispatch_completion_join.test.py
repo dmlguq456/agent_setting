@@ -46,6 +46,27 @@ def row(
     return f"2026-07-23T00:00:00Z\t{status}\t/repo\t/wt\t{slug}\t{meta}\n"
 
 
+def session_row(
+    status: str,
+    attempt: str,
+    parent_session: str,
+    slug: str,
+    *,
+    native: bool = True,
+) -> str:
+    meta = (
+        "attempt_schema_version=2,dispatch_depth=1,transport=headless,"
+        "execution_surface=registered-headless,registered_worker=1,"
+        "launch_claimed=1,"
+        f"attempt_id={attempt},parent_sid={parent_session}"
+    )
+    if native:
+        meta += ",parent_completion_delivery=codex-stop-hook"
+    if status == "done":
+        meta += ",launch_outcome=never-launched"
+    return f"2026-07-23T00:00:00Z\t{status}\t/repo\t/wt\t{slug}\t{meta}\n"
+
+
 def parallel_row(
     *,
     attempt: str,
@@ -274,6 +295,94 @@ class DispatchCompletionJoinTest(unittest.TestCase):
         state.write_text('{"schema_version":1,"parent_attempt_id":"att-parent"}', encoding="utf-8")
         self.assertIsNone(JOIN.read_supervisor_state(state, "att-parent"))
         JOIN.remove_supervisor_state(state)
+        self.assertFalse(state.exists())
+
+    def test_session_children_select_only_stamped_exact_direct_rows(self):
+        session = "thread-exact"
+        depth_two = row("open", "att-depth-two", "att-parent", "depth-two")
+        depth_two = depth_two.replace(
+            "parent_attempt_id=att-parent", f"parent_sid={session}"
+        )
+        self.jobs.write_text(
+            session_row("open", "att-native", session, "native")
+            + session_row("open", "att-foreign", "thread-foreign", "foreign")
+            + session_row("open", "att-legacy", session, "legacy", native=False)
+            + depth_two,
+            encoding="utf-8",
+        )
+        rows = JOIN.current_session_children(self.jobs, session)
+        self.assertEqual([item.attempt_id for item in rows], ["att-native"])
+
+    def test_session_batch_waits_for_every_exact_child(self):
+        session = "thread-parent"
+        self.jobs.write_text(
+            session_row("open", "att-a", session, "a")
+            + session_row("open", "att-b", session, "b")
+            + session_row("open", "att-foreign", "thread-other", "foreign"),
+            encoding="utf-8",
+        )
+
+        def close_batch() -> None:
+            time.sleep(0.06)
+            with self.jobs.open("a", encoding="utf-8") as handle:
+                handle.write(session_row("done", "att-a", session, "a"))
+            time.sleep(0.06)
+            with self.jobs.open("a", encoding="utf-8") as handle:
+                handle.write(session_row("done", "att-b", session, "b"))
+
+        thread = threading.Thread(target=close_batch)
+        thread.start()
+        receipt = JOIN.join_session_batch(
+            jobs=self.jobs,
+            parent_session_id=session,
+            interval=0.02,
+            timeout=1,
+            liveness_command=[str(self.live)],
+        )
+        thread.join(timeout=1)
+        self.assertEqual(receipt["state"], "ready")
+        self.assertEqual(receipt["parent_session_id"], session)
+        self.assertEqual(
+            {child["attempt_id"] for child in receipt["children"]},
+            {"att-a", "att-b"},
+        )
+
+    def test_parent_session_state_is_atomic_bounded_and_hashed(self):
+        session = "thread-private"
+        state = JOIN.parent_session_state_path(self.jobs, session)
+        self.assertNotIn(session, state.name)
+        JOIN.register_parent_session_attempt(state, session, "att-a")
+        JOIN.register_parent_session_attempt(state, session, "att-b")
+        pending = JOIN.read_parent_session_batch_state(state, session)
+        self.assertIsNotNone(pending)
+        self.assertEqual(set(pending.attempt_ids), {"att-a", "att-b"})
+        self.assertEqual(set(pending.delivered_attempt_ids), set())
+        JOIN.write_parent_session_state(
+            state,
+            session,
+            {"att-b", "att-a"},
+            attempt_ids={"att-b", "att-a"},
+        )
+        self.assertEqual(
+            JOIN.read_parent_session_state(state, session),
+            {"att-a", "att-b"},
+        )
+        self.assertEqual(state.stat().st_mode & 0o777, 0o600)
+        self.assertIsNone(JOIN.read_parent_session_state(state, "thread-foreign"))
+        with self.assertRaises(JOIN.JoinContractError):
+            JOIN.consume_parent_session_attempt(
+                state,
+                session,
+                "att-a",
+                before_consume=lambda: False,
+            )
+        self.assertEqual(
+            JOIN.read_parent_session_state(state, session),
+            {"att-a", "att-b"},
+        )
+        self.assertTrue(JOIN.consume_parent_session_attempt(state, session, "att-a"))
+        self.assertEqual(JOIN.read_parent_session_state(state, session), {"att-b"})
+        self.assertTrue(JOIN.consume_parent_session_attempt(state, session, "att-b"))
         self.assertFalse(state.exists())
 
     def test_supervised_command_classifier_admits_only_exact_phase_actions(self):

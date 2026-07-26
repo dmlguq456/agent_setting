@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-import argparse,importlib.util,json,os,subprocess,sys,tempfile,unittest
+import argparse,importlib.util,io,json,os,subprocess,sys,tempfile,unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 ROOT=Path(__file__).resolve().parents[3]
 S=importlib.util.spec_from_file_location("route",ROOT/"utilities/capability-route.py"); R=importlib.util.module_from_spec(S); S.loader.exec_module(R)
 WH_S=importlib.util.spec_from_file_location("codex_dispatch_headless",Path(__file__).with_name("dispatch-headless.py")); WH=importlib.util.module_from_spec(WH_S); WH_S.loader.exec_module(WH)
+JOIN=sys.modules["dispatch_completion_join"]
 
 
 def probe_args(**overrides):
@@ -257,6 +259,113 @@ class CodexSD78CompletionDelivery(unittest.TestCase):
         with mock.patch.object(WH, "task_prompt", return_value=("do the thing", "cli")):
             prompt, _source = WH.dispatch_prompt(args)
         self.assertNotIn("Runtime-owned completion join", prompt)
+
+    def parent_args(self, **overrides):
+        values = dict(
+            action="start",
+            dispatch_depth=1,
+            launch_lifecycle=WH.DETACHED,
+            execution_surface="registered-headless",
+            registered_worker=1,
+            parent_harness="codex",
+            parent_session_id="thread-native-parent",
+            require_hook_trust=False,
+        )
+        values.update(overrides)
+        return argparse.Namespace(**values)
+
+    def test_interactive_depth_one_start_forces_native_stop_and_hook_trust(self):
+        args = self.parent_args()
+        with mock.patch.dict(
+            os.environ,
+            {"CODEX_THREAD_ID": "thread-native-parent", "AGENT_DISPATCH_CHILD": "0"},
+            clear=False,
+        ):
+            WH.bind_parent_completion_delivery(args)
+        self.assertEqual(args.parent_completion_delivery, "codex-stop-hook")
+        self.assertTrue(args.require_hook_trust)
+
+    def test_synthetic_parent_keeps_poll_fallback(self):
+        args = self.parent_args(parent_session_id="thread-synthetic")
+        with mock.patch.dict(
+            os.environ,
+            {"CODEX_THREAD_ID": "thread-native-parent", "AGENT_DISPATCH_CHILD": "0"},
+            clear=False,
+        ):
+            WH.bind_parent_completion_delivery(args)
+        self.assertEqual(args.parent_completion_delivery, "poll-fallback")
+        self.assertFalse(args.require_hook_trust)
+
+    def test_interactive_registration_seals_native_delivery_without_trust_probe(self):
+        args = self.parent_args(action="register")
+        with mock.patch.dict(
+            os.environ,
+            {"CODEX_THREAD_ID": "thread-native-parent", "AGENT_DISPATCH_CHILD": "0"},
+            clear=False,
+        ):
+            WH.bind_parent_completion_delivery(args)
+        self.assertEqual(args.parent_completion_delivery, "codex-stop-hook")
+        self.assertFalse(args.require_hook_trust)
+
+    def test_untrusted_native_stop_fails_before_registry_or_spawn(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            jobs = Path(tmp) / "jobs.log"
+            argv = [
+                "dispatch-headless.py",
+                "--start",
+                "--worktree", str(repo),
+                "--slug", "native-stop-trust",
+                "--capability", "autopilot-code",
+                "--capability-mode", "debug",
+                "--model", "gpt-test",
+                "--reasoning", "low",
+                "--jobs", str(jobs),
+            ]
+            output = io.StringIO()
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "CODEX_THREAD_ID": "thread-native-parent",
+                    "AGENT_DISPATCH_CHILD": "0",
+                    "AGENT_HOME": str(ROOT),
+                },
+                clear=False,
+            ), mock.patch.object(
+                WH.shutil, "which", return_value="/usr/bin/codex"
+            ), mock.patch.object(
+                WH, "check_runtime_projection", return_value=1
+            ) as projection, mock.patch.object(
+                WH, "append_job"
+            ) as append, redirect_stdout(output):
+                rc = WH.main(argv)
+        self.assertEqual(rc, 69, output.getvalue())
+        projection.assert_called_once_with(str(repo.resolve()), True)
+        append.assert_not_called()
+        self.assertFalse(jobs.exists())
+        self.assertIn("reason=codex-stop-hook-untrusted", output.getvalue())
+        self.assertIn("child_spawned=0", output.getvalue())
+
+    def test_successful_native_spawn_records_pending_exact_session_attempt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs = Path(tmp) / "jobs.log"
+            args = argparse.Namespace(
+                parent_completion_delivery="codex-stop-hook",
+                parent_session_id="thread-native-parent",
+                attempt_id="att-native-child",
+            )
+            WH.register_parent_stop_attempt(args, jobs)
+            state_path = WH.parent_session_state_path(
+                jobs, args.parent_session_id
+            )
+            state = JOIN.read_parent_session_batch_state(
+                state_path, args.parent_session_id
+            )
+        self.assertIsNotNone(state)
+        self.assertEqual(set(state.attempt_ids), {args.attempt_id})
+        self.assertEqual(set(state.delivered_attempt_ids), set())
 
     def test_owner_direct_intensity_never_carries_the_clause(self):
         args = _prompt_args(intensity="direct")

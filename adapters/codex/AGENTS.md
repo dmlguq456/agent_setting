@@ -46,13 +46,15 @@ and `ADAPTATION.md`; command output is authoritative for current support.
 | dispatch control | `preflight.sh dispatch-wait --attempt-id <id> --max 300..600`, `preflight.sh liveness`, `preflight.sh harvest`, `preflight.sh dispatch-reconcile` |
 | install | `install-runtime-projection.sh [--install-plugin] [--skills-mode native|plugin|both]`, `check-runtime-projection.sh`, `preflight.sh runtime-projection --require-hook-trust` |
 
-Keep Codex `/statusline` responsible for model, context, token, limit, and session footer fields. `preflight.sh status` is an on-demand harness snapshot, including git dirty/worktree/dead-branch risks. Runtime config remains user-owned; `session_end=stop-alias` is only a projection-check status.
+Keep Codex `/statusline` responsible for model, context, token, limit, and session footer fields. `preflight.sh status` is an on-demand harness snapshot, including git dirty/worktree/dead-branch risks. Runtime config remains user-owned; strict projection checks read authoritative App Server `hooks/list` current-hash trust and never rewrite user trust state.
 The recommended footer fragment is `codex_setting/codex-config/tui-statusline.toml`; apply it only through explicit `preflight.sh tui-config`.
 
 Registered standard+ headless owners use the checked App Server completion
 supervisor: the runtime joins exact child batches and resumes the same thread once
-per batch. Arbitrary detached shell output and a completed interactive turn still
-do not auto-resume. For non-dispatch long-running work, obey `preflight.sh
+per batch. A direct registered depth-1 child started by the actual interactive
+Codex thread uses the trusted native Stop bridge: finish the turn and let Stop
+join outside the model; do not call a wait tool. Arbitrary detached shell output
+still does not auto-resume. For non-dispatch long-running work, obey `preflight.sh
 loop-info runtime-watch` and its explicit automatic-follow-up-impossible fallback
 instead of ending with a detached completion promise.
 
@@ -87,7 +89,9 @@ Launch registered jobs only through `preflight.sh dispatch
 `core/OPERATIONS.md`. Keep `capability_mode` separate from a non-owner
 `worker_mode`, which must equal its portable `unit`; a dispatch-depth-1 owner is
 `_kernel/owner` with no worker mode. `worker_role` and legacy `mode` are
-read-only metadata, not bootstrap identity. In a declared polling fallback,
+read-only metadata, not bootstrap identity. A native interactive Stop delivery
+forces current-hash hook trust before spawn, then admits no model tool until its
+typed receipt and only exact harvest afterward. In a declared polling fallback,
 wait with `preflight.sh dispatch-wait --attempt-id <id> --max 300..600`;
 otherwise monitor with `preflight.sh liveness [jobs.log]` and harvest with
 `preflight.sh harvest`.

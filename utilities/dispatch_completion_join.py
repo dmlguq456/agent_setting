@@ -9,7 +9,10 @@ typed harvest, and emits one bounded JSON receipt for the session supervisor.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from dataclasses import dataclass
+import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -18,6 +21,7 @@ import subprocess
 import tempfile
 import time
 import sys
+from typing import Callable
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +34,8 @@ OPEN_STATES = frozenset({"open", "running"})
 SCHEMA_VERSION = 1
 STATE_SCHEMA_VERSION = 1
 MAX_STATE_BYTES = 16384
+MAX_BATCH_ATTEMPTS = 4
+SESSION_PARENT_DELIVERY = "codex-stop-hook"
 
 
 class JoinContractError(RuntimeError):
@@ -44,6 +50,12 @@ class ChildRow:
     attempt_id: str
     raw: str
     metadata: dict[str, str]
+
+
+@dataclass(frozen=True)
+class ParentSessionState:
+    attempt_ids: frozenset[str]
+    delivered_attempt_ids: frozenset[str]
 
 
 @dataclass(frozen=True)
@@ -158,6 +170,246 @@ def remove_supervisor_state(path: Path | None) -> None:
         # A unique attempt path cannot wake a later owner. Reconciliation may
         # remove an unreadable leftover after the process exits.
         pass
+
+
+def parent_session_state_path(jobs: Path, parent_session_id: str) -> Path:
+    """Return a non-identifying, registry-scoped phase-state path."""
+
+    if not jobs.is_absolute() or not _safe_identity(parent_session_id):
+        raise JoinContractError("parent-session-state-contract-invalid")
+    digest = hashlib.sha256(parent_session_id.encode("utf-8")).hexdigest()
+    return jobs.resolve(strict=False).parent / "parent-session-state" / f"{digest}.json"
+
+
+@contextmanager
+def _parent_session_state_lock(path: Path):
+    try:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        lock_path = path.with_name(f"{path.name}.lock")
+        with lock_path.open("a+", encoding="utf-8") as handle:
+            os.chmod(lock_path, 0o600)
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            yield
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    except OSError as exc:
+        raise JoinContractError("parent-session-state-lock-unavailable") from exc
+
+
+def _write_parent_session_state_unlocked(
+    path: Path,
+    parent_session_id: str,
+    delivered_attempt_ids: set[str],
+    attempt_ids: set[str],
+) -> None:
+    if (
+        not path.is_absolute()
+        or not _safe_identity(parent_session_id)
+        or not attempt_ids
+        or len(attempt_ids) > MAX_BATCH_ATTEMPTS
+        or len(delivered_attempt_ids) > MAX_BATCH_ATTEMPTS
+        or not delivered_attempt_ids.issubset(attempt_ids)
+        or any(not _safe_identity(attempt) for attempt in attempt_ids)
+        or any(not _safe_identity(attempt) for attempt in delivered_attempt_ids)
+    ):
+        raise JoinContractError("parent-session-state-contract-invalid")
+    value = {
+        "schema_version": STATE_SCHEMA_VERSION,
+        "parent_session_id_sha256": hashlib.sha256(
+            parent_session_id.encode("utf-8")
+        ).hexdigest(),
+        "attempt_ids": sorted(attempt_ids),
+        "delivered_attempt_ids": sorted(delivered_attempt_ids),
+        "phase": (
+            "delivered"
+            if delivered_attempt_ids == attempt_ids
+            else "pending"
+        ),
+    }
+    encoded = json.dumps(value, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    if len(encoded) > MAX_STATE_BYTES:
+        raise JoinContractError("parent-session-state-oversized")
+    temporary: Path | None = None
+    try:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            "wb", dir=path.parent, prefix=".parent-session-state.", delete=False
+        ) as handle:
+            temporary = Path(handle.name)
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary.chmod(0o600)
+        os.replace(temporary, path)
+    except OSError as exc:
+        if temporary is not None:
+            try:
+                temporary.unlink()
+            except OSError:
+                pass
+        raise JoinContractError("parent-session-state-unwritable") from exc
+
+
+def write_parent_session_state(
+    path: Path,
+    parent_session_id: str,
+    delivered_attempt_ids: set[str],
+    *,
+    attempt_ids: set[str] | None = None,
+) -> None:
+    """Atomically publish one pending or delivered interactive Stop batch."""
+
+    registered = set(delivered_attempt_ids if attempt_ids is None else attempt_ids)
+    if not registered:
+        raise JoinContractError("parent-session-state-contract-invalid")
+    with _parent_session_state_lock(path):
+        _write_parent_session_state_unlocked(
+            path,
+            parent_session_id,
+            set(delivered_attempt_ids),
+            registered,
+        )
+
+
+def _read_parent_session_state_unlocked(
+    path: Path,
+    parent_session_id: str,
+) -> ParentSessionState | None:
+    if not path.is_absolute() or not _safe_identity(parent_session_id):
+        return None
+    try:
+        if path.stat().st_size > MAX_STATE_BYTES:
+            return None
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, ValueError):
+        return None
+    expected_digest = hashlib.sha256(parent_session_id.encode("utf-8")).hexdigest()
+    if (
+        not isinstance(value, dict)
+        or value.get("schema_version") != STATE_SCHEMA_VERSION
+        or value.get("parent_session_id_sha256") != expected_digest
+    ):
+        return None
+    raw_delivered = value.get("delivered_attempt_ids")
+    raw_attempts = value.get("attempt_ids", raw_delivered)
+    if (
+        not isinstance(raw_attempts, list)
+        or not isinstance(raw_delivered, list)
+        or not raw_attempts
+        or len(raw_attempts) > MAX_BATCH_ATTEMPTS
+        or len(raw_delivered) > MAX_BATCH_ATTEMPTS
+    ):
+        return None
+    parsed: list[set[str]] = []
+    for raw in (raw_attempts, raw_delivered):
+        values: set[str] = set()
+        for attempt in raw:
+            if (
+                not isinstance(attempt, str)
+                or not _safe_identity(attempt)
+                or attempt in values
+            ):
+                return None
+            values.add(attempt)
+        parsed.append(values)
+    attempts, delivered = parsed
+    expected_phase = (
+        "delivered"
+        if delivered == attempts
+        else "pending"
+        if not delivered
+        else "invalid"
+    )
+    if (
+        not delivered.issubset(attempts)
+        or value.get("phase", expected_phase) != expected_phase
+    ):
+        return None
+    return ParentSessionState(frozenset(attempts), frozenset(delivered))
+
+
+def read_parent_session_batch_state(
+    path: Path,
+    parent_session_id: str,
+) -> ParentSessionState | None:
+    """Return the exact registered and delivered sets for one native Stop batch."""
+
+    return _read_parent_session_state_unlocked(path, parent_session_id)
+
+
+def read_parent_session_state(
+    path: Path,
+    parent_session_id: str,
+) -> set[str] | None:
+    """Return delivered attempts, or None for missing/foreign/invalid state."""
+
+    state = read_parent_session_batch_state(path, parent_session_id)
+    return set(state.delivered_attempt_ids) if state is not None else None
+
+
+def register_parent_session_attempt(
+    path: Path,
+    parent_session_id: str,
+    attempt_id: str,
+) -> None:
+    """Bind a newly spawned direct child before the parent reaches Stop."""
+
+    if not _safe_identity(attempt_id):
+        raise JoinContractError("parent-session-state-contract-invalid")
+    with _parent_session_state_lock(path):
+        state = _read_parent_session_state_unlocked(path, parent_session_id)
+        if state is not None and not state.delivered_attempt_ids:
+            attempts = set(state.attempt_ids)
+            attempts.add(attempt_id)
+        else:
+            attempts = {attempt_id}
+        _write_parent_session_state_unlocked(
+            path,
+            parent_session_id,
+            set(),
+            attempts,
+        )
+
+
+def consume_parent_session_attempt(
+    path: Path,
+    parent_session_id: str,
+    attempt_id: str,
+    *,
+    before_consume: Callable[[], bool] | None = None,
+) -> bool:
+    """Consume one delivered receipt after a successful exact harvest."""
+
+    if not _safe_identity(attempt_id):
+        return False
+    with _parent_session_state_lock(path):
+        state = _read_parent_session_state_unlocked(path, parent_session_id)
+        if state is None or attempt_id not in state.delivered_attempt_ids:
+            return False
+        if before_consume is not None and not before_consume():
+            raise JoinContractError("parent-session-consume-commit-failed")
+        attempts = set(state.attempt_ids)
+        delivered = set(state.delivered_attempt_ids)
+        attempts.remove(attempt_id)
+        delivered.remove(attempt_id)
+        if attempts:
+            _write_parent_session_state_unlocked(
+                path,
+                parent_session_id,
+                delivered,
+                attempts,
+            )
+        else:
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                raise JoinContractError("parent-session-state-unwritable") from exc
+        return True
+
+
+def remove_parent_session_state(path: Path | None) -> None:
+    remove_supervisor_state(path)
 
 
 def _local_contract_path(base: Path, raw: str, relative: str) -> bool:
@@ -780,6 +1032,78 @@ def current_children(
     return sorted(latest.values(), key=lambda row: row.order)
 
 
+def current_session_children(
+    jobs: Path,
+    parent_session_id: str,
+    expected_attempts: set[str] | None = None,
+) -> list[ChildRow]:
+    """Return exact direct children owned by one interactive Codex session.
+
+    Only rows explicitly stamped for the native Stop delivery surface qualify.
+    Unmarked legacy rows remain on the disclosed polling fallback. The initial
+    lookup selects current open/running rows; an expected snapshot continues to
+    follow those same attempts after their status changes.
+    """
+
+    if not parent_session_id:
+        raise JoinContractError("parent-session-id-missing")
+    try:
+        lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
+    except FileNotFoundError:
+        lines = []
+    except OSError as exc:
+        raise JoinContractError("registry-unreadable") from exc
+
+    latest: dict[str, ChildRow] = {}
+    for order, line in enumerate(lines):
+        fields = line.split("\t")
+        if len(fields) != 6:
+            continue
+        meta = _metadata(fields[5])
+        if (
+            meta.get("parent_sid") != parent_session_id
+            or meta.get("parent_completion_delivery") != SESSION_PARENT_DELIVERY
+        ):
+            continue
+        if (
+            meta.get("launch_claimed") == "0"
+            or meta.get("parent_completion_harvested") == "1"
+        ):
+            continue
+        if (
+            meta.get("attempt_schema_version") != "2"
+            or meta.get("dispatch_depth") != "1"
+            or meta.get("execution_surface") != "registered-headless"
+            or meta.get("registered_worker") != "1"
+            or meta.get("launch_claimed") != "1"
+        ):
+            raise JoinContractError("owned-session-row-contract-invalid")
+        attempt_id = meta.get("attempt_id", "")
+        if not attempt_id:
+            raise JoinContractError("owned-session-row-attempt-id-missing")
+        if expected_attempts is not None and attempt_id not in expected_attempts:
+            continue
+        latest[attempt_id] = ChildRow(
+            order=order,
+            status=fields[1],
+            slug=fields[4],
+            attempt_id=attempt_id,
+            raw=line,
+            metadata=meta,
+        )
+
+    if len(latest) > MAX_BATCH_ATTEMPTS:
+        raise JoinContractError("owned-session-batch-oversized")
+    if expected_attempts is not None:
+        missing = expected_attempts.difference(latest)
+        if missing:
+            raise JoinContractError("expected-attempt-missing")
+    rows = sorted(latest.values(), key=lambda row: row.order)
+    if expected_attempts is None:
+        rows = [row for row in rows if row.status in OPEN_STATES]
+    return rows
+
+
 def pending_attempt_ids(rows: list[ChildRow]) -> set[str]:
     """Return children that are open or terminal-but-not-yet-quiescent."""
 
@@ -797,7 +1121,12 @@ def pending_attempt_ids(rows: list[ChildRow]) -> set[str]:
     return pending
 
 
-def _liveness_state(row: ChildRow, command: list[str], env: dict[str, str]) -> str:
+def _liveness_state(
+    row: ChildRow,
+    command: list[str],
+    env: dict[str, str],
+    timeout: float = 30.0,
+) -> str:
     """Return ``alive`` or ``terminal`` without exposing liveness output."""
 
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
@@ -813,7 +1142,7 @@ def _liveness_state(row: ChildRow, command: list[str], env: dict[str, str]) -> s
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            timeout=30,
+            timeout=max(0.1, timeout),
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
@@ -830,35 +1159,35 @@ def _liveness_state(row: ChildRow, command: list[str], env: dict[str, str]) -> s
     raise JoinContractError("liveness-contract-failed")
 
 
-def join_batch(
+def _join_snapshot(
     *,
-    jobs: Path,
-    parent_attempt_id: str,
-    expected_attempts: set[str] | None = None,
-    interval: float = 2.0,
-    timeout: float = 3600.0,
-    liveness_command: list[str] | None = None,
-    env: dict[str, str] | None = None,
+    initial: list[ChildRow],
+    refresh: Callable[[set[str]], list[ChildRow]],
+    identity: dict[str, str],
+    interval: float,
+    timeout: float,
+    liveness_command: list[str] | None,
+    liveness_probe_timeout: float,
+    env: dict[str, str] | None,
 ) -> dict[str, object]:
-    """Join one immutable child batch and return a bounded typed receipt."""
+    """Join one immutable exact-attempt snapshot."""
 
     command = liveness_command or [str(ROOT / "utilities" / "dispatch-liveness.sh")]
     runtime_env = dict(os.environ if env is None else env)
     interval = max(0.05, interval)
     timeout = max(0.0, timeout)
-    initial = current_children(jobs, parent_attempt_id, expected_attempts)
     if not initial:
         return {
             "schema_version": SCHEMA_VERSION,
             "state": "no-children",
-            "parent_attempt_id": parent_attempt_id,
+            **identity,
             "children": [],
         }
     snapshot = {row.attempt_id for row in initial}
     started = time.monotonic()
 
     while True:
-        rows = current_children(jobs, parent_attempt_id, snapshot)
+        rows = refresh(snapshot)
         children: list[dict[str, str]] = []
         pending = False
         for row in rows:
@@ -887,10 +1216,15 @@ def join_batch(
                 elif observed.state == "reconcile-needed":
                     readiness, reason = "ready", "terminal-observed"
                 else:
-                    _liveness_state(row, command, runtime_env)
-                    readiness = "pending"
-                    reason = "process-unverifiable"
-                    pending = True
+                    probe = _liveness_state(
+                        row, command, runtime_env, liveness_probe_timeout
+                    )
+                    if probe == "terminal":
+                        readiness, reason = "ready", "terminal-observed"
+                    else:
+                        readiness = "pending"
+                        reason = "process-unverifiable"
+                        pending = True
             else:
                 raise JoinContractError("owned-row-status-invalid")
             children.append(
@@ -906,17 +1240,69 @@ def join_batch(
             return {
                 "schema_version": SCHEMA_VERSION,
                 "state": "ready",
-                "parent_attempt_id": parent_attempt_id,
+                **identity,
                 "children": children,
             }
         if time.monotonic() - started >= timeout:
             return {
                 "schema_version": SCHEMA_VERSION,
                 "state": "timeout",
-                "parent_attempt_id": parent_attempt_id,
+                **identity,
                 "children": children,
             }
         time.sleep(interval)
+
+
+def join_batch(
+    *,
+    jobs: Path,
+    parent_attempt_id: str,
+    expected_attempts: set[str] | None = None,
+    interval: float = 2.0,
+    timeout: float = 3600.0,
+    liveness_command: list[str] | None = None,
+    env: dict[str, str] | None = None,
+) -> dict[str, object]:
+    """Join one immutable child batch sealed to an exact parent attempt."""
+
+    initial = current_children(jobs, parent_attempt_id, expected_attempts)
+    return _join_snapshot(
+        initial=initial,
+        refresh=lambda snapshot: current_children(jobs, parent_attempt_id, snapshot),
+        identity={"parent_attempt_id": parent_attempt_id},
+        interval=interval,
+        timeout=timeout,
+        liveness_command=liveness_command,
+        liveness_probe_timeout=30.0,
+        env=env,
+    )
+
+
+def join_session_batch(
+    *,
+    jobs: Path,
+    parent_session_id: str,
+    expected_attempts: set[str] | None = None,
+    interval: float = 2.0,
+    timeout: float = 540.0,
+    liveness_command: list[str] | None = None,
+    env: dict[str, str] | None = None,
+) -> dict[str, object]:
+    """Join one native-Stop batch sealed to an interactive Codex session."""
+
+    initial = current_session_children(jobs, parent_session_id, expected_attempts)
+    return _join_snapshot(
+        initial=initial,
+        refresh=lambda snapshot: current_session_children(
+            jobs, parent_session_id, snapshot
+        ),
+        identity={"parent_session_id": parent_session_id},
+        interval=interval,
+        timeout=timeout,
+        liveness_command=liveness_command,
+        liveness_probe_timeout=5.0,
+        env=env,
+    )
 
 
 def parser() -> argparse.ArgumentParser:

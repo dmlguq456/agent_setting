@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -80,6 +81,7 @@ class ParentParkGuardTest(unittest.TestCase):
         process_metadata: dict[str, str] | None = None,
         route_node: str = "",
         replica_group: str = "",
+        native_stop: bool = False,
     ) -> None:
         metadata = [
             "attempt_schema_version=2",
@@ -89,6 +91,9 @@ class ParentParkGuardTest(unittest.TestCase):
             "registered_worker=1",
             "attempt_id=" + attempt,
         ]
+        if native_stop:
+            metadata.append("parent_completion_delivery=codex-stop-hook")
+            metadata.append("launch_claimed=1")
         if parent_sid:
             metadata.append("parent_sid=" + parent_sid)
         if parent_attempt_id:
@@ -418,6 +423,106 @@ class ParentParkGuardTest(unittest.TestCase):
             "AGENT_ROUTE_FILE": str(self.route),
             "AGENT_ROUTE_ID": self.route_id,
         }
+
+    def native_stop_state(self, delivered: list[str]) -> Path:
+        digest = hashlib.sha256(SESSION.encode("utf-8")).hexdigest()
+        state = self.jobs.parent / "parent-session-state" / f"{digest}.json"
+        state.parent.mkdir(parents=True, exist_ok=True)
+        state.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "parent_session_id_sha256": digest,
+                    "attempt_ids": delivered,
+                    "delivered_attempt_ids": delivered,
+                }
+            ),
+            encoding="utf-8",
+        )
+        return state
+
+    def test_native_stop_undelivered_phase_denies_every_model_tool(self) -> None:
+        self.write_row("open", ATTEMPT, parent_sid=SESSION, native_stop=True)
+        cases = (
+            ("Bash", f"utilities/dispatch-wait.sh --attempt-id {ATTEMPT} --max 600"),
+            (
+                "Bash",
+                f"adapters/codex/bin/preflight.sh harvest --attempt-id {ATTEMPT} --status open",
+            ),
+            ("Bash", "git status --short"),
+            ("wait", None),
+            ("Read", None),
+        )
+        for name, command in cases:
+            with self.subTest(name=name, command=command):
+                blocked = self.invoke(name, command)
+                self.assertEqual(blocked["decision"], "block")
+                self.assertIn("native Stop", blocked["reason"])
+                self.assertIn("End this turn", blocked["reason"])
+
+    def test_native_stop_registered_only_row_does_not_park_parent(self) -> None:
+        self.write_row("open", ATTEMPT, parent_sid=SESSION, native_stop=True)
+        raw = self.jobs.read_text(encoding="utf-8")
+        self.jobs.write_text(
+            raw.replace("launch_claimed=1", "launch_claimed=0"),
+            encoding="utf-8",
+        )
+        self.assertIsNone(self.invoke("Read"))
+
+    def test_native_stop_delivered_phase_allows_only_exact_harvest(self) -> None:
+        self.write_row("open", ATTEMPT, parent_sid=SESSION, native_stop=True)
+        self.native_stop_state([ATTEMPT])
+        self.assertIsNone(
+            self.invoke(
+                "Bash",
+                f"adapters/codex/bin/preflight.sh harvest --attempt-id {ATTEMPT} --status all",
+            )
+        )
+        for name, command in (
+            ("Bash", f"utilities/dispatch-wait.sh --attempt-id {ATTEMPT} --max 600"),
+            ("Bash", "git status --short"),
+            ("wait", None),
+            ("Read", None),
+        ):
+            with self.subTest(name=name, command=command):
+                blocked = self.invoke(name, command)
+                self.assertEqual(blocked["decision"], "block")
+                self.assertIn("only exact preflight harvest", blocked["reason"])
+
+    def test_native_stop_terminal_receipt_uses_status_all(self) -> None:
+        self.write_row("done", ATTEMPT, parent_sid=SESSION, native_stop=True)
+        self.native_stop_state([ATTEMPT])
+        self.assertIsNone(
+            self.invoke(
+                "Bash",
+                f"adapters/codex/bin/preflight.sh harvest --attempt-id {ATTEMPT} --status all",
+            )
+        )
+        blocked = self.invoke(
+            "Bash",
+            f"adapters/codex/bin/preflight.sh harvest --attempt-id {ATTEMPT} --status done",
+        )
+        self.assertEqual(blocked["decision"], "block")
+        self.assertIn(f"{ATTEMPT}:all", blocked["reason"])
+
+    def test_native_stop_running_receipt_uses_all_status_without_poll_fallback(self) -> None:
+        self.write_row("running", ATTEMPT, parent_sid=SESSION, native_stop=True)
+        self.native_stop_state([ATTEMPT])
+        self.assertIsNone(
+            self.invoke(
+                "Bash",
+                f"adapters/codex/bin/preflight.sh harvest --attempt-id {ATTEMPT} --status all",
+            )
+        )
+
+    def test_harvested_native_receipt_releases_open_row_fallback(self) -> None:
+        self.write_row("open", ATTEMPT, parent_sid=SESSION, native_stop=True)
+        raw = self.jobs.read_text(encoding="utf-8")
+        self.jobs.write_text(
+            raw.rstrip("\n") + ",parent_completion_harvested=1\n",
+            encoding="utf-8",
+        )
+        self.assertIsNone(self.invoke("Read"))
 
     def test_supervised_delivered_batch_denies_model_wait_and_allows_only_harvest(self) -> None:
         self.write_row("open", ATTEMPT, parent_attempt_id=OWNER_ATTEMPT)

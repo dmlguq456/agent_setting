@@ -96,6 +96,7 @@ ATTEMPT_MUTABLE_METADATA = {
     "note",
     "completion_marker",
     "completion_marker_history",
+    "parent_completion_harvested",
     "watchdog",
     "heartbeat",
     "teardown_claim",

@@ -90,46 +90,34 @@ else
 fi
 
 hook_trust_check() {
-  cfg="$CODEX_HOME/config.toml"
   hook_file="$CODEX_HOME/hooks.json"
-  if [ ! -f "$cfg" ]; then
-    printf 'check=hook-trust:review-needed reason=config-missing\n'
-    printf 'hook_trust_hint=run /hooks in Codex CLI and trust changed agent harness hooks\n'
-    [ "${CODEX_REQUIRE_HOOK_TRUST:-0}" = "1" ] && return 1
+  helper="$AGENT_HOME/adapters/codex/bin/hook-trust-status.py"
+  if [ "${CODEX_REQUIRE_HOOK_TRUST:-0}" != "1" ]; then
+    printf 'check=hook-trust:skipped reason=authoritative-current-hash-check-not-requested\n'
+    printf 'hook_trust_hint=rerun with --require-hook-trust for authoritative App Server verification\n'
     return 0
   fi
-  has_trust() {
-    grep -Fq "$hook_file:$1:" "$cfg"
-  }
-  session_end_stop_alias() {
-    [ -f "$hook_file" ] \
-      && grep -Fq '"SessionEnd"' "$hook_file" \
-      && grep -Fq '"Stop"' "$hook_file" \
-      && [ "$(grep -Fc 'sessionend-lifecycle.py' "$hook_file")" -ge 2 ] \
-      && has_trust stop
-  }
-  missing=""
-  alias_note=""
-  for event in session_start stop user_prompt_submit permission_request pre_tool_use post_tool_use; do
-    if ! has_trust "$event"; then
-      missing="$missing $event"
+  hook_out=""
+  if [ -f "$hook_file" ] && [ -f "$helper" ] && command -v codex >/dev/null 2>&1; then
+    if hook_out=$(CODEX_HOME="$CODEX_HOME" timeout "$CLI_TIMEOUT" python3 "$helper" \
+      --hooks-file "$hook_file" --cwd "$AGENT_HOME" 2>/dev/null); then
+      printf 'check=hook-trust:ok current_hash=verified\n'
+      [ -n "$hook_out" ] && printf 'hook_trust_detail=%s\n' "$hook_out"
+      return 0
+    else
+      hook_rc=$?
     fi
-  done
-  if has_trust session_end; then
-    :
-  elif session_end_stop_alias; then
-    alias_note=" session_end=stop-alias"
   else
-    missing="$missing session_end"
+    hook_rc=69
   fi
-  if [ -n "$missing" ]; then
-    printf 'check=hook-trust:review-needed missing=%s\n' "$(printf '%s' "$missing" | sed 's/^ //')"
-    printf 'hook_trust_hint=run /hooks in Codex CLI and trust changed agent harness hooks\n'
-    [ "${CODEX_REQUIRE_HOOK_TRUST:-0}" = "1" ] && return 1
-    return 0
+  if [ "$hook_rc" -eq 3 ]; then
+    printf 'check=hook-trust:review-needed reason=current-hash-not-trusted\n'
+  else
+    printf 'check=hook-trust:review-needed reason=authoritative-check-unavailable exit=%s\n' "$hook_rc"
   fi
-  printf 'check=hook-trust:ok%s\n' "$alias_note"
-  return 0
+  [ -n "$hook_out" ] && printf 'hook_trust_detail=%s\n' "$hook_out"
+  printf 'hook_trust_hint=run /hooks in Codex CLI and trust changed agent harness hooks\n'
+  return 1
 }
 
 if ! hook_trust_check; then

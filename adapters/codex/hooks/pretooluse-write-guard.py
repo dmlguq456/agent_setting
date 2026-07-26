@@ -17,7 +17,11 @@ ROOT = Path(__file__).resolve().parents[3]
 PREFLIGHT = ROOT / "adapters" / "codex" / "bin" / "preflight.sh"
 sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_completion_join import (  # noqa: E402
+    current_session_children,
+    JoinContractError,
     classify_supervised_shell_command,
+    parent_session_state_path,
+    read_parent_session_batch_state,
     read_supervisor_state,
 )
 from dispatch_contract import attempt_process_quiescence  # noqa: E402
@@ -162,8 +166,8 @@ def dispatch_metadata(raw: str) -> dict[str, str]:
     return dict(part.split("=", 1) for part in raw.split(",") if "=" in part)
 
 
-def parent_park_attempts(session_id: str) -> dict[str, str]:
-    """Return exact attempts that park this completion-delivery surface."""
+def parent_park_rows(session_id: str) -> dict[str, tuple[str, dict[str, str]]]:
+    """Return exact attempt metadata that parks this delivery surface."""
 
     if os.environ.get("AGENT_PARENT_PARK_BYPASS") == "1":
         return {}
@@ -198,15 +202,38 @@ def parent_park_attempts(session_id: str) -> dict[str, str]:
         in STRICT_TERMINAL_PARK_MODES
     )
     return {
-        attempt_id: slug
+        attempt_id: (slug, metadata)
         for attempt_id, (state, slug, metadata) in latest.items()
-        if state in OPEN_DISPATCH_STATES
-        or (
-            strict_terminal_park
-            and state == "done"
-            and attempt_process_quiescence(metadata).state != "quiescent"
+        if metadata.get("launch_claimed") != "0"
+        and metadata.get("parent_completion_harvested") != "1"
+        and (
+            state in OPEN_DISPATCH_STATES
+            or (
+                strict_terminal_park
+                and state == "done"
+                and attempt_process_quiescence(metadata).state != "quiescent"
+            )
         )
     }
+
+
+def parent_park_attempts(session_id: str) -> dict[str, str]:
+    return {
+        attempt_id: slug
+        for attempt_id, (slug, _metadata) in parent_park_rows(session_id).items()
+    }
+
+
+def native_stop_delivered(session_id: str) -> set[str] | None:
+    if not session_id:
+        return None
+    jobs = dispatch_jobs_path()
+    try:
+        state_path = parent_session_state_path(jobs, session_id)
+    except JoinContractError:
+        return None
+    state = read_parent_session_batch_state(state_path, session_id)
+    return set(state.delivered_attempt_ids) if state is not None else None
 
 
 def local_contract_path(base: Path, raw: str, relative: str) -> bool:
@@ -255,6 +282,7 @@ def exact_park_control(
     attempts: dict[str, str],
     *,
     allow_wait: bool = True,
+    harvest_statuses: dict[str, set[str]] | None = None,
 ) -> bool:
     """Allow only an exact-attempt blocking wait or typed harvest command."""
 
@@ -311,11 +339,18 @@ def exact_park_control(
         )
         if options is None or len(options.get("--attempt-id", [])) != 1:
             return False
-        if options["--attempt-id"][0] not in attempts:
+        attempt_id = options["--attempt-id"][0]
+        if attempt_id not in attempts:
             return False
         if any(len(values) != 1 for values in options.values()):
             return False
-        return options.get("--status", ["open"])[0] == "open"
+        selected_status = options.get("--status", ["open"])[0]
+        allowed_statuses = (
+            harvest_statuses.get(attempt_id, set())
+            if harvest_statuses is not None
+            else {"open"}
+        )
+        return selected_status in allowed_statuses
 
     return False
 
@@ -513,7 +548,86 @@ def main() -> int:
             "runtime-supervised-parent: canonical child registry is unavailable"
         )
 
-    attempts = parent_park_attempts(session_id)
+    park_rows = parent_park_rows(session_id)
+    attempts = {
+        attempt_id: slug
+        for attempt_id, (slug, _metadata) in park_rows.items()
+    }
+    native_attempts: dict[str, str] = {}
+    native_harvest_statuses: dict[str, set[str]] = {}
+    delivered: set[str] | None = None
+    if session_id:
+        jobs = dispatch_jobs_path()
+        try:
+            state_path = parent_session_state_path(jobs, session_id)
+            native_state = read_parent_session_batch_state(state_path, session_id)
+            if native_state is None and state_path.exists():
+                raise JoinContractError("parent-session-state-invalid")
+            if native_state is not None:
+                state_attempts = set(native_state.attempt_ids)
+                state_rows = current_session_children(
+                    jobs,
+                    session_id,
+                    expected_attempts=state_attempts,
+                )
+                native_attempts = {
+                    row.attempt_id: row.slug for row in state_rows
+                }
+                delivered = set(native_state.delivered_attempt_ids)
+                native_harvest_statuses = {
+                    row.attempt_id: {"all"}
+                    for row in state_rows
+                }
+        except JoinContractError as exc:
+            return hook_block(
+                "parent-parked: native Stop session state failed closed "
+                f"({exc}); no model tool is allowed. Use the explicit operator "
+                "reconcile path"
+            )
+    if not native_attempts:
+        native_attempts = {
+            attempt_id: slug
+            for attempt_id, (slug, metadata) in park_rows.items()
+            if metadata.get("parent_completion_delivery") == "codex-stop-hook"
+            and metadata.get("parent_sid") == session_id
+        }
+        native_harvest_statuses = {
+            attempt_id: {"all"} for attempt_id in native_attempts
+        }
+    if native_attempts:
+        if delivered is None:
+            delivered = native_stop_delivered(session_id)
+        attempt_list = ",".join(sorted(native_attempts))
+        if delivered is None or not set(native_attempts).issubset(delivered):
+            return hook_block(
+                "parent-parked: native Stop owns the undelivered registered child "
+                f"attempt(s) {attempt_list}. End this turn without another tool call; "
+                "the Stop hook waits outside the model. dispatch-wait, transport wait, "
+                "raw logs, source, artifacts, git, and all other tools are blocked"
+            )
+        native_harvest = (
+            is_shell_tool(name)
+            and exact_park_control(
+                cwd(payload),
+                shell_command(payload, args),
+                native_attempts,
+                allow_wait=False,
+                harvest_statuses=native_harvest_statuses,
+            )
+        )
+        if not native_harvest:
+            status_hint = ",".join(
+                f"{attempt}:{next(iter(native_harvest_statuses[attempt]))}"
+                for attempt in sorted(native_attempts)
+            )
+            return hook_block(
+                "parent-parked: native Stop delivered exact attempt(s) "
+                f"{attempt_list}; only exact preflight harvest with --status all is "
+                f"allowed ({status_hint}). Do not wait, inspect raw output, "
+                "or perform unrelated work"
+            )
+        for attempt_id in native_attempts:
+            attempts.pop(attempt_id, None)
     if attempts and not park_control_allowed(name, payload, args, attempts):
         attempt_list = ",".join(sorted(attempts))
         if os.environ.get("AGENT_DISPATCH_COMPLETION_MODE") == "supervised":
