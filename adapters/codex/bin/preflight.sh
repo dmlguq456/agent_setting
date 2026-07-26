@@ -63,6 +63,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh dispatch-chain --route <route.json> --node <id> --slug <slug> --parent <slug> [--capability-mode <mode>] [--worker-mode <family/mode>] [--model-role <role>] [--capacity-model <id> --capacity-reasoning|--capacity-effort|--capacity-variant <level>] [--progress-window-seconds N --watchdog-max-windows M] [--dry-run|--register|--start]
        preflight.sh dispatch-batch --route <route.json> --parallel-group <id> --slug-prefix <slug> --parent <slug> --action dry-run|start [--qa <level>] [--jobs <jobs.log>] [--prompt-text <text>] [--allow-degraded-independence]
        preflight.sh stage-heartbeat --attempt-id <id> --route-id <id> --route-node <id> --jobs <jobs.log> --phase <phase> --kind <kind> --evidence <ref>
+       preflight.sh dispatch-wait --attempt-id <id> [--interval <seconds>] [--max <seconds>]
        preflight.sh dispatch-current --jobs <jobs.log> (--session <id>|--route <id>|--node <id>|--attempt <id>|--job <slug>) [--all]
        preflight.sh dispatch-reconcile --jobs <jobs.log> (--session <id>|--route <id>|--node <id>|--attempt <id>|--job <slug>) [--apply]
        preflight.sh qa-policy <quick|light|standard|thorough|adversarial> [code|research|doc|general]
@@ -534,6 +535,10 @@ EOF
   broker)
     shift
     AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/dispatch-broker.py" "$@"
+    ;;
+  dispatch-wait)
+    shift
+    AGENT_HOME="$AGENT_ROOT" "$ROOT/utilities/dispatch-wait.sh" "$@"
     ;;
   liveness)
     shift

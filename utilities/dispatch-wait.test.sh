@@ -34,11 +34,17 @@ if [ "$rc" -eq 0 ]; then ok "missing jobs.log → exit 0 (harvest)"; else bad "m
 
 # --- Case 0b: parent 자식이 done 뿐 → exit 0 ---
 : > "$jobs"
-printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-10T00:00:00" "done" "repo" "$tmp/wt/c1" "child1" "capability=code-plan,parent=conf" >> "$jobs"
+printf '%s\t%s\t%s\t%s\t%s\t%s\n' "2026-07-10T00:00:00" "done" "repo" "$tmp/wt/c1" "child1" "capability=code-plan,parent=conf,attempt_id=att-done" >> "$jobs"
 out=$(AGENT_HOME="$agent_home" sh "$WAIT" --jobs "$jobs" --parent conf 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'execution-quiescent'; then
   ok "no open children for parent → exit 0"
 else bad "done-only children expected 0 got $rc [$out]"; fi
+
+# --- Case 0b1: canonical long options also accept --arg=value. ---
+out=$(AGENT_HOME="$agent_home" sh "$WAIT" --jobs="$jobs" --attempt-id=att-done --interval=1 --max=300 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'execution-quiescent'; then
+  ok "equals-style wait options select the exact terminal attempt"
+else bad "equals-style wait options expected 0 got $rc [$out]"; fi
 
 # --- Case 0b2: --jobs 생략 시 shared registry env를 사용 ---
 out=$(AGENT_HOME="$agent_home" AGENT_DISPATCH_JOBS="$jobs" sh "$WAIT" --parent conf 2>&1); rc=$?

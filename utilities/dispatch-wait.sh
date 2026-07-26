@@ -35,11 +35,17 @@ INTERVAL=20
 MAX=600
 while [ $# -gt 0 ]; do
   case "$1" in
+    --parent=*) PARENT=${1#*=}; [ -n "$PARENT" ] || { echo "dispatch-wait: empty --parent" >&2; exit 64; }; shift ;;
     --parent) PARENT="${2:-}"; shift 2 ;;
+    --slug=*) SLUG=${1#*=}; [ -n "$SLUG" ] || { echo "dispatch-wait: empty --slug" >&2; exit 64; }; shift ;;
     --slug) SLUG="${2:-}"; shift 2 ;;
+    --attempt-id=*) ATTEMPT_ID=${1#*=}; [ -n "$ATTEMPT_ID" ] || { echo "dispatch-wait: empty --attempt-id" >&2; exit 64; }; shift ;;
     --attempt-id) ATTEMPT_ID="${2:-}"; shift 2 ;;
+    --jobs=*) JOBS=${1#*=}; [ -n "$JOBS" ] || { echo "dispatch-wait: empty --jobs" >&2; exit 64; }; shift ;;
     --jobs) JOBS="${2:-}"; shift 2 ;;
+    --interval=*) INTERVAL=${1#*=}; [ -n "$INTERVAL" ] || { echo "dispatch-wait: empty --interval" >&2; exit 64; }; shift ;;
     --interval) INTERVAL="${2:-20}"; shift 2 ;;
+    --max=*) MAX=${1#*=}; [ -n "$MAX" ] || { echo "dispatch-wait: empty --max" >&2; exit 64; }; shift ;;
     --max) MAX="${2:-120}"; shift 2 ;;
     -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "dispatch-wait: unknown arg '$1'" >&2; exit 64 ;;

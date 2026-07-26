@@ -193,6 +193,31 @@ class ParentParkGuardTest(unittest.TestCase):
         self.assertIsNone(
             self.invoke("Bash", f"utilities/dispatch-wait.sh --attempt-id {ATTEMPT} --max 600")
         )
+        preflight = "adapters/codex/bin/preflight.sh dispatch-wait"
+        self.assertIsNone(
+            self.invoke(
+                "Bash",
+                f"{preflight} --attempt-id {ATTEMPT} --max 300",
+            )
+        )
+        self.assertIsNone(
+            self.invoke(
+                "Bash",
+                (
+                    f"./{preflight} --attempt-id={ATTEMPT} "
+                    "--interval=1 --max=600"
+                ),
+            )
+        )
+        self.assertIsNone(
+            self.invoke(
+                "Bash",
+                (
+                    f"{ROOT / 'adapters/codex/bin/preflight.sh'} dispatch-wait "
+                    f"--attempt-id={ATTEMPT} --max=300"
+                ),
+            )
+        )
         self.assertIsNone(
             self.invoke(
                 "Bash",
@@ -205,12 +230,55 @@ class ParentParkGuardTest(unittest.TestCase):
         self.assert_parked("Bash", "utilities/dispatch-wait.sh --attempt-id att-other --max 600")
         self.assert_parked(
             "Bash",
+            f"{preflight} --attempt-id {ATTEMPT} --max 299",
+        )
+        self.assert_parked(
+            "Bash",
+            f"{preflight} --attempt-id={ATTEMPT} --max=601",
+        )
+        self.assert_parked(
+            "Bash",
+            f"{preflight} --attempt-id {ATTEMPT} --attempt-id {ATTEMPT} --max 300",
+        )
+        self.assert_parked(
+            "Bash",
+            f"{preflight} --attempt-id att-other --max 300",
+        )
+        self.assert_parked(
+            "Bash",
             f"utilities/dispatch-wait.sh --attempt-id {ATTEMPT} --max 600; git status",
+        )
+        self.assert_parked(
+            "Bash",
+            f"{preflight} --attempt-id {ATTEMPT} --max 300 && git status",
         )
         self.assert_parked(
             "Bash",
             f"adapters/codex/bin/preflight.sh harvest --attempt-id {ATTEMPT} --status done",
         )
+
+    def test_preflight_dispatch_wait_alias_forwards_split_and_equals_options(self) -> None:
+        preflight = ROOT / "adapters" / "codex" / "bin" / "preflight.sh"
+        missing_jobs = self.base / "missing-jobs.log"
+        env = {
+            **os.environ,
+            "AGENT_HOME": str(ROOT),
+            "AGENT_DISPATCH_JOBS": str(missing_jobs),
+        }
+        for args in (
+            ["--attempt-id", ATTEMPT, "--max", "300"],
+            [f"--attempt-id={ATTEMPT}", "--interval=1", "--max=300"],
+        ):
+            with self.subTest(args=args):
+                result = subprocess.run(
+                    [str(preflight), "dispatch-wait", *args],
+                    text=True,
+                    capture_output=True,
+                    env=env,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("jobs.log not found", result.stdout)
 
     def test_foreign_and_terminal_quiescent_rows_do_not_park(self) -> None:
         self.assertIsNone(self.invoke("Bash", "git status --short", session="different-session"))
@@ -362,6 +430,17 @@ class ParentParkGuardTest(unittest.TestCase):
         )
         self.assertEqual(wait["decision"], "block")
         self.assertIn("runtime-supervised-parent", wait["reason"])
+        preflight_wait = self.invoke(
+            "Bash",
+            (
+                "adapters/codex/bin/preflight.sh dispatch-wait "
+                f"--attempt-id={ATTEMPT} --max=300"
+            ),
+            session="worker-session",
+            extra_env=supervised,
+        )
+        self.assertEqual(preflight_wait["decision"], "block")
+        self.assertIn("runtime-supervised-parent", preflight_wait["reason"])
         transport_wait = self.invoke(
             "wait", session="worker-session", extra_env=supervised
         )

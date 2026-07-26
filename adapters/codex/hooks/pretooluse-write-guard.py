@@ -268,11 +268,21 @@ def exact_park_control(
     if not tokens:
         return False
 
+    wait_options: list[str] | None = None
     if local_contract_path(base, tokens[0], "utilities/dispatch-wait.sh"):
+        wait_options = tokens[1:]
+    elif (
+        len(tokens) >= 2
+        and local_contract_path(base, tokens[0], "adapters/codex/bin/preflight.sh")
+        and tokens[1] == "dispatch-wait"
+    ):
+        wait_options = tokens[2:]
+
+    if wait_options is not None:
         if not allow_wait:
             return False
         options = parse_long_options(
-            tokens[1:],
+            wait_options,
             {"--attempt-id", "--interval", "--max"},
             set(),
         )
@@ -522,7 +532,9 @@ def main() -> int:
         )
         return hook_block(
             f"parent-parked: {park_state} registered child attempt(s) "
-            f"{attempt_list}; only exact dispatch-wait --attempt-id with --max 300..600 "
+            f"{attempt_list}; only exact adapters/codex/bin/preflight.sh dispatch-wait "
+            "--attempt-id <id> "
+            "with --max 300..600 (or the direct utilities/dispatch-wait.sh equivalent) "
             "or exact preflight harvest is allowed; raw logs, source, artifacts, git, and other tools are blocked"
         )
     if os.environ.get("AGENT_PARENT_PARK_ONLY") == "1":
