@@ -14,6 +14,16 @@ completion marker를 기다리는 짧은 구간에서 Fleet가 route node를 실
 - 구현은 `plans/2026-07-27_fleet-route-reconcile-state/`에서 진행하며 live registry를
   변이하지 않는 hermetic fixture와 canonical/Claude mirror parity로 검증한다.
 
+### Implementation closure
+
+- `8615482f`에서 exact attempt-axis 검증과 canonical/newest retry 선택을 포함한
+  `reconciling` 분류, yellow breadcrumb/detail `…`, process `…gate`, 병렬 우선순위를
+  canonical Fleet와 Claude mirror에 함께 구현했다.
+- focused 131/131, worktree와 integrated main의 Fleet 전체 886/886, generated projection,
+  Python compile, diff hygiene, byte mirror, adaptation boundary를 통과했다.
+- acceptance probe는 marker 전 `reconciling`/done=0, marker 후 `done`/done=1,
+  generic stale `failed`를 확인했다. BC_ResNet_tf live registry는 수정하지 않았다.
+
 ## 2026-07-25 · v24 live repo ordering correction
 
 v13의 run-local anchor가 repo 그룹 전체 순서를 고정해, idle repo보다 아래에 있던

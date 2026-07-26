@@ -6,5 +6,5 @@
 - [x] Add regression coverage for exact and negative boundaries.
 - [x] Regenerate the Claude Fleet mirror.
 - [x] Run focused and full verification.
-- [ ] Record implementation and test evidence.
+- [x] Record implementation and test evidence.
 - [ ] Commit, push, integrate to main, reverify, and clean the worktree.

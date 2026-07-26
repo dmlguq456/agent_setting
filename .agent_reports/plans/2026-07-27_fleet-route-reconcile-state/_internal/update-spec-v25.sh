@@ -63,7 +63,7 @@ apply_patch <<'PATCH'
 +- **F-41 lock**: exact shared-observer `reconcile-needed`만 route node
 +  `reconciling`으로 투영하고 yellow `…`/`…gate`로 표시한다. 이 상태는 완료·gate
 +  통과·successor 개방을 주장하지 않으며 generic stale/dead 실패는 계속 `✕`다.
- 
+
 -## Next — current v16 implementation handoff (`autopilot-code`)
 -
 -1. `projection.py`와 additive model/JSON을 추가하고, exact route/registry evidence → ambiguity refusal → route-부재 단일 artifact stage 순서의 `WorkProjection` resolver를 구현한다.
@@ -96,7 +96,7 @@ apply_patch <<'PATCH'
 *** Update File: .agent_reports/spec/agent-fleet-dashboard/pipeline_summary.md
 @@
  # agent-fleet-dashboard — Spec Pipeline Summary
- 
+
 +## 2026-07-27 · v25 route completion reconciliation
 +
 +BC_ResNet_tf의 frame depth-2 workers가 terminal output을 남긴 뒤 owner의 exact

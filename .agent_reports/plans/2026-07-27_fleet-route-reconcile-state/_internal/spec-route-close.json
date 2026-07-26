@@ -1,0 +1,410 @@
+{
+  "schema_version": 2,
+  "capability": "autopilot-spec",
+  "capability_mode": "update",
+  "requested_intensity": "standard",
+  "effective_intensity": "standard",
+  "owner_model_profile": "balanced-deep",
+  "execution_topology": "transactional-owner",
+  "owner_dispatch_depth": 1,
+  "max_dispatch_depth": 2,
+  "tracking": "tracked",
+  "tracked_gate_evidence": {
+    "spec_read": {
+      "satisfied": true,
+      "source": "/home/Uihyeop/agent_setting/.agent_reports/spec/agent-fleet-dashboard/prd.md"
+    },
+    "drift_verdict": "SPEC-SIGNIFICANT closure: mark PRD v25 implementation evidence complete",
+    "workflow_mode": "tracked",
+    "artifact_guard": {
+      "satisfied": true,
+      "source": "preflight-satisfied"
+    }
+  },
+  "spec_touch": true,
+  "cwd": "/home/Uihyeop/agent_setting-wt/fleet-reconcile-state",
+  "artifact_root": "/home/Uihyeop/agent_setting/.agent_reports",
+  "source_commit": "8212b047e65d0fce4eeeee7f37c24f2885a01ca8",
+  "registry_digest": "sha256:85d67a79be93cff7fcc053e794728ddd387dc83bc88e872cbefe9f3bfde3bc7b",
+  "dispatch_defaults_digest": "sha256:87a0989b59fe101517acb48bfb0ccc27ebb78529b96a490da72299ba1038b5d9",
+  "selection": {
+    "direct_predicates": [],
+    "promotion_signals": [
+      {
+        "signal": "multi-runtime-parity",
+        "source": "caller"
+      },
+      {
+        "signal": "shared-contract",
+        "source": "caller"
+      }
+    ],
+    "selection_basis": [
+      {
+        "axis": "promotion",
+        "signal": "multi-runtime-parity",
+        "source": "caller"
+      },
+      {
+        "axis": "promotion",
+        "signal": "shared-contract",
+        "source": "caller"
+      }
+    ],
+    "escalation_basis": [
+      {
+        "signal": "multi-runtime-parity",
+        "source": "caller"
+      },
+      {
+        "signal": "shared-contract",
+        "source": "caller"
+      }
+    ],
+    "transport": "headless",
+    "transport_evidence": "checked-runtime-surface-with-inline-execution-exception",
+    "inline_reason": null
+  },
+  "nodes": [
+    {
+      "id": "research",
+      "kind": "map-worker",
+      "depends_on": [],
+      "role": "deep maker",
+      "inputs": [
+        "intent",
+        "prior-evidence"
+      ],
+      "outputs": [
+        "shards/spec-research/**"
+      ],
+      "write_scope": [
+        "shards/spec-research/**"
+      ],
+      "resource_class": "normal",
+      "completion_gate": "spec-research",
+      "dispatch_depth": 2,
+      "unit": "research/research-survey",
+      "model_profile": "balanced-deep",
+      "perspective": "primary-research",
+      "parallel_group": "research",
+      "parallel_group_kind": "explore",
+      "parallel_join_policy": "all",
+      "parallel_independence_axes": [
+        "cross-harness",
+        "model-profile",
+        "perspective"
+      ],
+      "parallel_leg_index": 0,
+      "parallel_leg_count": 2,
+      "parallel_leg_suffix": "anchor",
+      "parallel_anchor": "research",
+      "replica_group": "research",
+      "independence_axis": "cross-harness",
+      "fallback_hops": [
+        {
+          "ordinal": 1,
+          "fallback_hop": "same-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "codex",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-auth+headless-check",
+              "probe_time": "2026-07-26T07:55:19.699147Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "fallback_hop": "cross-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "claude",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-command-check",
+              "probe_time": "2026-07-26T07:55:20.688124Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "fallback_hop": "native-subagent",
+          "candidates": [],
+          "fleet_visibility": "degraded"
+        },
+        {
+          "ordinal": 4,
+          "fallback_hop": "inline",
+          "status": "eligible-after-prior-hop-exhaustion",
+          "reason_enum": "runtime-unavailable",
+          "fleet_visibility": "none"
+        }
+      ],
+      "harness_affinity": "unspecified"
+    },
+    {
+      "id": "research-alternative",
+      "kind": "map-worker",
+      "depends_on": [],
+      "role": "deep maker",
+      "inputs": [
+        "intent",
+        "prior-evidence"
+      ],
+      "outputs": [
+        "shards/spec-research-alternative/**"
+      ],
+      "write_scope": [
+        "shards/spec-research-alternative/**"
+      ],
+      "resource_class": "normal",
+      "completion_gate": "spec-research",
+      "dispatch_depth": 2,
+      "unit": "research/research-survey",
+      "model_profile": "light",
+      "perspective": "independent-research",
+      "parallel_group": "research",
+      "parallel_group_kind": "explore",
+      "parallel_join_policy": "all",
+      "parallel_independence_axes": [
+        "cross-harness",
+        "model-profile",
+        "perspective"
+      ],
+      "parallel_leg_index": 1,
+      "parallel_leg_count": 2,
+      "parallel_leg_suffix": "alternative",
+      "parallel_anchor": "research",
+      "replica_group": "research",
+      "independence_axis": "cross-harness",
+      "fallback_hops": [
+        {
+          "ordinal": 1,
+          "fallback_hop": "same-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "codex",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-auth+headless-check",
+              "probe_time": "2026-07-26T07:55:19.699147Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "fallback_hop": "cross-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "claude",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-command-check",
+              "probe_time": "2026-07-26T07:55:20.688124Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "fallback_hop": "native-subagent",
+          "candidates": [],
+          "fleet_visibility": "degraded"
+        },
+        {
+          "ordinal": 4,
+          "fallback_hop": "inline",
+          "status": "eligible-after-prior-hop-exhaustion",
+          "reason_enum": "runtime-unavailable",
+          "fleet_visibility": "none"
+        }
+      ],
+      "harness_affinity": "unspecified"
+    },
+    {
+      "id": "review",
+      "kind": "review-worker",
+      "depends_on": [
+        "research",
+        "research-alternative"
+      ],
+      "role": "deep reviewer",
+      "inputs": [
+        "intent",
+        "shards/spec-research/**",
+        "shards/spec-research-alternative/**"
+      ],
+      "outputs": [
+        "reviews/spec-verdict.json"
+      ],
+      "write_scope": [
+        "reviews/spec/**"
+      ],
+      "resource_class": "normal",
+      "completion_gate": "spec-review",
+      "dispatch_depth": 2,
+      "unit": "research/plan-review",
+      "model_profile": "balanced-deep",
+      "fallback_hops": [
+        {
+          "ordinal": 1,
+          "fallback_hop": "same-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "codex",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-auth+headless-check",
+              "probe_time": "2026-07-26T07:55:19.699147Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "fallback_hop": "cross-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "claude",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-command-check",
+              "probe_time": "2026-07-26T07:55:20.688124Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "fallback_hop": "native-subagent",
+          "candidates": [],
+          "fleet_visibility": "degraded"
+        },
+        {
+          "ordinal": 4,
+          "fallback_hop": "inline",
+          "status": "eligible-after-prior-hop-exhaustion",
+          "reason_enum": "runtime-unavailable",
+          "fleet_visibility": "none"
+        }
+      ],
+      "harness_affinity": "unspecified"
+    },
+    {
+      "id": "prd-transaction",
+      "kind": "capability-owner",
+      "depends_on": [
+        "review"
+      ],
+      "role": "deep maker",
+      "inputs": [
+        "intent",
+        "shards/spec-research/**",
+        "reviews/spec-verdict.json"
+      ],
+      "outputs": [
+        "spec/prd.md",
+        "spec/pipeline_state.yaml",
+        "spec/pipeline_summary.md",
+        "version-snapshot"
+      ],
+      "write_scope": [
+        "spec/prd.md",
+        "spec/pipeline_state.yaml",
+        "spec/pipeline_summary.md",
+        "spec/_internal/versions/**"
+      ],
+      "resource_class": "normal",
+      "completion_gate": "spec-atomic-transaction",
+      "dispatch_depth": 1,
+      "unit": "_kernel/owner",
+      "model_profile": "balanced-deep"
+    }
+  ],
+  "parallel_groups": [
+    {
+      "id": "research",
+      "kind": "explore",
+      "join_policy": "all",
+      "independence_axes": [
+        "cross-harness",
+        "model-profile",
+        "perspective"
+      ],
+      "width": 2,
+      "members": [
+        "research",
+        "research-alternative"
+      ]
+    }
+  ],
+  "completion_gates": [
+    "spec-research",
+    "spec-review",
+    "spec-atomic-transaction"
+  ],
+  "human_gates": [
+    "intent-confirmation"
+  ],
+  "resume_retry_boundaries": [
+    "research",
+    "review",
+    "prd-transaction"
+  ],
+  "dispatch_evidence": {
+    "tuples": [
+      {
+        "child_harness": "codex",
+        "failure_class": "",
+        "launch_authority": "conductor",
+        "parent_harness": "codex",
+        "parent_sandbox": "workspace-write",
+        "parent_transport": "headless",
+        "probe_source": "codex-owner-network-contract+direct-auth+headless-check",
+        "probe_time": "2026-07-26T07:55:19.699147Z",
+        "status": "supported"
+      },
+      {
+        "child_harness": "claude",
+        "failure_class": "",
+        "launch_authority": "conductor",
+        "parent_harness": "codex",
+        "parent_sandbox": "workspace-write",
+        "parent_transport": "headless",
+        "probe_source": "codex-owner-network-contract+direct-command-check",
+        "probe_time": "2026-07-26T07:55:20.688124Z",
+        "status": "supported"
+      }
+    ],
+    "native_subagent": []
+  },
+  "dispatch_contract_version": 3,
+  "registered_headless_candidates": null,
+  "registered_headless_policy": null,
+  "unit_catalog_digest": "sha256:46672b3c16f5eec4c97112e5f85d6dfe4c51b8125349154fbc5b02f2be643d47",
+  "route_hash": "sha256:412d1b3a0c4b65bcbf4ef14cb16a9fdef8835bf2a20ae67c434c5b4619b024bf",
+  "route_id": "rt-412d1b3a0c4b65bc"
+}

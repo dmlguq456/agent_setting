@@ -8,3 +8,7 @@
 - prior checked dispatch evidence remains sealed in both route records; the current
   `nested-headless` probe reported `nested-network-unconfirmed`, so it was not used to claim a
   live child launch.
+- spec closure required a fresh descendant-bound route after the original pre-mutation route
+  correctly failed `route-source-commit-mismatch`. The first fresh multi-file patch returned
+  nonzero after applying the state half; an idempotent follow-up under the same lock completed
+  the summary half. Final v25 state and summary are consistent; the retry events are preserved.
