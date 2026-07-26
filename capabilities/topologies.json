@@ -85,7 +85,7 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 1,
-        "model_profile": "light"
+        "model_profile": "balanced-deep"
       },
       "standard_plus": {
         "topology": "staged",
@@ -172,7 +172,7 @@
               "inline"
             ],
             "unit": "_kernel/owner",
-            "model_profile": "balanced-deep"
+            "model_profile": "deep"
           }
         ],
         "owner_dispatch_depth": 1,
@@ -257,7 +257,7 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 1,
-        "model_profile": "light"
+        "model_profile": "balanced-deep"
       },
       "standard_plus": {
         "topology": "staged",
@@ -639,7 +639,7 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 1,
-        "model_profile": "light"
+        "model_profile": "balanced-deep"
       },
       "standard_plus": {
         "topology": "staged",
@@ -908,7 +908,7 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 1,
-        "model_profile": "light"
+        "model_profile": "balanced-deep"
       },
       "standard_plus": {
         "topology": "staged",
@@ -1204,7 +1204,7 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 1,
-        "model_profile": "light"
+        "model_profile": "balanced-deep"
       },
       "standard_plus": {
         "topology": "staged+resource",
@@ -1377,7 +1377,7 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 1,
-        "model_profile": "light"
+        "model_profile": "balanced-deep"
       },
       "standard_plus": {
         "topology": "staged+resource",
@@ -1552,7 +1552,7 @@
               "inline"
             ],
             "unit": "_kernel/owner",
-            "model_profile": "balanced-deep"
+            "model_profile": "deep"
           }
         ],
         "owner_dispatch_depth": 1,
@@ -1638,7 +1638,7 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 1,
-        "model_profile": "light"
+        "model_profile": "balanced-deep"
       },
       "standard_plus": {
         "topology": "map-reduce",
@@ -1698,7 +1698,7 @@
               "inline"
             ],
             "unit": "_kernel/owner",
-            "model_profile": "balanced-deep"
+            "model_profile": "deep"
           }
         ],
         "owner_dispatch_depth": 1,
@@ -1744,7 +1744,7 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 1,
-        "model_profile": "light"
+        "model_profile": "balanced-deep"
       },
       "standard_plus": {
         "topology": "transactional-owner",
@@ -1787,7 +1787,7 @@
             "depends_on": [
               "review"
             ],
-            "role": "deep maker",
+            "role": "deep orchestrator",
             "inputs": [
               "target-artifact",
               "reviews/refine-verdict.json"
@@ -1811,7 +1811,7 @@
               "inline"
             ],
             "unit": "_kernel/owner",
-            "model_profile": "balanced-deep"
+            "model_profile": "deep"
           }
         ],
         "owner_dispatch_depth": 1,
@@ -1891,7 +1891,7 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 1,
-        "model_profile": "light"
+        "model_profile": "balanced-deep"
       },
       "standard_plus": {
         "topology": "map-reduce",
@@ -2118,7 +2118,7 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 1,
-        "model_profile": "light"
+        "model_profile": "balanced-deep"
       },
       "standard_plus": {
         "topology": "transactional-owner",
@@ -2149,7 +2149,7 @@
               "inline"
             ],
             "unit": "_kernel/owner",
-            "model_profile": "balanced-deep"
+            "model_profile": "deep"
           },
           {
             "id": "security-review",
@@ -2296,7 +2296,7 @@
         ],
         "owner_dispatch_depth": 1,
         "max_dispatch_depth": 1,
-        "model_profile": "light"
+        "model_profile": "balanced-deep"
       },
       "standard_plus": {
         "topology": "transactional-owner",
@@ -2363,7 +2363,7 @@
             "depends_on": [
               "review"
             ],
-            "role": "deep maker",
+            "role": "deep orchestrator",
             "inputs": [
               "intent",
               "shards/spec-research/**",
@@ -2390,7 +2390,7 @@
               "inline"
             ],
             "unit": "_kernel/owner",
-            "model_profile": "balanced-deep"
+            "model_profile": "deep"
           }
         ],
         "owner_dispatch_depth": 1,
@@ -2725,8 +2725,8 @@
     }
   },
   "owner_profile_by_intensity": {
-    "quick": "light",
-    "standard": "balanced-deep",
+    "quick": "balanced-deep",
+    "standard": "deep",
     "strong": "deep",
     "thorough": "deep",
     "adversarial": "deep"

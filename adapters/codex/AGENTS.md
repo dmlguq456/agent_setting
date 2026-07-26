@@ -105,7 +105,7 @@ dispatch-depth-2 workers do not. The retired broker exposes only legacy `status`
 
 `standard+` uses a dispatch-depth-1 capability owner and, when separable, dispatch-depth-2
 `code-plan -> code-execute -> code-test -> code-report` stage workers.
-`direct` is inline; `quick` is one registered-headless dispatch-depth-1 one-shot owner. Dispatch depth 3 is
+`direct` is inline; `quick` is one registered-headless dispatch-depth-1 one-shot conductor. Dispatch depth 3 is
 forbidden. Record an inline exception in plan metrics. After integration,
 verification, and push, use `preflight.sh worktree-cleanup --check` before
 `--apply`; SessionEnd/Stop never cleans worktrees.

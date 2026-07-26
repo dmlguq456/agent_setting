@@ -48,6 +48,15 @@ WORKER_TYPE_DEFAULT_KIND = {
 }
 
 
+def default_subordinate_profile(role: str) -> str:
+    """Choose the portable composed-node default without assigning owner budget."""
+    if role == "external adversary":
+        return "deep"
+    if role.startswith("deep "):
+        return "balanced-deep"
+    return "light"
+
+
 def _load_topology():
     spec = importlib.util.spec_from_file_location("capability_topology", ROOT / "tools/capability_topology.py")
     module = importlib.util.module_from_spec(spec)
@@ -113,7 +122,16 @@ def _derive_gate(node_id: str, unit: str, gate_index: dict) -> str:
     )
 
 
-def build_recipe(capability, capability_mode, unit_specs, *, topology_class, quick_write_scope, gate_index):
+def build_recipe(
+    capability,
+    capability_mode,
+    unit_specs,
+    *,
+    topology_class,
+    quick_write_scope,
+    quick_model_profile,
+    gate_index,
+):
     """Turn the unit list into a full-shape composed recipe (compile validates it)."""
     if not isinstance(unit_specs, list) or not unit_specs:
         raise ValueError("compose requires a non-empty unit list")
@@ -162,6 +180,7 @@ def build_recipe(capability, capability_mode, unit_specs, *, topology_class, qui
             "resource_class": spec.get("resource_class", "normal"),
             "completion_gate": gate,
             "fallback_hops": list(STANDARD_FALLBACK_HOPS),
+            "model_profile": spec.get("model_profile") or default_subordinate_profile(meta["role"]),
         }
         if spec.get("unit_choices"):
             node["unit_choices"] = list(spec["unit_choices"])
@@ -188,6 +207,7 @@ def build_recipe(capability, capability_mode, unit_specs, *, topology_class, qui
             "write_scope": list(quick_write_scope),
             "owner_dispatch_depth": 1,
             "max_dispatch_depth": 1,
+            "model_profile": quick_model_profile,
         },
         "standard_plus": {
             "owner_dispatch_depth": 1,
@@ -331,6 +351,7 @@ def main() -> int:
         args.capability, args.capability_mode, unit_specs,
         topology_class=args.topology_class,
         quick_write_scope=args.quick_write_scope,
+        quick_model_profile=registry["owner_profile_by_intensity"]["quick"],
         gate_index=unit_io_gate_index(registry),
     )
     evidence = assemble_dispatch_evidence(args)

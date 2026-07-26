@@ -274,6 +274,11 @@ role`, while route-bound registered work carries one of these sealed profiles:
 | `light` | configured light tier / runtime default | distinct |
 | `mini` | configured mini tier / runtime default | lifecycle/micro-only; substantive dispatch-depth-1/2 work is rejected |
 
+The portable policy assigns `balanced-deep` to quick one-shot conduction and `deep` to
+every standard+ owner. OpenCode preserves those sealed labels, but its current
+runtime realization collapses both to the configured deep tier and reports that
+reduced granularity explicitly.
+
 Non-route role compatibility overrides remain explicit and config-derived:
 
 ```text

@@ -371,7 +371,10 @@ def compile_composed_route(composed_recipe, capability_mode, requested_intensity
     """Compile a compose-on-demand recipe through the SAME validate/seal path (composed: true)."""
     registry=TOPO.load_registry(); TOPO.validate_registry(registry)
     if not isinstance(composed_recipe, dict): raise ValueError("composed recipe must be an object")
-    TOPO._validate_recipe(composed_recipe, registry)
+    TOPO._validate_recipe(
+        composed_recipe, registry,
+        registry["owner_profile_by_intensity"]["standard"],
+    )
     # SAME validator means gates too: without this, a composed recipe could carry a
     # forged completion gate that no registry contract backs (2026-07-22 verify finding).
     TOPO._validate_gate_contracts(composed_recipe, registry)
@@ -424,7 +427,7 @@ def _compile_from_recipe(registry, recipe, capability, capability_mode, requeste
         owner_model_profile=registry["owner_profile_by_intensity"]["quick"]
         nodes=[{"id":"one-shot","kind":recipe["quick"]["worker_kind"],"dispatch_depth":1,"role":"orchestrator",
                 "unit":"_kernel/owner",
-                "model_profile":recipe["quick"]["model_profile"],
+                "model_profile":owner_model_profile,
                 "write_scope":recipe["quick"]["write_scope"],"resource_class":"normal",
                 "execution_surface":"registered-headless","registered_worker":True,
                 "completion_gate":"quick-complete"}]
@@ -505,7 +508,10 @@ def verify_route(route, expected_cwd=None):
         composed_recipe=route.get("composed_recipe")
         if not isinstance(composed_recipe, dict):
             raise ValueError("composed route lacks embedded composed_recipe")
-        TOPO._validate_recipe(composed_recipe, registry)
+        TOPO._validate_recipe(
+            composed_recipe, registry,
+            registry["owner_profile_by_intensity"]["standard"],
+        )
         def _node_identity(node):
             return {k:v for k,v in node.items() if k not in ("fallback_hops","harness_affinity")}
         expected_nodes=json.loads(json.dumps(composed_recipe["standard_plus"]["nodes"]))
@@ -546,6 +552,19 @@ def verify_route(route, expected_cwd=None):
             row = registry["model_profiles"].get(profile)
             if not isinstance(row, dict) or row.get("registered_topology") is not True:
                 raise ValueError(f"node {node.get('id')} has invalid registered model_profile")
+        if (
+            effective not in ("direct", "quick")
+            and node.get("kind") == "capability-owner"
+            and node.get("unit") == "_kernel/owner"
+            and (
+                node.get("dispatch_depth") != 1
+                or node.get("model_profile") != expected_owner_profile
+            )
+        ):
+            raise ValueError(
+                f"semantic capability owner {node.get('id')} differs from "
+                "the portable standard+ owner policy"
+            )
         if any(key in node for key in ("depth", "owner_depth", "max_depth")) or node.get("dispatch_depth") not in {0, 1, 2}:
             raise ValueError(f"node {node.get('id')} has invalid dispatch_depth")
         observed_dispatch_depths.append(node["dispatch_depth"])
@@ -632,6 +651,7 @@ def verify_route(route, expected_cwd=None):
             node.get("id") != "one-shot"
             or node.get("dispatch_depth") != 1
             or node.get("unit") != "_kernel/owner"
+            or node.get("model_profile") != expected_owner_profile
             or node.get("execution_surface") != "registered-headless"
             or node.get("registered_worker") is not True
             or node.get("fallback_hops")

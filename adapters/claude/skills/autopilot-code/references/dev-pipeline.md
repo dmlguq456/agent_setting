@@ -1,6 +1,6 @@
 ## Pipeline: Mode dev
 
-Select the stage graph from `--intensity` before QA. `direct` performs produce plus sanity/report without this durable pipeline. `quick` uses one registered-headless dispatch-depth-1 one-shot owner with an inline micro-plan, plan-check-lite, and focused verification. standard+ follows the durable pipeline below.
+Select the stage graph from `--intensity` before QA. `direct` performs produce plus sanity/report without this durable pipeline. `quick` uses one registered-headless dispatch-depth-1 one-shot conductor with an inline micro-plan, plan-check-lite, and focused verification. standard+ follows the durable pipeline below.
 
 The compiled standard+ route always carries the `plan-check` review node; select its unit by risk axis: UI or visual risk → the `design/critic` unit; research or domain risk → the `research/plan-review` unit; construction quality (the compiled default) → the `qa/plan-review` unit. Each runs as a sibling review node dispatched by the owner per the compiled route.
 

@@ -358,9 +358,9 @@ route additionally seals one of these profiles from the single
 
 | Model profile | Codex realization | Registered topology use |
 |---|---|---|
-| `deep` | configured deep tier / `xhigh` | strong+ ownership, convergence, and highest-risk legs |
-| `balanced-deep` | configured deep tier / `medium` | standard ownership and deep-model judgment at a lower coordination budget |
-| `light` | configured light tier / `medium` | quick ownership, routine implementation, verification, reporting, and breadth legs |
+| `deep` | configured deep tier / `xhigh` | standard+ ownership, convergence, and highest-risk legs |
+| `balanced-deep` | configured deep tier / `medium` | quick one-shot conduction and subordinate deep-model judgment at a lower coordination budget |
+| `light` | configured light tier / `medium` | routine implementation, verification, reporting, and breadth legs |
 | `mini` | configured mini tier / `medium` | lifecycle and micro-semantic helpers only; substantive dispatch-depth-1/2 work is rejected |
 
 Non-route role compatibility overrides remain explicit and config-derived:

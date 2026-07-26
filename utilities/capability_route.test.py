@@ -116,12 +116,103 @@ class TestRoute(unittest.TestCase):
      self.assertEqual(route["owner_dispatch_depth"],1)
      self.assertEqual(route["max_dispatch_depth"],1)
      self.assertEqual(route["nodes"][0]["dispatch_depth"],1)
+     self.assertEqual(route["owner_model_profile"],"balanced-deep")
+     self.assertEqual(route["nodes"][0]["model_profile"],"balanced-deep")
      self.assertEqual(route["nodes"][0]["execution_surface"],"registered-headless")
      self.assertTrue(route["nodes"][0]["registered_worker"])
+     R.verify_route(route,R.ROOT)
  def test_promotion_standard(self):
   evidence=self.dispatch(self.nested())
   a=R.compile_route(**self.args(signals=["public-api"],transport="headless",inline_reason=None,dispatch_evidence=evidence)); self.assertEqual([x["id"] for x in a["nodes"]],["frame","frame-alternative","plan","plan-check","execute","impl-review","test","report"])
-  self.assertEqual(a["owner_model_profile"],"balanced-deep")
+  self.assertEqual(a["owner_model_profile"],"deep")
+ def test_complete_recipe_mode_intensity_owner_and_realized_node_census(self):
+  registry=R.TOPO.load_registry()
+  evidence=self.dispatch(self.nested())
+  compiled=0
+  for recipe in registry["recipes"]:
+   expected_owner_ids=[
+    node["id"] for node in recipe["standard_plus"]["nodes"]
+    if node.get("kind")=="capability-owner" and node.get("unit")=="_kernel/owner"
+   ]
+   for mode in recipe["modes"]:
+    direct=R.compile_route(
+     recipe["capability"],mode,"direct",R.ROOT,R.ROOT,predicates=recipe["direct_predicates"],
+     transport=None,inline_reason="atomic-direct",tracking="tracked",
+     tracked_gate_evidence=self.args()["tracked_gate_evidence"])
+    self.assertIsNone(direct["owner_model_profile"])
+    R.verify_route(direct,R.ROOT); compiled+=1
+    quick=R.compile_route(
+     recipe["capability"],mode,"quick",R.ROOT,R.ROOT,predicates=[],
+     transport=None,tracking="tracked",
+     tracked_gate_evidence=self.args()["tracked_gate_evidence"],
+     registered_headless_evidence=self.registered_headless())
+    self.assertEqual(quick["owner_model_profile"],"balanced-deep")
+    self.assertEqual(quick["nodes"][0]["model_profile"],"balanced-deep")
+    R.verify_route(quick,R.ROOT); compiled+=1
+    for intensity in ("standard","strong","thorough","adversarial"):
+     with self.subTest(capability=recipe["capability"],mode=mode,intensity=intensity):
+      route=R.compile_route(
+       recipe["capability"],mode,intensity,R.ROOT,R.ROOT,predicates=[],
+       transport="headless",tracking="tracked",
+       tracked_gate_evidence=self.args()["tracked_gate_evidence"],
+       dispatch_evidence=evidence)
+      self.assertEqual(route["owner_model_profile"],"deep")
+      owners=[
+       node for node in route["nodes"]
+       if node.get("kind")=="capability-owner" and node.get("unit")=="_kernel/owner"
+      ]
+      self.assertEqual([node["id"] for node in owners],expected_owner_ids)
+      for owner in owners:
+       self.assertEqual(owner["dispatch_depth"],1)
+       self.assertEqual(owner["model_profile"],"deep")
+       self.assertEqual(owner["role"],"deep orchestrator")
+      expected=json.loads(json.dumps(recipe["standard_plus"]["nodes"]))
+      expected=R._expand_parallel_groups(
+       expected,recipe["standard_plus"].get("parallel_groups"),intensity)
+      for node in expected: node.pop("fallback_hops",None)
+      def stable(nodes):
+       return [
+        {key:value for key,value in node.items()
+         if key not in ("fallback_hops","harness_affinity")}
+        for node in nodes
+       ]
+      self.assertEqual(stable(route["nodes"]),stable(expected))
+      R.verify_route(route,R.ROOT); compiled+=1
+  self.assertEqual(compiled,132)
+ def test_verify_rejects_rehashed_executable_owner_profile_drift(self):
+  quick=R.compile_route(**self.args(
+   requested_intensity="quick",predicates=[],transport=None,inline_reason=None,
+   registered_headless_evidence=self.registered_headless()))
+  quick["nodes"][0]["model_profile"]="light"
+  quick["route_hash"]=R.route_hash(quick)
+  quick["route_id"]="rt-"+quick["route_hash"].split(":",1)[1][:16]
+  with self.assertRaisesRegex(ValueError,"quick node axes mismatch"):
+   R.verify_route(quick,R.ROOT)
+  standard=R.compile_route(**self.args(
+   capability="autopilot-spec",capability_mode="update",
+   requested_intensity="standard",predicates=[],transport="headless",
+   inline_reason=None,dispatch_evidence=self.dispatch(self.nested())))
+  owner=next(node for node in standard["nodes"] if node["id"]=="prd-transaction")
+  owner["model_profile"]="balanced-deep"
+  standard["route_hash"]=R.route_hash(standard)
+  standard["route_id"]="rt-"+standard["route_hash"].split(":",1)[1][:16]
+  with self.assertRaisesRegex(ValueError,"semantic capability owner"):
+   R.verify_route(standard,R.ROOT)
+ def test_composed_verify_rejects_rehashed_semantic_owner_profile_drift(self):
+  recipe=json.loads(json.dumps(
+   R.TOPO.resolve_recipe(R.TOPO.load_registry(),"autopilot-spec","update")))
+  recipe["modes"]=["composed-fixture"]
+  route=self._composed(recipe)
+  route_owner=next(node for node in route["nodes"] if node["id"]=="prd-transaction")
+  embedded_owner=next(
+   node for node in route["composed_recipe"]["standard_plus"]["nodes"]
+   if node["id"]=="prd-transaction")
+  route_owner["model_profile"]="balanced-deep"
+  embedded_owner["model_profile"]="balanced-deep"
+  route["route_hash"]=R.route_hash(route)
+  route["route_id"]="rt-"+route["route_hash"].split(":",1)[1][:16]
+  with self.assertRaisesRegex(ValueError,"semantic capability owner"):
+   R.verify_route(route,R.ROOT)
  def test_strong_expands_asymmetric_parallel_groups(self):
   evidence=self.dispatch(self.nested())
   standard=R.compile_route(**self.args(signals=["public-api"],transport="headless",inline_reason=None,dispatch_evidence=evidence))

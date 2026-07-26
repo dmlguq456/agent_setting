@@ -78,7 +78,8 @@ class TestComposeRoute(unittest.TestCase):
     def test_build_recipe_derives_role_kind_gate_and_inputs(self):
         recipe = C.build_recipe(
             "analyze-project", "code", UNITS,
-            topology_class="staged", quick_write_scope=[], gate_index=self._gate_index(),
+            topology_class="staged", quick_write_scope=[],
+            quick_model_profile="balanced-deep", gate_index=self._gate_index(),
         )
         nodes = {n["id"]: n for n in recipe["standard_plus"]["nodes"]}
         # role is derived from unit frontmatter (never caller-supplied).
@@ -87,18 +88,22 @@ class TestComposeRoute(unittest.TestCase):
         # kind is derived from worker_type: stage -> pipeline-stage, review -> review-worker.
         self.assertEqual(nodes["survey"]["kind"], "pipeline-stage")
         self.assertEqual(nodes["claim"]["kind"], "review-worker")
+        self.assertEqual(nodes["survey"]["model_profile"], "balanced-deep")
+        self.assertEqual(nodes["claim"]["model_profile"], "light")
         # a dependent node inherits its upstream write scope as inputs.
         self.assertEqual(nodes["claim"]["inputs"], ["analysis_project/code/**"])
         # every node is a dispatch-depth-2 unit; the quick block excludes spec scopes.
         self.assertTrue(all(n["dispatch_depth"] == 2 for n in nodes.values()))
         self.assertEqual(recipe["standard_plus"]["max_dispatch_depth"], 2)
         self.assertEqual(recipe["standard_plus"]["owner_dispatch_depth"], 1)
+        self.assertEqual(recipe["quick"]["model_profile"], "balanced-deep")
 
     def test_build_recipe_auto_derives_single_unit_io_gate(self):
         recipe = C.build_recipe(
             "analyze-project", "code",
             [{"id": "review", "unit": "qa/plan-review", "write_scope": ["reviews/plan/**"]}],
-            topology_class="staged", quick_write_scope=[], gate_index=self._gate_index(),
+            topology_class="staged", quick_write_scope=[],
+            quick_model_profile="balanced-deep", gate_index=self._gate_index(),
         )
         # qa/plan-review names exactly one unit-io gate, so no explicit gate is needed.
         self.assertEqual(recipe["standard_plus"]["nodes"][0]["completion_gate"], "code-plan-check")

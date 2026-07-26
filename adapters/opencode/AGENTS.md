@@ -87,7 +87,7 @@ routes are read-only migration inputs; the retired broker exposes only legacy
 
 `standard+` uses a dispatch-depth-1 capability owner and separable dispatch-depth-2
 `code-plan -> code-execute -> code-test -> code-report` workers. `direct` is
-inline; `quick` is one registered-headless dispatch-depth-1 one-shot owner; dispatch depth 3 is forbidden. Record
+inline; `quick` is one registered-headless dispatch-depth-1 one-shot conductor; dispatch depth 3 is forbidden. Record
 inline exceptions in plan metrics. After merge, integrated verification, and
 push, use `preflight.sh worktree-cleanup --check` before `--apply`.
 

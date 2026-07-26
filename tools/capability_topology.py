@@ -136,7 +136,7 @@ def _validate_unit_ref(recipe, node, registry):
             )
         # Reserved refs carry no catalog frontmatter, so their role must be pinned here
         # (2026-07-22 verify finding: _kernel/owner previously accepted any role).
-        reserved_roles = {"_kernel/owner": {"deep orchestrator", "deep maker"},
+        reserved_roles = {"_kernel/owner": {"deep orchestrator"},
                           "_kernel/resource": {"orchestrator"}}
         allowed = reserved_roles.get(unit)
         if allowed is not None and node.get("role") not in allowed:
@@ -207,7 +207,7 @@ def _validate_gate_contracts(recipe, registry):
             raise TopologyError(f"{recipe['capability']}: unknown gate contract kind {kind!r} for {gate}")
 
 
-def _validate_recipe(recipe, registry):
+def _validate_recipe(recipe, registry, standard_plus_owner_profile):
     required = {"capability", "modes", "topology_class", "direct_predicates", "promotion_signals",
                 "quick", "standard_plus", "completion_gates", "human_gates", "resume_retry_boundaries"}
     missing = required - recipe.keys()
@@ -224,6 +224,12 @@ def _validate_recipe(recipe, registry):
     _validate_model_profile(
         registry, quick.get("model_profile"), f"{recipe['capability']}:quick"
     )
+    quick_owner_profile = registry["owner_profile_by_intensity"]["quick"]
+    if quick.get("model_profile") != quick_owner_profile:
+        raise TopologyError(
+            f"{recipe['capability']}:quick: model_profile must match "
+            f"owner_profile_by_intensity.quick ({quick_owner_profile})"
+        )
     for scope in quick.get("write_scope", []): _scope_root(scope)
     _validate_guard_scope(recipe, quick.get("write_scope", []), quick.get("guard_preconditions", []), registry, "quick")
     graph = recipe["standard_plus"]
@@ -279,6 +285,20 @@ def _validate_recipe(recipe, registry):
             )
             if any(key in node for key in bare_depth_keys) or node.get("dispatch_depth") not in (1, 2):
                 raise TopologyError(f"{recipe['capability']}:{node['id']}: dispatch_depth must be 1 or 2")
+            if (
+                node.get("kind") == "capability-owner"
+                and node.get("unit") == "_kernel/owner"
+                and (
+                    node.get("dispatch_depth") != graph["owner_dispatch_depth"]
+                    or node.get("dispatch_depth") != 1
+                    or node.get("model_profile") != standard_plus_owner_profile
+                )
+            ):
+                raise TopologyError(
+                    f"{recipe['capability']}:{node['id']}: semantic capability owner "
+                    f"must use dispatch_depth=1 and model_profile="
+                    f"{standard_plus_owner_profile}"
+                )
             unknown_hops = set(node.get("fallback_hops", [])) - FALLBACK_HOPS
             if unknown_hops:
                 raise TopologyError(
@@ -448,8 +468,16 @@ def validate_registry(registry, manifest=None):
     }
     if registry.get("model_profiles") != expected_profiles:
         raise TopologyError("model_profiles must declare the four portable execution profiles")
-    if registry.get("owner_profile_by_intensity") != {
-        "quick": "light", "standard": "balanced-deep", "strong": "deep",
+    owner_policy = registry.get("owner_profile_by_intensity", {})
+    standard_plus_profiles = {
+        owner_policy.get(intensity)
+        for intensity in ("standard", "strong", "thorough", "adversarial")
+    }
+    if len(standard_plus_profiles) != 1 or None in standard_plus_profiles:
+        raise TopologyError("standard+ owner profiles must be uniform across intensities")
+    standard_plus_owner_profile = next(iter(standard_plus_profiles))
+    if owner_policy != {
+        "quick": "balanced-deep", "standard": "deep", "strong": "deep",
         "thorough": "deep", "adversarial": "deep",
     }:
         raise TopologyError("owner_profile_by_intensity does not match the portable policy")
@@ -485,7 +513,7 @@ def validate_registry(registry, manifest=None):
     if actual != expected:
         raise TopologyError(f"coverage mismatch missing={sorted(expected-actual)} extra={sorted(actual-expected)}")
     for recipe in registry["recipes"]:
-        _validate_recipe(recipe, registry)
+        _validate_recipe(recipe, registry, standard_plus_owner_profile)
         _validate_gate_contracts(recipe, registry)
     return {"capabilities": len({x[0] for x in actual}), "recipes": len(actual), "registry_digest": registry_digest(registry)}
 

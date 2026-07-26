@@ -61,7 +61,7 @@ Minimum role mapping:
 - review: QA/reviewer role for plan, code, and test review;
 - app UI changes: design role as critic or handoff verifier when design artifacts exist.
 
-Pipeline intensity is the primary ceremony selector. `direct` is inline and `quick` is one `light` registered owner. `standard` uses a `balanced-deep` owner and opens framing as two asymmetric cross-harness legs (`balanced-deep` anchor plus `light` alternative). `strong` uses a `deep` owner, adds a deep contrarian framing leg, and opens width-two plan (`deep + balanced-deep`) and implementation-review (`balanced-deep + light`) groups. `thorough|adversarial` add the declared light implementation-risk plan leg and deep failure-mode review leg. All legs are dispatch-depth-2 siblings with disjoint artifacts, exact all-join, and route-sealed role/profile/perspective; other stages remain sequential. The same intensity determines plan-check, selected reviews, and code-test rigor without a separate user-facing QA axis. Concrete models remain adapter-specific.
+Pipeline intensity is the primary ceremony selector. `direct` is inline and `quick` is one `balanced-deep` registered one-shot conductor. Every `standard+` owner uses `deep`; `standard` opens framing as two asymmetric cross-harness legs (`balanced-deep` anchor plus `light` alternative). `strong` adds a deep contrarian framing leg and opens width-two plan (`deep + balanced-deep`) and implementation-review (`balanced-deep + light`) groups. `thorough|adversarial` add the declared light implementation-risk plan leg and deep failure-mode review leg. All legs are dispatch-depth-2 siblings with disjoint artifacts, exact all-join, and route-sealed role/profile/perspective; other stages remain sequential. The same intensity determines plan-check, selected reviews, and code-test rigor without a separate user-facing QA axis. Concrete models remain adapter-specific.
 
 ## Stage Mapping
 
@@ -69,12 +69,12 @@ Pipeline intensity is the primary ceremony selector. `direct` is inline and `qui
 |---|---|
 | `intake` | parse `dev|debug|audit`, classify spec significance, choose intensity and QA override |
 | `orient` | read `spec/prd.md` and relevant source context; `orient-lite` reads only the touched area |
-| `plan` | none for `direct`; registered-headless dispatch-depth-1 one-shot owner micro-plan for `quick`; `code-plan` durable artifact for `standard+` |
-| `plan-check` | none for `direct`; 3-4 question gate inside the registered-headless dispatch-depth-1 quick owner; lightweight plan QA for `standard`; risk/adversarial critique only for `strong+` |
-| `produce` | direct edit for `direct`; quick is one registered-headless dispatch-depth-1 one-shot owner and `code-execute` or scoped implementation for `quick+` |
+| `plan` | none for `direct`; registered-headless dispatch-depth-1 one-shot conductor micro-plan for `quick`; `code-plan` durable artifact for `standard+` |
+| `plan-check` | none for `direct`; 3-4 question gate inside the registered-headless dispatch-depth-1 quick conductor; lightweight plan QA for `standard`; risk/adversarial critique only for `strong+` |
+| `produce` | direct edit for `direct`; quick is one registered-headless dispatch-depth-1 one-shot conductor and `code-execute` or scoped implementation for `quick+` |
 | `verify` | sanity check for `direct`; focused command/review inside the quick one-shot worker; `code-test` evidence for `standard+` |
 | `synth` | only when dispatch-depth-2 perspective/verifier/adversary workers ran |
-| `report` | concise user report for `direct`; quick returns its concise report from its registered-headless dispatch-depth-1 one-shot owner; `code-report`/`pipeline_summary.md` for `standard+` |
+| `report` | concise user report for `direct`; quick returns its concise report from its registered-headless dispatch-depth-1 one-shot conductor; `code-report`/`pipeline_summary.md` for `standard+` |
 
 Stage-local gates must not become full independent QA loops after every sub-stage. Keep plan-check small, concentrate expensive independent review in the selected risk point or final verification, and keep raw logs in artifacts rather than parent context. `code-plan`, `code-refine`, and `code-test` inherit the selected graph: `code-plan` is standard+ durable planning, `code-refine` is optional correction, and `code-test` is final concrete verification rather than hardcoded-thorough QA.
 
@@ -110,7 +110,7 @@ Additional code-entry gates:
 3. Run git/worktree preflight and remember the starting `HEAD`.
 4. If `spec/` exists, read `spec/prd.md` plus relevant mode contracts before planning.
 5. Emit `spec-significance: within-spec` or `spec-significance: SPEC-SIGNIFICANT (...)`.
-6. Select the stage graph from pipeline intensity, then map common stages to code sub-capabilities. `direct` skips `code-plan`; `quick` runs as one registered-headless dispatch-depth-1 one-shot owner with an inline micro-plan and plan-check-lite; `standard+` uses `code-plan`, optional `code-refine`, `code-execute`, `code-test`, and `code-report` according to the selected graph, QA override, and resume point. For `standard+`, a dispatch-depth-1 capability owner may dispatch bounded dispatch-depth-2 planner/verifier/adversary workers when the task is separable and must synthesize their short reports before final write-back. `direct` stays inline; `quick` is one registered-headless dispatch-depth-1 one-shot owner unless explicitly escalated.
+6. Select the stage graph from pipeline intensity, then map common stages to code sub-capabilities. `direct` skips `code-plan`; `quick` runs as one registered-headless dispatch-depth-1 one-shot conductor with an inline micro-plan and plan-check-lite; `standard+` uses `code-plan`, optional `code-refine`, `code-execute`, `code-test`, and `code-report` according to the selected graph, QA override, and resume point. For `standard+`, a dispatch-depth-1 capability owner may dispatch bounded dispatch-depth-2 planner/verifier/adversary workers when the task is separable and must synthesize their short reports before final write-back. `direct` stays inline; `quick` is one registered-headless dispatch-depth-1 one-shot conductor unless explicitly escalated.
 7. Before each durable write-back or commit, re-run git/worktree safety and stop if `HEAD` or merge state changed unexpectedly.
 8. Record implementation evidence and verification results in `pipeline_summary.md`.
 

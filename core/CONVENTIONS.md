@@ -26,7 +26,7 @@ Pipeline intensity controls which orchestration shape an autopilot entry uses. V
 | Intensity | Stage graph | Plan and check policy | Dispatch | Assurance |
 |---|---|---|---|---|
 | `direct` | `intake → produce → sanity/report` | No plan, plan check, or durable plan; final sanity only | Inline | none/light |
-| `quick` | `intake → orient-lite → micro-plan → plan-check-lite → produce → verify-lite → report` | One dispatch-depth-1 session; 3–4 focused plan questions and one concrete sanity check | One-shot owner; no dispatch depth 2 | quick |
+| `quick` | `intake → orient-lite → micro-plan → plan-check-lite → produce → verify-lite → report` | One dispatch-depth-1 session; 3–4 focused plan questions and one concrete sanity check | One-shot conductor; no dispatch depth 2 | quick |
 | `standard` | `intake → orient → declared framing group → synth/owner-plan → plan-check → optional verifier/planner → produce → verify → report` | Durable plan where the capability owns a work cycle; a declared framing anchor normally opens two asymmetric legs and merges them before planning | Thin conductor dispatches each durable stage as dispatch depth 2 with file-only handoff | standard |
 | `strong` | Standard plus every declared strong-tier group and an optional fix loop | Retain framing breadth and open the declared plan-committal, implementation-review, or other risk groups; a registry `width_by_intensity` may widen a high-value group to three legs | Stage dispatch plus bounded parallel-group fan-out/fan-in; exact width is route-sealed | standard/thorough |
 | `thorough` | Strong groups plus deeper synthesis/verification | A declared group may add a third implementation-risk, failure-mode, or contrarian leg; unchanged groups remain width two | The base recipe realizes only registry-declared 2–4-way siblings; composed routes may add other bounded dispatch-depth-2 perspectives | thorough |
@@ -38,8 +38,11 @@ Dispatch depth is portable route topology, not process ancestry, runtime-native
 agent nesting, or proof of registry membership. Dispatch dispatch depth 0 is user-facing
 main ownership; dispatch depth 1 owns the capability pipeline; dispatch depth 2
 serves bounded review, perspective, and pipeline-stage nodes. Direct stays inline
-at dispatch depth 0. Quick is exactly one registered-headless owner at dispatch
-dispatch depth 1 and opens no child node. Standard+ fallback attempts retain their node's
+at dispatch depth 0. Quick is semantically one registered-headless one-shot
+conductor at dispatch depth 1 and opens no child node. Its transport/schema
+compatibility identity remains `worker_type=owner`, `unit=_kernel/owner`,
+`owner_model_profile`, and `one-shot-owner`; those names do not make it a
+standard+ capability owner. Standard+ fallback attempts retain their node's
 dispatch depth even when the execution surface changes from registered headless
 to a runtime-native subagent or inline. Dispatch dispatch depth 3 or greater is forbidden.
 Resource runners and Claude agent-team teammate sessions are separate lifecycle
@@ -117,7 +120,7 @@ The portable execution profiles are:
 | `light` | Low-latency/cost production, structured checking, and broad exploration | light tier at `medium` | allowed |
 | `mini` | Lifecycle, classification, title, or explicitly micro-semantic help | mini tier at `medium` | forbidden for substantive registered dispatch-depth-1/2 owner, stage, and review nodes |
 
-`standard` owners use `balanced-deep`; `strong|thorough|adversarial` owners use `deep`; `quick` uses `light`. Node meaning and risk—not dispatch depth alone—select the profile. Route compilation seals `owner_model_profile` and every node/parallel leg `model_profile`; a caller cannot replace a sealed profile with a trailing concrete model or effort. Capacity failover may choose a checked eligible substitute while preserving and reporting the profile intent. Claude and Codex must distinguish all four mappings. An adapter without a verified effort/variant axis may collapse `balanced-deep` to `deep` only while reporting reduced profile granularity; it must not claim four-step parity.
+The `quick` one-shot conductor uses `balanced-deep`; every `standard|strong|thorough|adversarial` capability owner uses `deep`. A standard+ node that is both `kind=capability-owner` and `unit=_kernel/owner` carries that same owner budget because it owns a conductor transaction, handback, or synthesis gate. Node meaning and risk—not dispatch depth or role wording alone—select the profile, so ordinary makers, implementers, reviewers, resource runners, and parallel legs retain their task-appropriate budgets. `balanced-deep` remains the ordinary deep-judgment subordinate profile rather than collapsing into `deep`. Route compilation seals `owner_model_profile` and every node/parallel leg `model_profile`; a caller cannot replace a sealed profile with a trailing concrete model or effort. Capacity failover may choose a checked eligible substitute while preserving and reporting the profile intent. Claude and Codex must distinguish all four mappings. An adapter without a verified effort/variant axis may collapse `balanced-deep` to `deep` only while reporting reduced profile granularity; it must not claim four-step parity.
 
 Effort labels are model-relative budgets, not portable performance scores. `deep/xhigh`, `balanced-deep/deep-medium`, and `light/medium` are deliberate distinct operating points. `high|max|low` remain explicit checked overrides or fallback values, not hidden default tiers.
 

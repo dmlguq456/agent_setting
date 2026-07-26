@@ -92,9 +92,9 @@ Route-bound registered work uses a second, independent execution-budget axis:
 
 | Model profile | Claude realization | Registered topology use |
 |---|---|---|
-| `deep` | `opus` / `xhigh` | strong+ ownership, convergence, and highest-risk legs |
-| `balanced-deep` | `opus` / `medium` | standard ownership and deep-model judgment at lower coordination cost |
-| `light` | `sonnet` / `medium` | quick ownership, routine implementation, verification, reporting, and breadth legs |
+| `deep` | `opus` / `xhigh` | standard+ ownership, convergence, and highest-risk legs |
+| `balanced-deep` | `opus` / `medium` | quick one-shot conduction and subordinate deep-model judgment at lower coordination cost |
+| `light` | `sonnet` / `medium` | routine implementation, verification, reporting, and breadth legs |
 | `mini` | `haiku` / `medium` | lifecycle and micro-semantic helpers only; substantive dispatch-depth-1/2 work is rejected |
 
 The route compiler seals `model_profile`; the wrapper resolves it through `config/models.conf` and may also receive the independently sealed `model_role`. A dispatch-depth-1 `_kernel/owner` is valid with a profile and no stage `worker_mode`. Non-route jobs retain explicit role/concrete-model selection. Registered inheritance and config-declared interactive-main-only models are rejected before launch; `fable` therefore remains available only to the interactive main session, while its usage/status telemetry stays visible.

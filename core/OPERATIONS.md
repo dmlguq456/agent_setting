@@ -118,7 +118,7 @@ another.
 | Scale | Handling |
 |---|---|
 | One-off typo, one line, or `direct` work | Work directly in the main working tree |
-| Small work routed to `quick` because atomic-direct predicates are incomplete and no promotion signal is present | Registered-headless dispatch-depth-1 one-shot owner in an isolated worktree |
+| Small work routed to `quick` because atomic-direct predicates are incomplete and no promotion signal is present | Registered-headless dispatch-depth-1 one-shot conductor in an isolated worktree |
 | Work promoted to `standard+` by durable scope, shared-contract, resource, resume, verifier, or separability signals | Use a worktree and task branch from the latest base. Features, new modules, and multi-file edits always use a branch; ambiguity resolves toward a branch. Separable multi-file or feature work at `standard+` must use headless dispatch. Team delegation and inline micro-stages are limited to `quick` and genuinely microscopic stages. |
 | A new independent request while work is active | Dispatch immediately to a new worktree; do not wait for the first job |
 
@@ -136,13 +136,16 @@ Dispatch rules:
      Writes to the task worktree's `.agent_reports/**` or
      `.claude_reports/**` snapshot fail closed.
    - **Light team delegation:** open a team agent in the background and name the work root in its prompt. The main session opens QA against that same path. Use only for small, fast iterations.
-   - **Quick one-shot:** compile one dispatch-depth-1 owner and launch it only
+   - **Quick one-shot:** compile one dispatch-depth-1 conductor and launch it only
      through a checked registered-headless wrapper. Its micro-stages stay inline
      inside that worker, it opens no dispatch-depth-2 child, and any mutating
      quick job uses an isolated worktree. Unsupported or exhausted checked
      headless candidates fail as `quick-headless-unavailable` or
      `quick-registered-headless-exhausted`; quick never degrades to a native
-     subagent, teammate, interactive wrapper, or inline attempt.
+     subagent, teammate, interactive wrapper, or inline attempt. The wrapper
+     continues to encode this conductor with the compatibility owner worker
+     type and `_kernel/owner`; standard+ capability ownership is a distinct
+     semantic responsibility.
    - **Full headless ceremony:** launch an adapter-specific headless main in the worktree. It acts as a complete main for that runtime, including team roles, hooks or preflight, and plan artifacts. The adapter owns noninteractive tool and permission setup and documents its cost realization. The top-level dispatch is a dispatch-depth-1 capability owner that returns only synthesis to main.
    - At `standard+`, the dispatch-depth-1 owner is a thin conductor. It dispatches compiled `frame`, `code-plan`, `plan-check`, `code-execute`, `impl-review`, `code-test`, and `code-report` nodes as separate dispatch-depth-2 headless sessions, reads verdict/status metadata rather than stage bodies, and passes context only through files. A declared `parallel_group` replaces member-level starts with one exact `dispatch-batch --parallel-group` transaction. Before any stage, the owner verifies that the artifact root and `spec/` exist.
    - **Separability under SD-17:** dispatch is mandatory when the stage output contract is complete and its edit surface is not boundary-coupled through shared semantic anchors or sequential boundary assertions. A non-separable stage may run inline only if the reason is recorded in `plans/<slug>/_internal/metrics.md`; missing evidence is a contract violation. Parallelize separable census or independent file groups in-session. Self-modification of dispatch infrastructure additionally requires the orchestrator opt-out `STAGE_DISPATCH_INLINE_OK`.
