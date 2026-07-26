@@ -1,0 +1,102 @@
+*** Begin Patch
+*** Update File: /home/Uihyeop/agent_setting/.agent_reports/spec/stage-dispatch/prd.md
+@@
+ > · **v29 2026-07-24** (owner terminal reconciliation·canonical parent identity·공통 observed liveness·Claude deep=Opus/Fable main-only, SD-85~87)
+ > · **v30 2026-07-26** (4단계 실행 프로파일·light medium 기본·profile-sealed route·비대칭 N-way parallel group·원자 N-way batch/recovery, SD-88~89; v4 fixed 2-way 계약 supersede)
++> · **v31 2026-07-26** (App Server supervised owner의 PID-namespace 독립 exact liveness lease·경고 불변 nested Codex auth 판정, SD-90)
+ > 컴포넌트: `agent_setting` repo 의 **autopilot 파이프 디스패치 토폴로지 개정** — 각 sub-skill 스테이지(code-plan / code-execute / code-test / code-report)를 `standard+` 에서 **기본으로 별개 headless 세션**으로 분사하는 계약. 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 와 무관한 독립 청사진. 이 폴더(`spec/stage-dispatch/`)가 자체 SoT.
+@@
+ > - **공식 runtime currentness (2026-07-26 v30)**: 현재 Codex manual은 subagent별 model/effort를 달리할 수 있고 `medium`을 대부분 agent의 balanced default로, 병렬 read-heavy exploration을 유효한 출발점으로 설명하되 각 agent가 별도 token/tool work를 사용하고 write-heavy 병렬은 충돌 비용이 있음을 명시한다. Claude Code model/effort 문서는 Opus·Sonnet·Haiku alias와 모델별 effort 조절을 제공하며 effort label은 모델별로 보정된다. 따라서 portable profile 의미와 adapter별 concrete projection/검증을 분리한다.
++> - **운영 실증 (2026-07-26 v31)**: App Server supervised Codex owner `att-f71ac671244a489aade65654f0dcc499`는 outer owner/watcher PID가 tool sandbox의 PID namespace에서 보이지 않아 `process-namespace-unverifiable`→`parent-attempt-not-live`로 depth-2 spawn 0이 됐다. 같은 owner에서 `codex login status`가 먼저 성공한 뒤 선행 cleanup warning 때문에 `Logged in` first-text 검사가 실패해 `auth-unavailable`로 진동했다. 정상 owner는 이후 final envelope까지 진행했으므로 registry-open과 tool-local PID visibility를 동일시한 것이 직접 원인이다.
+@@
+-  socket, request spool, lease, fencing 또는 launch authority가 아니다. child launch는
+-  계속 dispatch contract v3 conductor direct wrapper가 소유한다. supervisor 사망은
++  socket, request spool, broker/request lease, fencing 또는 launch authority가 아니다.
++  Codex realization은 SD-90의 exact-attempt liveness flock 하나만 per-process로 보유할
++  수 있으며 이는 child launch·completion·signal 권위가 아니다. child launch는 계속
++  dispatch contract v3 conductor direct wrapper가 소유한다. supervisor 사망은
+   SD-77 exact parent-bound watcher/cascade가 처리하므로 orphan reconcile은 안전망으로
+   유지한다.
+@@
+-## 14. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
++## 13.21 v31 — supervised parent liveness and auth stability (2026-07-26)
++
++### 13.21.1 SD-90 — exact supervisor-held liveness lease
++
++- `app-server-supervised` Codex depth-1 owner는 자신의 전체 active lifetime 동안
++  canonical registry와 같은 `.dispatch/supervisor-state/<attempt_id>.lease`에
++  `flock-v1` exclusive lock 하나를 보유한다. owner row는 lease kind와 exact canonical
++  path를 봉인한다. lease는 per-process liveness evidence일 뿐 daemon, broker/request
++  lease, launch authority, completion evidence, fencing 또는 signal authority가 아니다.
++- depth-2 parent resolver는 open/current depth-1 owner의 exact PID/start를 우선한다.
++  현재 observer가 recorded PID namespace를 권위 있게 볼 수 없어 classifier가 정확히
++  `process-namespace-unverifiable`인 경우에만, 동일 row가
++  `completion_delivery=app-server-supervised`이고 attempt-derived canonical lease의
++  lock이 현재 다른 open file description에 의해 held임을 확인해 live parent로
++  인정한다. process가 quiescent/reused/zombie/gone으로 확인되거나 row가 terminal이면
++  held lease도 이를 뒤집지 않는다.
++- missing·malformed·foreign-attempt·noncanonical·symlink·unlocked lease와 stale file은
++  모두 spawn 0으로 fail-closed한다. parent identity와 lease는 claim 전, fenced child
++  spawn 뒤 gate release 전, foreground-scoped wait 동안 재검증한다. lock 해제나 row
++  closure가 관측되면 unreleased fence를 닫거나 exact direct child를 bounded teardown한다.
++- supervisor는 App Server를 시작하기 전에 lease를 획득하고 모든 success/failure/
++  protocol/auth/signal 경로의 final reconcile 이후 해제·정리한다. App Server/tool
++  subprocess는 lease fd를 상속하지 않는다. 따라서 supervisor 사망은 lock release로
++  수렴하며 file 존재만으로 parent를 되살리지 않는다.
++- Codex nested auth check는 exit code 0을 계속 요구하되 stdout/stderr의 비어 있지 않은
++  개별 line 중 `Logged in`으로 시작하는 line 하나를 인정한다. 선행 warning, stdout과
++  stderr 위치, 반복 probe 순서는 결과를 바꾸지 않는다. command output은 계정 metadata
++  누출 방지를 위해 계속 외부에 출력하지 않는다.
++
++**acceptance**: ① PID namespace 불일치+held exact lease fixture에서 parent bind와
++pre/post-spawn recheck 통과 ② unlocked/stale/foreign/symlink lease, terminal/quiescent
++parent는 row/model spawn 0 ③ wait 중 lease release는 child bounded teardown
++④ supervisor success/error/signal에서 lock release와 state/lease cleanup
++⑤ warning-prefix+valid `Logged in`은 반복 supported, nonzero/missing login은 unsupported
++⑥ 실제 App Server owner→Codex `code-plan`이 `child_spawned=1`, parent/child liveness,
++exact completion/harvest/terminal reconcile 통과 ⑦ hook trust와 OpenCode unsupported
++범위 무변, dispatch/liveness/Fleet/adaptation 회귀 0.
++
++## 14. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
+@@
+ - **v30 profile/N-way 정련**: profile vocabulary·registered mini floor·intensity별 width·leg id/output/index/profile/perspective·group route seal·N-member manifest·full-N atomic admission·N-1 peer-set recovery·required/realized diversity·depth≤2는 결정론 fixture 대상이다. 어느 node를 widen할지, 각 perspective의 의미, evidence 충돌을 어떻게 합성할지는 registry/spec와 owner의 의미 판단으로 남는다.
++- **v31 supervised liveness 정련**: exact attempt-derived lease path/kind, held-vs-free flock probe, PID-unverifiable-only fallback, terminal/quiescent precedence, pre/post-spawn 및 foreground wait 재검증, warning-independent login-line 판정은 결정론 fixture 대상이다. lease는 launch/completion/signal 권위가 아니며 OpenCode 지원 범위를 넓히지 않는다.
+ - **의미 판단 구간(사람/LLM)**: (1) 마이크로-스테이지 inline 경계 임계 — 계측 후 판정(SD-OPEN-1). (2) 스테이지 실패 시 재분사 vs 이어쓰기 판단 — conductor 의 부분 산출물 해석. (3) 산출물 계약이 "완전한가"의 판정 — 스테이지가 대화 없이 완주 가능한지. **v2 추가**: (4) SD-11 을 deny 가 아니라 reminder 로 시작 — hook 이 intensity(direct/quick 정당 fallback)를 결정론적으로 알 수 없어, 규칙화 불가 구간을 deny 로 억지 규칙화하지 않음(경계 존중). deny 상향은 계측 후. (5) SD-14(b) 피드백도 "대기 강제"가 아니라 liveness 진단→행동 분기 지시 — 죽은 스테이지 해석은 의미 판단으로 남김. **v6 추가**: headless 실패 시 native subagent 로 충분한지, 또는 inline fallback 으로 낮출지의 fallback reason 작성은 runtime 상태 해석이므로 의미 판단으로 남긴다. **v7 추가**: stage affinity와 family diversity의 품질 판단은 의미 구간이지만, 그 적용 순서와 후보 탈락 사유는 helper가 구조화한다. **v10 추가**: "산출물을 추적할 가치가 있는가"(tracking)와 "분사할 실익이 있는가"(promotion/separability)는 각각 의미 판단으로 남되, 두 판단을 하나로 동일시하지 않는 것이 SD-44의 축 분리다 — record는 판단 결과와 근거 신호만 구조화한다. **v11 추가**: eligible 후보가 여러 개일 때 role affinity·family diversity로 어느 cross-harness를 고를지와 새로운 failure class의 의미 해석은 판단 구간이지만, 지원 여부·hop 순서·row 기록은 규칙 구간이다. **v13 추가**: "스테이지 산출물이 계약상 완전한가"의 통과 판정은 conductor의 의미 판단으로 남긴다 — SD-56은 그 판단을 대체하지 않고 판단 결과를 marker로 결정론화하며, marker 부재를 실패로 해석하지 않는 것도 의미 구간의 존중이다. **v14 추가**: 무진행 worker에 대한 최종 interrupt vs 계속 대기, 그리고 재분사 시 이어쓰기/재시작 선택은 conductor 의미 판단으로 남긴다 — SD-58은 경고·차단의 발동 조건과 인정 가능한 liveness 신호 집합만 결정론화한다. capacity failover에서 "어느 대체 모델인가"의 품질 판단도 SD-22 affinity 의미 구간이며, SD-59는 재시도 횟수·cooldown·증거 기록만 규칙화한다.
+*** Update File: /home/Uihyeop/agent_setting/.agent_reports/spec/stage-dispatch/pipeline_state.yaml
+@@
+-version: 30
++version: 31
+@@
+   - '공식 runtime currentness 2026-07-26: Codex manual은 medium을 balanced agent default로, 병렬 read-heavy exploration을 유효한 용도로 설명하되 token/조정비용을 경고. Claude model/effort docs는 family alias와 model-calibrated effort를 제공하므로 portable intent와 adapter projection을 분리'
++  - '운영 실증 2026-07-26 (v31): App Server supervised owner att-f71ac671244a489aade65654f0dcc499는 tool PID namespace에서 outer PID가 보이지 않아 parent-attempt-not-live, codex login status의 선행 warning은 valid Logged in line을 가려 auth-unavailable 진동을 만들었다'
+ phases:
+-  spec: done              # PRD v30 — SD-88~89 4-profile + asymmetric N-way contract
++  spec: done              # PRD v31 — SD-90 exact supervised liveness lease + stable nested auth
+   scaffolding: deferred   # lean — 코드 skeleton 은 autopilot-code 로 이월 (§11 module 구조만 확정, wrapper 재작성 불요)
+   design: n/a             # 시각 UI 없음 (인프라 계약)
+-  dev: in_progress        # topology registry/compiler/batch/governor/profile projection 구현
++  dev: in_progress        # v30 topology/profile 구현 + v31 Codex liveness/auth 구현
+ last_updated: 2026-07-26
+ decisions_locked:
++  - 'SD-90(v31): app-server-supervised Codex owner는 canonical attempt-derived flock-v1 liveness lease를 active lifetime 동안 보유. exact PID가 namespace-unverifiable일 때만 held lock을 live-parent 보조증거로 쓰며 free/stale/foreign/symlink lease와 terminal/quiescent parent는 spawn 0. pre/post-spawn+foreground wait 재검증, login status는 warning-independent Logged in line+exit0 판정'
+   - 'SD-89(v30): registry v5 parallel_groups는 width 2~4의 ordered profile/perspective legs를 intensity별 전개하고 exact all-join N-way batch로 원자 launch/recovery한다. cross-harness는 group 전체 2+ harness이며 model-profile/perspective 비대칭을 함께 봉인, depth 3 금지'
+*** Update File: /home/Uihyeop/agent_setting/.agent_reports/spec/stage-dispatch/pipeline_summary.md
+@@
+ - successor gate, completion join, wait, fallback, governor/cleanup은 shared quiescence
+   classifier를 계속 사용한다. native subagent surface는 registered completion-delivery
+   후보가 아니므로 동작을 제한하지 않는다.
++
++## v31 update (2026-07-26) — supervised parent liveness + stable nested auth
++
++- exact owner `att-f71ac671244a489aade65654f0dcc499`는 App Server turn을 계속
++  수행하고 있었지만 tool sandbox에서 outer owner/watcher PID가 보이지 않아 depth-2
++  parent gate가 `process-namespace-unverifiable`을 사망으로 오인했다.
++- SD-90은 Codex supervisor가 exact attempt-derived `flock-v1` lease를 active lifetime
++  동안 잡도록 한다. PID evidence가 namespace-unverifiable일 때만 held lock을 보조
++  live-parent 증거로 쓰며 terminal/quiescent/PID-reuse, free/stale/foreign path는 항상
++  fail-closed한다. launch/completion/signal 권위는 추가하지 않는다.
++- nested Codex auth는 exit 0과 개별 `Logged in` line을 결합해 판정한다. 선행 cleanup
++  warning이나 stdout/stderr 위치가 supported 결과를 뒤집지 않으며 원문 출력은 계속
++  숨긴다. 구현·실증은
++  `plans/2026-07-26_codex-supervised-parent-lease-auth/`가 소유한다.
+*** End Patch

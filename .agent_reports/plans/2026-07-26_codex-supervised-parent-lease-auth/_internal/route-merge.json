@@ -1,0 +1,773 @@
+{
+  "schema_version": 2,
+  "capability": "autopilot-code",
+  "capability_mode": "dev",
+  "requested_intensity": "standard",
+  "effective_intensity": "standard",
+  "owner_model_profile": "balanced-deep",
+  "execution_topology": "staged",
+  "owner_dispatch_depth": 1,
+  "max_dispatch_depth": 2,
+  "tracking": "tracked",
+  "tracked_gate_evidence": {
+    "spec_read": {
+      "satisfied": true,
+      "source": "stage-dispatch-prd-v31"
+    },
+    "drift_verdict": "SPEC-SIGNIFICANT",
+    "workflow_mode": "tracked",
+    "artifact_guard": {
+      "satisfied": true,
+      "source": "passed:canonical-root"
+    }
+  },
+  "spec_touch": false,
+  "cwd": "/home/Uihyeop/agent_setting",
+  "artifact_root": "/home/Uihyeop/agent_setting/.agent_reports",
+  "source_commit": "78b79561b0a8e49e98574a28765c6c11bc95b81b",
+  "registry_digest": "sha256:85d67a79be93cff7fcc053e794728ddd387dc83bc88e872cbefe9f3bfde3bc7b",
+  "dispatch_defaults_digest": "sha256:87a0989b59fe101517acb48bfb0ccc27ebb78529b96a490da72299ba1038b5d9",
+  "selection": {
+    "direct_predicates": [],
+    "promotion_signals": [
+      {
+        "signal": "multi-write-scope",
+        "source": "caller"
+      },
+      {
+        "signal": "shared-contract",
+        "source": "caller"
+      }
+    ],
+    "selection_basis": [
+      {
+        "axis": "promotion",
+        "signal": "multi-write-scope",
+        "source": "caller"
+      },
+      {
+        "axis": "promotion",
+        "signal": "shared-contract",
+        "source": "caller"
+      }
+    ],
+    "escalation_basis": [
+      {
+        "signal": "multi-write-scope",
+        "source": "caller"
+      },
+      {
+        "signal": "shared-contract",
+        "source": "caller"
+      }
+    ],
+    "transport": "headless",
+    "transport_evidence": "checked-2026-07-27",
+    "inline_reason": null
+  },
+  "nodes": [
+    {
+      "id": "frame",
+      "kind": "map-worker",
+      "depends_on": [],
+      "role": "deep maker",
+      "inputs": [
+        "task",
+        "spec",
+        "source"
+      ],
+      "outputs": [
+        "shards/frame/direction-brief.md"
+      ],
+      "write_scope": [
+        "shards/frame/**"
+      ],
+      "resource_class": "normal",
+      "completion_gate": "code-frame",
+      "dispatch_depth": 2,
+      "unit": "plan/frame",
+      "model_profile": "balanced-deep",
+      "perspective": "primary-framing",
+      "parallel_group": "frame",
+      "parallel_group_kind": "explore",
+      "parallel_join_policy": "all",
+      "parallel_independence_axes": [
+        "cross-harness",
+        "model-profile",
+        "perspective"
+      ],
+      "parallel_leg_index": 0,
+      "parallel_leg_count": 2,
+      "parallel_leg_suffix": "anchor",
+      "parallel_anchor": "frame",
+      "replica_group": "frame",
+      "independence_axis": "cross-harness",
+      "fallback_hops": [
+        {
+          "ordinal": 1,
+          "fallback_hop": "same-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "codex",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-auth+headless-check",
+              "probe_time": "2026-07-26T07:55:19.699147Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "fallback_hop": "cross-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "claude",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-command-check",
+              "probe_time": "2026-07-26T07:55:20.688124Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "fallback_hop": "native-subagent",
+          "candidates": [],
+          "fleet_visibility": "degraded"
+        },
+        {
+          "ordinal": 4,
+          "fallback_hop": "inline",
+          "status": "eligible-after-prior-hop-exhaustion",
+          "reason_enum": "runtime-unavailable",
+          "fleet_visibility": "none"
+        }
+      ],
+      "harness_affinity": "codex"
+    },
+    {
+      "id": "frame-alternative",
+      "kind": "map-worker",
+      "depends_on": [],
+      "role": "deep maker",
+      "inputs": [
+        "task",
+        "spec",
+        "source"
+      ],
+      "outputs": [
+        "shards/frame/direction-brief.alternative.md"
+      ],
+      "write_scope": [
+        "shards/frame-alternative/**"
+      ],
+      "resource_class": "normal",
+      "completion_gate": "code-frame",
+      "dispatch_depth": 2,
+      "unit": "plan/frame",
+      "model_profile": "light",
+      "perspective": "cross-harness-alternative",
+      "parallel_group": "frame",
+      "parallel_group_kind": "explore",
+      "parallel_join_policy": "all",
+      "parallel_independence_axes": [
+        "cross-harness",
+        "model-profile",
+        "perspective"
+      ],
+      "parallel_leg_index": 1,
+      "parallel_leg_count": 2,
+      "parallel_leg_suffix": "alternative",
+      "parallel_anchor": "frame",
+      "replica_group": "frame",
+      "independence_axis": "cross-harness",
+      "fallback_hops": [
+        {
+          "ordinal": 1,
+          "fallback_hop": "same-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "codex",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-auth+headless-check",
+              "probe_time": "2026-07-26T07:55:19.699147Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "fallback_hop": "cross-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "claude",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-command-check",
+              "probe_time": "2026-07-26T07:55:20.688124Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "fallback_hop": "native-subagent",
+          "candidates": [],
+          "fleet_visibility": "degraded"
+        },
+        {
+          "ordinal": 4,
+          "fallback_hop": "inline",
+          "status": "eligible-after-prior-hop-exhaustion",
+          "reason_enum": "runtime-unavailable",
+          "fleet_visibility": "none"
+        }
+      ],
+      "harness_affinity": "codex"
+    },
+    {
+      "id": "plan",
+      "kind": "pipeline-stage",
+      "depends_on": [
+        "frame",
+        "frame-alternative"
+      ],
+      "role": "deep maker",
+      "inputs": [
+        "task",
+        "spec",
+        "source",
+        "shards/frame/direction-brief.md",
+        "shards/frame/direction-brief.alternative.md"
+      ],
+      "outputs": [
+        "plan.md",
+        "checklist.md"
+      ],
+      "write_scope": [
+        "plan/**"
+      ],
+      "resource_class": "normal",
+      "completion_gate": "code-plan",
+      "dispatch_depth": 2,
+      "unit": "plan/plan-author",
+      "model_profile": "balanced-deep",
+      "fallback_hops": [
+        {
+          "ordinal": 1,
+          "fallback_hop": "same-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "codex",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-auth+headless-check",
+              "probe_time": "2026-07-26T07:55:19.699147Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "fallback_hop": "cross-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "claude",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-command-check",
+              "probe_time": "2026-07-26T07:55:20.688124Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "fallback_hop": "native-subagent",
+          "candidates": [],
+          "fleet_visibility": "degraded"
+        },
+        {
+          "ordinal": 4,
+          "fallback_hop": "inline",
+          "status": "eligible-after-prior-hop-exhaustion",
+          "reason_enum": "runtime-unavailable",
+          "fleet_visibility": "none"
+        }
+      ],
+      "harness_affinity": "unspecified"
+    },
+    {
+      "id": "plan-check",
+      "kind": "review-worker",
+      "depends_on": [
+        "plan"
+      ],
+      "role": "fast reviewer",
+      "unit": "qa/plan-review",
+      "inputs": [
+        "plan.md",
+        "checklist.md"
+      ],
+      "outputs": [
+        "_internal/plan_reviews/round_1.md"
+      ],
+      "write_scope": [
+        "_internal/plan_reviews/**"
+      ],
+      "resource_class": "normal",
+      "completion_gate": "code-plan-check",
+      "dispatch_depth": 2,
+      "model_profile": "light",
+      "fallback_hops": [
+        {
+          "ordinal": 1,
+          "fallback_hop": "same-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "codex",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-auth+headless-check",
+              "probe_time": "2026-07-26T07:55:19.699147Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "fallback_hop": "cross-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "claude",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-command-check",
+              "probe_time": "2026-07-26T07:55:20.688124Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "fallback_hop": "native-subagent",
+          "candidates": [],
+          "fleet_visibility": "degraded"
+        },
+        {
+          "ordinal": 4,
+          "fallback_hop": "inline",
+          "status": "eligible-after-prior-hop-exhaustion",
+          "reason_enum": "runtime-unavailable",
+          "fleet_visibility": "none"
+        }
+      ],
+      "harness_affinity": "unspecified"
+    },
+    {
+      "id": "execute",
+      "kind": "pipeline-stage",
+      "depends_on": [
+        "plan-check"
+      ],
+      "role": "fast implementer",
+      "inputs": [
+        "plan.md",
+        "checklist.md"
+      ],
+      "outputs": [
+        "source-diff",
+        "dev_logs/**"
+      ],
+      "write_scope": [
+        "source/**",
+        "checklist.md",
+        "dev_logs/**"
+      ],
+      "resource_class": "normal",
+      "completion_gate": "code-execute",
+      "dispatch_depth": 2,
+      "unit": "dev/backend",
+      "unit_choices": [
+        "dev/backend",
+        "dev/frontend",
+        "dev/new-lib",
+        "dev/refactor"
+      ],
+      "model_profile": "light",
+      "fallback_hops": [
+        {
+          "ordinal": 1,
+          "fallback_hop": "same-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "codex",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-auth+headless-check",
+              "probe_time": "2026-07-26T07:55:19.699147Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "fallback_hop": "cross-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "claude",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-command-check",
+              "probe_time": "2026-07-26T07:55:20.688124Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "fallback_hop": "native-subagent",
+          "candidates": [],
+          "fleet_visibility": "degraded"
+        },
+        {
+          "ordinal": 4,
+          "fallback_hop": "inline",
+          "status": "eligible-after-prior-hop-exhaustion",
+          "reason_enum": "runtime-unavailable",
+          "fleet_visibility": "none"
+        }
+      ],
+      "harness_affinity": "codex"
+    },
+    {
+      "id": "impl-review",
+      "kind": "review-worker",
+      "depends_on": [
+        "execute"
+      ],
+      "role": "fast reviewer",
+      "unit": "qa/code-review",
+      "inputs": [
+        "plan.md",
+        "source-diff",
+        "dev_logs/**"
+      ],
+      "outputs": [
+        "_internal/dev_reviews/phase_review.md"
+      ],
+      "write_scope": [
+        "_internal/dev_reviews/**"
+      ],
+      "resource_class": "normal",
+      "completion_gate": "code-impl-review",
+      "dispatch_depth": 2,
+      "model_profile": "light",
+      "fallback_hops": [
+        {
+          "ordinal": 1,
+          "fallback_hop": "same-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "codex",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-auth+headless-check",
+              "probe_time": "2026-07-26T07:55:19.699147Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "fallback_hop": "cross-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "claude",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-command-check",
+              "probe_time": "2026-07-26T07:55:20.688124Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "fallback_hop": "native-subagent",
+          "candidates": [],
+          "fleet_visibility": "degraded"
+        },
+        {
+          "ordinal": 4,
+          "fallback_hop": "inline",
+          "status": "eligible-after-prior-hop-exhaustion",
+          "reason_enum": "runtime-unavailable",
+          "fleet_visibility": "none"
+        }
+      ],
+      "harness_affinity": "unspecified"
+    },
+    {
+      "id": "test",
+      "kind": "pipeline-stage",
+      "depends_on": [
+        "impl-review"
+      ],
+      "role": "fast reviewer",
+      "inputs": [
+        "plan.md",
+        "checklist.md",
+        "source-diff"
+      ],
+      "outputs": [
+        "test_logs/**"
+      ],
+      "write_scope": [
+        "test_logs/**",
+        "_internal/test_reviews/**"
+      ],
+      "resource_class": "normal",
+      "completion_gate": "code-test",
+      "dispatch_depth": 2,
+      "unit": "qa/test",
+      "model_profile": "light",
+      "fallback_hops": [
+        {
+          "ordinal": 1,
+          "fallback_hop": "same-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "codex",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-auth+headless-check",
+              "probe_time": "2026-07-26T07:55:19.699147Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "fallback_hop": "cross-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "claude",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-command-check",
+              "probe_time": "2026-07-26T07:55:20.688124Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "fallback_hop": "native-subagent",
+          "candidates": [],
+          "fleet_visibility": "degraded"
+        },
+        {
+          "ordinal": 4,
+          "fallback_hop": "inline",
+          "status": "eligible-after-prior-hop-exhaustion",
+          "reason_enum": "runtime-unavailable",
+          "fleet_visibility": "none"
+        }
+      ],
+      "harness_affinity": "diverse"
+    },
+    {
+      "id": "report",
+      "kind": "pipeline-stage",
+      "depends_on": [
+        "test"
+      ],
+      "role": "fast writer",
+      "inputs": [
+        "plan.md",
+        "checklist.md",
+        "dev_logs/**",
+        "test_logs/**"
+      ],
+      "outputs": [
+        "pipeline_summary.md",
+        "final_report.md"
+      ],
+      "write_scope": [
+        "pipeline_summary.md",
+        "final_report.md",
+        "analysis_project/code/**"
+      ],
+      "resource_class": "normal",
+      "completion_gate": "code-report",
+      "dispatch_depth": 2,
+      "unit": "editorial/report",
+      "model_profile": "light",
+      "fallback_hops": [
+        {
+          "ordinal": 1,
+          "fallback_hop": "same-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "codex",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-auth+headless-check",
+              "probe_time": "2026-07-26T07:55:19.699147Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 2,
+          "fallback_hop": "cross-harness-headless",
+          "candidates": [
+            {
+              "child_harness": "claude",
+              "failure_class": "",
+              "launch_authority": "conductor",
+              "parent_harness": "codex",
+              "parent_sandbox": "workspace-write",
+              "parent_transport": "headless",
+              "probe_source": "codex-owner-network-contract+direct-command-check",
+              "probe_time": "2026-07-26T07:55:20.688124Z",
+              "status": "supported"
+            }
+          ]
+        },
+        {
+          "ordinal": 3,
+          "fallback_hop": "native-subagent",
+          "candidates": [],
+          "fleet_visibility": "degraded"
+        },
+        {
+          "ordinal": 4,
+          "fallback_hop": "inline",
+          "status": "eligible-after-prior-hop-exhaustion",
+          "reason_enum": "runtime-unavailable",
+          "fleet_visibility": "none"
+        }
+      ],
+      "harness_affinity": "claude"
+    }
+  ],
+  "parallel_groups": [
+    {
+      "id": "frame",
+      "kind": "explore",
+      "join_policy": "all",
+      "independence_axes": [
+        "cross-harness",
+        "model-profile",
+        "perspective"
+      ],
+      "width": 2,
+      "members": [
+        "frame",
+        "frame-alternative"
+      ]
+    }
+  ],
+  "completion_gates": [
+    "code-frame",
+    "code-plan",
+    "code-plan-check",
+    "code-execute",
+    "code-impl-review",
+    "code-test",
+    "code-report"
+  ],
+  "human_gates": [],
+  "resume_retry_boundaries": [
+    "frame",
+    "plan",
+    "plan-check",
+    "execute",
+    "impl-review",
+    "test",
+    "report"
+  ],
+  "dispatch_evidence": {
+    "tuples": [
+      {
+        "child_harness": "codex",
+        "failure_class": "",
+        "launch_authority": "conductor",
+        "parent_harness": "codex",
+        "parent_sandbox": "workspace-write",
+        "parent_transport": "headless",
+        "probe_source": "codex-owner-network-contract+direct-auth+headless-check",
+        "probe_time": "2026-07-26T07:55:19.699147Z",
+        "status": "supported"
+      },
+      {
+        "child_harness": "claude",
+        "failure_class": "",
+        "launch_authority": "conductor",
+        "parent_harness": "codex",
+        "parent_sandbox": "workspace-write",
+        "parent_transport": "headless",
+        "probe_source": "codex-owner-network-contract+direct-command-check",
+        "probe_time": "2026-07-26T07:55:20.688124Z",
+        "status": "supported"
+      }
+    ],
+    "native_subagent": []
+  },
+  "dispatch_contract_version": 3,
+  "registered_headless_candidates": null,
+  "registered_headless_policy": null,
+  "unit_catalog_digest": "sha256:46672b3c16f5eec4c97112e5f85d6dfe4c51b8125349154fbc5b02f2be643d47",
+  "route_hash": "sha256:3db646da18310996be150b77809117f456a8e3e25ae46cdf227d9896a0148f7f",
+  "route_id": "rt-3db646da18310996"
+}

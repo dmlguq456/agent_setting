@@ -1,7 +1,7 @@
 project_name: stage-dispatch
 component: stage-dispatch          # autopilot 파이프 디스패치 토폴로지 개정 (repo spec/prd.md = Unified Memory System, spec/harness-layer-sync·dispatch-profiles·agent-fleet-dashboard 무관)
 created: 2026-07-10
-version: 31
+version: 30
 mode: [library, cli]              # library(스테이지 분사 계약·오케스트레이션) + cli(dispatch wrapper·jobs.log·fleet 관제) — infra
 scope_note: "dispatch_depth=0 main은 substantive tracked work의 orchestration/integration만 소유. direct=atomic main-inline, quick=registered-headless-only capability owner 1개(owner/max dispatch depth=1, child 없음), standard+=capability-specific recipe와 기존 checked fallback. v20부터 portable dispatch depth는 Codex agents.max_depth 및 runtime-native agent surfaces와 별도 namespace다."
 inputs:
@@ -47,15 +47,13 @@ inputs:
   - '공식·로컬 surface 대조 2026-07-24 (v27): Codex native subagent spawn/wait와 registered-headless App Server completion supervisor는 별도 runtime surface. native 지원을 registered parent park로 제한하지 않으며 supervised/poll readiness만 strict 유지'
   - '사용자 결정 2026-07-26 (v30): deep/xhigh → balanced-deep/deep-medium → light/medium → mini/micro의 4 profile. 분업 품질 꼬리는 cross-harness 중심 비대칭 N-way 탐색과 선택적 deep 수렴으로 보완하고 mini는 substantive depth-1/2에서 제외'
   - '공식 runtime currentness 2026-07-26: Codex manual은 medium을 balanced agent default로, 병렬 read-heavy exploration을 유효한 용도로 설명하되 token/조정비용을 경고. Claude model/effort docs는 family alias와 model-calibrated effort를 제공하므로 portable intent와 adapter projection을 분리'
-  - '운영 실증 2026-07-26 (v31): App Server supervised owner att-f71ac671244a489aade65654f0dcc499는 tool PID namespace에서 outer PID가 보이지 않아 parent-attempt-not-live, codex login status의 선행 warning은 valid Logged in line을 가려 auth-unavailable 진동을 만들었다'
 phases:
-  spec: done              # PRD v31 — SD-90 exact supervised liveness lease + stable nested auth
+  spec: done              # PRD v30 — SD-88~89 4-profile + asymmetric N-way contract
   scaffolding: deferred   # lean — 코드 skeleton 은 autopilot-code 로 이월 (§11 module 구조만 확정, wrapper 재작성 불요)
   design: n/a             # 시각 UI 없음 (인프라 계약)
-  dev: done               # v30 topology/profile + v31 Codex liveness/auth 구현·검증·main 통합 완료
+  dev: in_progress        # topology registry/compiler/batch/governor/profile projection 구현
 last_updated: 2026-07-26
 decisions_locked:
-  - 'SD-90(v31): app-server-supervised Codex owner는 canonical attempt-derived flock-v1 liveness lease를 active lifetime 동안 보유. exact PID가 namespace-unverifiable일 때만 held lock을 live-parent 보조증거로 쓰며 free/stale/foreign/symlink lease와 terminal/quiescent parent는 spawn 0. pre/post-spawn+foreground wait 재검증, login status는 warning-independent Logged in line+exit0 판정'
   - 'SD-89(v30): registry v5 parallel_groups는 width 2~4의 ordered profile/perspective legs를 intensity별 전개하고 exact all-join N-way batch로 원자 launch/recovery한다. cross-harness는 group 전체 2+ harness이며 model-profile/perspective 비대칭을 함께 봉인, depth 3 금지'
   - 'SD-88(v30): role=행동, model_profile=실행 budget의 별도 축. deep xhigh / balanced-deep deep-medium / light medium / mini medium이며 standard owner=balanced-deep, strong+=deep. registered substantive depth-1/2 mini는 fail-closed, OpenCode profile 축약은 parity로 가장하지 않음'
   - 'SD-87(v29): primary/linked worktree는 canonical repository identity를 공유하되 exact worktree/attempt/PID 조건을 유지한다. Fleet/park/wait/fallback은 공통 observed-liveness를 소비하고 read-only Fleet는 stale-open을 숨기거나 mutation하지 않는다'

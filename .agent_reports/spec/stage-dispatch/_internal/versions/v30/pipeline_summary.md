@@ -12,13 +12,6 @@ N-way는 모든 node의 무조건 fan-out이 아니다. registry가 위험·불�
 batch/governor는 exact N을 원자 admit하며 단일 missing-leg 복구도 N-1 peer-set 증거를
 요구한다. implementation cycle은 `plans/2026-07-26_topology-nway-profiles/`이다.
 
-v30 구현 범위는 registry/compiler부터 N-way batch·governor·completion join, 세 adapter
-profile projection, Fleet 표시까지 완료됐다. strong route 실컴파일은 `frame=3`,
-`plan=2`, `impl-review=2`의 비대칭 profile leg를 봉인했고 focused·portable·generated 및
-isolated Fleet 회귀 검사를 통과했다. main 통합 후 topology 집중 356건과 runtime
-projection도 통과했다. 이 완료 기록은 동시에 진행 중인 v31 liveness/auth 상태를
-변경하지 않는다.
-
 ## v29 update (2026-07-24) — owner terminal/model/liveness convergence
 
 종료된 supervised owner의 exact row를 final envelope와 process exit로 즉시 typed
@@ -343,20 +336,3 @@ v18 구현 사이클에서 SD-69~71을 source와 deterministic fixtures로 닫�
 - successor gate, completion join, wait, fallback, governor/cleanup은 shared quiescence
   classifier를 계속 사용한다. native subagent surface는 registered completion-delivery
   후보가 아니므로 동작을 제한하지 않는다.
-
-## v31 update (2026-07-26) — supervised parent liveness + stable nested auth
-
-- exact owner `att-f71ac671244a489aade65654f0dcc499`는 App Server turn을 계속
-  수행하고 있었지만 tool sandbox에서 outer owner/watcher PID가 보이지 않아 depth-2
-  parent gate가 `process-namespace-unverifiable`을 사망으로 오인했다.
-- SD-90은 Codex supervisor가 exact attempt-derived `flock-v1` lease를 active lifetime
-  동안 잡도록 한다. PID evidence가 namespace-unverifiable일 때만 held lock을 보조
-  live-parent 증거로 쓰며 terminal/quiescent/PID-reuse, free/stale/foreign path는 항상
-  fail-closed한다. launch/completion/signal 권위는 추가하지 않는다.
-- nested Codex auth는 exit 0과 개별 `Logged in` line을 결합해 판정한다. 선행 cleanup
-  warning이나 stdout/stderr 위치가 supported 결과를 뒤집지 않으며 원문 출력은 계속
-  숨긴다. 구현·실증은
-  `plans/2026-07-26_codex-supervised-parent-lease-auth/`가 소유한다.
-- 2026-07-27 main 통합 전 lease/auth/wrapper/topology 핵심 회귀 113건과
-  generated-projections 29건을 재검증했고 모두 통과했다. 기능 커밋은 current main에
-  fast-forward로 통합했으며 다른 primary artifact 변경은 포함하지 않았다.

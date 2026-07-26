@@ -1,0 +1,4 @@
+{"action": "latest-reread", "next_version": 30, "route_id": "rt-8f33b2f2a1b53faf", "status": "acquired", "waited": false}
+{"result": 65, "route_id": "rt-8f33b2f2a1b53faf", "status": "released", "version": 30}
+{"action": "latest-reread", "next_version": 30, "route_id": "rt-8f33b2f2a1b53faf", "status": "acquired", "waited": false}
+{"result": 0, "route_id": "rt-8f33b2f2a1b53faf", "status": "released", "version": 30}
