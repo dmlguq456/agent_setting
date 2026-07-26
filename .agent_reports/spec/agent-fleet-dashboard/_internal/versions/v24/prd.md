@@ -10,7 +10,6 @@
 > · **v22 hotfix 2026-07-23** (분사 attempt-owned Claude stream의 Agent lifecycle을 dispatch 행에 직접 연결하고 exact child-session association을 fallback으로 사용; dispatch context는 계속 미수집·미표시)
 > · **v23 hotfix 2026-07-24** (dispatch mode-axis projection — capability mode와 worker mode/unit 분리, owner stage-persona 표시·bootstrap 오염 차단, F-40)
 > · **v24 correction 2026-07-25** (live TUI repo 그룹 정렬 — 현재 activity tier를 매 tick 우선 적용하고, 빠른 위치 교환 방지는 같은 tier 안의 survivor anchor에만 적용)
-> · **v25 correction 2026-07-27** (route completion reconciliation — exact terminal 관측 뒤 completion marker를 기다리는 노드를 실패 `✕`와 분리해 `reconciling`/`…`로 표시, gate·progress는 계속 미완료)
 > 컴포넌트: `agent_setting` repo 의 **별도 내부 도구** — 기존 `spec/prd.md`(Unified Memory System)와 무관, 이 폴더(`spec/agent-fleet-dashboard/`)가 자체 청사진.
 > 입력(1순위 근거): `research/agent-fleet-dashboard/00_prior_art.md`(build-vs-adopt·herdr·렌더스택) · `research/agent-fleet-dashboard/01_tap_mechanics.md`(하네스별 tap·discovery·liveness, file-cited)
 > **v2 추가 입력**: `spec/stage-dispatch/prd.md`(SD-1~9 — 스테이지 단위 depth-2 headless 분사 계약, §9-13 fleet 표시 = Phase 2 잔여) · 현행 `tools/fleet/` 코드 전수 실측(2026-07-10 Explore, file:line-cited) · 사용자 관찰("워크플로우를 못 따라감 + UI 아쉬운 점 다수").
@@ -331,7 +330,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 - **F-30 (처리-과정 뷰 — 전용 모드, 설계 확정)**:
   - **진입**: 전용 키 `p`(process) 토글 — 기존 `w` 레이아웃 cycle과 직교(그룹 뷰 ↔ 과정 뷰 전환). footer 키 바에 표기. 비대화식 투영 = `--view {group,process}` CLI 플래그 + `FLEET_VIEW` env — `p` 토글과 같은 전역 상태 하나를 공유하며 별도 코드 경로를 만들지 않는다(v10 구현이 3폭 캡처·디자인 비평 등 비대화식 검증용으로 추가, 2026-07-16 사용자 확정 minor).
   - **단위**: 카드 1장 = 활성 route 1개 (프로젝트 그룹 대신 파이프라인 중심 재그룹).
-  - **카드 구성**: L1 = `[capability·mode·intensity] <route_id 단축> — <n/m nodes> ⏳<경과>`; L2 = DAG 가로 흐름 `plan ✓12m › exec ● 8m (opus·high) › test ○ › report ○` — 노드별 상태 글리프(✓ 완료 / ● 활성+경과+모델 / ○ 미기동 / `…` completion-marker 조정 대기 / ✕ 실패)와 completion gate 통과 여부. `depends_on`이 병렬인 노드는 세로 분기(들여쓴 병렬 행)로.
+  - **카드 구성**: L1 = `[capability·mode·intensity] <route_id 단축> — <n/m nodes> ⏳<경과>`; L2 = DAG 가로 흐름 `plan ✓12m › exec ● 8m (opus·high) › test ○ › report ○` — 노드별 상태 글리프(✓ 완료 / ● 활성+경과+모델 / ○ 미기동 / ✕ 실패)와 completion gate 통과 여부. `depends_on`이 병렬인 노드는 세로 분기(들여쓴 병렬 행)로.
   - **gate 통과 증거 소스 (2026-07-16 확정, v10 minor #2 — 재개 조건 충족)**: v10 구현은 통과 증거 부재로 정직 결손(`—`) 처리했다(carryover §1). stage-dispatch v13(SD-56)이 canonical marker `.dispatch/<agent-home 기준>/completion/<route_id>/<node_id>.json`을 실사용으로 착륙시켜 재개 조건이 충족됐다. 판정 규칙: **marker 존재 + record의 route_id/route_hash 일치 = 통과**(별도 gate 표식, 상태 글리프와 독립 차원). marker 부재 = "무주장"(실패·미통과로 표시 금지, F-28 tolerant 원칙 불변). read-only, mtime 캐시, 이력 파일 중 최신만 authoritative.
   - **자식 연결**: 활성 노드 아래 그 노드를 실행 중인 세션 행(축약형)과 그 서브에이전트 `└⚡`(F-29 재사용)를 중첩 — "누가 지금 어느 단계를 어떤 모델로" 한눈에.
   - **마우스**: 노드/카드 클릭 = 접기·펼치기, 세션 축약행 클릭 = 선택(F-27 문법 재사용). 완료 route는 기본 1행 접힘, 실패 노드 포함 route는 자동 펼침 + 적색 강조.
@@ -430,32 +429,6 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 depth-2 row는 `capability_mode=dev`, `worker_mode=unit=plan/plan-author`를 JSON에 별도
 보존하며 중복 knob 0회, legacy owner slash mode는 conflict로 분류, old scalar rows와
 public JSON consumer 회귀 0, mirror parity 통과.
-
-## 4.14 [v25 신설] route completion reconciliation projection — F-41
-
-- **F-41a (판정 경계)**: open attempt의 Fleet liveness가 `stale`이더라도
-  `state_evidence.attempt`가 단일 classifier의 exact
-  `shared-observer` 판정이고 그 `observed_liveness.state`가
-  `reconcile-needed`이면 route node는 `failed`가 아니라 `reconciling`이다. 단순
-  stale/dead, pid 종료, killed/cancelled, fail-note는 계속 `failed`다. 문자열 note나
-  top-level stage 이름만으로 이 상태를 합성하지 않는다.
-- **F-41b (완료·gate 독립)**: `reconciling`은 terminal output 관측과 completion marker
-  사이의 중간 상태다. `done` progress에 포함하지 않고 `gate_passed`를 만들지 않으며
-  successor도 열지 않는다. 유효 marker가 생기면 기존 marker 우선순위로 `done`이
-  되고, marker 없이 실제 실패 증거가 우세하면 `failed`다.
-- **F-41c (표시)**: breadcrumb와 stage detail은 yellow `…`, process L2는
-  `…gate`로 표시한다. `✕`·적색 failed alert·실패 자동 펼침은 실제 실패에만 쓴다.
-  public route JSON은 node `state=reconciling`을 그대로 노출하고 completion/gate
-  필드는 기존 의미를 유지한다.
-- **F-41d (병렬 집계)**: 병렬 그룹 상태 우선순위는
-  `failed > active > reconciling > done/pending fallback`이다. 한 leg가 조정 대기라는
-  이유만으로 그룹을 실패로 만들지 않되, 다른 leg의 실제 실패를 숨기지 않는다.
-
-**acceptance**: BC_ResNet_tf에서 관찰된 exact
-`terminal-observed/reconcile-needed` shape는 marker 전 `reconciling`+`…`+progress
-미증가, marker 후 `done`으로 전이한다. 동일 `stale`이라도 exact reconciliation
-증거가 없는 fixture는 `failed`+`✕`를 유지한다. group/process 및 wide/narrow/stack,
-parallel collapse, public JSON, canonical↔Claude mirror가 같은 상태를 보존한다.
 
 ## 5. 능동 변경 — fleet-owned local state write
 
@@ -652,17 +625,11 @@ flowchart TD
   capability mode로 표시하지 않는다. depth-2 worker mode는 unit/contract 라벨과
   중복 렌더하지 않고 JSON evidence로만 보존한다.
 
-## 확정 결정 (v25 승격, 2026-07-27 — route completion reconciliation)
+## Next — current v16 implementation handoff (`autopilot-code`)
 
-- **F-41 lock**: exact shared-observer `reconcile-needed`만 route node
-  `reconciling`으로 투영하고 yellow `…`/`…gate`로 표시한다. 이 상태는 완료·gate
-  통과·successor 개방을 주장하지 않으며 generic stale/dead 실패는 계속 `✕`다.
+1. `projection.py`와 additive model/JSON을 추가하고, exact route/registry evidence → ambiguity refusal → route-부재 단일 artifact stage 순서의 `WorkProjection` resolver를 구현한다.
+2. sealed arbitrary DAG의 opaque node/unit/gate/scope, parallel sibling, fan-in을 group/process/plain/JSON에 공통 투영한다.
+3. wide의 `harness | session (branch) | stages | time` 4칼럼, 각 경계 +1 cell, 빈 stage `-`와 narrow/stack의 동일 branch·stage placeholder 문법을 구현한다. interactive identity 아래에는 session 열에 맞춘 콜론 없는 `context <gauge> …[   NOW]` row를 둔다. dispatch는 context 없이 NOW만 같은 열에 두며 title/NOW만 단일 child association으로 공급한다. dim 퍼센트, 현행 TITLE 3~6단어·최대 40자 및 F-39의 3/4 concurrency·4 starts/60s·600/150s 계약은 유지한다.
+4. §4.12 acceptance matrix, canonical↔Claude mirror parity, public JSON compatibility를 hermetic fixture/fake clock으로 검증한다. default/custom live provider 호출과 실세션 spawn/signal은 금지한다.
 
-## Next — current v25 implementation handoff (`autopilot-code`)
-
-1. `route.py`가 exact shared-observer reconciliation evidence만 `reconciling`으로
-   분류하고 marker/generic-failure 우선순위를 보존한다.
-2. `render.py`의 breadcrumb, DAG detail, process L2, parallel collapse에 yellow
-   `…`/`…gate`를 적용한다.
-3. exact positive/negative fixture, marker 전이, 병렬 집계, JSON 및 mirror parity를
-   hermetic regression으로 고정한다. live registry 변이는 금지한다.
+권장 진입: `/autopilot-code --mode dev --intensity strong "agent-fleet-dashboard PRD v16 F-36~F-39 구현 및 §4.12 검증"`. v6/v8/v9/v10 및 v2의 이전 구현 순서는 위 version history와 pipeline summary에 보존된 **완료·대체된 역사**이며 현재 실행 지시가 아니다.

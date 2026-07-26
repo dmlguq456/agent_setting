@@ -1,5 +1,19 @@
 # agent-fleet-dashboard — Spec Pipeline Summary
 
+## 2026-07-27 · v25 route completion reconciliation
+
+BC_ResNet_tf의 frame depth-2 workers가 terminal output을 남긴 뒤 owner의 exact
+completion marker를 기다리는 짧은 구간에서 Fleet가 route node를 실패 `✕`로
+표시하는 오해를 바로잡는다.
+
+- exact shared-observer `reconcile-needed`만 새 route state `reconciling`으로 투영한다.
+- marker 전에는 progress·gate·successor를 움직이지 않고, generic stale/dead/killed는
+  계속 실제 실패로 유지한다.
+- group/process 표시는 yellow `…`(process L2 `…gate`)를 사용하며 병렬 그룹의 실제
+  실패가 있으면 실패가 계속 우선한다.
+- 구현은 `plans/2026-07-27_fleet-route-reconcile-state/`에서 진행하며 live registry를
+  변이하지 않는 hermetic fixture와 canonical/Claude mirror parity로 검증한다.
+
 ## 2026-07-25 · v24 live repo ordering correction
 
 v13의 run-local anchor가 repo 그룹 전체 순서를 고정해, idle repo보다 아래에 있던
