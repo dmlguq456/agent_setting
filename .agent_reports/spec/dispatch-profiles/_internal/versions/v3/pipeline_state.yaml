@@ -2,25 +2,21 @@ project_name: dispatch-profiles
 component: dispatch-profiles      # 별도 컴포넌트 (repo spec/prd.md = Unified Memory System, 무관)
 created: 2026-07-02
 mode: [cli]
-scope_note: "v4는 typed bootstrap을 유지하면서 model_role(행동)과 route-sealed model_profile(실행 budget)을 분리한다. substantive registered topology는 mini를 거부하고 adapter별 profile granularity를 정직하게 보고한다."
+scope_note: "v2는 config-home 부분 투영을 유지하면서 L0 blanket core read를 폐기한다. worker 입력은 minimal kernel+one worker_type+assigned contract+specialization이고, runtime 자동 instruction 상속은 masking 한계로 분리한다."
 inputs:
   - research/cross-platform-agent-setting/00_overview.md   # gsd-core capability 매니페스트·installer 선행 사례
   - 세션 실측 2026-07-02: CLAUDE_CONFIG_DIR (마커 CLAUDE.md 로드·credentials 심링크 auth·상태 격리 3중 확인)
   - repo 현황 조사: codex dispatch-headless.py / jobs.log 6필드 스키마 / roles·capabilities·projection 규약
-  - '사용자 결정 2026-07-26: deep/balanced-deep/light/mini 4 profile, light medium 기본, mini는 micro-semantic only, topology N-way leg가 model/harness/tier 비대칭을 봉인'
 phases:
-  spec: done              # PRD v4 model-profile tuple amendment
+  spec: done              # PRD v2 typed worker-bootstrap amendment
   scaffolding: n/a        # autopilot-code 가 v1 에서 직접 완성 (templates+profiles 포함)
   design: n/a             # 터미널 도구 — 시각 UI 없음
-  dev: done               # route-sealed profile resolution + three adapter projection
-  verification: done     # override/mini/granularity + boundary/runtime checks PASS
-spec_version: v4
+  dev: done               # typed dispatcher/profile realization
+  verification: done     # profile checks + three dispatchers + boundary + footprint PASS
+spec_version: v3
 result: GREEN
-last_updated: 2026-07-26
+last_updated: 2026-07-16
 decisions_locked:
-  - 'DP-22: Claude/Codex는 4 profile을 구분; OpenCode balanced-deep 축약은 reduced granularity로 보고하고 parity로 표시하지 않음'
-  - 'DP-21: registered substantive owner/stage/review model_profile=mini는 prompt/row/spawn 전에 fail-closed'
-  - 'DP-20: model_role=behavior, model_profile=execution budget. route-bound tuple은 둘을 함께 봉인하고 trailing model/effort override를 거부'
   - 'DP-19: owner bootstrap = kernel + owner type + capability contract + _kernel/owner, worker specialization absent; stage/dev/qa persona injection is invalid'
   - 'DP-18: capability_mode and non-owner worker_mode/unit are independent registry, environment, and prompt axes'
   - DP-1: 마스킹 = 심링크 부분 투영, 내용 fork 금지 (조립 bootstrap 만 생성 파일)

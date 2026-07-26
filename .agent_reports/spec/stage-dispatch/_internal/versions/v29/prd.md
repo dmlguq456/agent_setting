@@ -16,7 +16,6 @@
 > · **v27 2026-07-24** (completion-delivery 범위별 parent park — interactive registry-open 보호와 supervised/poll successor-readiness 분리, terminal-unverifiable 전역 교착 복구, SD-83)
 > · **v28 2026-07-24** (owner dispatch mode-axis 분리 — capability mode와 depth-2 worker unit/persona의 독립 필드·owner 모순 조합 fail-closed, SD-84)
 > · **v29 2026-07-24** (owner terminal reconciliation·canonical parent identity·공통 observed liveness·Claude deep=Opus/Fable main-only, SD-85~87)
-> · **v30 2026-07-26** (4단계 실행 프로파일·light medium 기본·profile-sealed route·비대칭 N-way parallel group·원자 N-way batch/recovery, SD-88~89; v4 fixed 2-way 계약 supersede)
 > 컴포넌트: `agent_setting` repo 의 **autopilot 파이프 디스패치 토폴로지 개정** — 각 sub-skill 스테이지(code-plan / code-execute / code-test / code-report)를 `standard+` 에서 **기본으로 별개 headless 세션**으로 분사하는 계약. 기존 `spec/prd.md`(Unified Memory System)·`spec/harness-layer-sync/`·`spec/dispatch-profiles/`·`spec/agent-fleet-dashboard/` 와 무관한 독립 청사진. 이 폴더(`spec/stage-dispatch/`)가 자체 SoT.
 > 입력(1순위 근거):
 > - **사용자 승인 결정 (2026-07-20 v20)**: `effective_intensity=quick` 인 모든 route는 registered headless worker session만 사용한다. `native-subagent`, `inline-fallback`, interactive/empty, unknown/arbitrary surface는 compile 단계에서 fail-closed이며 dispatch depth로 이름 붙이지 않는다. `direct` inline과 `standard+` fallback은 유지한다. portable nesting은 `dispatch_depth`/`max_dispatch_depth`로 한정하고 Codex `agents.max_depth`와 분리한다. Claude subagent, Claude agent-team teammate session, registered headless worker session을 구별하며 multi-capability composition은 추가하지 않는다.
@@ -27,8 +26,6 @@
 > - **사용자 결정 (2026-07-14 v8 확정)**: agent 산출물은 task worktree에 쓰지 않는다. worker는 main checkout의 canonical artifact root만 읽고 쓰며, main/orchestrator는 merge·통합 검증·push를 증명한 뒤 안전 조건을 모두 통과한 worktree를 자동 정리한다. runtime 종료 hook은 정리 권위자가 아니다.
 > - **공식 Codex 근거 (2026-07-13 확인 시도)**: OpenAI Codex manual `https://developers.openai.com/codex/codex-manual.md#execution-model-and-workflows` / Subagents 섹션은 subagent workflow 가 noisy work 를 main thread 밖으로 옮겨 context pollution 을 줄이고, 병렬 read-heavy 작업에 유용하지만 write-heavy 병렬은 충돌·조정비용 주의가 필요하며 각 subagent 가 자체 model/tool work 를 하므로 single-agent 대비 token 을 더 쓴다고 설명한다. skill helper 는 `x-content-sha256` 헤더 누락으로 실패했으나 `/tmp/openai-docs-cache/codex-manual.md` 에서 해당 공식 manual 섹션을 확인했다.
 > - **공식 모델 currentness 근거 (2026-07-13 확인)**: OpenAI Models 문서는 최신 권장 시작점으로 GPT-5.6 Sol을 복잡한 reasoning/coding에 안내하고 exact model ID=`gpt-5.6-sol`, API alias=`gpt-5.6`으로 게시한다. 단 API alias 게시와 Codex ChatGPT runtime 허용 ID는 별도 표면이다. parent 실측에서 Codex ChatGPT surface는 `gpt-5.6` alias를 거부했고 이 환경은 exact `gpt-5.6-sol`을 지원했다. 따라서 adapter는 현재 runtime에 exact ID를 probe한 뒤 성공한 ID만 선택하고, 실패 시 다음 eligible 후보로 깨끗하게 fallback해야 한다.
-> - **사용자 결정 (2026-07-26 v30)**: 분업과 낮은 effort가 만드는 품질 꼬리를 병렬 다양성으로 보완한다. 2-way를 topology의 특수 규칙으로 두지 않고 bounded N-way fan-out/fan-in으로 일반화하며, cross-harness를 중심축으로 다른 모델/티어/관점의 비대칭 탐색을 함께 봉인한다. mini는 결정론으로 처리하기 애매한 micro-semantic helper만 담당하고 substantive depth-1/2 topology에는 쓰지 않는다.
-> - **공식 runtime currentness (2026-07-26 v30)**: 현재 Codex manual은 subagent별 model/effort를 달리할 수 있고 `medium`을 대부분 agent의 balanced default로, 병렬 read-heavy exploration을 유효한 출발점으로 설명하되 각 agent가 별도 token/tool work를 사용하고 write-heavy 병렬은 충돌 비용이 있음을 명시한다. Claude Code model/effort 문서는 Opus·Sonnet·Haiku alias와 모델별 effort 조절을 제공하며 effort label은 모델별로 보정된다. 따라서 portable profile 의미와 adapter별 concrete projection/검증을 분리한다.
 > - **로컬 runtime 근거 (parent 검증 완료, 2026-07-13)**: Codex native subagent check ok, strict headless projection restored/check ok, quick depth-1 dispatch dry-run accepted, quick depth-2 remains forbidden.
 > - research `.agent_reports/research/cross-platform-agent-frameworks/` — `analysis_summary.md` §4-(8)(fresh-context-per-agent + file-state 지배 관용구), `cards/gsd.md`(fresh-context subagent per stage·`.planning/` file-state·two-stage routing·size-budget), `06_implementation.md`(파일-복제 회피·parity 정직성).
 > - 운영 실증 (2026-07-10, 이 결정의 직접 계기): ① in-session Task 서브에이전트 = jobs.log 미등록 → fleet 관제에 스테이지 진행 불가시 ② in-session 서브에이전트는 hook ceremony(가드·spec 게이트) 미수령 ③ owner 단일 세션 = 스테이지 누적 컨텍스트 비대.
@@ -283,7 +280,7 @@ pilot 부수발견 ②: 스테이지 세션도 SessionEnd 에 mem curator(distil
   - **특성 보완 (강점 배치)**: 작업 특성별 하네스/모델 적합성 배치 — CONVENTIONS §2 role 매핑의 하네스별 실현 + 검증·리뷰 자리는 **타 모델 계열 교차**(다른 실패 모드 = 리뷰 다양성 이득, codex-review-team 선례)를 우선 후보로. 같은 사이클 안에서 maker 하네스와 checker 하네스를 다르게 두는 조합을 정규 옵션화.
   - 계약 자리 = OPERATIONS §5.10 ⑦ 확장 + dev-pipeline 등 파이프 스테이지 분사 절.
 - (c) **관제·계측**: cross-harness row 는 기존 `harness=`/`owner_harness=`/`parent_sid` 표기로 fleet 연속성 유지. harness 별 분사 분포·limit 회피 이벤트·교차 리뷰 조합을 계측에 기록.
-- (d) **thorough+ 동시성 검증** (사용자 확인 요청): 현행 계약은 thorough/adversarial 에서 depth-1 owner 가 **다축 depth-2 perspective/verifier/adversary 워커**를 열도록 명시(WORKFLOW §1.1·OPERATIONS §5.10 ④)하고 동시 상한 ⑤ 가 "동시 분사"를 전제하나, **다축 워커의 병렬 실행이 실측 검증된 적은 없다**(Phase 1·2 사이클은 strong — 단일 리뷰). 검증 항목: thorough 사이클에서 다축 워커가 실제 동시 jobs.log row 로 뜨는지 + Σ 상한 계산 준수 + dispatch-wait 의 다중 자식 대기 의미론. 
+- (d) **thorough+ 동시성 검증** (사용자 확인 요청): 현행 계약은 thorough/adversarial 에서 depth-1 owner 가 **다축 depth-2 perspective/verifier/adversary 워커**를 열도록 명시(WORKFLOW §1.1·OPERATIONS §5.10 ④)하고 동시 상한 ⑤ 가 "동시 분사"를 전제하나, **다축 워커의 병렬 실행이 실측 검증된 적은 없다**(Phase 1·2 사이클은 strong — 단일 리뷰). 검증 항목: thorough 사이클에서 다축 워커가 실제 동시 jobs.log row 로 뜨는지 + Σ 상한 계산 준수 + dispatch-wait 의 다중 자식 대기 의미론.
 - **한도 비대칭 기본값** (사용자 제공 2026-07-10, minor): 현행 가정 = **Claude Code 한도 > Codex 한도** → 기본 배분 = Claude 주력(주 파이프·대량 스테이지), Codex 보완(교차 리뷰·failover·특성 적합 자리에 우선 소비 — 낮은 한도를 고가치 자리에 아껴 씀). 단 **이 비대칭은 향후 바뀔 수 있는 가변 전제** — 코드에 하드코드 금지, 이름 있는 설정값(정책 파일/명시 상수, 예: `dispatch-policy` 의 `harness_capacity_bias`)으로 선언해 한 자리 수정으로 뒤집을 수 있게 한다.
 - **SD-OPEN-3 (미결)**: 보완 정책의 정확한 가중("limit 회피 > 특성 적합 > 분산" 초기 보수 정책, 위 한도 비대칭 기본값 반영) — 편중·교차 리뷰 효과는 계측 누적 후 조정.
 
@@ -1600,75 +1597,6 @@ foreign repo·slug/attempt 혼용 거부 ⑤ PID-gone stale-open fixture에서 F
 fallback observed state 일치, Fleet mutation 0 ⑥ Claude/Codex supervisor·wrapper·Fleet·
 liveness/adaptation 회귀 0.
 
-## 13.20 v30 — profile-sealed asymmetric N-way topology (2026-07-26)
-
-### 13.20.1 SD-88 — 네 단계 실행 프로파일과 역할/프로파일 축 분리
-
-- portable 실행 프로파일은 품질·지연·비용 의도를 나타내는 `deep`,
-  `balanced-deep`, `light`, `mini` 네 단계다. model role은 작업 행동과 책임을,
-  model profile은 concrete model tier와 effort/variant budget을 소유한다. 역할 이름으로
-  topology의 실제 모델을 역추측하지 않는다.
-- 기본 intent는 `deep = deep tier/xhigh`, `balanced-deep = deep tier/medium`,
-  `light = light tier/medium`, `mini = mini tier/medium`이다. high/max/low는 route가
-  별도로 봉인하거나 capacity/fallback 정책이 증거와 함께 선택하는 override이며 새
-  기본 tier가 아니다. effort label은 vendor/model 간 절대 성능 척도가 아니므로 adapter가
-  current runtime을 검증해 대응한다.
-- 표준 owner는 `balanced-deep`, strong+ owner와 critical frame/plan/security anchor는
-  `deep`을 사용한다. 일반 구현·정형 검토·test/report는 `light`가 기본이며 위험/불일치가
-  확인될 때 `balanced-deep` 또는 `deep`으로 승급한다. depth 자체가 profile selector는
-  아니고 node 의미·위험·intensity가 선택한다.
-- registered depth-1/2 substantive topology는 `mini`를 fail-closed한다. mini는 lifecycle,
-  분류, 짧은 의미 판정처럼 main이 소유하는 micro-semantic helper에만 허용한다.
-- topology compiler는 owner와 모든 realized node에 `model_profile`을 hash-seal한다.
-  route-bound dispatch는 이 profile과 portable role을 함께 adapter에 전달하며 trailing
-  concrete model/effort로 조용히 바꿀 수 없다. 비-topology legacy/direct surface의 명시
-  선택은 기존 자격 검증을 유지한다.
-- Claude/Codex는 4개 profile을 실제 model+effort 조합으로 구분한다. OpenCode가 검증된
-  effort/variant 축을 제공하지 못하면 `balanced-deep -> deep`으로 명시 축약하고
-  `profile_granularity=collapsed`를 보고한다. 축약을 4단계 parity로 표시하지 않는다.
-
-### 13.20.2 SD-89 — registry v5 parallel group과 원자 N-way batch
-
-- registry `schema_version: 5`는 `replications`를 `parallel_groups`로 대체한다.
-  group은 `{id,node,kind,min_intensity,width_by_intensity,join_policy,
-  independence_axes,legs}`를 선언한다. kind 어휘는
-  `replicate|explore|adversarial|verify`, join은 현재 `all`, width는 2~4다. 네 번째
-  leg까지인 이유는 기본 governor cap 5에서 owner 1 + siblings 4를 원자 admit하기
-  위해서다.
-- `legs`는 순서가 고정된 `{suffix,perspective,model_profile}` 배열이다. 첫 leg는 원래
-  node id를 유지하고 나머지는 `<node>-<suffix>`가 된다. compiler는 실제 intensity의
-  width만큼 전개하고 모든 leg의 index/profile/perspective/group metadata, disjoint output,
-  downstream depends_on/inputs를 결정론적으로 봉인한다.
-- `cross-harness` independence는 모든 leg가 서로 다른 harness라는 뜻이 아니라 group
-  전체가 지원 harness 둘 이상을 포함한다는 뜻이다. N이 harness 수보다 클 때 나머지
-  leg는 다른 `model-profile` 또는 `perspective`로 상관된 실패를 줄인다. 요구 축과 실제
-  달성 축을 batch receipt/manifest에 따로 기록하고, auto-selected cross-harness 불가 시
-  typed degradation만 허용한다.
-- autopilot-code framing은 standard에서 `balanced-deep anchor + light cross-harness
-  alternative`, strong+에서 `deep contrarian`을 추가한다. strong plan은
-  `deep anchor + balanced-deep alternative`, thorough+에서 `light implementation-risk
-  scout`를 추가한다. strong implementation review는 `balanced-deep + light`,
-  thorough+에서 `deep failure-mode`를 추가한다. 다른 capability의 기존 pair는 같은
-  primitive의 width 2로 이관하되 자동 확장하지 않는다.
-- `dispatch-batch`는 route가 선언한 exact N members를 한 manifest로 seal하고 governor
-  lock 한 번에서 full-N slot을 원자 예약한다. 부족하면 row/model spawn 0이다. wrapper는
-  leg별 opaque reservation을 claim하고 동시에 시작한다. 안정 attempt의 단일 missing-leg
-  recovery는 나머지 N-1 member가 active 또는 completed임을 canonical peer-set proof로
-  모두 증명할 때만 허용하며, 2-way singular peer proof는 schema-v1 read compatibility다.
-- 모든 N-way child는 같은 depth-1 owner의 depth-2 sibling이다. worker가 fan-out하거나
-  depth 3을 만들 수 없다. exact group join 뒤 owner가 합성하거나 후속 depth-2 reducer를
-  시작한다. 다수결은 기본 merge가 아니며 artifact 주장·근거·실패 조건과 provenance를
-  reducer가 비교한다.
-
-**acceptance**: ① registry v5가 malformed width/profile/leg/axis/mini를 launch 전 거부
-② standard/strong/thorough route가 각각 선언된 2/3/N leg와 disjoint output·downstream
-wiring을 결정론적으로 seal ③ owner/node/leg profile override 불가, Claude/Codex
-profile resolution과 OpenCode 축약 보고 동형 ④ full N capacity 부족 시 row/model 0,
-충분 시 exact N concurrent wrapper starts ⑤ one-missing recovery는 exact N-1 peer-set
-proof 없으면 spawn 0 ⑥ cross-harness+profile diversity와 typed degradation receipt
-⑦ depth 3·substantive mini·parallel write-scope overlap 0 ⑧ 기존 width-2 group, route,
-supervisor, Fleet, fallback, projection 회귀 0.
-
 ## 14. 의미↔규칙 경계 체크 (DESIGN_PRINCIPLES §0.7)
 
 - **규칙 구간(코드로 강제)**: depth ≤ 2(wrapper 게이트)·jobs.log row 형식·스테이지-워커 write 클래스·lock 범위·model role 명시 — 전부 결정론 가드/wrapper(§2.4). "산출물 기반 소통"의 완결성은 파일 존재로 결정론적 감사. **v2 추가**: SD-14(b) Stop hook(open 자식 row = 결정론적 차단 조건)·SD-14(c) dispatch-wait(대기 판단을 코드로)·SD-14(a) depth_note(계약 전달의 결정론화). **v6 추가**: quick depth-2 금지, quick jobs.log child-row 부재, mutation quick isolated worktree 는 결정론 gate 대상. **v7 추가**: hard eligibility 기반 후보 제거·adapter exact-ID probe·reason trace 필드·helper read-only·Fleet env child-hidden/metadata-exact 분류는 결정론 테스트 대상. **v8 추가**: canonical path 해석·worker-local artifact write 차단·cleanup eligibility·registry 직렬화는 모두 deterministic fail-closed 규칙이다. **v10 추가**: route record hash/scope 검증·tracked gate 증거 4종 필드 존재 검사·guard↔write_scope validator 항목·spec-transaction lock 시퀀스와 버전 경합 대기 규칙은 전부 결정론 검사 대상이다. **v11 추가**: nested eligibility tuple/status, immutable global registry path, attempt-first row identity, no-change retry 금지, fallback hop 순서·broker parent linkage는 결정론 validator/fixture 대상이다. **v12 추가**: broker endpoint/identity·request schema/idempotency·atomic state transition·fencing/lease·spawn 전 registry·4조합 logical parent 보존은 결정론 protocol/fixture 대상이다. **v13 추가**: per-request lease 직렬화·전역 락 비보유 실행·record v2 필드 규칙(stable identity만)·hop 시점 ensure 해석·completion marker 존재/필드/경로 검사·후속 노드 launch의 선행 marker gate는 전부 결정론 검사 대상이다. **v14 추가**: 생존증거 위계(exact-proc/flock 프로브/fenced ping+heartbeat) 판정 순서·spool publish/consume 원자성과 idempotency·발화-비인정 liveness 신호 집합·capacity failure class 감지와 모델 cooldown·registry reconcile 안전 게이트와 현재-작업 필터는 전부 결정론 검사 대상이다.
@@ -1684,6 +1612,5 @@ supervisor, Fleet, fallback, projection 회귀 0.
 - **v27 경계 정련**: `supervised|poll-fallback` strict completion park와 ordinary interactive registry-open park의 후보 상태 집합, exact parent/latest-attempt 선택, bypass의 explicit opt-in은 결정론 fixture 대상이다. terminal row를 ordinary global park에서 제외해도 successor/join/wait/fallback/cleanup의 quiescence 판정은 약화하지 않으며, terminal-unverifiable을 dead로 재분류하거나 registry를 수동 수정하는 것은 금지한다.
 - **v28 축 정련**: capability-mode catalog membership, owner reserved unit/worker-mode 부재, non-owner unit↔worker-mode 일치, route tuple equality, legacy mode shape 분류는 결정론 validator 대상이다. capability mode의 의미 선택은 route owner가 하지만 worker persona 칸에 대체값을 넣어 validator를 우회할 수 없다.
 - **v29 terminal/model 정련**: execution-surface별 Fable 자격, deep role의 Opus 실현, supervisor final envelope→exact terminal closure, canonical repo identity, observed-liveness enum과 consumer별 mutation 권한은 결정론 fixture 대상이다. capacity 이후 어느 eligible harness/model을 택할지는 SD-22 의미 판단이지만 Fable을 분사 후보로 되살리거나 죽은 exact process를 alive로 합성할 수 없다.
-- **v30 profile/N-way 정련**: profile vocabulary·registered mini floor·intensity별 width·leg id/output/index/profile/perspective·group route seal·N-member manifest·full-N atomic admission·N-1 peer-set recovery·required/realized diversity·depth≤2는 결정론 fixture 대상이다. 어느 node를 widen할지, 각 perspective의 의미, evidence 충돌을 어떻게 합성할지는 registry/spec와 owner의 의미 판단으로 남는다.
 - **의미 판단 구간(사람/LLM)**: (1) 마이크로-스테이지 inline 경계 임계 — 계측 후 판정(SD-OPEN-1). (2) 스테이지 실패 시 재분사 vs 이어쓰기 판단 — conductor 의 부분 산출물 해석. (3) 산출물 계약이 "완전한가"의 판정 — 스테이지가 대화 없이 완주 가능한지. **v2 추가**: (4) SD-11 을 deny 가 아니라 reminder 로 시작 — hook 이 intensity(direct/quick 정당 fallback)를 결정론적으로 알 수 없어, 규칙화 불가 구간을 deny 로 억지 규칙화하지 않음(경계 존중). deny 상향은 계측 후. (5) SD-14(b) 피드백도 "대기 강제"가 아니라 liveness 진단→행동 분기 지시 — 죽은 스테이지 해석은 의미 판단으로 남김. **v6 추가**: headless 실패 시 native subagent 로 충분한지, 또는 inline fallback 으로 낮출지의 fallback reason 작성은 runtime 상태 해석이므로 의미 판단으로 남긴다. **v7 추가**: stage affinity와 family diversity의 품질 판단은 의미 구간이지만, 그 적용 순서와 후보 탈락 사유는 helper가 구조화한다. **v10 추가**: "산출물을 추적할 가치가 있는가"(tracking)와 "분사할 실익이 있는가"(promotion/separability)는 각각 의미 판단으로 남되, 두 판단을 하나로 동일시하지 않는 것이 SD-44의 축 분리다 — record는 판단 결과와 근거 신호만 구조화한다. **v11 추가**: eligible 후보가 여러 개일 때 role affinity·family diversity로 어느 cross-harness를 고를지와 새로운 failure class의 의미 해석은 판단 구간이지만, 지원 여부·hop 순서·row 기록은 규칙 구간이다. **v13 추가**: "스테이지 산출물이 계약상 완전한가"의 통과 판정은 conductor의 의미 판단으로 남긴다 — SD-56은 그 판단을 대체하지 않고 판단 결과를 marker로 결정론화하며, marker 부재를 실패로 해석하지 않는 것도 의미 구간의 존중이다. **v14 추가**: 무진행 worker에 대한 최종 interrupt vs 계속 대기, 그리고 재분사 시 이어쓰기/재시작 선택은 conductor 의미 판단으로 남긴다 — SD-58은 경고·차단의 발동 조건과 인정 가능한 liveness 신호 집합만 결정론화한다. capacity failover에서 "어느 대체 모델인가"의 품질 판단도 SD-22 affinity 의미 구간이며, SD-59는 재시도 횟수·cooldown·증거 기록만 규칙화한다.
 - **충돌**: 없음 — 반전의 핵심 우려(현행 "상태 재발굴·연속성 상실")를 §0.5 계약 완결성 의무 + §8 inline 경계로 규칙화해 흡수했다. 우려를 사람 vigilance 로 남기지 않고 "산출물이 상태를 완전히 담는가"라는 검증 가능한 규칙으로 전환한 것이 이 경계 존중. per-stage cost 는 추측으로 규칙화하지 않고 계측(SD-OPEN-1)으로 미룬 것도 동일.

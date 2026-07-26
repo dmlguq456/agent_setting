@@ -1,7 +1,6 @@
-# Dispatch Profiles — PRD v4
+# Dispatch Profiles — PRD v3
 
-> 2026-07-26 · topology model-profile amendment. v3 owner mode-axis, v2 typed
-> bootstrap과 v1 원 설계·실측·CLI
+> 2026-07-24 · owner mode-axis amendment. v2 typed bootstrap과 v1 원 설계·실측·CLI
 > 근거는 `_internal/versions/`에 보존한다.
 
 ## 0. Outcome
@@ -75,13 +74,6 @@ blocker: none | <one line>
 - **DP-19:** an owner bootstrap is kernel + owner type + capability contract with
   reserved unit `_kernel/owner` and no worker specialization. A plan/dev/qa unit
   must never be loaded into an owner prompt.
-- **DP-20:** portable `model_role` is behavior identity while sealed
-  `model_profile` is execution budget. A route-bound wrapper consumes both and
-  refuses trailing model/effort replacement.
-- **DP-21:** profile vocabulary is `deep|balanced-deep|light|mini`; registered
-  substantive owner/stage/review topology rejects mini before prompt/row/spawn.
-- **DP-22:** Claude/Codex distinguish all four profiles. OpenCode may collapse
-  balanced-deep to deep only with explicit reduced-granularity metadata.
 
 ## 5.1 v3 bootstrap tuple
 
@@ -97,29 +89,9 @@ capability-mode catalog mismatch, route capability-mode mismatch, and
 worker-mode/unit mismatch across all three adapters. Each failure produces no
 prompt, row, or child process.
 
-## 5.2 v4 execution-profile tuple
-
-The route adds one canonical `model_profile` field without overloading
-`model_role`, `capability_mode`, or `worker_mode`. The adapter config remains the
-sole concrete-model source and maps the portable profile to its model tier plus
-effort/variant. Generated prompt, environment, registry, Fleet metadata, and
-launch command preserve the resolved profile and any explicit granularity
-degradation.
-
-For route-bound work the tuple is immutable: `model_role` comes from the unit,
-`model_profile` comes from the sealed node/owner, and a caller cannot replace
-either with a trailing concrete model or effort. Direct, quick, lifecycle, and
-runtime-native surfaces keep their own explicit selection contracts, but may not
-claim topology-profile parity without a sealed route.
-
-`mini` remains valid for lifecycle and explicitly micro-semantic helpers. A
-registered depth-1/2 owner, stage, or review tuple with `model_profile=mini` is
-invalid even if the concrete runtime could execute it.
-
 ## 6. Completion
 
-Complete when every bootstrap profile passes builder checks, the three
-dispatchers resolve the four execution profiles honestly, route-bound profile
-overrides and substantive mini are rejected, portable boundary/projection checks
-pass, and static kernel/type bytes are baselined. Static bytes are not a
-total-token, billing, savings, or ROI claim.
+Complete when every profile passes builder checks, three dispatchers wrap custom
+prompts, portable boundary/projection checks pass, and static kernel/type bytes
+are baselined. Static bytes are not a total-token, billing, savings, or ROI
+claim.

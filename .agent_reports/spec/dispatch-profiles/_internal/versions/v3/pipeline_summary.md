@@ -1,19 +1,5 @@
 # dispatch-profiles — pipeline summary
 
-## 2026-07-26 · v4 model-profile amendment
-
-portable role의 행동 의미와 실행 자원 budget을 분리했다. route-bound worker는
-`model_role + model_profile`을 함께 받고, adapter config가 profile을 concrete
-model/effort 또는 variant로 해석한다. substantive registered topology의 mini와 sealed
-profile의 trailing override는 launch 전에 거부한다. Claude/Codex는 네 단계를 실제로
-구분하고 OpenCode의 balanced-deep 축약은 reduced granularity로 표시한다.
-
-구현은 topology registry/compiler, batch/governor/join, 세 adapter wrapper와 Fleet
-projection까지 완료했다. route-bound role/profile override와 substantive mini를
-fail-closed로 검증했고, isolated worktree의 Fleet 875건, portable guards 358건,
-generated projection, model-config, adaptation boundary 검사를 통과해 v4를 GREEN으로
-닫았다. main 통합 후 profile/topology 집중 356건과 runtime projection도 통과했다.
-
 ## 2026-07-24 · v3 mode-axis amendment
 
 typed bootstrap tuple에 `capability_mode`와 non-owner `worker_mode/unit`의

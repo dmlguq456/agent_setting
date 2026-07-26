@@ -1,23 +1,5 @@
 # stage-dispatch — Spec Pipeline Summary
 
-## v30 update (2026-07-26) — four profiles + asymmetric N-way topology
-
-분업과 낮은 effort의 효율 이득을 유지하면서 품질 꼬리를 보완하기 위해 fixed
-2-way replica를 bounded parallel group으로 일반화했다. role과 model profile을 분리하고
-`deep / balanced-deep / light / mini`를 route에 봉인한다. light 기본은 medium이며 mini는
-registered substantive topology에서 제외한다.
-
-N-way는 모든 node의 무조건 fan-out이 아니다. registry가 위험·불확실성이 큰 anchor만
-2~4개 leg로 선언하고, cross-harness와 model-profile/perspective 다양성을 조합한다.
-batch/governor는 exact N을 원자 admit하며 단일 missing-leg 복구도 N-1 peer-set 증거를
-요구한다. implementation cycle은 `plans/2026-07-26_topology-nway-profiles/`이다.
-
-v30 구현 범위는 registry/compiler부터 N-way batch·governor·completion join, 세 adapter
-profile projection, Fleet 표시까지 완료됐다. strong route 실컴파일은 `frame=3`,
-`plan=2`, `impl-review=2`의 비대칭 profile leg를 봉인했고 focused·portable·generated 및
-isolated Fleet 회귀 검사를 통과했다. main 통합 후 topology 집중 356건과 runtime
-projection도 통과했다.
-
 ## v29 update (2026-07-24) — owner terminal/model/liveness convergence
 
 종료된 supervised owner의 exact row를 final envelope와 process exit로 즉시 typed
