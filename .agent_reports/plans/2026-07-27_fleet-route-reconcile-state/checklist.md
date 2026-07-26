@@ -7,4 +7,4 @@
 - [x] Regenerate the Claude Fleet mirror.
 - [x] Run focused and full verification.
 - [x] Record implementation and test evidence.
-- [ ] Commit, push, integrate to main, reverify, and clean the worktree.
+- [x] Commit, push, integrate to main, reverify, and clean the worktree.
