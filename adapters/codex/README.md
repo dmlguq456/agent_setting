@@ -270,7 +270,9 @@ entrypoints are represented by Codex-native Skills and the installable
 `SessionEnd` bridge runs `mem sync` and automatic distillation (on by
 default; opt out with `CODEX_DISTILL_ENABLE=0`). `Stop` first joins a stamped
 exact-session registered-child batch outside the model and emits a blocking
-continuation only for typed harvest; with no such child it schedules the same
+continuation only for typed harvest. A continuation marked by Codex as
+`stop_hook_active` never blocks or joins again, so a ready/timeout receipt cannot
+re-enter an automatic Stop loop. With no such child it schedules the same
 memory lifecycle in a detached background process. The `UserPromptSubmit` bridge extracts
 prompt text from top-level and nested message/content payloads for recall, and
 also runs the deterministic N-turn distill nudge under the same default. The
@@ -324,9 +326,11 @@ disclosed prompt/conformance fallback rather than total enforcement. A later
 wait was approved; that is the intended same-wait continuation.
 The pre-existing write/shell matcher and command remain byte-stable so a
 previously trusted installation protects the observed shell-exec failure path
-as soon as the bridge body updates. A second wildcard, park-only entry extends
-coverage to other supported local tools after Codex records current-hash trust
-for that hook definition through `/hooks`. The strict runtime check reads the
+as soon as the bridge body updates. Codex runs every matching hook definition
+concurrently, so the wildcard park-only bridge exits silently for names already
+owned by that specific matcher; exactly one bridge can deny those tools. The
+wildcard retains parent-park coverage for every other supported local tool. The
+strict runtime check reads the
 authoritative App Server `hooks/list` trust status instead of inferring trust
 from a stale config key.
 Use `adapters/codex/bin/preflight.sh doctor --runtime-strict` for the combined

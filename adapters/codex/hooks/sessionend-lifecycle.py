@@ -57,6 +57,18 @@ def nested_string(payload: dict[str, Any], *keys: str) -> str:
     return ""
 
 
+def nested_bool(payload: dict[str, Any], *keys: str) -> bool:
+    for key in keys:
+        value = payload.get(key)
+        if isinstance(value, bool):
+            return value
+    for key in ("context", "workspace", "session", "payload", "event", "input", "data"):
+        value = payload.get(key)
+        if isinstance(value, dict) and nested_bool(value, *keys):
+            return True
+    return False
+
+
 def cwd(payload: dict[str, Any]) -> str:
     return nested_string(payload, "cwd", "working_directory", "workingDirectory") or os.getcwd()
 
@@ -223,9 +235,9 @@ def handle_stop(event_cwd: str, event_session_id: str) -> None:
         if receipt.get("state") == "timeout":
             emit_stop_block(
                 "codex-stop-parent: exact registered child batch is still running after "
-                f"the bounded native wait; attempt(s)={attempt_list}. End this continuation "
-                "immediately without any tool call so the Stop hook can resume waiting "
-                "outside the model."
+                f"the bounded native wait; attempt(s)={attempt_list}. This is the single "
+                "timeout continuation. End it immediately without any tool call; do not "
+                "start a model or tool polling loop."
             )
             return
         raise JoinContractError("stop-receipt-state-invalid")
@@ -237,6 +249,33 @@ def handle_stop(event_cwd: str, event_session_id: str) -> None:
         )
 
 
+def finish_stop_reentry(event_cwd: str, event_session_id: str) -> None:
+    """End a runtime-created Stop continuation without another block or join."""
+
+    jobs = dispatch_jobs_path()
+    try:
+        state_path = parent_session_state_path(jobs, event_session_id)
+        state = read_parent_session_batch_state(state_path, event_session_id)
+        if state is not None:
+            rows = current_session_children(
+                jobs,
+                event_session_id,
+                expected_attempts=set(state.attempt_ids),
+            )
+        else:
+            if state_path.exists():
+                return
+            rows = current_session_children(jobs, event_session_id)
+        if rows:
+            return
+        remove_parent_session_state(state_path)
+        spawn_preflight("session-end", event_cwd, event_session_id)
+    except JoinContractError:
+        # A continuation must never recursively block. Invalid state remains
+        # available for the explicit operator recovery path on a later turn.
+        return
+
+
 def main() -> int:
     payload = load_payload()
     # Worker shutdown owns no automatic sync or curator lifecycle. Return before
@@ -246,6 +285,12 @@ def main() -> int:
     event_cwd = cwd(payload)
     event_session_id = session_id(payload)
     if hook_event(payload).lower() == "stop":
+        # A blocking Stop result is itself replayed as a new model continuation.
+        # Codex marks that replay with stop_hook_active. Blocking that replay
+        # again creates an unbounded Stop -> continuation -> Stop cycle.
+        if nested_bool(payload, "stop_hook_active", "stopHookActive"):
+            finish_stop_reentry(event_cwd, event_session_id)
+            return 0
         # Stop owns interactive registered-child waiting. It emits a continuation
         # only for one typed receipt (or a bounded retry/recovery instruction).
         # Distillation remains detached, but only after no native child is open.

@@ -72,6 +72,16 @@ class CodexStopParentParkTest(unittest.TestCase):
         )["hooks"]
         self.assertEqual(config["Stop"][0]["hooks"][0]["timeout"], 600)
         self.assertEqual(config["SessionStart"][0]["hooks"][0]["timeout"], 30)
+        self.assertEqual(len(config["PreToolUse"]), 2)
+        self.assertEqual(
+            config["PreToolUse"][0]["matcher"],
+            r"Write|Edit|MultiEdit|apply_patch|functions\.apply_patch|Bash|Shell|functions\.exec_command",
+        )
+        self.assertEqual(config["PreToolUse"][1]["matcher"], "*")
+        self.assertIn(
+            "AGENT_PARENT_PARK_ONLY=1",
+            config["PreToolUse"][1]["hooks"][0]["command"],
+        )
 
     def test_no_children_schedules_memory_lifecycle_silently(self) -> None:
         with mock.patch.object(HOOK, "spawn_preflight") as spawn:
@@ -110,6 +120,59 @@ class CodexStopParentParkTest(unittest.TestCase):
              mock.patch.object(HOOK, "is_worker_session", return_value=True), \
              mock.patch.object(HOOK, "spawn_preflight") as spawn:
             self.assertEqual(HOOK.main(), 0)
+        spawn.assert_not_called()
+
+    def test_runtime_stop_continuation_never_blocks_or_joins_again(self) -> None:
+        self.jobs.write_text(row(), encoding="utf-8")
+        payload = {
+            "hook_event_name": "Stop",
+            "cwd": "/repo",
+            "session_id": SESSION,
+            "stop_hook_active": True,
+        }
+        with mock.patch.object(HOOK, "load_payload", return_value=payload), \
+             mock.patch.object(HOOK, "is_worker_session", return_value=False), \
+             mock.patch.object(HOOK, "handle_stop") as handle, \
+             mock.patch.object(HOOK, "spawn_preflight") as spawn:
+            output = self.output(HOOK.main)
+        self.assertEqual(output, "")
+        handle.assert_not_called()
+        spawn.assert_not_called()
+
+    def test_runtime_stop_continuation_runs_lifecycle_after_harvest(self) -> None:
+        payload = {
+            "hook_event_name": "Stop",
+            "cwd": "/repo",
+            "session_id": SESSION,
+            "stop_hook_active": True,
+        }
+        with mock.patch.object(HOOK, "load_payload", return_value=payload), \
+             mock.patch.object(HOOK, "is_worker_session", return_value=False), \
+             mock.patch.object(HOOK, "handle_stop") as handle, \
+             mock.patch.object(HOOK, "spawn_preflight") as spawn:
+            output = self.output(HOOK.main)
+        self.assertEqual(output, "")
+        handle.assert_not_called()
+        spawn.assert_called_once_with("session-end", "/repo", SESSION)
+
+    def test_runtime_stop_continuation_leaves_invalid_state_for_recovery(self) -> None:
+        state = HOOK.parent_session_state_path(self.jobs, SESSION)
+        state.parent.mkdir(parents=True, exist_ok=True)
+        state.write_text("{}", encoding="utf-8")
+        payload = {
+            "hook_event_name": "Stop",
+            "cwd": "/repo",
+            "session_id": SESSION,
+            "stop_hook_active": True,
+        }
+        with mock.patch.object(HOOK, "load_payload", return_value=payload), \
+             mock.patch.object(HOOK, "is_worker_session", return_value=False), \
+             mock.patch.object(HOOK, "handle_stop") as handle, \
+             mock.patch.object(HOOK, "spawn_preflight") as spawn:
+            output = self.output(HOOK.main)
+        self.assertEqual(output, "")
+        self.assertTrue(state.exists())
+        handle.assert_not_called()
         spawn.assert_not_called()
 
     def test_ready_batch_publishes_state_and_one_continuation(self) -> None:
@@ -186,7 +249,7 @@ class CodexStopParentParkTest(unittest.TestCase):
             output = self.output(lambda: HOOK.handle_stop("/repo", SESSION))
         value = json.loads(output)
         self.assertEqual(value["decision"], "block")
-        self.assertIn("End this continuation immediately", value["reason"])
+        self.assertIn("single timeout continuation", value["reason"])
         self.assertIsNone(
             JOIN.read_parent_session_state(
                 HOOK.parent_session_state_path(self.jobs, SESSION), SESSION
