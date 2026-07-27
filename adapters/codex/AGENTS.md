@@ -93,6 +93,14 @@ Route by `core/WORKFLOW.md §0.2`, apply its §0.3 gate, and present the
 five-field card in §0.4 before material work unless scope and route are already
 approved. Load full capability detail only in the acting owner or worker.
 
+An ordinary dispatch-depth-1 owner launches through `preflight.sh dispatch-owner
+--dry-run|--register|--start`, a separate low-level surface from `preflight.sh
+dispatch` below: it delegates to the portable `utilities/dispatch-owner.py`
+selector, which reads `profiles/dispatch-defaults.yaml` and runs the SD-22
+cascade (explicit target, then hard eligibility, then configured
+`depth1_owner`, then eligibility fallback) before execing only the chosen
+adapter's wrapper.
+
 Check `preflight.sh headless [--check] [--require-hook-trust] <worktree>`.
 Launch registered jobs only through `preflight.sh dispatch
 --dry-run|--register|--start [--require-hook-trust]` with the complete tuple in
