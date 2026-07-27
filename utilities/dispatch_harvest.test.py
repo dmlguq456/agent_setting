@@ -212,6 +212,31 @@ class HarvestTest(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        status_done = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "adapters/codex/bin/dispatch-harvest.py"),
+                "--jobs",
+                str(jobs),
+                "--attempt-id",
+                attempt,
+                "--status",
+                "done",
+            ],
+            text=True,
+            capture_output=True,
+            env=self.env(),
+        )
+        self.assertEqual(
+            status_done.returncode, 0, status_done.stdout + status_done.stderr
+        )
+        self.assertNotIn("parent_completion_receipt=consumed", status_done.stdout)
+        self.assertTrue(state.exists())
+        self.assertNotIn(
+            "parent_completion_harvested=1",
+            jobs.read_text(encoding="utf-8"),
+        )
+
         result = subprocess.run(
             [
                 sys.executable,
@@ -228,6 +253,58 @@ class HarvestTest(unittest.TestCase):
             env=self.env(),
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("parent_completion_receipt=consumed", result.stdout)
+        self.assertFalse(state.exists())
+        self.assertIn(
+            "parent_completion_harvested=1",
+            jobs.read_text(encoding="utf-8"),
+        )
+
+    def test_native_stop_runtime_failure_still_consumes_delivered_receipt(self):
+        attempt = "att-native-stop-runtime-failure"
+        session = "thread-native-stop-runtime-failure"
+        jobs = self.base / "native-stop-runtime-failure.jobs.log"
+        missing_log = self.base / "missing-runtime-failure.codex.jsonl"
+        row = self.current_row(attempt).replace("\topen\t", "\tdone\t")
+        row = row.replace("dispatch_depth=2", "dispatch_depth=1").rstrip("\n")
+        row += (
+            f",harness=codex,log_file={missing_log},"
+            "parent_completion_delivery=codex-stop-hook,"
+            f"parent_sid={session},failure_class=runtime,note=dead-runtime-exit\n"
+        )
+        jobs.write_text(row, encoding="utf-8")
+        digest = hashlib.sha256(session.encode("utf-8")).hexdigest()
+        state = jobs.parent / "parent-session-state" / f"{digest}.json"
+        state.parent.mkdir(parents=True, exist_ok=True)
+        state.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "parent_session_id_sha256": digest,
+                    "attempt_ids": [attempt],
+                    "delivered_attempt_ids": [attempt],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "adapters/codex/bin/dispatch-harvest.py"),
+                "--jobs",
+                str(jobs),
+                "--attempt-id",
+                attempt,
+                "--status",
+                "all",
+            ],
+            text=True,
+            capture_output=True,
+            env=self.env(),
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("handoff_state=error", result.stdout)
         self.assertIn("parent_completion_receipt=consumed", result.stdout)
         self.assertFalse(state.exists())
         self.assertIn(

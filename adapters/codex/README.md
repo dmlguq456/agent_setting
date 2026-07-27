@@ -284,6 +284,9 @@ dispatch registry and parks a dispatch-depth-0 parent by exact `parent_sid` or a
 conductor by exact `parent_attempt_id`. For a row stamped `codex-stop-hook`, the
 undelivered interactive phase admits no tool and directs the model to end its
 turn; after Stop publishes the exact receipt, it admits only typed harvest.
+Exact `--status all` harvest consumes that delivered receipt even when the child
+ended with a runtime error or an absent/malformed terminal handoff; the bounded
+terminal state is reported first and is never reclassified as success.
 Poll fallback for unstamped rows admits only the long exact-attempt wait,
 continuation of that wait, and typed exact-attempt harvest.
 Supervised mode instead reads the runtime-owned phase state: an undelivered batch
