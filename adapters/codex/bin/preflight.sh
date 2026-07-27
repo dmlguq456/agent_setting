@@ -42,7 +42,7 @@ usage() {
   cat <<'EOF'
 usage: preflight.sh write <file> [session-id]
        preflight.sh read <file> [session-id]
-       preflight.sh route <capability> [cwd] [session-id]
+       preflight.sh route <capability> [cwd] [session-id] [mode] [intensity]
        preflight.sh capability <name> [cwd] [session-id]
        preflight.sh skill <name> [cwd] [session-id]
        preflight.sh session-end [cwd] [session-id]
@@ -279,10 +279,23 @@ case "$cmd" in
     name=$2
     cwd=${3:-$PWD}
     sid=${4:-codex}
+    mode=${5:-}
+    intensity=${6:-}
+    [ "$#" -le 6 ] || { echo "codex preflight: route accepts at most capability, cwd, session-id, mode, and intensity" >&2; exit 64; }
     "$0" status "$cwd" "$sid"
     "$0" prompt-signal "$cwd" "$sid"
     "$0" capability-info "$name"
     "$0" capability "$name" "$cwd" "$sid"
+    # Codex has no native Skill-invocation hook.  Realize the portable inline
+    # capability-grounding contract at its explicit router instead (F-43).
+    # Display evidence is best-effort and never turns a successful route into
+    # a failure; worker sessions carry their identity in jobs.log/route records.
+    if [ "$sid" != codex ] && ! is_worker_session; then
+      set -- record --sid "$sid" --capability "$name" --agent-home "$AGENT_ROOT" --cwd "$cwd"
+      [ -z "$mode" ] || set -- "$@" --mode "$mode"
+      [ -z "$intensity" ] || set -- "$@" --intensity "$intensity"
+      sh "$ROOT/utilities/capability-grounding.sh" "$@" >/dev/null 2>&1 || :
+    fi
     ;;
   material-route)
     [ "$#" -ge 2 ] || { echo "codex preflight: material-route requires an action" >&2; exit 64; }

@@ -325,3 +325,21 @@ contract/unit 라벨과 중복 표시하지 않는다.
 - dispatch collector는 attempt stream에서 title/NOW association용 session id만 읽고 usage/window/context evidence를 만들지 않는다.
 - group/process와 wide/narrow/stack의 dispatch 행은 `context` block을 전부 제거한다. fresh NOW가 있으면 session 열에 설명만 표시하고, 없으면 subordinate row도 없다.
 - v20의 parent/owner stage ownership과 `one-shot` 단일 표시는 그대로 유지한다. 이전 정본은 `_internal/versions/v20/prd.md`에 보존했다.
+
+## v27 correction (2026-07-27) — inline capability truth
+
+- 사용자 관찰: 메인 세션 inline이 실제 작업과 무관하게 거의 항상 `spec`으로 보였다.
+- 원인: spec-read marker를 active work로 단독 채택했고, Codex capability router는 native
+  Skill hook 부재에도 `.capability-grounding` marker를 기록하지 않았다.
+- 결정: fresh exact-sid `autopilot-spec` capability가 있을 때만 spec breadcrumb를 허용한다.
+  non-spec capability는 spec보다 우선하고, capability 부재는 spec 추측 대신 정직한 공백이다.
+- 구현 handoff: Fleet projection/render fail-closed, Codex router marker bridge, marker matrix와
+  full Fleet·portable guard·generator/mirror parity 검증.
+- 구현 완료: capability grounding을 projection보다 먼저 결합하고, active
+  `autopilot-spec`일 때만 spec marker fallback을 허용했다. Codex router는 main session에
+  capability/mode/intensity marker를 best-effort 기록하며 worker는 제외한다.
+- 검증: Fleet 926/926, focused marker matrix 38/38, Codex router 2/2,
+  adaptation-boundary 및 generator 15개 그룹, canonical↔Claude mirror parity 통과.
+  live `--once`에서 현재 main은 `code(debug·direct)`, capability 없는 과거 main은 `-`로 확인했다.
+- 전체 `portable-guards.test.sh`는 관련 route/write/hook 및 신규 F-43 케이스가 통과했으나,
+  현 설치/runtime projection·dispatch/drill fixture의 기존 환경 의존 15건은 별도 실패로 남았다.

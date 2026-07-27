@@ -11,8 +11,6 @@
 > · **v23 hotfix 2026-07-24** (dispatch mode-axis projection — capability mode와 worker mode/unit 분리, owner stage-persona 표시·bootstrap 오염 차단, F-40)
 > · **v24 correction 2026-07-25** (live TUI repo 그룹 정렬 — 현재 activity tier를 매 tick 우선 적용하고, 빠른 위치 교환 방지는 같은 tier 안의 survivor anchor에만 적용)
 > · **v25 correction 2026-07-27** (route completion reconciliation — exact terminal 관측 뒤 completion marker를 기다리는 노드를 실패 `✕`와 분리해 `reconciling`/`…`로 표시, gate·progress는 계속 미완료)
-> · **v26 correction 2026-07-27** (pre-stage truthfulness + depth-2 stage hue + subtitle column — 실제 stage/route가 생기기 전 고정 breadcrumb를 `preparing…`으로 대체하고, worker `running`과 NOW 설명을 각각 해당 stage hue·session 열에 정렬)
-> · **v27 correction 2026-07-27** (inline capability truth — spec-read marker를 현재 작업 증거로 단독 채택하지 않고, active entry capability가 `autopilot-spec`일 때만 spec breadcrumb를 표시하며 Codex router가 capability marker를 기록)
 > 컴포넌트: `agent_setting` repo 의 **별도 내부 도구** — 기존 `spec/prd.md`(Unified Memory System)와 무관, 이 폴더(`spec/agent-fleet-dashboard/`)가 자체 청사진.
 > 입력(1순위 근거): `research/agent-fleet-dashboard/00_prior_art.md`(build-vs-adopt·herdr·렌더스택) · `research/agent-fleet-dashboard/01_tap_mechanics.md`(하네스별 tap·discovery·liveness, file-cited)
 > **v2 추가 입력**: `spec/stage-dispatch/prd.md`(SD-1~9 — 스테이지 단위 depth-2 headless 분사 계약, §9-13 fleet 표시 = Phase 2 잔여) · 현행 `tools/fleet/` 코드 전수 실측(2026-07-10 Explore, file:line-cited) · 사용자 관찰("워크플로우를 못 따라감 + UI 아쉬운 점 다수").
@@ -182,7 +180,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 
 - **F-9 (dispatch 메타라벨 가독화)**: 현행 `(loop/drill-diagnosis·q/diagnosis_gro…/qa:~q)` 처럼 축약·중간잘림이 겹친 라벨을 재배분 — (a) role 은 SD-F1 단계명 매핑 우선, 매핑 밖 role 은 **중간잘림 대신 뒤에서 자름**(head 보존) (b) drill 케이스 하드코딩 축약 맵(`g6`/`g9` 등)은 **일반 규칙으로 대체**(`g\d+` 접두 추출 — 신규 케이스마다 코드 수정하는 구조 제거) (c) 라벨 성분 우선순위 명문화: 폭 부족 시 `qa → intensity → role` 순으로 드롭하되 mode 는 유지 (d) `~` 유도값 접두는 유지 + legend 에 1회 설명.
 - **F-10 (alert 행 humanize)**: alert 의 job 이름도 dispatch 행과 같은 compact 이름 경로 재사용 — loop 잡의 `<case>-<ts>-<pid>` 꼬리(`…-20260710035842-294678`)는 strip. 같은 종류 alert 다수면 개수 집계(`⚠ 2 dead jobs: a·b`). 화면 폭 초과는 조용한 클립 대신 우선순위 절단(dead > stale > ctx).
-- **F-11 (raw status 어휘 정리, v26 correction)**: registry-only 잡의 stage=`open`/`running` raw 노출과 loop 잡 `drill: running` 류를 사람 어휘로 정리한다. 진짜 미기동 `open`은 `queued`, 실행 중이지만 검증된 stage/route node가 아직 없는 depth-1 owner는 고정 `pre › plan › exec › test` 트랙을 합성하지 않고 단일 `preparing…`을 표시한다. depth-2 worker의 `running`은 worker-local micro-status로 유지하되 해당 route node/stage의 hue를 쓴다. status 어휘 자체(jobs.log)는 불변 — 표시층만.
+- **F-11 (raw status 어휘 정리)**: registry-only 잡의 stage=`open`/`running` raw 노출과 loop 잡 `drill: running` 류를 사람 어휘로 — `open`=`queued`(미기동 대기), `running`=breadcrumb 미점등 트랙(기존 규칙 재사용). status 어휘 자체(jobs.log)는 불변 — 표시층만.
 - **F-12 (footer·잡음 절제)**: (a) `+N malformed jobs.log rows skipped` 는 dim 강등 — 진단 상세는 `--json` 몫 (b) footer `w` 라벨이 stack 모드를 누락하는 표기 버그 수정(3-모드 전부) (c) legend 는 현재 화면에 실제 등장한 글리프만.
 - **F-13 (dead/stale 행 결손 절제)**: dead/stale row 의 `— … — … —` 나열 대신 telemetry 셀은 생략하고 **마지막 관측 경과**(`last seen 2h`) 1값으로 대체 — "없음" 명시 원칙(F-3)은 live 행에만 적용, 죽은 행은 결손 나열이 정보가 아니다.
 ## 4.7 [v3 승격] 표시명·관제 표면 확장 — F-14~F-19
@@ -380,7 +378,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 - **F-36d (artifact fallback 경계)**: artifact 유도는 route tuple이 전혀 없고 exact plan-dir 후보가 하나일 때만 `source=artifact-inferred`로 `stage_label`만 채운다. `route_id`, `route_node`, progress, gate, node 완료를 절대 합성하지 않는다. 후보가 0개면 `source=none`, 2개 이상이면 `source=none`+`multiple-artifact-plan-dirs`로 남고, fuzzy "최선" 후보를 임의 선택하지 않는다.
 - **F-36e (group view stage 단일 소유)**: visible dispatch-depth-1 owner가 메인 session과 같은 validated route를 운반하면 메인 session의 `stages` 칸은 `-`로 강등하고 route stage는 owner 행이 소유한다. verified linear route(단일 `one-shot` 포함)는 owner의 `stages` breadcrumb에 전 노드를 한 번만 표시하며 별도 `stage …` detail row를 만들지 않는다. parallel branch·fan-in 등 비선형 DAG만 dependency를 보존하는 detail row를 유지한다. process view의 full-DAG 계약은 불변이다.
 
-- **F-37a (interactive context + dispatch summary 분리, v26 정렬 교정)**: wide 주 행의 확장 context gauge, narrow/stack inline context telemetry, wide-only NOW 행을 이 계약이 대체한다. live interactive `Session`은 정체성 카드 직후·sub-agent strip 전에 wide/narrow/stack 공통 subordinate line 하나를 표시한다. context block은 harness 열 아래에 유지하되 fresh NOW 설명의 첫 display cell은 주 행의 **session 시작 열**에 맞춘다. 둘 사이에는 콜론을 넣지 않고 최소 세 칸을 보장하며, `normal|tight|critical` band 문자열은 숨기고 퍼센트 숫자는 dim으로 낮춘다. interactive truth table:
+- **F-37a (interactive context + dispatch summary 분리)**: wide 주 행의 확장 context gauge, narrow/stack inline context telemetry, wide-only NOW 행을 이 계약이 대체한다. live interactive `Session`은 정체성 카드 직후·sub-agent strip 전에 wide/narrow/stack 공통 subordinate line 하나를 표시한다. context block을 먼저 읽고 fresh NOW와 **콜론 없이 세 칸 간격**으로 구분하는 `context <gauge> <NN%|—>[   <fresh NOW>]` 문법이며, `normal|tight|critical` band 문자열은 숨기고 퍼센트 숫자는 dim으로 낮춘다. interactive truth table:
   - live context+NOW → `context <gauge> 63%   <NOW>`;
   - live context, NOW 부재 → `context <gauge> 63%`;
   - live context 부재, NOW 있음 → `context <empty-gauge> —   <NOW>`;
@@ -458,47 +456,6 @@ public JSON consumer 회귀 0, mirror parity 통과.
 미증가, marker 후 `done`으로 전이한다. 동일 `stale`이라도 exact reconciliation
 증거가 없는 fixture는 `failed`+`✕`를 유지한다. group/process 및 wide/narrow/stack,
 parallel collapse, public JSON, canonical↔Claude mirror가 같은 상태를 보존한다.
-
-## 4.15 [v26 신설] pre-stage·worker hue·subtitle column correction — F-42
-
-- **F-42a (pre-stage 정직성)**: sealed route sequence나 관측된 concrete stage가 없는
-  depth-1 known pipeline은 `_PIPE_STAGES`를 진행 사실처럼 미리 그리지 않는다. live owner는
-  단일 `preparing…`, 진짜 미기동 `open`은 `queued`를 표시한다. concrete stage가 생긴 뒤의
-  legacy breadcrumb와 검증된 arbitrary route sequence는 기존 규칙을 유지한다.
-- **F-42b (depth-2 hue)**: depth-2 worker의 `running`은 route record에서 선택된 node의
-  collapsed record-order hue를 우선 사용한다. route가 없는 legacy worker는 assigned
-  contract/key의 stage 순서를 사용한다. 근거가 없을 때만 첫 hue로 강등하며 blink on/off는
-  같은 hue의 밝기만 바꾼다.
-- **F-42c (subtitle column)**: interactive context block은 기존 harness anchor를 유지하지만
-  fresh NOW 설명은 `_NAME_COL`(session 열 시작점)에서 시작한다. dispatch summary-only line도
-  같은 열을 사용한다. CJK display width와 terminal tail-clip 계약은 그대로다.
-
-**acceptance**: stage 미확정 code owner에서 `preparing…` 1개와 고정 track 0개, `plan`
-확정 뒤 기존 track 유지, depth-2 plan/exec/test/report 및 arbitrary route node의
-`running` color key가 해당 stage key와 일치, interactive/dispatch 설명의 첫 display
-column이 모든 지원 폭에서 session 열과 같고 canonical↔Claude mirror가 byte-identical이다.
-
-## 4.16 [v27 신설] inline capability truth correction — F-43
-
-- **F-43a (active capability 우선)**: `.capability-grounding/<session-id>`의 fresh exact-sid
-  entry capability가 interactive inline 작업의 현재 정체성이다. non-spec capability가 있으면
-  spec-read marker나 spec pipeline phase가 stage 칸을 덮지 못하며, capability tag가 우선한다.
-- **F-43b (spec fail-closed)**: `.spec-grounding`은 PRD를 읽었다는 증거이지 active spec 작업
-  증거가 아니다. 따라서 exact-sid marker와 nonterminal `pipeline_state.yaml`만으로 spec을
-  채택하지 않는다. fresh capability grounding이 `autopilot-spec`일 때만 spec phase breadcrumb를
-  허용하며, capability evidence가 없으면 `-` 또는 다른 exact projection으로 정직하게 강등한다.
-- **F-43c (Codex router realization)**: Codex는 native Skill-invocation hook이 없으므로
-  `preflight.sh route <capability> <cwd> <session-id>` 성공 뒤 portable capability-grounding
-  utility를 best-effort로 호출한다. marker 실패는 routing을 막지 않으며 worker session은
-  inline main marker를 만들지 않는다. optional mode/intensity는 전달된 경우에만 기록한다.
-- **F-43d (surface parity)**: group/plain/live/JSON은 같은 `WorkProjection` 판정을 소비하고,
-  render는 불일치 projection이 주입되어도 non-spec capability 뒤에 stale spec label을 붙이지
-  않는다. canonical Fleet와 Claude mirror는 byte-identical을 유지한다.
-
-**acceptance**: (1) spec marker만 있는 main session은 spec을 표시하지 않음, (2) 같은 session의
-`autopilot-code` marker는 `code(...)`를 표시하고 spec phase를 숨김, (3) `autopilot-spec` marker는
-기존 lit breadcrumb를 유지, (4) Codex router 호출이 exact session marker를 생성, (5) full Fleet,
-portable guard, generator/mirror parity 회귀 0.
 
 ## 5. 능동 변경 — fleet-owned local state write
 
@@ -701,23 +658,11 @@ flowchart TD
   `reconciling`으로 투영하고 yellow `…`/`…gate`로 표시한다. 이 상태는 완료·gate
   통과·successor 개방을 주장하지 않으며 generic stale/dead 실패는 계속 `✕`다.
 
-## 확정 결정 (v26 승격, 2026-07-27 — pre-stage truth + aligned status)
+## Next — current v25 implementation handoff (`autopilot-code`)
 
-- **F-42 lock**: stage/route 미확정 depth-1 owner는 고정 pipeline track 대신
-  `preparing…`을 표시한다. depth-2 `running`은 해당 stage hue를 사용하고, interactive
-  NOW와 dispatch summary는 session 시작 열에 맞춘다.
-
-## 확정 결정 (v27 승격, 2026-07-27 — inline capability truth)
-
-- **F-43 lock**: spec-read marker는 active capability가 아니다. interactive spec breadcrumb는
-  fresh exact-sid capability grounding이 `autopilot-spec`일 때만 허용하고, Codex capability
-  router는 native Skill hook 부재를 marker 기록으로 보완한다.
-
-## Next — current v27 implementation handoff (`autopilot-code`)
-
-1. `projection.py`가 capability grounding을 먼저 결합하고 active `autopilot-spec`일 때만
-   spec marker fallback을 허용한다.
-2. Codex `preflight.sh route` 성공 경로가 main-session capability marker를 best-effort로
-   기록하고 worker를 제외하도록 구현한다.
-3. spec-only/code/spec marker matrix, Codex router marker, full Fleet, portable guard,
-   generator 및 canonical↔Claude mirror parity를 완료 게이트로 삼는다.
+1. `route.py`가 exact shared-observer reconciliation evidence만 `reconciling`으로
+   분류하고 marker/generic-failure 우선순위를 보존한다.
+2. `render.py`의 breadcrumb, DAG detail, process L2, parallel collapse에 yellow
+   `…`/`…gate`를 적용한다.
+3. exact positive/negative fixture, marker 전이, 병렬 집계, JSON 및 mirror parity를
+   hermetic regression으로 고정한다. live registry 변이는 금지한다.

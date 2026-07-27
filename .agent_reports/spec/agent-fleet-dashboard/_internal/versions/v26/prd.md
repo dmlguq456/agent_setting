@@ -12,7 +12,6 @@
 > · **v24 correction 2026-07-25** (live TUI repo 그룹 정렬 — 현재 activity tier를 매 tick 우선 적용하고, 빠른 위치 교환 방지는 같은 tier 안의 survivor anchor에만 적용)
 > · **v25 correction 2026-07-27** (route completion reconciliation — exact terminal 관측 뒤 completion marker를 기다리는 노드를 실패 `✕`와 분리해 `reconciling`/`…`로 표시, gate·progress는 계속 미완료)
 > · **v26 correction 2026-07-27** (pre-stage truthfulness + depth-2 stage hue + subtitle column — 실제 stage/route가 생기기 전 고정 breadcrumb를 `preparing…`으로 대체하고, worker `running`과 NOW 설명을 각각 해당 stage hue·session 열에 정렬)
-> · **v27 correction 2026-07-27** (inline capability truth — spec-read marker를 현재 작업 증거로 단독 채택하지 않고, active entry capability가 `autopilot-spec`일 때만 spec breadcrumb를 표시하며 Codex router가 capability marker를 기록)
 > 컴포넌트: `agent_setting` repo 의 **별도 내부 도구** — 기존 `spec/prd.md`(Unified Memory System)와 무관, 이 폴더(`spec/agent-fleet-dashboard/`)가 자체 청사진.
 > 입력(1순위 근거): `research/agent-fleet-dashboard/00_prior_art.md`(build-vs-adopt·herdr·렌더스택) · `research/agent-fleet-dashboard/01_tap_mechanics.md`(하네스별 tap·discovery·liveness, file-cited)
 > **v2 추가 입력**: `spec/stage-dispatch/prd.md`(SD-1~9 — 스테이지 단위 depth-2 headless 분사 계약, §9-13 fleet 표시 = Phase 2 잔여) · 현행 `tools/fleet/` 코드 전수 실측(2026-07-10 Explore, file:line-cited) · 사용자 관찰("워크플로우를 못 따라감 + UI 아쉬운 점 다수").
@@ -478,28 +477,6 @@ parallel collapse, public JSON, canonical↔Claude mirror가 같은 상태를 �
 `running` color key가 해당 stage key와 일치, interactive/dispatch 설명의 첫 display
 column이 모든 지원 폭에서 session 열과 같고 canonical↔Claude mirror가 byte-identical이다.
 
-## 4.16 [v27 신설] inline capability truth correction — F-43
-
-- **F-43a (active capability 우선)**: `.capability-grounding/<session-id>`의 fresh exact-sid
-  entry capability가 interactive inline 작업의 현재 정체성이다. non-spec capability가 있으면
-  spec-read marker나 spec pipeline phase가 stage 칸을 덮지 못하며, capability tag가 우선한다.
-- **F-43b (spec fail-closed)**: `.spec-grounding`은 PRD를 읽었다는 증거이지 active spec 작업
-  증거가 아니다. 따라서 exact-sid marker와 nonterminal `pipeline_state.yaml`만으로 spec을
-  채택하지 않는다. fresh capability grounding이 `autopilot-spec`일 때만 spec phase breadcrumb를
-  허용하며, capability evidence가 없으면 `-` 또는 다른 exact projection으로 정직하게 강등한다.
-- **F-43c (Codex router realization)**: Codex는 native Skill-invocation hook이 없으므로
-  `preflight.sh route <capability> <cwd> <session-id>` 성공 뒤 portable capability-grounding
-  utility를 best-effort로 호출한다. marker 실패는 routing을 막지 않으며 worker session은
-  inline main marker를 만들지 않는다. optional mode/intensity는 전달된 경우에만 기록한다.
-- **F-43d (surface parity)**: group/plain/live/JSON은 같은 `WorkProjection` 판정을 소비하고,
-  render는 불일치 projection이 주입되어도 non-spec capability 뒤에 stale spec label을 붙이지
-  않는다. canonical Fleet와 Claude mirror는 byte-identical을 유지한다.
-
-**acceptance**: (1) spec marker만 있는 main session은 spec을 표시하지 않음, (2) 같은 session의
-`autopilot-code` marker는 `code(...)`를 표시하고 spec phase를 숨김, (3) `autopilot-spec` marker는
-기존 lit breadcrumb를 유지, (4) Codex router 호출이 exact session marker를 생성, (5) full Fleet,
-portable guard, generator/mirror parity 회귀 0.
-
 ## 5. 능동 변경 — fleet-owned local state write
 
 현재 `statusline.sh:10` 이 **모든 세션을 `~/.claude/.statusline-last.json` 한 파일에 덮어씀**(last-writer-wins) → 멀티세션 대시보드가 세션별 telemetry 를 못 얻음. 해결:
@@ -707,17 +684,10 @@ flowchart TD
   `preparing…`을 표시한다. depth-2 `running`은 해당 stage hue를 사용하고, interactive
   NOW와 dispatch summary는 session 시작 열에 맞춘다.
 
-## 확정 결정 (v27 승격, 2026-07-27 — inline capability truth)
+## Next — current v26 implementation handoff (`autopilot-code`)
 
-- **F-43 lock**: spec-read marker는 active capability가 아니다. interactive spec breadcrumb는
-  fresh exact-sid capability grounding이 `autopilot-spec`일 때만 허용하고, Codex capability
-  router는 native Skill hook 부재를 marker 기록으로 보완한다.
-
-## Next — current v27 implementation handoff (`autopilot-code`)
-
-1. `projection.py`가 capability grounding을 먼저 결합하고 active `autopilot-spec`일 때만
-   spec marker fallback을 허용한다.
-2. Codex `preflight.sh route` 성공 경로가 main-session capability marker를 best-effort로
-   기록하고 worker를 제외하도록 구현한다.
-3. spec-only/code/spec marker matrix, Codex router marker, full Fleet, portable guard,
-   generator 및 canonical↔Claude mirror parity를 완료 게이트로 삼는다.
+1. `render.py`에서 pre-stage fallback, depth-2 stage hue, NOW session-column 정렬을
+   단일 표시 규칙으로 구현한다.
+2. known/unknown route, legacy worker, arbitrary route, wide/narrow/stack 폭을 focused
+   regression으로 고정한다.
+3. full Fleet suite, generator check, canonical↔Claude mirror parity를 완료 게이트로 삼는다.

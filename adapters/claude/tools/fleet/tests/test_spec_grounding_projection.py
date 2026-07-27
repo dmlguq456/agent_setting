@@ -63,6 +63,23 @@ def _session(sid="sid-a", cwd=None, elapsed_min=1, slug=None, **kw):
                    elapsed_min=elapsed_min, liveness="working", slug=slug, **kw)
 
 
+def _attach_projections(sessions, jobs, **kwargs):
+    """Most legacy cells exercise spec projection itself, so explicitly model
+    an active autopilot-spec entry.  F-43 negative cells call the production
+    function directly with no capability evidence."""
+    home = kwargs.get("spec_marker_home")
+    cap_index = projection._capability_grounding_index(home) if home else {}
+    if kwargs.get("spec_markers") is not None:
+        for entity in sessions:
+            if entity.session_id:
+                cap_index.setdefault(
+                    entity.session_id,
+                    (NOW, {"capability": "autopilot-spec"}),
+                )
+    kwargs["capability_groundings"] = cap_index
+    return projection.attach_projections(sessions, jobs, **kwargs)
+
+
 class SpecMarkerAttributionTest(unittest.TestCase):
     # (a) exact sid + fresh marker + standard pipeline_state -> "spec <topic> ·<phase>"
     def test_a_exact_sid_fresh_marker_standard_pipeline_state(self):
@@ -70,7 +87,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             _write_pipeline_state(tmp, "topic-a", "phases:\n  design: done\n  dev: in_progress\n")
             markers = {_marker_name("sid-a", tmp, "topic-a"): NOW}
             entity = _session(sid="sid-a", cwd=tmp)
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.source, "artifact-inferred")
             self.assertEqual(entity.work_projection.stage_label, "spec topic-a ·dev")
 
@@ -80,7 +97,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             _write_pipeline_state(tmp, "topic-a", "phases:\n  dev: in_progress\n")
             markers = {_marker_name("sid-a", tmp, "topic-a"): NOW}
             entity = _session(sid="sid-other", cwd=tmp)
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.source, "none")
 
     # (c) direction-fixed cell: a fixed/slug sid marker ("codex") is never adopted,
@@ -91,7 +108,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             _write_pipeline_state(tmp, "topic-a", "phases:\n  dev: in_progress\n")
             markers = {_marker_name("codex", tmp, "topic-a"): NOW}
             entity = _session(sid="019f1bdf-c9d8-72f0-b529-d8793305210e", cwd=tmp)
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.source, "none")
 
     # (d) multiple topics: strictly-freshest wins; exact tie -> unadopted +
@@ -105,7 +122,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
                 _marker_name("sid-a", tmp, "topic-new"): NOW - 10,
             }
             entity = _session(sid="sid-a", cwd=tmp)
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.stage_label, "spec topic-new ·test")
 
     def test_d_multiple_topics_exact_tie_rejected_with_diagnostic(self):
@@ -117,7 +134,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
                 _marker_name("sid-a", tmp, "topic-y"): NOW - 10,
             }
             entity = _session(sid="sid-a", cwd=tmp)
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.source, "none")
             self.assertEqual(entity.work_projection.ambiguity, projection.MULTIPLE_SPEC_MARKERS)
 
@@ -129,7 +146,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             markers = {_marker_name("sid-e", tmp): NOW}
             entity = _session(sid="sid-e", cwd=tmp, route_id=rid, route_file=REAL, route_node="execute")
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.source, "route-exact")
             self.assertEqual(entity.work_projection.stage_label, "execute")
 
@@ -144,7 +161,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             def resolve_at(mtime):
                 markers = {_marker_name("sid-a", tmp, "topic-a"): mtime}
                 entity = _session(sid="sid-a", cwd=tmp, elapsed_min=elapsed_min)
-                projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+                _attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
                 return entity.work_projection
 
             with self.subTest("beyond slack before start -> reject"):
@@ -162,7 +179,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             os.makedirs(tmp, exist_ok=True)
             markers = {_marker_name("sid-a", tmp, "topic-a"): NOW}
             entity = _session(sid="sid-a", cwd=tmp)
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.stage_label, "spec topic-a")
 
     # (h) phases: absent, top-level status: present -> status fallback (value taken verbatim)
@@ -171,7 +188,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             _write_pipeline_state(tmp, "topic-a", "mode: library\nphase: complete\nstatus: complete\n")
             markers = {_marker_name("sid-a", tmp, "topic-a"): NOW}
             entity = _session(sid="sid-a", cwd=tmp)
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.source, "none")
 
     # (i) all three keys absent -> topic-only
@@ -180,7 +197,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             _write_pipeline_state(tmp, "topic-a", "mode: library\nupdated: 2026-07-14\n")
             markers = {_marker_name("sid-a", tmp, "topic-a"): NOW}
             entity = _session(sid="sid-a", cwd=tmp)
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.stage_label, "spec topic-a")
 
     # (i2) non-UTF-8 pipeline_state.yaml -> degrades to topic-only, never raises
@@ -192,7 +209,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
                 f.write(b"phases:\n  dev: in_progress\xff\xfe\n")
             markers = {_marker_name("sid-a", tmp, "topic-a"): NOW}
             entity = _session(sid="sid-a", cwd=tmp)
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.stage_label, "spec topic-a")
 
     # (j) root marker: project_name: present -> topic reflected; absent (context-recovery-like) -> bare "spec" label
@@ -201,7 +218,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             _write_pipeline_state(tmp, None, "project_name: my-proj\nphases:\n  dev: in_progress\n")
             markers = {_marker_name("sid-a", tmp): NOW}
             entity = _session(sid="sid-a", cwd=tmp)
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.stage_label, "spec my-proj ·dev")
 
     def test_j_root_terminal_marker_is_not_live_work(self):
@@ -209,7 +226,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             _write_pipeline_state(tmp, None, "mode: library,cli\nphase: complete\nstatus: complete\n")
             markers = {_marker_name("sid-a", tmp): NOW}
             entity = _session(sid="sid-a", cwd=tmp)
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.source, "none")
 
     def test_terminal_done_and_skipped_sequence_is_suppressed(self):
@@ -218,7 +235,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
                 tmp, "topic-a", "phases:\n  design: done\n  dev: deferred\n"
             )
             entity = _session(sid="sid-a", cwd=tmp)
-            projection.attach_projections(
+            _attach_projections(
                 [entity], [], artifact_root=tmp, now=NOW,
                 spec_markers={_marker_name("sid-a", tmp, "topic-a"): NOW},
             )
@@ -230,7 +247,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
                 tmp, "topic-a", "phases:\n  design: done\n  dev: in_progress\n"
             )
             entity = _session(sid="sid-a", cwd=tmp)
-            projection.attach_projections(
+            _attach_projections(
                 [entity], [], artifact_root=tmp, now=NOW,
                 spec_markers={_marker_name("sid-a", tmp, "topic-a"): NOW},
             )
@@ -242,7 +259,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             _make_plan_dir(tmp, "2026-07-24_proj-a", "test", NOW - 5)
             markers = {_marker_name("sid-a", tmp): NOW - 50}
             entity = _session(sid="sid-a", cwd=tmp, slug="proj-a")
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.source, "artifact-inferred")
             self.assertEqual(entity.work_projection.stage_label, "test")
 
@@ -251,7 +268,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             _make_plan_dir(tmp, "2026-07-24_proj-a", "test", NOW - 50)
             markers = {_marker_name("sid-a", tmp): NOW - 5}
             entity = _session(sid="sid-a", cwd=tmp, slug="proj-a")
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.source, "artifact-inferred")
             self.assertEqual(entity.work_projection.stage_label, "spec")
 
@@ -260,7 +277,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             _make_plan_dir(tmp, "2026-07-24_proj-a", "test", NOW - 5)
             markers = {_marker_name("sid-a", tmp): NOW - 5}
             entity = _session(sid="sid-a", cwd=tmp, slug="proj-a")
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.source, "none")
             self.assertEqual(entity.work_projection.ambiguity, projection.MARKER_ARTIFACT_TIE)
 
@@ -270,7 +287,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             os.makedirs(os.path.join(tmp, "plans", "2026-07-20_proj-a", "plan"))
             markers = {_marker_name("sid-a", tmp): NOW}
             entity = _session(sid="sid-a", cwd=tmp, slug="proj-a")
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.source, "artifact-inferred")
             self.assertEqual(entity.work_projection.stage_label, "spec")
 
@@ -281,7 +298,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             _write_pipeline_state(tmp, "topic-a", "phases:\n  dev: in_progress\n")
             markers = {_marker_name("sid-a", tmp, "topic-a"): NOW}
             job = DispatchJob(key="code", slug="topic-a", cwd=tmp, liveness="working")
-            projection.attach_projections([], [job], artifact_root=tmp, now=NOW, spec_markers=markers)
+            _attach_projections([], [job], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(job.work_projection.source, "none")
 
     def test_l_other_root_marker_excluded(self):
@@ -289,7 +306,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             _write_pipeline_state(tmp_b, "topic-a", "phases:\n  dev: in_progress\n")
             markers = {_marker_name("sid-a", tmp_b, "topic-a"): NOW}
             entity = _session(sid="sid-a", cwd=tmp_a)
-            projection.attach_projections([entity], [], artifact_root=tmp_a, now=NOW, spec_markers=markers)
+            _attach_projections([entity], [], artifact_root=tmp_a, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.source, "none")
 
     def test_l_session_without_session_id_never_adopts(self):
@@ -298,7 +315,7 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             markers = {"nosession__%s__topic-a" % _key(tmp): NOW}
             entity = Session(harness="claude", pid=1, cwd=tmp, session_id=None,
                              elapsed_min=1, liveness="working")
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.source, "none")
 
 
@@ -364,7 +381,7 @@ class SpecPhaseSequenceTest(unittest.TestCase):
                 "mode: [cli]\nphases:\n  spec: done\n  scaffolding: deferred\n  dev: in_progress\n")
             markers = {_marker_name("sid-a", tmp, "topic-a"): NOW}
             entity = _session(sid="sid-a", cwd=tmp)
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW,
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW,
                                           spec_markers=markers)
             seq = render._spec_phase_seq(entity)
             self.assertEqual(seq, [("spec", "done"), ("scaffolding", "skipped"),
@@ -395,7 +412,7 @@ class SpecPhaseSequenceTest(unittest.TestCase):
                     "mode: [%s]\nphases:\n  dev: in_progress\n" % mode)
                 markers = {_marker_name("sid-a", tmp, "t"): NOW}
                 entity = _session(sid="sid-a", cwd=tmp)
-                projection.attach_projections([entity], [], artifact_root=tmp, now=NOW,
+                _attach_projections([entity], [], artifact_root=tmp, now=NOW,
                                               spec_markers=markers)
                 segs = render._session_stage_segs(entity, working=True, max_width=80)
                 text = "".join(t for t, _k in segs)
@@ -422,7 +439,7 @@ class SpecPhaseSequenceTest(unittest.TestCase):
                 "  design: done\n  dev: in_progress\n  ship_setup: pending\n")
             markers = {_marker_name("sid-a", tmp, "topic-a"): NOW}
             entity = _session(sid="sid-a", cwd=tmp, slug="topic-a")
-            projection.attach_projections([entity], [], artifact_root=tmp, now=NOW,
+            _attach_projections([entity], [], artifact_root=tmp, now=NOW,
                                           spec_markers=markers)
             lines = render._build_lines([entity], [], "fleet", False, 0,
                                         layout="wide", term_width=220)
@@ -459,7 +476,7 @@ class CapabilityGroundingTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self._write(tmp, "sid-c", "capability=autopilot-code\nmode=dev\nintensity=standard\n")
             s = _session(sid="sid-c", cwd="/x")
-            projection.attach_projections([s], [], now=NOW, spec_marker_home=tmp)
+            _attach_projections([s], [], now=NOW, spec_marker_home=tmp)
             self.assertEqual(s.cap_grounding,
                              {"capability": "autopilot-code", "mode": "dev", "intensity": "standard"})
             text = "".join(t for t, _k in render._session_stage_segs(s, True, 80))
@@ -471,10 +488,46 @@ class CapabilityGroundingTest(unittest.TestCase):
             markers = {_marker_name("sid-s", tmp, "topic-a"): NOW}
             self._write(tmp, "sid-s", "capability=autopilot-spec\nintensity=strong\n")
             s = _session(sid="sid-s", cwd=tmp)
-            projection.attach_projections([s], [], artifact_root=tmp, now=NOW,
+            _attach_projections([s], [], artifact_root=tmp, now=NOW,
                                           spec_markers=markers, spec_marker_home=tmp)
             text = "".join(t for t, _k in render._session_stage_segs(s, True, 80))
             self.assertIn("spec(cli·strong) : ", text)   # intensity from the grounding marker
+
+    def test_spec_read_marker_alone_is_not_active_inline_work(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_pipeline_state(
+                tmp, "topic-a", "mode: [cli]\nphases:\n  dev: in_progress\n"
+            )
+            s = _session(sid="sid-read-only", cwd=tmp)
+            projection.attach_projections(
+                [s], [], artifact_root=tmp, now=NOW,
+                spec_markers={_marker_name("sid-read-only", tmp, "topic-a"): NOW},
+                capability_groundings={},
+            )
+            self.assertEqual(s.work_projection.source, "none")
+            self.assertEqual(
+                "".join(t for t, _k in render._session_stage_segs(s, True, 80)), "-"
+            )
+
+    def test_non_spec_capability_hides_a_fresher_spec_read_marker(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_pipeline_state(
+                tmp, "topic-a", "mode: [cli]\nphases:\n  dev: in_progress\n"
+            )
+            self._write(
+                tmp, "sid-code",
+                "capability=autopilot-code\nmode=debug\nintensity=direct\n",
+            )
+            s = _session(sid="sid-code", cwd=tmp)
+            _attach_projections(
+                [s], [], artifact_root=tmp, now=NOW,
+                spec_markers={_marker_name("sid-code", tmp, "topic-a"): NOW},
+                spec_marker_home=tmp,
+            )
+            text = "".join(t for t, _k in render._session_stage_segs(s, True, 80))
+            self.assertEqual(s.work_projection.source, "none")
+            self.assertIn("code(debug·direct)", text)
+            self.assertNotIn("spec", text)
 
     def test_non_entry_and_stale_markers_are_ignored(self):
         with tempfile.TemporaryDirectory() as tmp:

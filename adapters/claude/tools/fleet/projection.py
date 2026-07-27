@@ -714,7 +714,8 @@ def _candidate_projection(entity, candidate, jobs, route_records, node_evidence,
 
 
 def resolve_work_projection(entity, jobs=(), route_records=None, node_evidence=None,
-                            artifact_root=None, now=None, spec_markers=None, _seen=None):
+                            artifact_root=None, now=None, spec_markers=None,
+                            cap_grounding=None, _seen=None):
     """Resolve one entity using the approved evidence precedence."""
     seen = set() if _seen is None else _seen
     ident = (id(entity), _field(entity, "slug"), _field(entity, "session_id"))
@@ -814,11 +815,13 @@ def resolve_work_projection(entity, jobs=(), route_records=None, node_evidence=N
     # Artifact inference is the final fallback and is legal only when no route
     # tuple exists anywhere on this entity.  Owner candidates above therefore
     # always win, even when a plausible plan directory is present.
-    # Spec-grounding marker attribution is Session-only (DispatchJob keeps its
-    # existing route/registry precedence unchanged, handoff rule 1) and shares
-    # this same final-fallback slot as one more inferred-evidence source.
+    # Spec-grounding is a read marker, not proof that spec is the session's
+    # current entry capability.  Adopt it only when the fresh exact-sid
+    # capability marker says autopilot-spec (F-43); absence is safer than
+    # pinning a long-lived main session to every PRD it happened to read.
     marker_projection = marker_ambiguity = marker_mtime = None
-    if spec_markers is not None and not hasattr(entity, "depth"):
+    if (spec_markers is not None and not hasattr(entity, "depth")
+            and _field(cap_grounding, "capability") == "autopilot-spec"):
         marker_projection, marker_ambiguity, marker_mtime = _spec_marker_projection(
             entity, spec_markers, artifact_root=artifact_root, now=now)
 
@@ -853,14 +856,16 @@ def resolve_projection(*args, **kwargs):
 
 def attach_projections(sessions: Iterable[Session], jobs: Iterable[DispatchJob],
                       route_records=None, node_evidence=None, artifact_root=None, now=None,
-                      spec_markers=None, spec_marker_home=None):
+                      spec_markers=None, spec_marker_home=None,
+                      capability_groundings=None):
     """Attach work to every row and context only to interactive session rows."""
     sessions, jobs = list(sessions), list(jobs)
     route_records = _load_evidence_records(node_evidence, route_records)
     home = spec_marker_home or _grounding_home()
     if spec_markers is None:
         spec_markers = _spec_marker_index(home)
-    cap_index = _capability_grounding_index(home)
+    cap_index = (_capability_grounding_index(home) if capability_groundings is None
+                 else capability_groundings)
     all_entities = sessions + jobs
     for session in sessions:
         public, private = normalize_context(_evidence(session), now=now)
@@ -871,17 +876,17 @@ def attach_projections(sessions: Iterable[Session], jobs: Iterable[DispatchJob],
         # window.  Drop legacy/inferred values instead of projecting "unknown".
         job.context = None
         job._context_evidence = None
+    # Resolve the current inline entry before artifact fallback.  A spec-read
+    # marker is eligible only when this exact session is actively in autopilot-spec.
+    for session in sessions:
+        session.cap_grounding = _capability_grounding_for(session, cap_index, now=now)
     for entity in all_entities:
         entity.work_projection = resolve_work_projection(
             entity, jobs=jobs, route_records=route_records,
             node_evidence=node_evidence, artifact_root=artifact_root, now=now,
-            spec_markers=spec_markers)
+            spec_markers=spec_markers,
+            cap_grounding=(entity.cap_grounding if isinstance(entity, Session) else None))
         entity.stage = entity.work_projection.stage_label if isinstance(entity, DispatchJob) else getattr(entity, "stage", None)
-    # Capability grounding is a Session-only inline tag (dispatched work carries capability/mode/
-    # intensity in its own jobs.log row).  Attach after work resolution so the render layer can
-    # show `capability(mode·intensity)` for inline entry work that leaves no dispatch row.
-    for session in sessions:
-        session.cap_grounding = _capability_grounding_for(session, cap_index, now=now)
     return sessions, jobs
 
 

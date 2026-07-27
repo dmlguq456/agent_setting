@@ -8,13 +8,14 @@ inputs:
   - spec/stage-dispatch/prd.md   # v2: SD-3·§9-13 스테이지 row 관제 parity
   - spec/prd.md                  # v3/F-19: Unified Memory System v15 Cluster J (write-events 저널 = F-19 소스)
 phases:
-  spec: done            # PRD v25: route completion reconciliation projection
+  spec: done            # PRD v27: inline capability truth correction
   scaffolding: deferred # lean — skeleton 은 autopilot-code 로 이월 (module 구조만 §9 확정)
   design: n/a           # 시각 UI 아님 (터미널 TUI 레이아웃은 PRD §4)
-  dev: done             # 8615482f F-41 classification/render/regressions + mirror parity
+  dev: done             # F-43 projection/router implementation + 926 Fleet regressions
 last_updated: 2026-07-27
-spec_version: v25
+spec_version: v27
 decisions_locked:
+  - 'F-43(v27): spec-read marker는 active capability가 아니며 fresh exact-sid capability=autopilot-spec일 때만 inline spec breadcrumb를 허용한다; Codex router는 main-session capability marker를 best-effort 기록한다'
   - 'F-41(v25): exact shared-observer reconcile-needed는 route node reconciling/…로 표시하며 marker 전에는 done·gate·successor를 주장하지 않고 generic stale/dead는 계속 failed/✕다'
   - 'F-40(v23): capability_mode, worker_mode, unit은 독립 필드다. owner는 capability mode만 표시하고 legacy slash mode는 conflict이며, depth-2 worker mode는 JSON evidence로 보존하되 contract/unit과 중복 렌더하지 않는다'
   - 'v24: live repo 그룹은 현재 activity tier를 즉시 반영하며 run-local anchor는 같은 tier 내부의 survivor 순서만 안정화한다'

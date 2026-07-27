@@ -963,6 +963,9 @@ def _projection_stage_text(entity, max_width=24):
 def _spec_phase_seq(entity):
     """``[(display, state), ...]`` for a spec-grounding projection's lit phase breadcrumb, else
     None. The sequence is attached by ``projection._spec_marker_projection`` in ``_route_view``."""
+    cap = getattr(entity, "cap_grounding", None) or {}
+    if cap.get("capability") != "autopilot-spec":
+        return None
     projection = getattr(entity, "work_projection", None)
     if not projection or getattr(projection, "source", None) != "artifact-inferred":
         return None
@@ -1009,7 +1012,12 @@ def _session_stage_segs(entity, working, max_width):
         segs = [(name, "name_dim")]
         if knob_items:
             segs += [("(", "dim"), ("·".join(knob_items), "dim"), (")", "dim")]
-        stage = getattr(getattr(entity, "work_projection", None), "stage_label", None)
+        projection = getattr(entity, "work_projection", None)
+        stage = getattr(projection, "stage_label", None)
+        # Defensive F-43 boundary: even a manually injected/mixed projection
+        # must not trail stale spec phases after a non-spec capability tag.
+        if (getattr(projection, "_route_view", None) or {}).get("spec_phases"):
+            stage = None
         if stage:
             segs += [(" : ", "dim"), (_clip_w(str(stage), max(4, max_width - sum(_dw(t) for t, _k in segs) - 3)),
                                       "g_work" if working else "dim")]
