@@ -112,6 +112,39 @@ class CodexStopParentParkTest(unittest.TestCase):
             self.assertEqual(HOOK.main(), 0)
         spawn.assert_not_called()
 
+    def test_session_end_clears_quietly_but_preserves_lifecycle_stderr_contract(self) -> None:
+        payload = {"hook_event_name": "SessionEnd", "cwd": "/repo", "session_id": SESSION}
+        with mock.patch.object(HOOK, "load_payload", return_value=payload), \
+             mock.patch.object(HOOK, "is_worker_session", return_value=False), \
+             mock.patch.object(HOOK, "run_preflight") as run:
+            self.assertEqual(HOOK.main(), 0)
+        self.assertEqual(
+            run.call_args_list,
+            [
+                mock.call("material-route", "clear", "--session", SESSION, quiet=True),
+                mock.call("session-end", "/repo", SESSION),
+            ],
+        )
+
+    def test_unknown_event_keeps_existing_session_end_fallback_without_clear(self) -> None:
+        payload = {"hook_event_name": "", "cwd": "/repo", "session_id": SESSION}
+        with mock.patch.object(HOOK, "load_payload", return_value=payload), \
+             mock.patch.object(HOOK, "is_worker_session", return_value=False), \
+             mock.patch.object(HOOK, "run_preflight") as run:
+            self.assertEqual(HOOK.main(), 0)
+        run.assert_called_once_with("session-end", "/repo", SESSION)
+
+    def test_preflight_quiet_only_suppresses_material_route_clear_diagnostics(self) -> None:
+        result = mock.Mock(stderr="diagnostic\n")
+        with mock.patch.object(HOOK.subprocess, "run", return_value=result):
+            quiet = io.StringIO()
+            with redirect_stdout(io.StringIO()), mock.patch("sys.stderr", quiet):
+                HOOK.run_preflight("material-route", "clear", quiet=True)
+            self.assertEqual(quiet.getvalue(), "")
+            with redirect_stdout(io.StringIO()), mock.patch("sys.stderr", quiet):
+                HOOK.run_preflight("session-end")
+        self.assertEqual(quiet.getvalue(), "diagnostic\n")
+
     def test_ready_batch_publishes_state_and_one_continuation(self) -> None:
         self.jobs.write_text(row(), encoding="utf-8")
         receipt = {

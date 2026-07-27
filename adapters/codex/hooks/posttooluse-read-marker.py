@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import os
 import shlex
 import subprocess
@@ -125,6 +126,32 @@ def read_target(payload: dict[str, Any]) -> str:
     return ""
 
 
+def bind_material_route(payload: dict[str, Any], session_id: str) -> None:
+    name = tool_name(payload)
+    if not is_shell_tool(name):
+        return
+    command = shell_command(payload, tool_input(payload))
+    guard_path = ROOT / "hooks" / "material-route-guard.py"
+    spec = importlib.util.spec_from_file_location("material_route_guard", guard_path)
+    if not spec or not spec.loader:
+        return
+    guard = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(guard)
+    invocations = guard.route_compile_invocations(command, cwd(payload).resolve(strict=False))
+    outputs = [path for invocation in invocations for path in invocation.outputs]
+    if len(outputs) != 1 or len(invocations) != 1:
+        return
+    effective_cwd = invocations[0].effective_cwd
+    env = os.environ.copy()
+    env.setdefault("AGENT_HOME", str(ROOT))
+    subprocess.run(
+        [str(PREFLIGHT), "material-route", "bind", "--route", str(outputs[0]),
+         "--cwd", str(effective_cwd), "--session", session_id],
+        cwd=str(ROOT), env=env, text=True, stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL, check=False,
+    )
+
+
 def main() -> int:
     try:
         payload = json.load(sys.stdin)
@@ -133,14 +160,14 @@ def main() -> int:
     if not isinstance(payload, dict):
         return 0
 
-    file = read_target(payload)
-    if not file:
-        return 0
-
     session_id = nested_string(payload, "session_id", "sessionID", "thread_id", "threadID")
     if not session_id:
         session_id = first_string(nested_mapping(payload, "session"), "id")
     session_id = session_id or "codex-hook"
+    bind_material_route(payload, session_id)
+    file = read_target(payload)
+    if not file:
+        return 0
     env = os.environ.copy()
     env.setdefault("AGENT_HOME", str(ROOT))
     result = subprocess.run(

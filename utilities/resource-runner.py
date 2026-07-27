@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Detached process runner with PID reuse-safe reattachment."""
-import argparse, fcntl, hashlib, json, os, signal, subprocess, sys, time
+import argparse, fcntl, hashlib, importlib.util, json, os, signal, subprocess, sys, time
 from pathlib import Path
 
 def proc_identity(pid):
@@ -16,20 +16,29 @@ def locked_update(path, fn):
         result=fn(data); tmp=path.with_suffix(path.suffix+".tmp"); tmp.write_text(json.dumps(data,indent=2)+"\n"); os.replace(tmp,path); return result
 def main():
     p=argparse.ArgumentParser(); p.add_argument("--registry",required=True); s=p.add_subparsers(dest="cmd",required=True)
-    a=s.add_parser("start"); a.add_argument("--run-id",required=True); a.add_argument("--cwd",required=True); a.add_argument("--log",required=True); a.add_argument("--route"); a.add_argument("--node"); a.add_argument("--smoke-attestation"); a.add_argument("command",nargs=argparse.REMAINDER)
+    a=s.add_parser("start"); a.add_argument("--run-id",required=True); a.add_argument("--cwd",required=True); a.add_argument("--log",required=True); a.add_argument("--route",required=True); a.add_argument("--node",required=True); a.add_argument("--smoke-attestation"); a.add_argument("command",nargs=argparse.REMAINDER)
     for name in ("status","stop","tail"):
         x=s.add_parser(name); x.add_argument("--run-id",required=True)
     args=p.parse_args(); registry=Path(args.registry).resolve()
     if args.cmd=="start":
-        cwd=Path(args.cwd).resolve(strict=True); log=Path(args.log).resolve(); log.parent.mkdir(parents=True,exist_ok=True)
+        cwd=Path(args.cwd).resolve(strict=True)
         command=args.command[1:] if args.command[:1]==["--"] else args.command
         if not command: raise SystemExit("command required")
-        if args.route:
-            route=json.loads(Path(args.route).read_text()); node=next((n for n in route["nodes"] if n["id"]==args.node),None)
-            if not node or node["kind"]!="resource-runner": raise SystemExit("route node is not resource-runner")
-            if route["cwd"]!=str(cwd): raise SystemExit("route cwd mismatch")
+        guard_path=Path(__file__).parents[1]/"hooks"/"material-route-guard.py"
+        spec=importlib.util.spec_from_file_location("material_route_guard", guard_path)
+        guard=importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(guard)
+        route=guard.verify_route(
+            Path(args.route), cwd, guard.resolve_agent_home(), expected_node=args.node,
+            accepted_capabilities={"autopilot-code", "autopilot-lab"},
+        )
+        node=next((n for n in route["nodes"] if isinstance(n,dict) and n.get("id")==args.node),None)
+        if not node or node.get("kind")!="resource-runner" or node.get("resource_transport")!="detached-process":
+            raise SystemExit("route node is not detached resource-runner")
         if not args.smoke_attestation: raise SystemExit("hash-bound smoke attestation required")
         subprocess.run([sys.executable,str(Path(__file__).parents[1]/"tools/smoke-attestation.py"),"verify","--attestation",args.smoke_attestation],check=True)
+        log=Path(args.log).resolve(); log.parent.mkdir(parents=True,exist_ok=True)
         out=open(log,"ab",buffering=0); proc=subprocess.Popen(command,cwd=cwd,stdout=out,stderr=subprocess.STDOUT,start_new_session=True)
         ident=None
         for _ in range(20):

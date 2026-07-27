@@ -27,7 +27,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import Any, Iterable
+from typing import Any, Iterable, NamedTuple
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -266,12 +266,14 @@ def verify_route(
     *,
     expected_route_id: str | None = None,
     expected_node: str | None = None,
+    accepted_capabilities: set[str] | None = None,
 ) -> dict[str, Any]:
     if route_file.is_symlink():
         raise RouteError("route-file-unsafe")
     route_file = route_file.resolve(strict=False)
     route = _load_route(route_file)
-    if route.get("capability") != "autopilot-code":
+    capabilities = accepted_capabilities or {"autopilot-code"}
+    if route.get("capability") not in capabilities:
         raise RouteError("route-capability-not-autopilot-code")
     if route.get("effective_intensity") not in INTENSITIES:
         raise RouteError("route-intensity-invalid")
@@ -445,8 +447,67 @@ def _route_compile_argv(segment: list[str]) -> list[str] | None:
     return segment[index + 1:]
 
 
-def route_compile_outputs(command: str, cwd: Path) -> list[Path]:
-    outputs: list[Path] = []
+class CompileInvocation(NamedTuple):
+    outputs: tuple[Path, ...]
+    effective_cwd: Path
+
+
+def _git_common_dir(checkout: Path) -> Path | None:
+    try:
+        result = _run(["git", "-C", str(checkout), "rev-parse", "--git-common-dir"])
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode or not result.stdout.strip():
+        return None
+    raw = Path(result.stdout.strip())
+    return (checkout / raw).resolve(strict=False) if not raw.is_absolute() else raw.resolve(strict=False)
+
+
+def _trusted_codex_preflight(path: str, command_cwd: Path) -> bool:
+    """Accept an exact wrapper in a checkout sharing this harness's Git identity."""
+    candidate = Path(os.path.expanduser(path))
+    if not candidate.is_absolute():
+        candidate = command_cwd / candidate
+    try:
+        resolved = candidate.resolve(strict=True)
+    except OSError:
+        return False
+    if not resolved.is_file():
+        return False
+    relative = Path("adapters") / "codex" / "bin" / "preflight.sh"
+    try:
+        checkout = resolved.parents[3]
+        if resolved.relative_to(checkout) != relative:
+            return False
+    except (IndexError, ValueError):
+        return False
+    try:
+        canonical = (ROOT / relative).resolve(strict=True)
+    except OSError:
+        canonical = None
+    if resolved == canonical:
+        return True
+    trusted_common = _git_common_dir(ROOT.resolve(strict=True))
+    candidate_common = _git_common_dir(checkout)
+    return trusted_common is not None and candidate_common == trusted_common
+
+
+def _codex_route_compile_argv(segment: list[str], command_cwd: Path) -> list[str] | None:
+    """Recognize the exact local `preflight.sh route --capability` form."""
+    index = 0
+    while index < len(segment) and re.fullmatch(
+        r"[A-Za-z_][A-Za-z0-9_]*=.*", segment[index]
+    ):
+        index += 1
+    if index >= len(segment) or not _trusted_codex_preflight(segment[index], command_cwd):
+        return None
+    if segment[index + 1:index + 3] != ["route", "--capability"]:
+        return None
+    return segment[index + 3:]
+
+
+def route_compile_invocations(command: str, cwd: Path) -> list[CompileInvocation]:
+    invocations: list[CompileInvocation] = []
     command_cwd = cwd.resolve(strict=False)
     for segment in _shell_segments(command):
         if segment and segment[0] == "cd" and len(segment) == 2 and not segment[1].startswith("-"):
@@ -454,7 +515,10 @@ def route_compile_outputs(command: str, cwd: Path) -> list[Path]:
             continue
         tail = _route_compile_argv(segment)
         if tail is None:
+            tail = _codex_route_compile_argv(segment, command_cwd)
+        if tail is None:
             continue
+        outputs: list[Path] = []
         for offset, value in enumerate(tail):
             raw = ""
             if value == "--output" and offset + 1 < len(tail):
@@ -466,11 +530,20 @@ def route_compile_outputs(command: str, cwd: Path) -> list[Path]:
                 outputs.append(
                     (command_cwd / path).resolve() if not path.is_absolute() else path.resolve()
                 )
-    unique = []
-    for path in outputs:
-        if path not in unique:
-            unique.append(path)
-    return unique
+        unique = []
+        for path in outputs:
+            if path not in unique:
+                unique.append(path)
+        if unique:
+            invocations.append(CompileInvocation(tuple(unique), command_cwd))
+    return invocations
+
+
+def route_compile_outputs(command: str, cwd: Path) -> list[Path]:
+    outputs: list[Path] = []
+    for invocation in route_compile_invocations(command, cwd):
+        outputs.extend(invocation.outputs)
+    return outputs
 
 
 def _resolve_path(base: Path, raw: str) -> Path:
@@ -725,11 +798,15 @@ def hook_main(payload: dict[str, Any], agent_home: Path) -> int:
         if session_id:
             clear_route(session_id, agent_home)
         return 0
-    if event == "PostToolUse" and tool in {"Bash", "bash", "Shell", "shell"}:
-        outputs = route_compile_outputs(str(tool_input.get("command") or ""), cwd)
-        if session_id and len(outputs) == 1:
+    if event == "PostToolUse" and (
+        tool in {"Bash", "bash", "Shell", "shell", "exec_command", "functions.exec_command"}
+        or tool.endswith(".exec_command")
+    ):
+        invocations = route_compile_invocations(str(tool_input.get("command") or ""), cwd)
+        outputs = [path for invocation in invocations for path in invocation.outputs]
+        if session_id and len(outputs) == 1 and len(invocations) == 1:
             try:
-                bind_route(outputs[0], cwd, session_id, agent_home)
+                bind_route(outputs[0], invocations[0].effective_cwd, session_id, agent_home)
             except (RouteError, OSError, subprocess.SubprocessError):
                 pass
         return 0

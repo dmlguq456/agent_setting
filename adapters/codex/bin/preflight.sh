@@ -261,6 +261,7 @@ case "$cmd" in
       */.agent_reports/spec/ui_flow.md|*/.claude_reports/spec/ui_flow.md)
         "$ROOT/hooks/spec-skill-gate.sh" --skill autopilot-spec --cwd "$(dirname "$file")" --session "$sid" ;;
     esac
+    "$0" material-route check --tool Write --file "$file" --cwd "$(dirname "$file")" --session "$sid"
     ;;
   read)
     [ "$#" -ge 2 ] || { echo "codex preflight: read requires a file path" >&2; exit 64; }
@@ -282,6 +283,11 @@ case "$cmd" in
     "$0" prompt-signal "$cwd" "$sid"
     "$0" capability-info "$name"
     "$0" capability "$name" "$cwd" "$sid"
+    ;;
+  material-route)
+    [ "$#" -ge 2 ] || { echo "codex preflight: material-route requires an action" >&2; exit 64; }
+    shift
+    exec python3 "$ROOT/hooks/material-route-guard.py" --agent-home "$ROOT" "$@"
     ;;
   worker-route)
     shift

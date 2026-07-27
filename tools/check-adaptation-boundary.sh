@@ -1956,6 +1956,21 @@ check_codex_native_hook_projection() {
     || ! grep -Fq 'payload, "patch", "patchText", "patch_text", "input", "text"' "$post_bridge"; then
     fail_msg "Codex patch hook bridges must parse qualified apply_patch names and top-level patch text"
   fi
+  if ! grep -Fq 'functions\\.apply_patch' "$hook_json" \
+    || ! grep -Fq 'patch_files(base, patch_text(payload, args))' "$pre_bridge" \
+    || ! grep -Fq 'material-route' "$pre_bridge" \
+    || ! grep -Fq 'bind_material_route' "$read_bridge"; then
+    fail_msg "Codex apply_patch matcher/payload projection and material-route bridge must remain explicit"
+  fi
+  if ! grep -Fq 'material-route' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq '"$0" material-route check --tool Write --file "$file" --cwd "$(dirname "$file")" --session "$sid"' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'material-route", "check", "--tool", "Bash"' "$pre_bridge" \
+    || ! grep -Fq 'material-route", "bind", "--route"' "$read_bridge" \
+    || ! grep -Fq 'if os.environ.get("AGENT_PARENT_PARK_ONLY") == "1":' "$pre_bridge" \
+    || ! grep -Fq 'SessionEnd' adapters/codex/hooks/sessionend-lifecycle.py \
+    || ! grep -Fq 'event == "sessionend"' adapters/codex/hooks/sessionend-lifecycle.py; then
+    fail_msg "Codex material-route write/check/bind call sites and SessionEnd-only clear must remain wired"
+  fi
   if ! grep -Fq '"design"' "$post_bridge"; then
     fail_msg "$post_bridge must call the Codex design preflight"
   fi

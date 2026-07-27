@@ -401,3 +401,18 @@ Claude Code-specific files remain valid as implementation references, not as Cod
 - `adapters/claude/statusline.sh` targets Claude Code's statusline contract.
 
 When porting a behavior, copy the underlying invariant from `CORE.md`, `WORKFLOW.md`, `CONVENTIONS.md`, or `OPERATIONS.md`; then map it to Codex's tool, approval, and session model.
+# Material-route boundary
+
+The Codex hook bridge delegates material source checks to the portable
+material-route guard. `functions.apply_patch` is parsed into portable `Write`
+targets, while source-bearing shell commits are checked from the exact command.
+Binding requires one successful trusted local route compile and canonical route
+verification; interactive session markers and registered-worker route
+environment proof remain separate. `SessionEnd` clears markers, never `Stop`.
+`preflight.sh material-route` is the explicit checked fallback for unavailable,
+disabled, or untrusted hooks and does not claim hosted-tool parity.
+
+Resource-runner startup requires a sealed route, exact detached resource node,
+and smoke attestation before launch state or a child process exists. Installing
+the projection and satisfying current-hash hook trust are separate operator
+actions; this source tree alone does not activate runtime enforcement.
