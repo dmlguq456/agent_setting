@@ -148,6 +148,23 @@ class RegisteredParentParkTest(unittest.TestCase):
             "--adapter claude --action start --slug child-b --parent owner",
         )
 
+    def test_delivered_terminal_quiescent_open_row_stays_harvest_only(self) -> None:
+        self.jobs.write_text(
+            self.jobs.read_text(encoding="utf-8").rstrip()
+            + ",launch_outcome=never-launched\n",
+            encoding="utf-8",
+        )
+        self.write_state([CHILD])
+        self.assert_denied("Read")
+        self.assert_denied("Bash", "git status --short")
+        self.assertIsNone(
+            self.invoke(
+                "Bash",
+                f"adapters/codex/bin/preflight.sh harvest --attempt-id {CHILD} "
+                "--status open --mark-done",
+            )
+        )
+
     def test_missing_state_is_recovery_only_and_non_supervised_is_inactive(self) -> None:
         self.assertFalse(self.state.exists())
         self.assertIsNone(

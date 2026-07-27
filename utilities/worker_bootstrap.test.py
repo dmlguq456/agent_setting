@@ -54,6 +54,8 @@ class WorkerBootstrapTest(unittest.TestCase):
         self.assertEqual(rendered.count("# Portable Worker Kernel"), 1)
         self.assertEqual(rendered.count("# Worker Type:"), 1)
         self.assertIn(W.handoff_template(), rendered)
+        self.assertIn("has no Markdown fence", rendered)
+        self.assertNotIn("```text\nartifact:", rendered)
         self.assertNotIn("# Worker Type: Owner", rendered)
         self.assertNotIn("# Worker Type: Review", rendered)
 

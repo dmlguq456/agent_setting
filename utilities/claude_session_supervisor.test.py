@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import os
 from pathlib import Path
 import subprocess
@@ -15,6 +16,11 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SUPERVISOR = ROOT / "utilities" / "claude-session-supervisor.py"
 PARENT = "att-parent"
+sys.path.insert(0, str(ROOT / "utilities"))
+_SPEC = importlib.util.spec_from_file_location("claude_session_supervisor", SUPERVISOR)
+supervisor = importlib.util.module_from_spec(_SPEC)
+assert _SPEC.loader is not None
+_SPEC.loader.exec_module(supervisor)
 
 
 def owner_row(status: str = "open") -> str:
@@ -153,7 +159,9 @@ class ClaudeSessionSupervisorTest(unittest.TestCase):
             settings = json.loads(
                 turn["args"][turn["args"].index("--settings") + 1]
             )
-            hook = settings["hooks"]["PreToolUse"][0]["hooks"][0]
+            pre_tool = settings["hooks"]["PreToolUse"][0]
+            self.assertEqual(pre_tool["matcher"], "*")
+            hook = pre_tool["hooks"][0]
             self.assertEqual(hook["type"], "command")
             self.assertIn("hooks/registered-parent-park.py", hook["command"])
         rows = [json.loads(line) for line in result.stdout.splitlines()]
@@ -205,6 +213,33 @@ class ClaudeSessionSupervisorTest(unittest.TestCase):
         self.assertEqual(turns[0]["session"], turns[1]["session"])
         self.assertEqual(turns[1]["delivered"], ["att-child"])
         self.assertNotIn("RAW_CLAUDE_SENTINEL", result.stdout)
+
+    def test_completion_prompt_carries_only_exact_checked_harvest(self):
+        prompt = supervisor.completion_prompt(
+            {
+                "schema_version": 1,
+                "state": "ready",
+                "parent_attempt_id": PARENT,
+                "children": [
+                    {
+                        "attempt_id": "att-child-a",
+                        "status": "open",
+                        "readiness": "ready",
+                        "reason": "terminal-observed",
+                    },
+                    {
+                        "attempt_id": "att-child-b",
+                        "status": "open",
+                        "readiness": "ready",
+                        "reason": "terminal-observed",
+                    },
+                ],
+            }
+        )
+        self.assertEqual(prompt.count("preflight.sh harvest --attempt-id"), 2)
+        self.assertIn("--attempt-id att-child-a --mark-done", prompt)
+        self.assertIn("--attempt-id att-child-b --mark-done", prompt)
+        self.assertNotIn("RAW_CLAUDE_SENTINEL", prompt)
 
     def test_missing_result_has_no_false_terminal(self):
         broken = self.base / "broken.py"

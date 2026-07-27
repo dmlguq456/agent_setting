@@ -50,6 +50,60 @@ def safe_private_directory(path: Path, label: str) -> Path:
     return resolved
 
 
+def safe_registry(path: Path) -> Path:
+    """Create or validate one owner-private exact registry file."""
+
+    if not path.is_absolute() or path.is_symlink():
+        raise EntryError("jobs-path-unsafe")
+    parent = safe_directory(path.parent, "jobs-parent")
+    candidate = parent / path.name
+    existed = candidate.exists()
+    flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_CLOEXEC
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(candidate, flags, 0o600)
+    except OSError as exc:
+        raise EntryError("jobs-unavailable") from exc
+    try:
+        if not existed:
+            os.fchmod(descriptor, 0o600)
+        info = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.geteuid()
+            or info.st_mode & 0o077
+        ):
+            raise EntryError("jobs-permissions-unsafe")
+    finally:
+        os.close(descriptor)
+    return candidate.resolve(strict=True)
+
+
+def check_runtime(codex: str, workspace: Path, environment: dict[str, str]) -> None:
+    """Verify the two runtime surfaces needed by managed entry without login I/O."""
+
+    commands = (
+        ([codex, "app-server", "--help"], "--listen", "app-server-unavailable"),
+        ([codex, "--help"], "--remote", "remote-tui-unavailable"),
+    )
+    for command, marker, reason in commands:
+        try:
+            result = subprocess.run(
+                command,
+                cwd=workspace,
+                env=environment,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                check=False,
+                timeout=20,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise EntryError(reason) from exc
+        if result.returncode != 0 or marker not in result.stdout:
+            raise EntryError(reason)
+
+
 def wait_socket(path: Path, process: subprocess.Popen[Any], timeout: float) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -99,6 +153,16 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument("--state-dir", required=True, type=Path)
     value.add_argument("--workspace", required=True, type=Path)
     value.add_argument(
+        "--jobs",
+        type=Path,
+        help="exact registry path; defaults to <state-dir>/jobs.log",
+    )
+    value.add_argument(
+        "--check",
+        action="store_true",
+        help="validate the isolated entry contract without starting a TUI",
+    )
+    value.add_argument(
         "--client-command",
         help=(
             "proof-only command; token {remote} is replaced by the gateway URI. "
@@ -121,6 +185,10 @@ def execute(args: argparse.Namespace) -> int:
     auth = codex_home / "auth.json"
     if not auth.is_file() or auth.is_symlink():
         raise EntryError("codex-home-auth-missing")
+    auth_info = auth.stat()
+    if auth_info.st_uid != os.geteuid() or auth_info.st_mode & 0o077:
+        raise EntryError("codex-home-auth-permissions-unsafe")
+    jobs = safe_registry(args.jobs or (state_dir / "jobs.log"))
     upstream = state_dir / "app-server.sock"
     front = state_dir / "managed-tui.sock"
     control = state_dir / "managed-control.sock"
@@ -138,8 +206,22 @@ def execute(args: argparse.Namespace) -> int:
             "AGENT_CODEX_MANAGED_GATEWAY": "1",
             "AGENT_CODEX_MANAGED_PARENT_RUNTIME": "codex",
             "AGENT_CODEX_MANAGED_CONTROL_SOCKET": str(control),
+            "AGENT_DISPATCH_JOBS": str(jobs),
         }
     )
+    check_runtime(args.codex, workspace, environment)
+    if args.check:
+        print(
+            canonical(
+                {
+                    "schema_version": 1,
+                    "status": "ready",
+                    "runtime": "codex-managed-entry",
+                    "jobs": str(jobs),
+                }
+            )
+        )
+        return 0
     app_server: subprocess.Popen[Any] | None = None
     gateway: subprocess.Popen[Any] | None = None
     try:

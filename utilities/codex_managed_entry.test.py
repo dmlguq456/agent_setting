@@ -29,12 +29,16 @@ class ManagedEntryTest(unittest.TestCase):
         os.chmod(self.home, 0o700)
         os.chmod(self.state, 0o700)
         (self.home / "auth.json").write_text("{}\n", encoding="utf-8")
+        os.chmod(self.home / "auth.json", 0o600)
         self.fake_codex = self.base / "fake-codex.py"
         self.fake_codex.write_text(
             textwrap.dedent(
                 """\
                 #!/usr/bin/env python3
                 import signal, socket, sys, time
+                if '--help' in sys.argv:
+                    print('--listen --remote')
+                    raise SystemExit(0)
                 listen = sys.argv[sys.argv.index('--listen') + 1]
                 path = listen[len('unix://'):] if listen.startswith('unix://') else listen
                 server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -67,6 +71,7 @@ class ManagedEntryTest(unittest.TestCase):
                     'control': os.environ.get('AGENT_CODEX_MANAGED_CONTROL_SOCKET'),
                     'codex_home': os.environ.get('CODEX_HOME'),
                     'agent_home': os.environ.get('AGENT_HOME'),
+                    'jobs': os.environ.get('AGENT_DISPATCH_JOBS'),
                 }
                 pathlib.Path(result).write_text(json.dumps(value), encoding='utf-8')
                 """
@@ -103,6 +108,8 @@ class ManagedEntryTest(unittest.TestCase):
         self.assertEqual(value["parent_runtime"], "codex")
         self.assertEqual(value["codex_home"], str(self.home))
         self.assertEqual(value["agent_home"], str(ROOT))
+        self.assertEqual(value["jobs"], str(self.state / "jobs.log"))
+        self.assertEqual((self.state / "jobs.log").stat().st_mode & 0o777, 0o600)
         self.assertEqual(
             value["remote"], f"unix://{self.state / 'managed-tui.sock'}"
         )
@@ -123,6 +130,35 @@ class ManagedEntryTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 65)
         self.assertIn("state-dir-permissions-unsafe", result.stderr)
+        self.assertFalse(self.result.exists())
+
+    def test_check_validates_runtime_without_starting_sockets(self) -> None:
+        command = self.command()
+        command.insert(command.index("--client-command"), "--check")
+        result = subprocess.run(
+            command, text=True, capture_output=True, timeout=5
+        )
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        value = json.loads(result.stdout)
+        self.assertEqual(value["status"], "ready")
+        self.assertEqual(value["jobs"], str(self.state / "jobs.log"))
+        self.assertFalse(self.result.exists())
+        for name in (
+            "app-server.sock",
+            "managed-tui.sock",
+            "managed-control.sock",
+        ):
+            self.assertFalse((self.state / name).exists())
+
+    def test_relative_jobs_path_fails_before_process_start(self) -> None:
+        command = self.command()
+        insert = command.index("--workspace")
+        command[insert:insert] = ["--jobs", "relative-jobs.log"]
+        result = subprocess.run(
+            command, text=True, capture_output=True, timeout=5
+        )
+        self.assertEqual(result.returncode, 65)
+        self.assertIn("jobs-path-unsafe", result.stderr)
         self.assertFalse(self.result.exists())
 
 

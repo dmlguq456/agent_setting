@@ -52,6 +52,7 @@ and `ADAPTATION.md`; command output is authoritative for current support.
 | delegation/QA | `preflight.sh subagent-info --check`, `preflight.sh qa-policy <level> [code|research|doc|general]` |
 | readiness/loops | `preflight.sh doctor [--runtime]`, `preflight.sh loop-info <oncall|note|study|drill|runtime-watch>` |
 | dispatch control | `preflight.sh dispatch-wait --attempt-id <id> --max 300..600`, `preflight.sh liveness`, `preflight.sh harvest`, `preflight.sh dispatch-reconcile` |
+| managed Codex | `preflight.sh managed-entry [--check] --codex-home <private-dir> --state-dir <private-dir> --workspace <dir> [--jobs <jobs.log>]` |
 | install | `install-runtime-projection.sh [--install-plugin] [--skills-mode native|plugin|both]`, `check-runtime-projection.sh`, `preflight.sh runtime-projection --require-hook-trust` |
 
 Keep Codex `/statusline` responsible for model, context, token, limit, and session footer fields. `preflight.sh status` is an on-demand harness snapshot, including git dirty/worktree/dead-branch risks. Runtime config remains user-owned; strict projection checks read authoritative App Server `hooks/list` current-hash trust and never rewrite user trust state.
@@ -109,9 +110,11 @@ Launch registered jobs only through `preflight.sh dispatch
 `core/OPERATIONS.md`. Keep `capability_mode` separate from a non-owner
 `worker_mode`, which must equal its portable `unit`; a dispatch-depth-1 owner is
 `_kernel/owner` with no worker mode. `worker_role` and legacy `mode` are
-read-only metadata, not bootstrap identity. A direct interactive Codex launch is
-always explicit `poll-fallback`: it does not force Stop/PreToolUse trust, create
-parent Stop state, or park the model/tool loop. Keep the parent conversational.
+read-only metadata, not bootstrap identity. A direct interactive launch selects
+completion by the parent runtime: a live `managed-entry` Codex parent uses the
+gateway, a Claude parent uses Claude resume, and an unmanaged Codex parent uses
+explicit `poll-fallback`. This parent-runtime selection does not force Stop/PreToolUse trust,
+create new parent Stop state, or park the model/tool loop. Keep the parent conversational.
 If an operator deliberately selects the finite polling fallback, use
 `preflight.sh dispatch-wait --attempt-id <id> --max 300..600`; otherwise monitor
 with `preflight.sh liveness [jobs.log]` and harvest with `preflight.sh harvest`.

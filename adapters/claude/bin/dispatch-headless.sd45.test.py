@@ -188,6 +188,8 @@ class ClaudeSD78CompletionDelivery(unittest.TestCase):
         self.assertTrue(prompt.startswith("Runtime-owned completion join (SD-78):"))
         self.assertIn("same Claude session once", prompt)
         self.assertIn("Do not call dispatch-wait", prompt)
+        self.assertIn("a supervised owner yields the current turn", prompt)
+        self.assertNotIn("poll in the current turn", prompt)
 
     def test_supervised_shell_uses_session_bridge_without_no_persistence(self):
         args = _shell_command_args(

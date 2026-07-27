@@ -225,6 +225,8 @@ class CodexSD78CompletionDelivery(unittest.TestCase):
         self.assertIn("runtime_wait: registered-children", prompt)
         self.assertIn("joins all exact parent_attempt_id children outside the model", prompt)
         self.assertIn("Do not call dispatch-wait", prompt)
+        self.assertIn("a supervised owner yields the current turn", prompt)
+        self.assertNotIn("poll in the current turn", prompt)
 
     def test_explicit_poll_mode_is_disclosed_as_fallback(self):
         args = _prompt_args(resolved_completion_delivery="poll-fallback")
