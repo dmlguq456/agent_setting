@@ -26,9 +26,10 @@
 
 schema_version: 1
 
-# depth-1 owner: capability-owner harnesses the main session (depth-0) may
-# pick from when it opens a standard+ conductor. Concrete harnesses only.
-depth1_owner: [claude, codex]
+# depth-1 owner: Claude is the default long-context capability owner. Codex
+# remains available through an explicit override or a recorded eligibility /
+# capacity deviation, but is not selected from the normal owner candidate set.
+depth1_owner: [claude]
 
 # OpenCode is relief-only: it is never an automatic neutral/diverse
 # candidate. It participates only via an explicit --adapter opencode, an
@@ -42,20 +43,23 @@ capabilities:
   # autopilot-code: canonical topology node ids are frame, plan, plan-check,
   # execute, impl-review, test, report (capabilities/topologies.json v5).
   # PRD prose names "exec"/"review"; execute below realizes prose "exec" and
-  # test realizes the reviewer stage. plan is intentionally omitted
-  # (discretionary); a literal exec/review key fails validation against the
-  # topology registry. Parallel leg ids are compile-time expansions, not
-  # config keys. The batch places a group across at least two harness families
-  # when available; the route independently seals each leg's profile and perspective.
+  # test realizes the final verification stage. Context-bounded maker stages
+  # prefer Codex; checks stay cross-harness and final synthesis stays on Claude.
+  # A literal exec/review key fails validation against the topology registry.
+  # Parallel leg ids are compile-time expansions, not config keys. The batch
+  # places a group across at least two harness families when available; the
+  # route independently seals each leg's profile and perspective.
   autopilot-code:
     # frame: root-cause/direction leg leads on the GPT/Codex family
     # (root-cause-first practice; SD-82 framing anchor, 2026-07-24). The
     # alternative/contrarian legs are placed cross-harness-first by contract.
     frame: codex
+    plan: codex
+    plan-check: diverse
     execute: codex
+    impl-review: diverse
     test: diverse
     report: claude
-    # plan:  # omitted — discretionary, no shipped default
 
   # Coordinate inventory for other registered capabilities. All left
   # commented (parse-neutral scaffold, not empty keys) — no default is
