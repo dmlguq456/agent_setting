@@ -107,10 +107,10 @@ class RenderContentTest(ProcessViewEnv):
                                     malformed=0, layout="wide")
         text = _joined(lines)
         self.assertNotIn("PROCESS VIEW", text)
-        # the pre-v10 `_PIPE_STAGES` breadcrumb still renders exactly as before route_seq
-        # existed — proof this record-less job took the ORIGINAL code path, unmodified.
-        self.assertIn("plan", text)
-        self.assertIn("exec", text)
+        # F-42a: record-less capability identity is not a concrete route. The group view
+        # renders one preparation state and does not preview `_PIPE_STAGES`.
+        self.assertIn("preparing…", text)
+        self.assertNotIn("plan › exec › test", text)
 
     def test_t3_2_real_record_card_shows_short_route_id_and_progress(self):
         dispatch.collect.last_route_nodes = {

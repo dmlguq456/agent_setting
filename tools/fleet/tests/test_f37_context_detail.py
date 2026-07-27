@@ -36,19 +36,21 @@ class ContextDetailTruthTableTest(unittest.TestCase):
     def test_context_now_truth_table(self):
         cases = [
             (ContextProjection(63, "normal", "claude"), "Doing work",
-             "📚 ━━━━━━━━━━────── 63%   Doing work"),
+             "📚 ━━━━━━━━━━────── 63%"),
             (ContextProjection(63, "normal", "claude"), None,
              "📚 ━━━━━━━━━━────── 63%"),
             (ContextProjection(None, "unknown", "claude"), "Doing work",
-             "📚 ────────────────   —   Doing work"),
+             "📚 ────────────────   —"),
             (None, None, "📚 ────────────────   —"),
             (ContextProjection(0, "normal", "claude"), None,
              "📚 ────────────────  0%"),
         ]
-        for context, now, expected in cases:
+        for context, now, context_text in cases:
             row = render._context_detail_row(self._session(context=context, summary=now), term_width=168)
-            # The row is left-aligned to the NAME column (2026-07-24).
-            self.assertEqual(text(row), " " * render._CONTEXT_INDENT_W + expected)
+            expected = " " * render._CONTEXT_INDENT_W + context_text
+            if now:
+                expected += " " * (render._NAME_COL - render._dw(expected)) + now
+            self.assertEqual(text(row), expected)
 
     def test_stale_and_dead_rows_suppress_cached_detail(self):
         for state in ("stale", "dead"):
@@ -124,8 +126,7 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                     visible = text(row)
                     self.assertEqual(
                         render._dw(visible[:visible.index("Doing work")]),
-                        render._CONTEXT_INDENT_W + render._CTX_LABEL_W + render._HW
-                        + render._CONTEXT_VALUE_W + render._CONTEXT_NOW_GAP)
+                        render._NAME_COL)
                     track = re.search(r"[━─]+", visible).group(0)
                     self.assertEqual(len(track), render._HW - 2 * depth)
 
@@ -137,7 +138,8 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                                   summary="Doing work"), term_width=168)
                 visible = text(row)
                 self.assertNotIn(band, visible)
-                self.assertIn("85%   Doing work", visible)
+                self.assertEqual(render._dw(visible[:visible.index("Doing work")]),
+                                 render._NAME_COL)
                 self.assertNotIn(": ", visible)
 
     def test_percentage_is_dim_while_gauge_keeps_level_color(self):

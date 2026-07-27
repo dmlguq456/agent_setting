@@ -222,7 +222,7 @@ class FoldingTest(unittest.TestCase):
         self.assertNotIn("plan fleet-ui-v2-plan", text)
         self.assertNotIn("test fleet-ui-v2-test", text)
 
-    def test_portable_persona_child_is_visible_and_drives_exec_without_show_all(self):
+    def test_portable_persona_child_is_visible_with_exec_hue_without_owner_track(self):
         conductor = DispatchJob(key="code", slug="agent-home-code-owner", depth=1,
                                 liveness="working", stage="plan",
                                 worker_role="capability-owner")
@@ -238,13 +238,14 @@ class FoldingTest(unittest.TestCase):
         finally:
             render.set_show_all(False)
         text = "\n".join("".join(t for t, _key in line) for line in lines if line)
-        exec_keys = [key for line in lines if line for t, key in line if t == "exec"]
-        plan_keys = [key for line in lines if line for t, key in line if t == "plan"]
+        running_keys = [key for line in lines if line for t, key in line if t == "running"]
+        preparing_keys = [key for line in lines if line for t, key in line if t == "preparing…"]
         self.assertIn("exec agent-first-home-c", text)
         self.assertIn("code-execute(strong)", text)
         self.assertNotIn("dev/refactor·strong·development", text)
-        self.assertTrue(any(key in ("stg1_on", "stg1_off") for key in exec_keys))
-        self.assertEqual(plan_keys, ["stg0_off"])
+        self.assertTrue(any(key in ("stg1_on", "stg1_off") for key in running_keys))
+        self.assertTrue(any(key in ("stg0_on", "stg0_off") for key in preparing_keys))
+        self.assertNotIn("plan › exec › test", text)
 
     def test_dead_children_fold_to_alert_by_default(self):
         conductor = DispatchJob(key="code", slug="fleet-ui-v2", depth=1, liveness="idle",

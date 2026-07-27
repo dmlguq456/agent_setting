@@ -848,21 +848,14 @@ def _stage_segs(key, stage, working=False, max_width=None, route_seq=None):
             out.append((label, key_))
         return out
     if seq and stage in ("", key, "open", "running"):
-        # pre-plan boot (live_stage fell back to the argv key) / registry-only rows: show the
-        # WHOLE track unlit — the breadcrumb is visible from the first tick and lights up
-        # left→right (plan › exec › test) as plans/ artifacts appear. (user 2026-07-02:
-        # Preserve the concrete plan → exec › test sequence.)
-        # A leading `pre` token carries the BOOT-PHASE liveness (user 2026-07-20: "plan 전에
-        # 이게 죽었나 살았나") — it blinks like any current stage while the classifier says
-        # working, sits dim while queued/stale, and leaves the track the moment `plan`
-        # lights. The evidence is F-25's existing verdict; this is display only.
-        pre_key = ("stg0_on" if _BLINK_ON else "stg0_off") if working else "stg0_off"
-        out = [("pre", pre_key), (" › ", "dim")]
-        for i, st in enumerate(seq):
-            if i:
-                out.append((" › ", "dim"))
-            out.append((st, "stg%d_off" % (i % 5)))
-        return out
+        # F-42a: a known capability key is not evidence that its concrete route/stages already
+        # exist.  Keep a truly unstarted registry row queued; otherwise render one honest boot
+        # state until a stage or sealed route arrives.  Never preview the hardcoded track as if
+        # it had already been configured.
+        if stage == "open" and not working:
+            return [("queued", "stg0_off")]
+        preparing_key = ("stg0_on" if _BLINK_ON else "stg0_off") if working else "stg0_off"
+        return [("preparing…", preparing_key)]
     if stage:
         # F-11: no known pipeline track for this key (seq is None) — jobs.log raw status vocab
         # ("open"/"running") shouldn't leak onto the board as-is. "open" humanizes to "queued";
@@ -872,7 +865,8 @@ def _stage_segs(key, stage, working=False, max_width=None, route_seq=None):
         if stage == "open":
             return [("queued", _cur_key(0))]
         if stage == "running":
-            return [("running", "stg0_off")]
+            preparing_key = ("stg0_on" if _BLINK_ON else "stg0_off") if working else "stg0_off"
+            return [("preparing…", preparing_key)]
         return [(stage, _cur_key(0))]
     return [("-", "dim")]
 
@@ -890,7 +884,9 @@ def _dispatch_stage_segs(j, key, stage, slug_name, working=False, route_seq=None
         # is its own micro-status only. route_seq is a dispatch-depth-1 CONDUCTOR concern only —
         # never consulted here, unconditionally (F-28b plan §4.2, unchanged from pre-v10).
         if j.liveness == "working":
-            return [("running", "stg0_on" if _BLINK_ON else "stg0_off")]
+            color_i = _dispatch_stage_color_index(j, key, stage)
+            return [("running", "stg%d_on" % color_i if _BLINK_ON
+                                else "stg%d_off" % color_i)]
         if stage and stage not in ("open", "running"):
             return [(stage, "stg0_off")]
         return []
@@ -1113,6 +1109,56 @@ def _projection_route_seq(entity):
     view = backing.get("view") or {}
     return [(node.get("id"), node.get("state"))
             for node in _collapse_parallel_nodes(view.get("nodes") or ())]
+
+
+_LEGACY_STAGE_COLOR_INDEX = {
+    "code-plan": 0,
+    "code-execute": 1,
+    "code-test": 2,
+    "code-report": 3,
+    "stage-search": 0,
+    "stage-analyze": 1,
+    "stage-report": 2,
+}
+
+
+def _dispatch_stage_color_index(entity, key=None, stage=None):
+    """F-42b — color a depth-2 micro-status with its own stage.
+
+    A validated route owns the index, including a collapsed parallel group.  Legacy rows fall
+    back to their stage contract/key; zero is only the final no-evidence fallback.  The helper
+    returns an index rather than a color key so blink only changes brightness, never hue.
+    """
+    projection = getattr(entity, "work_projection", None)
+    if projection and getattr(projection, "source", None) == "route-exact":
+        backing = getattr(projection, "_route_view", None) or {}
+        view = backing.get("view") or {}
+        raw_nodes = list(view.get("nodes") or ())
+        selected_id = (getattr(projection, "route_node", None)
+                       or getattr(entity, "route_node", None))
+        selected = next((node for node in raw_nodes if node.get("id") == selected_id), None)
+        selected_group = ((selected or {}).get("parallel_group")
+                          or (selected or {}).get("replica_group"))
+        for i, node in enumerate(_collapse_parallel_nodes(raw_nodes)):
+            node_group = node.get("parallel_group") or node.get("replica_group")
+            if node.get("id") == selected_id or (selected_group and node_group == selected_group):
+                return i % 5
+
+    identities = (
+        getattr(entity, "assigned_contract", None),
+        key,
+        getattr(entity, "worker_role", None),
+    )
+    for identity in identities:
+        base = str(identity or "").partition(":")[0]
+        if base in _LEGACY_STAGE_COLOR_INDEX:
+            return _LEGACY_STAGE_COLOR_INDEX[base] % 5
+
+    label = _dispatch_stage_label(entity) or stage
+    for seq in _PIPE_STAGES.values():
+        if label in seq:
+            return seq.index(label) % 5
+    return 0
 
 
 def _projection_stage_for_dispatch(entity):
@@ -2263,7 +2309,7 @@ _CTX_LABEL_W = 3              # display cells: 📚 (2, emoji range) + trailing 
                                # Hardcoded (not _dw(_CTX_LABEL)) — this constant is computed at
                                # module load, before _dw/_WIDE are defined further down the file.
 _CONTEXT_VALUE_W = 4
-_CONTEXT_NOW_GAP = 3          # gap between the % value and the NOW summary — a plain separator.
+_CONTEXT_NOW_GAP = 3          # minimum gap; F-42c widens it until NOW reaches the session column.
 _CONTEXT_INDENT_W = 4        # left inset that aligns the row under the HARNESS NAME (user
                                # 2026-07-24 "하네스에서 좌측 정렬"): the session row leads with
                                # ``"  " + glyph + " "`` = 4 cells before the harness field, so the
@@ -2281,9 +2327,11 @@ def _compact_context_gauge_width(available, depth=0):
 
 
 def _context_detail_row(entity, depth=0, term_width=None):
-    """One ``📚 <gauge> <value>   NOW`` row for every live card, left-aligned under the HARNESS
-    NAME (user 2026-07-24 "하네스에서 좌측 정렬"): the gauge and NOW read as one block directly
-    below the row's harness field, at the same column in every layout."""
+    """One ``📚 <gauge> <value>   NOW`` row for every live card.
+
+    The context block stays under the harness field; F-42c aligns the descriptive NOW text to
+    the session column shared with dispatch subtitles.  Both anchors are stable across layouts.
+    """
     if getattr(entity, "liveness", None) in ("stale", "dead"):
         return []
     context = getattr(entity, "context", None)
@@ -2305,12 +2353,13 @@ def _context_detail_row(entity, depth=0, term_width=None):
         value_text = "%d%%" % shown_pct
     segs.append((value_text.rjust(_CONTEXT_VALUE_W), "dim"))
     if now_text:
-        fixed = (sum(_dw(text) for text, _key in segs) - _dw(indent)
-                 + _CONTEXT_NOW_GAP)
-        now_room = max(0, available - fixed)
+        prefix_width = sum(_dw(text) for text, _key in segs)
+        gap = max(_CONTEXT_NOW_GAP, _NAME_COL - prefix_width)
+        total_width = term_width or _SUMMARY_FALLBACK_W
+        now_room = max(0, total_width - prefix_width - gap)
         now_text = _clip_w(str(now_text), now_room) if now_room else ""
         if now_text:
-            segs.extend([(" " * _CONTEXT_NOW_GAP, None), (now_text, "dim")])
+            segs.extend([(" " * gap, None), (now_text, "dim")])
     return [segs]
 
 

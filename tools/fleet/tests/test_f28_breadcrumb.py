@@ -63,17 +63,18 @@ class RouteBreadcrumbTest(unittest.TestCase):
         # record node id (there is no sealed route record here at all).
         self.assertIn("exec", expected_text)
 
-    def test_t2_1b_zero_evidence_job_shows_honest_preboot_not_a_fabricated_stage(self):
+    def test_t2_1b_zero_evidence_job_shows_preparing_not_a_fabricated_stage(self):
         # Companion case: a job with NEITHER a route record NOR any resolvable artifact/registry
         # evidence must not have its manually-set `stage` echoed back — WorkProjection resolves
-        # source="none" and the compat `stage` field clears, so the breadcrumb shows the honest
-        # unlit pre-boot track instead of fabricating a lit "exec".
+        # source="none" and the compat `stage` field clears, so the breadcrumb shows one honest
+        # preparation state instead of fabricating either a lit "exec" or a fixed stage track.
         job = DispatchJob(key="code", stage="exec", slug="no-route-job", cwd="/nonexistent/x",
                           liveness="working", depth=1)
         via_build_lines = _joined(
             render._build_lines([], [job], section="dispatch", narrow=False,
                                 malformed=0, layout="wide"))
-        self.assertIn("pre › plan › exec › test", via_build_lines)
+        self.assertIn("preparing…", via_build_lines)
+        self.assertNotIn("pre › plan › exec › test", via_build_lines)
 
     def test_t2_2_real_record_lights_active_child_node(self):
         dispatch.collect.last_route_nodes = {

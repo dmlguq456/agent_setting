@@ -1641,7 +1641,7 @@ class ConductorBreadcrumbTest(unittest.TestCase):
                         ("plan", "exec", "test", "search", "analyze", "report")}
         return None
 
-    def test_research_conductor_blinks_active_search_child(self):
+    def test_research_owner_prepares_while_search_worker_uses_search_hue(self):
         conductor = DispatchJob(key="research", slug="research-topic", depth=1,
                                 liveness="working", stage="research",
                                 worker_role="capability-owner")
@@ -1649,39 +1649,38 @@ class ConductorBreadcrumbTest(unittest.TestCase):
                             parent_slug="research-topic", worker_role="stage-search",
                             liveness="working")
 
-        def stage_keys(blink_on):
+        def status_keys(blink_on):
             with mock.patch.object(render, "_BLINK_ON", blink_on):
                 lines = render._build_lines([], [conductor, child], section="both", narrow=False,
                                             malformed=0, layout="wide")
-            return self._stage_keys(lines, "owner")
+            return ({t: k for line in lines if line for t, k in line
+                     if t in ("preparing…", "running")})
 
-        on, off = stage_keys(True), stage_keys(False)
-        self.assertIsNotNone(on)
-        self.assertIsNotNone(off)
-        self.assertEqual(on.get("search"), "stg0_off")
-        self.assertEqual(off.get("search"), "stg0_off")
-        self.assertEqual(on.get("analyze"), "stg1_off")
+        on, off = status_keys(True), status_keys(False)
+        self.assertEqual(on, {"preparing…": "stg0_on", "running": "stg0_on"})
+        self.assertEqual(off, {"preparing…": "stg0_off", "running": "stg0_off"})
 
-    def test_conductor_breadcrumb_aggregates_active_child_stage(self):
+    def test_owner_does_not_fabricate_track_while_exec_worker_keeps_exec_hue(self):
         conductor = DispatchJob(key="code", slug="fleet-ui-v2", depth=1, liveness="idle",
                                 stage="plan", worker_role="capability-owner")
         child = DispatchJob(key="code", slug="fleet-ui-v2-exec", depth=2,
                             parent_slug="fleet-ui-v2", worker_role="code-execute",
                             liveness="working")
-        lines = render._build_lines([], [conductor, child], section="both", narrow=False,
-                                    malformed=0, layout="wide")
-        stage_keys = self._stage_keys(lines, "owner")
-        self.assertIsNotNone(stage_keys)
-        self.assertEqual(stage_keys.get("exec"), "stg1_off")
-        self.assertEqual(stage_keys.get("plan"), "stg0_off")
-        self.assertEqual(stage_keys.get("test"), "stg2_off")
+        with mock.patch.object(render, "_BLINK_ON", True):
+            lines = render._build_lines([], [conductor, child], section="both", narrow=False,
+                                        malformed=0, layout="wide")
+        self.assertEqual([k for line in lines if line for t, k in line if t == "preparing…"],
+                         ["stg0_off"])
+        self.assertEqual([k for line in lines if line for t, k in line if t == "running"],
+                         ["stg1_on"])
+        self.assertEqual(self._stage_keys(lines, "owner"), {})
 
-    def test_conductor_breadcrumb_falls_back_to_own_stage_when_child_not_working(self):
+    def test_zero_evidence_owner_prepares_when_child_is_not_working(self):
         # v16: a direct-construction job with no route/registry/artifact evidence at all
         # resolves to WorkProjection source="none", so the legacy compatibility `stage`
         # field is no longer fabricated from a static argv value — the breadcrumb instead
-        # renders the honest record-less/pre-boot track (nothing lit) rather than lighting
-        # a stage the projection authority never actually observed.
+        # renders one honest preparation state rather than previewing a track the projection
+        # authority never actually observed.
         conductor = DispatchJob(key="code", slug="fleet-ui-v2", depth=1, liveness="idle",
                                 stage="test", worker_role="capability-owner")
         child = DispatchJob(key="code", slug="fleet-ui-v2-exec", depth=2,
@@ -1689,24 +1688,22 @@ class ConductorBreadcrumbTest(unittest.TestCase):
                             liveness="done")
         lines = render._build_lines([], [conductor, child], section="both", narrow=False,
                                     malformed=0, layout="wide")
-        stage_keys = self._stage_keys(lines, "owner")
-        self.assertIsNotNone(stage_keys)
-        self.assertEqual(stage_keys.get("test"), "stg2_off")
+        self.assertEqual(self._stage_keys(lines, "owner"), {})
+        self.assertEqual([k for line in lines if line for t, k in line if t == "preparing…"],
+                         ["stg0_off"])
 
-    def test_conductor_breadcrumb_report_child_renders_lone_bright_token(self):
-        # N5 — "report" sits outside the code track (plan/exec/test); the accepted minimal
-        # behavior is a single bright lone "report" token (fallthrough), not a dim/unlit track.
+    def test_report_worker_running_uses_report_hue_without_owner_track(self):
         conductor = DispatchJob(key="code", slug="fleet-ui-v2", depth=1, liveness="idle",
                                 stage="test", worker_role="capability-owner")
         child = DispatchJob(key="code", slug="fleet-ui-v2-report", depth=2,
                             parent_slug="fleet-ui-v2", worker_role="code-report",
                             liveness="working")
-        lines = render._build_lines([], [conductor, child], section="both", narrow=False,
-                                    malformed=0, layout="wide")
-        stage_keys = self._stage_keys(lines, "owner")
-        self.assertIsNotNone(stage_keys)
-        self.assertNotIn("report", stage_keys)
-        self.assertEqual(stage_keys.get("test"), "stg2_off")
+        with mock.patch.object(render, "_BLINK_ON", True):
+            lines = render._build_lines([], [conductor, child], section="both", narrow=False,
+                                        malformed=0, layout="wide")
+        self.assertEqual(self._stage_keys(lines, "owner"), {})
+        self.assertEqual([k for line in lines if line for t, k in line if t == "running"],
+                         ["stg3_on"])
 
 
 class AlertHumanizeTest(unittest.TestCase):

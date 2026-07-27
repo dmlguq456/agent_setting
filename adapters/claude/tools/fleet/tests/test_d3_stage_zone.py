@@ -12,7 +12,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from fleet import render                                     # noqa: E402
-from fleet.model import DispatchJob                           # noqa: E402
+from fleet.model import DispatchJob, WorkProjection           # noqa: E402
 
 
 def _job(key="code", worker_role="code-execute", stage="exec", slug="myslug", depth=1,
@@ -110,30 +110,79 @@ class StageZoneCapTest(unittest.TestCase):
         self.assertEqual(joined, "plan✓ › exec › test")
 
 
-class PrePlanBootTokenTest(unittest.TestCase):
-    """user 2026-07-20: "plan 전에 이게 죽었나 살았나" — the unlit pre-plan track leads with a
-    `pre` token carrying boot-phase liveness (blinks while working, dim while queued)."""
+class PreparingStageTest(unittest.TestCase):
+    """F-42a — capability identity alone must not fabricate a concrete stage sequence."""
 
-    def test_pre_leads_the_unlit_track_dim_when_not_working(self):
+    def test_true_unstarted_open_row_is_queued_without_a_track(self):
         segs = render._stage_segs("code", "open", working=False)
-        self.assertEqual("".join(t for t, _k in segs), "pre › plan › exec › test")
-        self.assertEqual(segs[0], ("pre", "stg0_off"))
+        self.assertEqual(segs, [("queued", "stg0_off")])
 
-    def test_pre_blinks_with_the_working_dot(self):
+    def test_preparing_replaces_the_fake_track_and_blinks(self):
         prev = render._BLINK_ON
         try:
             render._BLINK_ON = True
-            self.assertEqual(render._stage_segs("code", "", working=True)[0],
-                             ("pre", "stg0_on"))
+            self.assertEqual(render._stage_segs("code", "", working=True),
+                             [("preparing…", "stg0_on")])
             render._BLINK_ON = False
-            self.assertEqual(render._stage_segs("code", "", working=True)[0],
-                             ("pre", "stg0_off"))
+            self.assertEqual(render._stage_segs("code", "running", working=True),
+                             [("preparing…", "stg0_off")])
         finally:
             render._BLINK_ON = prev
 
-    def test_pre_leaves_the_track_once_plan_lights(self):
+    def test_concrete_plan_keeps_the_real_legacy_track(self):
         segs = render._stage_segs("code", "plan", working=True)
-        self.assertNotIn("pre", "".join(t for t, _k in segs))
+        self.assertEqual("".join(t for t, _k in segs), "plan › exec › test")
+        self.assertNotIn("preparing", "".join(t for t, _k in segs))
+
+
+class DepthTwoRunningHueTest(unittest.TestCase):
+    """F-42b — a worker's micro-status uses the hue of the stage it represents."""
+
+    def test_legacy_code_workers_use_their_stage_index(self):
+        prev = render._BLINK_ON
+        try:
+            for blink in (True, False):
+                render._BLINK_ON = blink
+                suffix = "on" if blink else "off"
+                for contract, index in (("code-plan", 0), ("code-execute", 1),
+                                        ("code-test", 2), ("code-report", 3)):
+                    with self.subTest(contract=contract, blink=blink):
+                        job = _job(key=contract, worker_role=contract, stage="running",
+                                   depth=2, liveness="working")
+                        self.assertEqual(
+                            render._dispatch_stage_segs(
+                                job, job.key, job.stage, job.slug, working=True),
+                            [("running", "stg%d_%s" % (index, suffix))],
+                        )
+        finally:
+            render._BLINK_ON = prev
+
+    def test_route_node_uses_collapsed_record_order_hue(self):
+        nodes = [
+            {"id": "frame", "state": "done", "depends_on": []},
+            {"id": "review-a", "state": "active", "depends_on": ["frame"],
+             "parallel_group": "review"},
+            {"id": "review-b", "state": "active", "depends_on": ["frame"],
+             "parallel_group": "review"},
+            {"id": "ship", "state": "pending", "depends_on": ["review-a", "review-b"]},
+        ]
+        work = WorkProjection(
+            source="route-exact", route_node="review-b",
+            _route_view={"view": {"nodes": nodes}},
+        )
+        job = DispatchJob(key="custom-worker", slug="worker", depth=2,
+                          liveness="working", route_node="review-b",
+                          work_projection=work)
+        prev = render._BLINK_ON
+        try:
+            render._BLINK_ON = True
+            self.assertEqual(
+                render._dispatch_stage_segs(
+                    job, job.key, "running", job.slug, working=True),
+                [("running", "stg1_on")],
+            )
+        finally:
+            render._BLINK_ON = prev
 
 
 class StageZoneLeadInTest(unittest.TestCase):
