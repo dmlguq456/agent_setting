@@ -90,6 +90,12 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | artifact-order gate | `core/HOOKS.md` defines the invariant; run `adapters/codex/bin/preflight.sh write <file> [session-id]` before writes |
 | core-first gate | `core/HOOKS.md` defines marker/check semantics; Codex `PostToolUse` Read hook records actual `core/*.md` reads and `PreToolUse` write guard hard-denies ungrounded `adapters/**` edits. Explicit fallback: `adapters/codex/bin/preflight.sh read <core-doc.md> [session-id]` after core reads |
 
+When a manual turn wins the managed-entry race, the gateway first tries exact
+`turn/steer`. A positive response merges the receipt into that turn. An explicit
+not-steerable response proves non-acceptance, so the same delivery is held in
+memory and receives exactly one `turn/start` after idle; a gateway crash before
+that start remains durable `sent-ambiguous` and is never retried automatically.
+
 The dispatch wrapper still validates the capability catalog, validates an
 optional non-owner `worker_mode` through `mode-info`, and `_kernel/owner`
 rejects a worker mode before prompt or registry writes. `--register` and

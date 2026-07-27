@@ -117,9 +117,13 @@ state = 'timeout' if mode == 'timeout' else 'ready'
 children = [
     {
         'attempt_id': attempt,
-        'status': 'done' if state == 'ready' else 'open',
+        'status': 'open' if mode in {'timeout', 'terminal'} else 'done',
         'readiness': 'ready' if state == 'ready' else 'pending',
-        'reason': 'registry-closed' if state == 'ready' else 'process-alive',
+        'reason': (
+            'terminal-observed' if mode == 'terminal'
+            else 'registry-closed' if state == 'ready'
+            else 'process-alive'
+        ),
         'slug': 'child',
     }
     for attempt in attempts
@@ -254,6 +258,26 @@ raise SystemExit(3 if state == 'timeout' else 0)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["status"], "timeout")
         self.assertFalse(self.control_path.exists())
+
+    def test_terminal_observed_open_child_is_normalized_to_done(self) -> None:
+        self.jobs.write_text(
+            row("att-terminal", harness="codex", status="open"),
+            encoding="utf-8",
+        )
+        server = ControlServer(self.control_path)
+        self.addCleanup(server.close)
+        result = subprocess.run(
+            self.command(["att-terminal"], mode="terminal"),
+            text=True,
+            capture_output=True,
+            timeout=5,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertTrue(server.called.wait(2))
+        assert server.request is not None
+        child = server.request["receipt"]["children"][0]
+        self.assertEqual(child["status"], "done")
+        self.assertEqual(child["reason"], "terminal-observed")
 
     def test_foreign_or_missing_attempt_fails_before_gateway(self) -> None:
         self.jobs.write_text(

@@ -362,7 +362,7 @@ def launch_parent_completion_sidecar(
     args: argparse.Namespace,
     jobs: Path,
 ) -> None:
-    """Attach one exact joiner after a managed direct child is live."""
+    """Prelaunch one exact joiner before the managed direct child spawn claim."""
 
     args.managed_sidecar_state = "not-selected"
     args.managed_sidecar_reason = "-"

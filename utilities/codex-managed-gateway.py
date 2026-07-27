@@ -4,8 +4,9 @@
 One remote TUI owns the only upstream App Server connection. Completion
 producers use a bounded Unix control socket and never subscribe to App Server
 notifications or approval requests. Manual turn/start and completion delivery
-are ordered under one lock; the loser is sent with turn/steer against the exact
-active turn.
+are ordered under one lock. Completion first attempts turn/steer against the
+exact active turn; an explicit not-steerable rejection is serialized into one
+turn/start after that manual turn becomes idle.
 
 This is local at-most-once delivery, not a claim of native idle-claim or
 server-side idempotency. If a send is interrupted before its accept response is
@@ -427,6 +428,7 @@ class PendingInternal:
     identity: dict[str, str] = field(default_factory=dict)
     receipt: dict[str, Any] | None = None
     tui_request_id: Any = None
+    deferred_after_steer: bool = False
     event: threading.Event = field(default_factory=threading.Event)
     outcome: dict[str, Any] | None = None
 
@@ -445,6 +447,7 @@ class ThreadState:
     pending_start_id: tuple[str, Any] | None = None
     pending_start_owner: str = ""
     queued: list[PendingInternal | QueuedManual] = field(default_factory=list)
+    idle_completions: list[PendingInternal] = field(default_factory=list)
 
 
 class ManagedGateway:
@@ -775,6 +778,7 @@ class ManagedGateway:
                 state.active_turn_id = ""
                 state.active_turn = None
                 state.steer_ready = False
+                self._start_next_idle_completion_locked(state)
             self.trace(
                 "turn-completed", thread_id=thread_id, turn_id=turn_id
             )
@@ -839,13 +843,36 @@ class ManagedGateway:
             state.active_turn = (
                 turn_from_message(message) or self._minimal_turn(turn_id)
             )
-            self._accept_delivery_locked(pending, "start")
+            self._accept_delivery_locked(
+                pending,
+                (
+                    "start-after-steer-rejected"
+                    if pending.deferred_after_steer
+                    else "start"
+                ),
+            )
             if state.steer_ready:
                 self._drain_queued_locked(state)
             return
         if pending.kind == "completion-steer":
             if "error" in message:
-                self._reject_delivery_locked(pending, "turn-steer-rejected")
+                # The explicit RPC error proves that App Server did not accept
+                # the receipt. Keep this exact delivery in memory and start it
+                # once the manual turn is idle. Its durable state stays `sent`,
+                # so a crash in this interval is fail-closed sent-ambiguous.
+                pending.kind = "completion-wait"
+                pending.request_id = ""
+                pending.deferred_after_steer = True
+                state.idle_completions.append(pending)
+                self.trace(
+                    "completion-deferred",
+                    thread_id=pending.thread_id,
+                    turn_id=state.active_turn_id,
+                    delivery_id=pending.delivery_id,
+                    action="start",
+                    reason="turn-steer-rejected",
+                )
+                self._start_next_idle_completion_locked(state)
             else:
                 response_turn = turn_id_from_message(message)
                 if response_turn and response_turn != state.active_turn_id:
@@ -893,6 +920,18 @@ class ManagedGateway:
                 )
             else:
                 self._send_completion_locked(item, state, "steer")
+
+    def _start_next_idle_completion_locked(
+        self, state: ThreadState
+    ) -> None:
+        if (
+            state.active_turn_id
+            or state.pending_start_id is not None
+            or not state.idle_completions
+        ):
+            return
+        pending = state.idle_completions.pop(0)
+        self._send_completion_locked(pending, state, "start")
 
     def _fail_queued_locked(
         self, state: ThreadState, reason: str
@@ -1117,9 +1156,8 @@ class ManagedGateway:
         context = (
             "AGENT_HARNESS_COMPLETION_V1\n"
             + canonical(receipt)
-            + "\nTyped runtime receipt only. Harvest the listed exact attempts "
-            "through the checked contract, continue the owned route, and do "
-            "not inspect raw child logs or call a wait tool."
+            + "\nExact typed receipt. Harvest listed attempts, continue route; "
+            "no raw logs or waits."
         )
         if len(context.encode("utf-8")) > MAX_CONTEXT_BYTES:
             raise GatewayError("completion-context-oversized")

@@ -129,6 +129,13 @@ main/orchestrator chooses per job and the wrapper only reflects that choice:
   the parent. This extra
   settings object applies only to the spawned command and never edits the user's
   Claude settings.
+- Direct registered child completion is selected by the parent runtime, not by
+  the child wrapper. A Claude parent therefore keeps this same
+  async-rewake/`--resume` path for either a Claude or Codex child. A Codex parent
+  that launches a Claude child uses the checked `codex-managed-gateway` only
+  when that parent was created through the explicit managed entry; its
+  completion sidecar is control-only and never becomes a Claude or Codex
+  approval client. An unmanaged Codex parent remains `poll-fallback`.
 - A route-bound headless job carries a sealed `model_profile` independently of
   its behavioral `model_role`. The wrapper resolves `deep`, `balanced-deep`,
   `light`, or `mini` through `config/models.conf`; it rejects caller replacement

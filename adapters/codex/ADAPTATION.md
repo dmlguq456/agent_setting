@@ -440,6 +440,12 @@ Codex-native counterpart today.
 | hook invariants | `pretooluse-write-guard.py` owns only material-route and targeted write safety. `stop-lifecycle.py` is a silent no-op with no subprocess, lifecycle, registry, or completion authority. Deterministic tests assert that wildcard PreToolUse, Stop joins/blocks/subprocesses, new `codex-stop-hook` stamps, and parent-state writes are absent; legacy exact-terminal harvest recovery remains covered separately. Session, prompt, permission, read-marker, design-check, native-subagent, and explicit preflight fallback mappings remain unchanged |
 | capabilities | Read `capabilities/README.md`, then run `adapters/codex/bin/preflight.sh capability-info <capability>`; do not assume Claude Skill invocation |
 
+For a manual/completion race, a managed Codex gateway accepts same-turn
+`turn/steer` when App Server permits it. An explicit not-steerable error is
+proof that the receipt was not accepted: the gateway serializes that exact
+delivery into one `turn/start` after idle. A crash during this in-memory defer
+is durable `sent-ambiguous`, so retry cannot create a duplicate wake.
+
 The wrapper validates the capability catalog, validates an optional non-owner
 `worker_mode` through `mode-info`, and `_kernel/owner` rejects a worker mode
 before prompt or registry writes. Registration materializes the portable

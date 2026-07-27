@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_completion_join import (  # noqa: E402
     JoinContractError,
     MANAGED_SESSION_PARENT_DELIVERY,
+    OPEN_STATES,
     current_children,
     current_session_children,
 )
@@ -179,13 +180,16 @@ def normalize_receipt(
         if not isinstance(child, dict):
             raise CompletionError("join-receipt-child-invalid")
         attempt_id = child.get("attempt_id")
+        status = child.get("status")
+        reason = child.get("reason")
         if (
             not isinstance(attempt_id, str)
             or attempt_id not in attempts
             or attempt_id in by_attempt
-            or child.get("status") != "done"
             or child.get("readiness") != "ready"
-            or child.get("reason") not in ALLOWED_REASONS
+            or reason not in ALLOWED_REASONS
+            or (reason == "registry-closed" and status != "done")
+            or (reason == "terminal-observed" and status not in OPEN_STATES)
         ):
             raise CompletionError("join-receipt-child-contract-invalid")
         by_attempt[attempt_id] = child

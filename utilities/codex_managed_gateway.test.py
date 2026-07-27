@@ -143,6 +143,7 @@ class FakeAppServer:
         self.steer_count = 0
         self.approval_responses: list[dict[str, Any]] = []
         self.hold_start = False
+        self.reject_steer = False
         self.start_received = threading.Event()
         self.release_start = threading.Event()
         self.current: Any = None
@@ -223,15 +224,27 @@ class FakeAppServer:
             elif method == "turn/steer":
                 with self.lock:
                     self.steer_count += 1
-                websocket.write_json(
-                    {
-                        "jsonrpc": "2.0",
-                        "id": message["id"],
-                        "result": {
-                            "turnId": message["params"]["expectedTurnId"]
-                        },
-                    }
-                )
+                if self.reject_steer:
+                    websocket.write_json(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": message["id"],
+                            "error": {
+                                "code": -32011,
+                                "message": "active turn is not steerable",
+                            },
+                        }
+                    )
+                else:
+                    websocket.write_json(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": message["id"],
+                            "result": {
+                                "turnId": message["params"]["expectedTurnId"]
+                            },
+                        }
+                    )
             elif "id" in message and (
                 "result" in message or "error" in message
             ):
@@ -269,6 +282,27 @@ class FakeAppServer:
     def counts(self) -> tuple[int, int]:
         with self.lock:
             return self.start_count, self.steer_count
+
+    def complete_turn(self, turn_id: str = "turn-1") -> None:
+        deadline = time.monotonic() + 5
+        while self.current is None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        if self.current is None:
+            raise AssertionError("no upstream client")
+        self.current.write_json(
+            {
+                "jsonrpc": "2.0",
+                "method": "turn/completed",
+                "params": {
+                    "threadId": "thread-1",
+                    "turn": {
+                        "id": turn_id,
+                        "items": [],
+                        "status": "completed",
+                    },
+                },
+            }
+        )
 
     def methods(self) -> list[str]:
         with self.lock:
@@ -418,6 +452,38 @@ class ManagedGatewayTest(unittest.TestCase):
         )
         self.assertEqual(steer["params"]["expectedTurnId"], "turn-1")
         self.assertEqual(steer["params"]["input"], [])
+
+    def test_rejected_steer_serializes_one_start_after_manual_turn(self) -> None:
+        self.server.reject_steer = True
+        self.client.request(
+            "turn/start",
+            {
+                "threadId": "thread-1",
+                "input": [{"type": "text", "text": "manual"}],
+            },
+        )
+        outcome: dict[str, Any] = {}
+
+        def completion() -> None:
+            outcome.update(control(self.control, receipt_request()))
+
+        worker = threading.Thread(target=completion)
+        worker.start()
+        deadline = time.monotonic() + 5
+        while self.server.counts()[1] != 1 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertEqual(self.server.counts(), (1, 1))
+        self.assertTrue(worker.is_alive())
+        self.server.complete_turn()
+        worker.join(timeout=5)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(outcome["status"], "accepted")
+        self.assertEqual(outcome["action"], "start-after-steer-rejected")
+        self.assertEqual(self.server.counts(), (2, 1))
+        replay = control(self.control, receipt_request())
+        self.assertTrue(replay["replay"])
+        self.assertEqual(replay["action"], "start-after-steer-rejected")
+        self.assertEqual(self.server.counts(), (2, 1))
 
     def test_pending_start_race_is_one_start_plus_one_steer(self) -> None:
         self.server.hold_start = True

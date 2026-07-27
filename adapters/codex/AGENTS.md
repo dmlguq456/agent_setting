@@ -59,12 +59,14 @@ The recommended footer fragment is `codex_setting/codex-config/tui-statusline.to
 
 Registered standard+ headless owners use the checked App Server completion
 supervisor: the runtime joins exact child batches and resumes the same thread once
-per batch. A general interactive Codex thread has no atomic idempotent wake
-primitive: its Stop hook never joins children and PreToolUse never parks all
-tools for completion. A direct registered depth-1 child is explicit
-`poll-fallback`; keep the parent conversational and do not promise automatic
-resume. Arbitrary detached shell output still does not auto-resume. For
-non-dispatch long-running work, obey `preflight.sh
+per batch. New interactive Codex sessions opt in through
+`utilities/codex-managed-entry.py`: single ingress keeps the TUI sole approval/
+subscription owner and sends one bounded receipt. Parent runtime decides—Codex
+gateway or Claude async-rewake/`--resume`—regardless of child. Managed completion never uses Stop continuation or a PreToolUse park; rejected steer defers once to
+idle, with crash state `sent-ambiguous`. Unmanaged new Codex sessions use finite
+`poll-fallback`; legacy Stop permits exact migration harvest only.
+Arbitrary detached shell output still does not auto-resume. For non-dispatch
+long-running work, obey `preflight.sh
 loop-info runtime-watch` and its explicit automatic-follow-up-impossible fallback
 instead of ending with a detached completion promise.
 
