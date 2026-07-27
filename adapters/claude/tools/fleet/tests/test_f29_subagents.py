@@ -15,6 +15,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
+from fleet import collectors as fleet_collectors                  # noqa: E402
 from fleet import render                                          # noqa: E402
 from fleet.collectors import claude, codex, opencode              # noqa: E402
 from fleet.model import Session, SubAgent                         # noqa: E402
@@ -116,11 +117,15 @@ class CodexSubagentTest(unittest.TestCase):
         codex._SUBAGENT_INDEX.clear()
         codex._TITLE_INDEX.update(stamp=None, map={})
         codex._PROC_PATHS.clear()
+        codex._LIFECYCLE_CACHE.clear()
+        codex._LIFECYCLE_CACHE_EVICTIONS = 0
 
     def tearDown(self):
         codex._SUBAGENT_INDEX.clear()
         codex._TITLE_INDEX.update(stamp=None, map={})
         codex._PROC_PATHS.clear()
+        codex._LIFECYCLE_CACHE.clear()
+        codex._LIFECYCLE_CACHE_EVICTIONS = 0
 
     def _db(self, tmp, edges, children, malformed=False):
         path = os.path.join(tmp, "state_5.sqlite")
@@ -186,6 +191,19 @@ class CodexSubagentTest(unittest.TestCase):
         con.commit()
         con.close()
         return path
+
+    def _lifecycle(self, path, events, trailing=0):
+        with open(path, "w", encoding="utf-8") as handle:
+            for event_type, turn_id in events:
+                handle.write(json.dumps({
+                    "type": "event_msg",
+                    "payload": {"type": event_type, "turn_id": turn_id},
+                }) + "\n")
+            if trailing:
+                handle.write(json.dumps({
+                    "type": "event_msg",
+                    "payload": {"type": "note", "text": "x" * trailing},
+                }) + "\n")
 
     def test_exact_parent_type_and_active_done_status(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -400,6 +418,326 @@ class CodexSubagentTest(unittest.TestCase):
             self.assertEqual(len(sess.subagents), 1)
             self.assertEqual(sess.subagents[0].agent_type, "qa-team")
             self.assertFalse(sess.subagents[0].active)
+
+    def test_lifecycle_cache_hits_for_valid_and_readable_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            valid = os.path.join(tmp, "valid.jsonl")
+            ambiguous = os.path.join(tmp, "ambiguous.jsonl")
+            self._lifecycle(valid, [("task_started", "turn")])
+            self._lifecycle(ambiguous, [("task_complete", "turn")])
+            with mock.patch.object(
+                codex, "_parse_latest_task_lifecycle",
+                wraps=codex._parse_latest_task_lifecycle,
+            ) as parse:
+                self.assertEqual(
+                    codex._latest_task_lifecycle(valid),
+                    ("task_started", "turn"),
+                )
+                self.assertEqual(
+                    codex._latest_task_lifecycle(valid),
+                    ("task_started", "turn"),
+                )
+                self.assertIsNone(codex._latest_task_lifecycle(ambiguous))
+                self.assertIsNone(codex._latest_task_lifecycle(ambiguous))
+            self.assertEqual(parse.call_count, 2)
+
+    def test_lifecycle_parser_configurations_are_isolated_in_both_orders(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "bounded.jsonl")
+            self._lifecycle(
+                path,
+                [("task_started", "turn"), ("task_complete", "turn")],
+                trailing=4096,
+            )
+            for first_narrow in (True, False):
+                codex._LIFECYCLE_CACHE.clear()
+                calls = (
+                    ((64, 128), (65536, 1048576))
+                    if first_narrow else
+                    ((65536, 1048576), (64, 128))
+                )
+                with mock.patch.object(
+                    codex, "_parse_latest_task_lifecycle",
+                    wraps=codex._parse_latest_task_lifecycle,
+                ) as parse:
+                    results = [
+                        codex._latest_task_lifecycle(path, chunk, max_scan)
+                        for chunk, max_scan in calls
+                    ]
+                expected = (
+                    [None, ("task_complete", "turn")]
+                    if first_narrow else
+                    [("task_complete", "turn"), None]
+                )
+                self.assertEqual(results, expected)
+                self.assertEqual(parse.call_count, 2)
+
+    def test_lifecycle_chunk_is_identity_and_global_lru_is_bounded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "active.jsonl")
+            self._lifecycle(path, [("task_started", "turn")])
+            with mock.patch.object(
+                codex, "_parse_latest_task_lifecycle",
+                wraps=codex._parse_latest_task_lifecycle,
+            ) as parse:
+                for chunk in range(1, codex._LIFECYCLE_CACHE_MAX + 2):
+                    codex._latest_task_lifecycle(path, chunk=chunk)
+            self.assertEqual(parse.call_count, codex._LIFECYCLE_CACHE_MAX + 1)
+            self.assertEqual(len(codex._LIFECYCLE_CACHE), codex._LIFECYCLE_CACHE_MAX)
+            first = (os.path.realpath(path), 1, 1048576)
+            newest = (
+                os.path.realpath(path), codex._LIFECYCLE_CACHE_MAX + 1, 1048576
+            )
+            self.assertNotIn(first, codex._LIFECYCLE_CACHE)
+            self.assertIn(newest, codex._LIFECYCLE_CACHE)
+
+    def test_lifecycle_append_replacement_and_io_failure_invalidate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "changing.jsonl")
+            self._lifecycle(path, [("task_started", "turn")])
+            self.assertEqual(
+                codex._latest_task_lifecycle(path), ("task_started", "turn")
+            )
+            with open(path, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps({
+                    "type": "event_msg",
+                    "payload": {"type": "task_complete", "turn_id": "turn"},
+                }) + "\n")
+            self.assertEqual(
+                codex._latest_task_lifecycle(path), ("task_complete", "turn")
+            )
+            replacement = os.path.join(tmp, "replacement.jsonl")
+            self._lifecycle(replacement, [("task_started", "replacement")])
+            os.replace(replacement, path)
+            self.assertEqual(
+                codex._latest_task_lifecycle(path),
+                ("task_started", "replacement"),
+            )
+            key = (os.path.realpath(path), 65536, 1048576)
+            with mock.patch.object(codex.os, "stat", side_effect=OSError):
+                self.assertIsNone(codex._latest_task_lifecycle(path))
+            self.assertNotIn(key, codex._LIFECYCLE_CACHE)
+
+    def test_one_changed_rollout_reparses_only_that_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            changed = os.path.join(tmp, "changed.jsonl")
+            unchanged = os.path.join(tmp, "unchanged.jsonl")
+            self._lifecycle(changed, [("task_started", "changed")])
+            self._lifecycle(unchanged, [("task_started", "unchanged")])
+            codex._latest_task_lifecycle(changed)
+            codex._latest_task_lifecycle(unchanged)
+            with open(changed, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps({
+                    "type": "event_msg",
+                    "payload": {
+                        "type": "task_complete", "turn_id": "changed"
+                    },
+                }) + "\n")
+            with mock.patch.object(
+                codex, "_parse_latest_task_lifecycle",
+                wraps=codex._parse_latest_task_lifecycle,
+            ) as parse:
+                self.assertEqual(
+                    codex._latest_task_lifecycle(changed),
+                    ("task_complete", "changed"),
+                )
+                self.assertEqual(
+                    codex._latest_task_lifecycle(unchanged),
+                    ("task_started", "unchanged"),
+                )
+            parse.assert_called_once()
+            self.assertEqual(parse.call_args.args[0], os.path.realpath(changed))
+
+    def test_lifecycle_open_failure_removes_stale_entry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "failure.jsonl")
+            self._lifecycle(path, [("task_started", "turn")])
+            codex._latest_task_lifecycle(path)
+            key = (os.path.realpath(path), 65536, 1048576)
+            # Force a stamp miss so the wrapper reaches the raw open, then fail it.
+            stat = os.stat(path)
+            os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1))
+            with mock.patch.object(
+                codex, "_parse_latest_task_lifecycle", side_effect=OSError
+            ):
+                self.assertIsNone(codex._latest_task_lifecycle(path))
+            self.assertNotIn(key, codex._LIFECYCLE_CACHE)
+
+    def test_lifecycle_changed_during_read_is_not_cached(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "changing.jsonl")
+            self._lifecycle(path, [("task_started", "turn")])
+            raw = codex._parse_latest_task_lifecycle
+
+            def mutate(canonical, chunk, max_scan):
+                result = raw(canonical, chunk, max_scan)
+                with open(canonical, "a", encoding="utf-8") as handle:
+                    handle.write("{}\n")
+                return result
+
+            with mock.patch.object(
+                codex, "_parse_latest_task_lifecycle", side_effect=mutate
+            ):
+                self.assertIsNone(codex._latest_task_lifecycle(path))
+            key = (os.path.realpath(path), 65536, 1048576)
+            self.assertNotIn(key, codex._LIFECYCLE_CACHE)
+
+    def test_symlink_retarget_binds_one_canonical_target_per_call(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target_a = os.path.join(tmp, "a.jsonl")
+            target_b = os.path.join(tmp, "b.jsonl")
+            link = os.path.join(tmp, "current.jsonl")
+            self._lifecycle(target_a, [("task_started", "a")])
+            self._lifecycle(
+                target_b,
+                [("task_started", "b"), ("task_complete", "b")],
+            )
+            os.symlink(target_a, link)
+            raw = codex._parse_latest_task_lifecycle
+            parsed_paths = []
+
+            def retarget(canonical, chunk, max_scan):
+                parsed_paths.append(canonical)
+                os.unlink(link)
+                os.symlink(target_b, link)
+                return raw(canonical, chunk, max_scan)
+
+            with mock.patch.object(
+                codex, "_parse_latest_task_lifecycle", side_effect=retarget
+            ):
+                self.assertEqual(
+                    codex._latest_task_lifecycle(link), ("task_started", "a")
+                )
+            self.assertEqual(parsed_paths, [os.path.realpath(target_a)])
+            self.assertEqual(
+                codex._latest_task_lifecycle(link), ("task_complete", "b")
+            )
+
+    def test_canonical_target_replacement_during_read_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, "target.jsonl")
+            link = os.path.join(tmp, "current.jsonl")
+            self._lifecycle(target, [("task_started", "old")])
+            os.symlink(target, link)
+            raw = codex._parse_latest_task_lifecycle
+
+            def replace(canonical, chunk, max_scan):
+                result = raw(canonical, chunk, max_scan)
+                replacement = os.path.join(tmp, "new.jsonl")
+                self._lifecycle(replacement, [("task_started", "new")])
+                os.replace(replacement, canonical)
+                return result
+
+            with mock.patch.object(
+                codex, "_parse_latest_task_lifecycle", side_effect=replace
+            ):
+                self.assertIsNone(codex._latest_task_lifecycle(link))
+            key = (os.path.realpath(target), 65536, 1048576)
+            self.assertNotIn(key, codex._LIFECYCLE_CACHE)
+            self.assertEqual(
+                codex._latest_task_lifecycle(link), ("task_started", "new")
+            )
+
+    def test_tick_snapshot_freezes_db_change_until_next_tick(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._db(
+                tmp,
+                [("parent", "first", "closed")],
+                [{"id": "first", "agent_role": "first", "missing_rollout": True}],
+            )
+            first_tick = codex._CodexTick(tmp, {}, {})
+            first = codex._tick_subagents(first_tick, tmp)
+            connection = sqlite3.connect(path)
+            source = json.dumps({"subagent": {"thread_spawn": {
+                "parent_thread_id": "parent"
+            }}})
+            connection.execute(
+                "INSERT INTO threads (id, agent_role, thread_source, source, "
+                "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+                ("second", "second", "subagent", source, 100, int(time.time())),
+            )
+            connection.execute(
+                "INSERT INTO thread_spawn_edges VALUES (?, ?, ?)",
+                ("parent", "second", "closed"),
+            )
+            connection.commit()
+            connection.close()
+            self.assertEqual(
+                [
+                    item.agent_type
+                    for item in codex._tick_subagents(first_tick, tmp)["parent"]
+                ],
+                ["first"],
+            )
+            second_tick = codex._CodexTick(tmp, {}, {})
+            second = codex._tick_subagents(second_tick, tmp)
+            self.assertEqual(
+                [item.agent_type for item in first["parent"]], ["first"]
+            )
+            self.assertEqual(
+                [item.agent_type for item in second["parent"]],
+                ["first", "second"],
+            )
+
+    def test_tick_home_cache_preserves_none_empty_and_one_build_per_home(self):
+        tick = codex._CodexTick("/default", {}, {})
+        with mock.patch.object(
+            codex, "_thread_subagents", side_effect=[None, {}, {"parent": []}]
+        ) as build:
+            self.assertIsNone(codex._tick_subagents(tick, "/unavailable"))
+            self.assertIsNone(codex._tick_subagents(tick, "/unavailable"))
+            self.assertEqual(codex._tick_subagents(tick, "/empty"), {})
+            self.assertEqual(codex._tick_subagents(tick, "/empty"), {})
+            self.assertEqual(
+                codex._tick_subagents(tick, "/unexpected"), {"parent": []}
+            )
+            self.assertEqual(
+                codex._tick_subagents(tick, "/unexpected"), {"parent": []}
+            )
+        self.assertEqual(build.call_count, 3)
+
+    def test_prepare_tick_prewarms_default_and_owned_runtime_homes(self):
+        default = "/runtime/default"
+        nested = (
+            "/runtime/nested/sessions/2033/05/18/"
+            "rollout-2033-05-18T00-00-00-"
+            "33333333-3333-3333-3333-333333333333.jsonl"
+        )
+        sessions = [
+            Session(harness="codex", pid=1, cwd="/a"),
+            Session(harness="codex", pid=2, cwd="/b"),
+        ]
+        with mock.patch.object(codex, "_home", return_value=default), \
+             mock.patch.object(
+                 codex, "_proc_rollout", side_effect=[None, nested]
+             ), \
+             mock.patch.object(codex, "_thread_subagents", return_value={}) as build:
+            tick = codex.prepare_tick(sessions)
+        self.assertEqual(tick.default_home, os.path.abspath(default))
+        self.assertEqual(tick.proc_paths, {2: nested})
+        self.assertEqual(
+            set(tick.subagents_by_home),
+            {os.path.abspath(default), "/runtime/nested"},
+        )
+        self.assertEqual(build.call_count, 2)
+
+    def test_collect_all_passes_tick_only_to_codex_enrichment(self):
+        codex_session = Session(harness="codex", pid=1, cwd="/codex")
+        claude_session = Session(harness="claude", pid=2, cwd="/claude")
+        tick = codex._CodexTick("/default", {}, {})
+        with mock.patch.object(
+            fleet_collectors.procscan, "scan",
+            return_value=[codex_session, claude_session],
+        ), mock.patch.object(codex, "prepare_tick", return_value=tick), \
+             mock.patch.object(codex, "enrich") as codex_enrich, \
+             mock.patch.object(claude, "enrich") as claude_enrich, \
+             mock.patch("fleet.collectors.usage_api.account_usage", return_value=None), \
+             mock.patch.object(codex, "account_usage", return_value=None), \
+             mock.patch("fleet.collectors.liveness.classify", return_value="working"), \
+             mock.patch("fleet.collectors.dispatch.collect", return_value=[]):
+            fleet_collectors.collect_all()
+        codex_enrich.assert_called_once_with(codex_session, tick=tick)
+        claude_enrich.assert_called_once_with(claude_session)
 
 
 def _tool_use_line(tid, agent_type, ts="2026-07-15T10:00:00Z", name="Task"):

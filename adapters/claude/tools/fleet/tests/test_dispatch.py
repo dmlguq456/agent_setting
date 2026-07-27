@@ -589,6 +589,18 @@ class JobLivenessPathAssemblyTest(unittest.TestCase):
 
 class CodexJobLivenessPathTest(unittest.TestCase):
 
+    def _rollout(self, sessions, name, cwd=None, mtime=1000.0, malformed=False):
+        directory = os.path.join(sessions, "2033", "05", "18")
+        os.makedirs(directory, exist_ok=True)
+        path = os.path.join(directory, "rollout-%s.jsonl" % name)
+        with open(path, "w", encoding="utf-8") as handle:
+            if malformed:
+                handle.write("{not-json\n")
+            else:
+                handle.write(json.dumps({"payload": {"cwd": cwd}}) + "\n")
+        os.utime(path, (mtime, mtime))
+        return path
+
     def test_nested_worker_uses_worktree_local_codex_home(self):
         with tempfile.TemporaryDirectory() as tmp:
             worktree = os.path.join(tmp, "nested-worktree")
@@ -619,6 +631,228 @@ class CodexJobLivenessPathTest(unittest.TestCase):
         self.assertEqual(result, [
             "/REGISTRY/.dispatch/homes/nested-child.lab/sessions"
         ])
+
+    def test_shared_default_root_is_walked_once_and_each_rollout_parsed_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = os.path.join(tmp, "sessions")
+            self._rollout(root, "one", "/work/a")
+            self._rollout(root, "two", "/work/b")
+            jobs = [
+                DispatchJob(
+                    key="code", slug="job-%d" % index, cwd="/work/a",
+                    harness="codex",
+                )
+                for index in range(3)
+            ]
+            walked = list(os.walk(root))
+            with mock.patch.object(
+                dispatch, "_codex_sessions_dirs", return_value=[root, root]
+            ), mock.patch.object(
+                dispatch, "_codex_transcript_cwd",
+                wraps=dispatch._codex_transcript_cwd,
+            ) as parse, mock.patch.object(
+                dispatch.os, "walk", return_value=iter(walked)
+            ) as walk:
+                index = dispatch._build_codex_rollout_index(jobs)
+            self.assertEqual(walk.call_count, 1)
+            self.assertEqual(parse.call_count, 2)
+            self.assertEqual(index[os.path.abspath(root)]["/work/a"], 1000.0)
+
+    def test_nested_and_default_roots_choose_newest_matching_mtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            nested = os.path.join(tmp, "nested", "sessions")
+            default = os.path.join(tmp, "default", "sessions")
+            self._rollout(nested, "nested", "/work/a", 1200.0)
+            self._rollout(default, "default", "/work/a", 1100.0)
+            job = DispatchJob(
+                key="code", slug="nested", cwd="/work/a", harness="codex"
+            )
+            with mock.patch.object(
+                dispatch, "_codex_sessions_dirs", return_value=[nested, default]
+            ):
+                index = dispatch._build_codex_rollout_index([job])
+                state = dispatch._codex_job_liveness(
+                    "/work/a", now=1250.0, codex_index=index
+                )
+            self.assertEqual(state, "working")
+            self.assertEqual(index[os.path.abspath(nested)]["/work/a"], 1200.0)
+            self.assertEqual(index[os.path.abspath(default)]["/work/a"], 1100.0)
+
+    def test_two_profile_homes_with_same_cwd_remain_isolated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root_a = os.path.join(
+                tmp, ".dispatch", "homes", "alpha.lab", "sessions"
+            )
+            root_b = os.path.join(
+                tmp, ".dispatch", "homes", "beta.lab", "sessions"
+            )
+            self._rollout(root_a, "alpha", "/work/shared", 990.0)
+            self._rollout(root_b, "beta", "/work/shared", 1.0)
+            alpha = DispatchJob(
+                key="code", slug="alpha", cwd="/work/shared",
+                harness="codex", profile="lab",
+            )
+            beta = DispatchJob(
+                key="code", slug="beta", cwd="/work/shared",
+                harness="codex", profile="lab",
+            )
+            with mock.patch.object(dispatch, "_registry_home", return_value=tmp):
+                index = dispatch._build_codex_rollout_index([alpha, beta])
+                alpha_state = dispatch._codex_job_liveness(
+                    alpha.cwd, now=1000.0, profile=alpha.profile,
+                    slug=alpha.slug, codex_index=index,
+                )
+                beta_state = dispatch._codex_job_liveness(
+                    beta.cwd, now=1000.0, profile=beta.profile,
+                    slug=beta.slug, codex_index=index,
+                )
+            self.assertEqual(alpha_state, "working")
+            self.assertEqual(beta_state, "stale")
+
+    def test_duplicate_physical_rollout_is_parsed_once_but_scoped_to_both_roots(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root_a = os.path.join(tmp, "a")
+            root_b = os.path.join(tmp, "b")
+            original = self._rollout(root_a, "physical", "/work/shared", 900.0)
+            linked_dir = os.path.join(root_b, "2033", "05", "18")
+            os.makedirs(linked_dir)
+            linked = os.path.join(linked_dir, "rollout-linked.jsonl")
+            os.symlink(original, linked)
+            jobs = [
+                DispatchJob(key="code", slug="a", cwd="/work/shared", harness="codex"),
+                DispatchJob(key="code", slug="b", cwd="/work/shared", harness="codex"),
+            ]
+
+            def roots(_cwd, _profile=None, slug=None):
+                return [root_a] if slug == "a" else [root_b]
+
+            with mock.patch.object(
+                dispatch, "_codex_sessions_dirs", side_effect=roots
+            ), mock.patch.object(
+                dispatch, "_codex_transcript_cwd",
+                wraps=dispatch._codex_transcript_cwd,
+            ) as parse:
+                index = dispatch._build_codex_rollout_index(jobs)
+            self.assertEqual(parse.call_count, 1)
+            self.assertEqual(index[os.path.abspath(root_a)]["/work/shared"], 900.0)
+            self.assertEqual(index[os.path.abspath(root_b)]["/work/shared"], 900.0)
+
+    def test_malformed_absent_cwd_and_vanished_files_are_omitted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = os.path.join(tmp, "sessions")
+            self._rollout(root, "malformed", malformed=True)
+            self._rollout(root, "absent", cwd=None)
+            vanished = self._rollout(root, "vanished", cwd="/work/a")
+            job = DispatchJob(
+                key="code", slug="job", cwd="/work/a", harness="codex"
+            )
+            original = dispatch._codex_transcript_cwd
+
+            def parse(path):
+                result = original(path)
+                if path == vanished:
+                    os.unlink(path)
+                return result
+
+            with mock.patch.object(
+                dispatch, "_codex_sessions_dirs", return_value=[root]
+            ), mock.patch.object(
+                dispatch, "_codex_transcript_cwd", side_effect=parse
+            ):
+                index = dispatch._build_codex_rollout_index([job])
+            self.assertEqual(index[os.path.abspath(root)], {})
+            self.assertEqual(
+                dispatch._codex_job_liveness(
+                    "/work/a", now=1000.0, codex_index=index
+                ),
+                "dead",
+            )
+            self.assertEqual(
+                dispatch._codex_job_liveness(
+                    None, now=1000.0, codex_index=index
+                ),
+                "unknown",
+            )
+
+    def test_unreadable_root_is_contained_as_empty_index(self):
+        job = DispatchJob(
+            key="code", slug="job", cwd="/work/a", harness="codex"
+        )
+        root = "/unreadable/sessions"
+        with mock.patch.object(
+            dispatch, "_codex_sessions_dirs", return_value=[root]
+        ), mock.patch.object(dispatch.os, "walk", side_effect=OSError):
+            index = dispatch._build_codex_rollout_index([job])
+        self.assertEqual(index, {os.path.abspath(root): {}})
+
+    def test_indexed_and_legacy_classifier_evidence_are_equal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = os.path.join(tmp, "sessions")
+            self._rollout(root, "active", "/work/a", 990.0)
+            legacy = DispatchJob(
+                key="code", slug="legacy", cwd="/work/a",
+                source="jobs", status="open", harness="codex",
+            )
+            indexed = DispatchJob(
+                key="code", slug="legacy", cwd="/work/a",
+                source="jobs", status="open", harness="codex",
+            )
+            with mock.patch.object(
+                dispatch, "_codex_sessions_dirs", return_value=[root]
+            ):
+                index = dispatch._build_codex_rollout_index([indexed])
+                legacy_state = dispatch._dispatch_liveness(
+                    legacy, now=1000.0, track=False, codex_index=None
+                )
+                indexed_state = dispatch._dispatch_liveness(
+                    indexed, now=1000.0, track=False, codex_index=index
+                )
+            self.assertEqual(indexed_state, legacy_state)
+            self.assertEqual(indexed.state_evidence, legacy.state_evidence)
+
+    def test_collect_shares_one_exact_index_through_reconcile_and_final_loop(self):
+        job = DispatchJob(
+            key="code", slug="job", cwd="/work/a",
+            source="proc", harness="codex",
+        )
+        sentinel = {"/root": {"/work/a": 1000.0}}
+        with mock.patch.object(dispatch, "_scan_processes", return_value=[job]), \
+             mock.patch.object(dispatch, "_candidate_jobs_paths", return_value=[]), \
+             mock.patch.object(
+                 dispatch, "_build_codex_rollout_index", return_value=sentinel
+             ), \
+             mock.patch.object(
+                 dispatch, "_reconcile_drill_rows", return_value=[job]
+             ) as reconcile, \
+             mock.patch.object(
+                 dispatch, "_dispatch_liveness", return_value="working"
+             ) as classify:
+            rows = dispatch.collect()
+        self.assertEqual(rows, [job])
+        self.assertIs(reconcile.call_args.kwargs["codex_index"], sentinel)
+        self.assertIs(classify.call_args.kwargs["codex_index"], sentinel)
+
+    def test_collect_builder_failure_preserves_rows_with_legacy_fallback(self):
+        job = DispatchJob(
+            key="code", slug="job", cwd="/work/a",
+            source="proc", harness="codex",
+        )
+        with mock.patch.object(dispatch, "_scan_processes", return_value=[job]), \
+             mock.patch.object(dispatch, "_candidate_jobs_paths", return_value=[]), \
+             mock.patch.object(
+                 dispatch, "_build_codex_rollout_index",
+                 side_effect=RuntimeError("builder failed"),
+             ), \
+             mock.patch.object(
+                 dispatch, "_reconcile_drill_rows", return_value=[job]
+             ) as reconcile, \
+             mock.patch.object(
+                 dispatch, "_dispatch_liveness", return_value="working"
+             ) as classify:
+            rows = dispatch.collect()
+        self.assertEqual(rows, [job])
+        self.assertIsNone(reconcile.call_args.kwargs["codex_index"])
+        self.assertIsNone(classify.call_args.kwargs["codex_index"])
 
 
 class CodexAttemptIdentityTest(unittest.TestCase):

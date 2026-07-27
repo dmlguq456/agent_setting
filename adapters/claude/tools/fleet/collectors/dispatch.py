@@ -412,24 +412,83 @@ def _codex_sessions_dirs(cwd, profile=None, slug=None):
     return result
 
 
-def _codex_job_liveness(cwd, now, stale_min=15, profile=None, slug=None):
-    if not cwd:
-        return "unknown"
-    newest = None
-    for sessions in _codex_sessions_dirs(cwd, profile, slug):
+def _build_codex_rollout_index(jobs):
+    """Build one root-scoped cwd/newest-mtime index for this dispatch collection."""
+    roots = []
+    seen_roots = set()
+    for job in jobs:
+        if getattr(job, "harness", None) != "codex" or not getattr(job, "cwd", None):
+            continue
+        for candidate in _codex_sessions_dirs(
+            job.cwd, getattr(job, "profile", None), getattr(job, "slug", None)
+        ):
+            root = os.path.abspath(candidate)
+            if root in seen_roots:
+                continue
+            seen_roots.add(root)
+            roots.append(root)
+
+    result = {}
+    parsed_files = {}
+    for sessions_root in roots:
+        by_cwd = result.setdefault(sessions_root, {})
         try:
-            for root, _dirs, names in os.walk(sessions):
+            walker = os.walk(sessions_root)
+            for root, _dirs, names in walker:
                 for name in names:
                     if not (name.startswith("rollout-") and name.endswith(".jsonl")):
                         continue
                     path = os.path.join(root, name)
-                    if not _same_path(_codex_transcript_cwd(path) or "", cwd):
+                    physical = os.path.realpath(path)
+                    if physical not in parsed_files:
+                        try:
+                            cwd = _codex_transcript_cwd(path)
+                            mtime = os.path.getmtime(path)
+                        except OSError:
+                            parsed_files[physical] = None
+                        else:
+                            parsed_files[physical] = (
+                                (os.path.abspath(cwd), mtime)
+                                if isinstance(cwd, str) and cwd else None
+                            )
+                    parsed = parsed_files[physical]
+                    if parsed is None:
                         continue
-                    mtime = os.path.getmtime(path)
+                    cwd, mtime = parsed
+                    newest = by_cwd.get(cwd)
                     if newest is None or mtime > newest:
-                        newest = mtime
+                        by_cwd[cwd] = mtime
         except OSError:
             continue
+    return result
+
+
+def _codex_job_liveness(cwd, now, stale_min=15, profile=None, slug=None,
+                        codex_index=None):
+    if not cwd:
+        return "unknown"
+    newest = None
+    if isinstance(codex_index, dict):
+        wanted_cwd = os.path.abspath(cwd)
+        for sessions in _codex_sessions_dirs(cwd, profile, slug):
+            mtime = codex_index.get(os.path.abspath(sessions), {}).get(wanted_cwd)
+            if mtime is not None and (newest is None or mtime > newest):
+                newest = mtime
+    else:
+        for sessions in _codex_sessions_dirs(cwd, profile, slug):
+            try:
+                for root, _dirs, names in os.walk(sessions):
+                    for name in names:
+                        if not (name.startswith("rollout-") and name.endswith(".jsonl")):
+                            continue
+                        path = os.path.join(root, name)
+                        if not _same_path(_codex_transcript_cwd(path) or "", cwd):
+                            continue
+                        mtime = os.path.getmtime(path)
+                        if newest is None or mtime > newest:
+                            newest = mtime
+            except OSError:
+                continue
     if newest is None:
         return "dead"
     return "working" if (now - newest) / 60.0 <= stale_min else "stale"
@@ -510,11 +569,14 @@ def _opencode_job_liveness(cwd, now, stale_min=15, slug=None):
 _QUEUED_GRACE_MIN = model.JOB_QUEUED_GRACE_MIN
 
 
-def _job_transcript_signal(job, now):
+def _job_transcript_signal(job, now, codex_index=None):
     """tier-3 evidence only: what the transcript/rollout/db mtime says, per harness.
     Returns working | stale | dead | unknown. No judgment — that is classify_job's job."""
     if job.harness == "codex":
-        return _codex_job_liveness(job.cwd, now, profile=job.profile, slug=job.slug)
+        return _codex_job_liveness(
+            job.cwd, now, profile=job.profile, slug=job.slug,
+            codex_index=codex_index,
+        )
     if job.harness == "opencode":
         return _opencode_job_liveness(job.cwd, now, slug=job.slug)
     return _job_liveness(job.cwd, now, profile=job.profile, slug=job.slug)
@@ -562,7 +624,7 @@ def _attempt_terminal_observation(attempt_id, route_id, route_node):
     }
 
 
-def _dispatch_liveness(job, now, track=True):
+def _dispatch_liveness(job, now, track=True, codex_index=None):
     """Job → state string. Signature/return preserved; the verdict now comes from the
     single F-25 classifier. Stamps `job.state_evidence` as a side effect.
 
@@ -654,7 +716,11 @@ def _dispatch_liveness(job, now, track=True):
         ),
         # A loop proc row is decided by tier-2 evidence; skip the mtime probe entirely
         # (it was never consulted on that path pre-F-25 either).
-        "transcript": None if is_loop else _job_transcript_signal(job, now),
+        "transcript": (
+            None if is_loop else _job_transcript_signal(
+                job, now, codex_index=codex_index
+            )
+        ),
         "proc_liveness": getattr(job, "_proc_liveness", None),
     }
     state, evidence = model.classify_job(ev_in, now,
@@ -1655,7 +1721,7 @@ def _jobs_log_fields(paths):
     return fields_by_slug
 
 
-def _reconcile_drill_rows(jobs, now=None):
+def _reconcile_drill_rows(jobs, now=None, codex_index=None):
     """Merge duplicate registry and process rows for the same drill run.
 
     Keep the registry row, absorb the process PID and its liveness as tier-2 EVIDENCE,
@@ -1708,7 +1774,10 @@ def _reconcile_drill_rows(jobs, now=None):
         if pl in (None, "unknown"):
             # track=False: this row is about to be dropped, so it must not occupy a
             # tracker slot (and its verdict is evidence, not a rendered state).
-            pl = _dispatch_liveness(p, time.time() if now is None else now, track=False)
+            pl = _dispatch_liveness(
+                p, time.time() if now is None else now, track=False,
+                codex_index=codex_index,
+            )
         if pl in ("working", "idle"):
             r._proc_liveness = pl                    # tier-2 evidence; classify_job weighs it
         drop.add(id(p))
@@ -1878,13 +1947,17 @@ def collect(jobs_path=None, harness_filter=None):
                 j.model = _claude_job_model(str(pid), j.cwd)
                 j.stage = None
     now = time.time()
+    try:
+        codex_index = _build_codex_rollout_index(jobs)
+    except Exception:
+        codex_index = None
     # F-18a correlation merges proc evidence onto canonical registry rows BEFORE
     # classification, so every row is decided exactly once, by the single classifier.
-    jobs = _reconcile_drill_rows(jobs, now)
+    jobs = _reconcile_drill_rows(jobs, now, codex_index=codex_index)
     for j in jobs:
         _enrich_claude_stream_session(j)
     for j in jobs:
-        j.liveness = _dispatch_liveness(j, now)
+        j.liveness = _dispatch_liveness(j, now, codex_index=codex_index)
     _annotate_orphan_conductors(jobs, now, jobs_path=jobs_path)
     # F-15c(a): a registry-only row (source="jobs") that turns out to be genuinely working
     # re-derives its breadcrumb from the real plan artifacts instead of the raw jobs.log
