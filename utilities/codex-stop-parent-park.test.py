@@ -249,7 +249,13 @@ class CodexStopParentParkTest(unittest.TestCase):
             "parent_session_id": SESSION,
             "children": [],
         }
+        proof = mock.Mock(
+            eligible=True,
+            reason="parent-definition-proven",
+        )
         with mock.patch.object(
+            HOOK, "prove_parent_definition", return_value=proof
+        ), mock.patch.object(
             HOOK, "join_session_batch", return_value=receipt
         ), mock.patch.object(HOOK, "spawn_preflight") as spawn:
             output = self.output(lambda: HOOK.handle_stop("/repo", SESSION))
@@ -264,6 +270,54 @@ class CodexStopParentParkTest(unittest.TestCase):
             )
         )
         spawn.assert_not_called()
+
+    def test_predefinition_parent_keeps_inner_wait_below_legacy_outer_timeout(self) -> None:
+        self.jobs.write_text(row(), encoding="utf-8")
+        receipt = {
+            "schema_version": 1,
+            "state": "timeout",
+            "parent_session_id": SESSION,
+            "children": [],
+        }
+        proof = mock.Mock(
+            eligible=False,
+            reason="parent-older-than-definition",
+        )
+        with mock.patch.object(
+            HOOK, "prove_parent_definition", return_value=proof
+        ) as prove, mock.patch.object(
+            HOOK, "join_session_batch", return_value=receipt
+        ) as join:
+            output = self.output(lambda: HOOK.handle_stop("/repo", SESSION))
+        prove.assert_called_once_with(SESSION)
+        self.assertEqual(join.call_args.kwargs["timeout"], 540.0)
+        value = json.loads(output)
+        self.assertIn("compatibility native wait", value["reason"])
+        self.assertIn("parent-older-than-definition", value["reason"])
+
+    def test_current_definition_parent_retains_two_hour_inner_wait(self) -> None:
+        self.jobs.write_text(row(), encoding="utf-8")
+        receipt = {
+            "schema_version": 1,
+            "state": "timeout",
+            "parent_session_id": SESSION,
+            "children": [],
+        }
+        proof = mock.Mock(
+            eligible=True,
+            reason="parent-definition-proven",
+        )
+        with mock.patch.object(
+            HOOK, "prove_parent_definition", return_value=proof
+        ) as prove, mock.patch.object(
+            HOOK, "join_session_batch", return_value=receipt
+        ) as join:
+            output = self.output(lambda: HOOK.handle_stop("/repo", SESSION))
+        prove.assert_called_once_with(SESSION)
+        self.assertEqual(join.call_args.kwargs["timeout"], 7140.0)
+        value = json.loads(output)
+        self.assertIn("two-hour native wait", value["reason"])
+        self.assertIn("parent-definition-proven", value["reason"])
 
     def test_repeated_stop_does_not_join_delivered_open_attempt_again(self) -> None:
         self.jobs.write_text(row(), encoding="utf-8")
