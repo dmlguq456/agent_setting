@@ -85,7 +85,7 @@ def session_id(payload: dict[str, Any]) -> str:
     return sid or "codex-hook"
 
 
-def run_preflight(*args: str) -> None:
+def run_preflight(*args: str, quiet: bool = False) -> None:
     env = os.environ.copy()
     env.setdefault("AGENT_HOME", str(ROOT))
     result = subprocess.run(
@@ -97,7 +97,7 @@ def run_preflight(*args: str) -> None:
         stderr=subprocess.PIPE,
         check=False,
     )
-    if result.stderr:
+    if result.stderr and not quiet:
         sys.stderr.write(result.stderr)
 
 
@@ -315,7 +315,8 @@ def main() -> int:
         return 0
     event_cwd = cwd(payload)
     event_session_id = session_id(payload)
-    if hook_event(payload).lower() == "stop":
+    event = hook_event(payload).lower()
+    if event == "stop":
         # A blocking Stop result is itself replayed as a new model continuation.
         # Codex marks that replay with stop_hook_active. Blocking that replay
         # again creates an unbounded Stop -> continuation -> Stop cycle.
@@ -326,6 +327,9 @@ def main() -> int:
         # only for one typed receipt (or a bounded retry/recovery instruction).
         # Distillation remains detached, but only after no native child is open.
         handle_stop(event_cwd, event_session_id)
+    elif event == "sessionend":
+        run_preflight("material-route", "clear", "--session", event_session_id, quiet=True)
+        run_preflight("session-end", event_cwd, event_session_id)
     else:
         run_preflight("session-end", event_cwd, event_session_id)
     return 0

@@ -733,3 +733,24 @@ target file and inspect `preflight.sh worklog` output. Codex may read/write
 notes-root files only when the task is explicitly about notes, triage, feedback,
 or worklog routing. It must not copy worklog-board DBs, caches, `.env*`, build
 output, dispatch logs, or worktrees into this repo.
+# Material-route enforcement
+
+Codex's supported local `Write`/`Edit`/`MultiEdit`/`apply_patch` and shell
+boundaries delegate material authorization to `hooks/material-route-guard.py`.
+Patch targets are normalized to portable `Write`; source-bearing `git commit`
+commands are checked independently after parent parking. A successful,
+trusted local `preflight.sh route --capability ... --output ...` (or direct
+router compile) binds the exact interactive session only when one output and
+canonical route verification succeed. Registered workers remain bound by their
+immutable `AGENT_ROUTE_*` proof and cannot impersonate interactive markers.
+
+`preflight.sh material-route check|bind|clear` is the explicit checked fallback
+when native hooks are unavailable. Only `SessionEnd` clears an interactive
+marker; `Stop` never does. Successful hook side effects are silent and denials
+remain Codex-shaped. Detached `resource-runner.py start` additionally requires
+the sealed route, exact `resource-runner`/`detached-process` node, and smoke
+attestation before logs, registry state, or a child process are created.
+
+This source change does not install projections or alter trust. Automatic
+enforcement begins only after the integrated source is installed as
+`AGENT_HOME` and the existing projection/current-hash trust check passes.

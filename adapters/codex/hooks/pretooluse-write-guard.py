@@ -678,13 +678,24 @@ def main() -> int:
     if os.environ.get("AGENT_PARENT_PARK_ONLY") == "1":
         return 0
 
-    files = target_files(payload)
-    if (name in {"Write", "write", "Edit", "edit", "MultiEdit", "multi_edit", "multiedit"} or is_patch_tool(name)) and not files:
-        return hook_block(f"agent harness preflight could not determine target file for Codex tool {name}")
-
     session_id = session_id or "codex-hook"
     env = os.environ.copy()
     env.setdefault("AGENT_HOME", str(ROOT))
+    if is_shell_tool(name):
+        result = subprocess.run(
+            [str(PREFLIGHT), "material-route", "check", "--tool", "Bash",
+             "--command", shell_command(payload, args), "--cwd", str(cwd(payload)),
+             "--session", session_id],
+            cwd=str(ROOT), env=env, text=True, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=False,
+        )
+        if result.returncode != 0:
+            detail = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
+            return hook_block(detail or "material-route preflight failed")
+
+    files = target_files(payload)
+    if (name in {"Write", "write", "Edit", "edit", "MultiEdit", "multi_edit", "multiedit"} or is_patch_tool(name)) and not files:
+        return hook_block(f"agent harness preflight could not determine target file for Codex tool {name}")
 
     for file in files:
         result = subprocess.run(

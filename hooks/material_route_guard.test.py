@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import os
 from pathlib import Path
+import shutil
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -23,6 +26,11 @@ PREDICATES = (
     "no-independent-verifier",
     "focused-verification",
 )
+SPEC = importlib.util.spec_from_file_location("material_route_guard", GUARD)
+assert SPEC and SPEC.loader
+MATERIAL_GUARD = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = MATERIAL_GUARD
+SPEC.loader.exec_module(MATERIAL_GUARD)
 
 
 class MaterialRouteGuardTest(unittest.TestCase):
@@ -72,6 +80,8 @@ class MaterialRouteGuardTest(unittest.TestCase):
         self.route_id = json.loads(self.route.read_text())["route_id"]
 
     def guard(self, *args: str, session: str = "session-a", env: dict[str, str] | None = None):
+        clean = {key: value for key, value in os.environ.items()
+                 if key not in {"AGENT_ROUTE_FILE", "AGENT_ROUTE_ID", "AGENT_ROUTE_NODE"}}
         return subprocess.run(
             [
                 sys.executable, str(GUARD), "--agent-home", str(self.home),
@@ -79,7 +89,7 @@ class MaterialRouteGuardTest(unittest.TestCase):
             ],
             text=True,
             capture_output=True,
-            env={**os.environ, **(env or {})},
+            env={**clean, **(env or {})},
         )
 
     def bind(self, session: str = "session-a") -> subprocess.CompletedProcess[str]:
@@ -270,6 +280,226 @@ class MaterialRouteGuardTest(unittest.TestCase):
             "--tool", "Edit", "--file", str(self.repo / "app.py"), session="hook-session"
         )
         self.assertEqual(denied.returncode, 2)
+
+    def test_codex_preflight_compile_binds_but_echo_and_foreign_paths_do_not(self) -> None:
+        trusted = str(ROOT / "adapters" / "codex" / "bin" / "preflight.sh")
+        for session, command in (
+            ("codex-echo", f"echo {trusted} route --capability autopilot-code --output {self.route}"),
+            ("codex-foreign", f"/tmp/preflight.sh route --capability autopilot-code --output {self.route}"),
+        ):
+            payload = {"hook_event_name": "PostToolUse", "tool_name": "Bash",
+                       "tool_input": {"command": command}, "cwd": str(self.repo),
+                       "session_id": session}
+            subprocess.run([sys.executable, str(GUARD)], input=json.dumps(payload),
+                           text=True, capture_output=True,
+                           env={**os.environ, "AGENT_HOME": str(self.home)}, check=True)
+            self.assertEqual(self.guard("--tool", "Edit", "--file", str(self.repo / "app.py"),
+                                        session=session).returncode, 2)
+        payload = {"hook_event_name": "PostToolUse", "tool_name": "functions.exec_command",
+                   "tool_input": {"command": f"{trusted} route --capability autopilot-code --output {self.route}"},
+                   "cwd": str(self.repo), "session_id": "codex-good"}
+        result = subprocess.run([sys.executable, str(GUARD)], input=json.dumps(payload), text=True,
+                                capture_output=True, env={**os.environ, "AGENT_HOME": str(self.home)})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.guard("--tool", "Edit", "--file", str(self.repo / "app.py"),
+                                    session="codex-good").returncode, 0)
+
+    def test_codex_compile_binding_requires_one_exact_local_output_and_proof(self) -> None:
+        trusted = str(ROOT / "adapters" / "codex" / "bin" / "preflight.sh")
+
+        def post(command: str, *, cwd: Path = self.repo, session: str = "compile-case"):
+            payload = {"hook_event_name": "PostToolUse", "tool_name": "functions.exec_command",
+                       "tool_input": {"command": command}, "cwd": str(cwd), "session_id": session}
+            return subprocess.run([sys.executable, str(GUARD)], input=json.dumps(payload), text=True,
+                                  capture_output=True, env={**os.environ, "AGENT_HOME": str(self.home)})
+
+        def denied(session: str = "compile-case"):
+            result = self.guard("--tool", "Edit", "--file", str(self.repo / "app.py"), session=session)
+            self.assertEqual(result.returncode, 2, result.stderr)
+
+        for command in (
+            f"{trusted} route --capability autopilot-code",
+            f"{trusted} route --capability autopilot-code --output {self.route} --output {self.artifacts / 'second.json'}",
+        ):
+            session = "compile-" + str(abs(hash(command)))
+            result = post(command, session=session)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            denied(session)
+
+        result = post(f"{trusted} route --capability autopilot-code --output={self.route}", session="equals-output")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.guard("--tool", "Edit", "--file", str(self.repo / "app.py"),
+                                    session="equals-output").returncode, 0)
+
+        # An exact shell directory change is supported only when it still binds
+        # the route against the payload cwd; foreign cwd/session proofs fail.
+        result = post(f"cd {self.repo} && {trusted} route --capability autopilot-code --output {self.route}")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.guard("--tool", "Edit", "--file", str(self.repo / "app.py"),
+                                    session="compile-case").returncode, 0)
+        post(f"{trusted} route --capability autopilot-code --output {self.route}", cwd=self.base,
+             session="foreign-cwd")
+        denied("foreign-cwd")
+        denied("foreign-session")
+
+        value = json.loads(self.route.read_text())
+        value["route_id"] = "rt-tampered"
+        self.route.write_text(json.dumps(value))
+        post(f"{trusted} route --capability autopilot-code --output {self.route}", session="tampered")
+        denied("tampered")
+
+    def test_codex_wrapper_requires_shared_git_common_dir_and_tracks_effective_cwd(self) -> None:
+        canonical = self.base / "canonical"
+        ignored = shutil.ignore_patterns(".git", ".agent_reports", ".claude_reports", ".dispatch", ".spec-grounding", "__pycache__")
+        shutil.copytree(ROOT, canonical, symlinks=True, ignore=ignored)
+        subprocess.run(["git", "init", "-q", str(canonical)], check=True)
+        subprocess.run(["git", "-C", str(canonical), "config", "user.email", "test@example.invalid"], check=True)
+        subprocess.run(["git", "-C", str(canonical), "config", "user.name", "Test"], check=True)
+        subprocess.run(["git", "-C", str(canonical), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(canonical), "commit", "-qm", "exact committed fixture"], check=True)
+        linked = self.base / "linked"
+        subprocess.run(["git", "-C", str(canonical), "worktree", "add", "-q", str(linked), "HEAD"], check=True)
+
+        foreign = self.base / "foreign"
+        (foreign / "adapters/codex/bin").mkdir(parents=True)
+        shutil.copy2(canonical / "adapters/codex/bin/preflight.sh", foreign / "adapters/codex/bin/preflight.sh")
+        subprocess.run(["git", "init", "-q", str(foreign)], check=True)
+        subprocess.run(["git", "-C", str(foreign), "config", "user.email", "test@example.invalid"], check=True)
+        subprocess.run(["git", "-C", str(foreign), "config", "user.name", "Test"], check=True)
+        subprocess.run(["git", "-C", str(foreign), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(foreign), "commit", "-qm", "foreign wrapper"], check=True)
+
+        fixture_guard_path = canonical / "hooks/material-route-guard.py"
+        fixture_spec = importlib.util.spec_from_file_location("fixture_material_route_guard", fixture_guard_path)
+        assert fixture_spec and fixture_spec.loader
+        fixture_guard = importlib.util.module_from_spec(fixture_spec)
+        fixture_spec.loader.exec_module(fixture_guard)
+        wrapper_rel = "adapters/codex/bin/preflight.sh"
+
+        # The canonical installed harness remains trusted even when it is a
+        # release tree without Git metadata. Git common-dir proof is required
+        # only to extend that trust to a sibling linked worktree.
+        standalone = self.base / "standalone"
+        (standalone / "adapters/codex/bin").mkdir(parents=True)
+        shutil.copy2(
+            canonical / wrapper_rel,
+            standalone / wrapper_rel,
+        )
+        original_root = fixture_guard.ROOT
+        fixture_guard.ROOT = standalone
+        try:
+            standalone_invocations = fixture_guard.route_compile_invocations(
+                f"{wrapper_rel} route --capability autopilot-code --output route.json",
+                standalone,
+            )
+        finally:
+            fixture_guard.ROOT = original_root
+        self.assertEqual(len(standalone_invocations), 1)
+        self.assertEqual(
+            standalone_invocations[0].outputs,
+            ((standalone / "route.json").resolve(),),
+        )
+
+        def compile_command(target: Path, output: str) -> str:
+            args = [
+                wrapper_rel, "route", "--capability", "autopilot-code",
+                "--capability-mode", "dev", "--intensity", "direct",
+                "--cwd", str(target), "--artifact-root", str(target),
+            ]
+            for predicate in PREDICATES:
+                args += ["--predicate", predicate]
+            args += [
+                "--transport", "interactive", "--inline-reason", "atomic-direct",
+                "--tracking", "untracked", "--spec-read", "not-applicable",
+                "--drift-verdict", "no-project-spec", "--workflow-mode", "untracked",
+                "--artifact-guard", "preflight-passed", "--output", output,
+            ]
+            return shlex.join(args)
+
+        def run_bridge(command: str, target: Path, session: str) -> subprocess.CompletedProcess[str]:
+            bridge = canonical / "adapters/codex/hooks/posttooluse-read-marker.py"
+            payload = {
+                "hook_event_name": "PostToolUse", "tool_name": "functions.exec_command",
+                "tool_input": {"command": command}, "cwd": str(target), "session_id": session,
+            }
+            return subprocess.run(
+                [sys.executable, str(bridge)], input=json.dumps(payload), text=True,
+                capture_output=True, env={**os.environ, "AGENT_HOME": str(canonical)},
+            )
+
+        def run_portable(command: str, target: Path, session: str) -> subprocess.CompletedProcess[str]:
+            payload = {
+                "hook_event_name": "PostToolUse", "tool_name": "functions.exec_command",
+                "tool_input": {"command": command}, "cwd": str(target), "session_id": session,
+            }
+            return subprocess.run(
+                [sys.executable, str(fixture_guard_path)], input=json.dumps(payload), text=True,
+                capture_output=True, env={**os.environ, "AGENT_HOME": str(canonical)},
+            )
+
+        cases = (
+            ("canonical-absolute", canonical, str(canonical / wrapper_rel)),
+            ("canonical-relative", canonical, wrapper_rel),
+            ("linked-absolute", linked, str(linked / wrapper_rel)),
+            ("linked-relative", linked, wrapper_rel),
+        )
+        for name, target, executable in cases:
+            with self.subTest(case=name):
+                output = f"route-{name}.json"
+                command = compile_command(target, output).replace(wrapper_rel, executable, 1)
+                result = subprocess.run(command, shell=True, cwd=target, text=True, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(
+                    fixture_guard.route_compile_invocations(command, target)[0].effective_cwd,
+                    target.resolve(),
+                )
+                for bridge_name, runner in (("portable", run_portable), ("codex", run_bridge)):
+                    session = f"{name}-{bridge_name}"
+                    bound = runner(command, target, session)
+                    self.assertEqual(bound.returncode, 0, bound.stderr)
+                    self.assertTrue(fixture_guard.marker_path(canonical, session).is_file(), session)
+                    allowed = subprocess.run(
+                        [sys.executable, str(fixture_guard_path), "--agent-home", str(canonical), "check", "--tool", "Edit",
+                         "--file", str(target / "app.py"), "--cwd", str(target), "--session", session,
+                         ], text=True, capture_output=True,
+                    )
+                    self.assertEqual(allowed.returncode, 0, allowed.stderr)
+
+        cd_command = f"cd {linked} && {compile_command(linked, 'route-cd.json')}"
+        result = subprocess.run(cd_command, shell=True, cwd=canonical, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = run_portable(cd_command, canonical, "preceding-cd-portable")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(fixture_guard.marker_path(canonical, "preceding-cd-portable").is_file())
+        result = run_bridge(cd_command, canonical, "preceding-cd-codex")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(fixture_guard.marker_path(canonical, "preceding-cd-codex").is_file())
+        for session in ("preceding-cd-portable", "preceding-cd-codex"):
+            allowed = subprocess.run(
+                [sys.executable, str(fixture_guard_path), "--agent-home", str(canonical), "check", "--tool", "Edit",
+                 "--file", str(linked / "app.py"), "--cwd", str(linked), "--session", session,
+                 ], text=True, capture_output=True,
+            )
+            self.assertEqual(allowed.returncode, 0, allowed.stderr)
+
+        no_bind = (
+            ("foreign-repository", str(foreign / wrapper_rel), foreign),
+            ("missing-file", str(canonical / "adapters/codex/bin/missing.sh"), canonical),
+            ("echo-substring", f"echo {canonical / wrapper_rel} route --capability autopilot-code --output route.json", canonical),
+            ("wrong-subcommand", f"{canonical / wrapper_rel} status --capability autopilot-code --output route.json", canonical),
+            ("missing-capability", f"{canonical / wrapper_rel} route autopilot-code --output route.json", canonical),
+            ("direct-non-compile", f"{canonical / wrapper_rel} status", canonical),
+            ("zero-output", f"{canonical / wrapper_rel} route --capability autopilot-code", canonical),
+            ("multiple-output", f"{canonical / wrapper_rel} route --capability autopilot-code --output one.json --output two.json", canonical),
+        )
+        for name, command, cwd in no_bind:
+            with self.subTest(no_bind=name):
+                invocations = fixture_guard.route_compile_invocations(command, cwd)
+                if name == "multiple-output":
+                    self.assertEqual(len(invocations), 1)
+                    self.assertEqual(len(invocations[0].outputs), 2)
+                else:
+                    self.assertEqual(invocations, [])
 
     def test_claude_hook_protocol_and_source_registration(self) -> None:
         payload = {

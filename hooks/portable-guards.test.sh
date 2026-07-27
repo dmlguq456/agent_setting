@@ -1998,6 +1998,83 @@ if printf '{"tool_name":"Bash","tool_input":{"command":"printf x > %s"},"session
 else
   bad "codex native hook projection should block obvious shell write targets"
 fi
+
+# Material-route Codex projection fixtures: denial must be native JSON, while a
+# successful local compile/bind remains silent and is scoped to session + cwd.
+codex_source="$TMP/repo/source.py"
+printf 'print(1)\n' > "$codex_source"
+git -C "$TMP/repo" add "$codex_source"
+no_route_write=$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"codex-no-route","cwd":"%s"}\n' "$codex_source" "$TMP/repo" \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py")
+if python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert d["decision"]=="block"; assert "material-route" in d["reason"] or "route" in d["reason"]' "$no_route_write"; then
+  ok "codex Write without material route returns native JSON denial"
+else
+  bad "codex Write without material route should return native JSON denial [$no_route_write]"
+fi
+patch_payload=$(python3 - "$codex_source" "$TMP/repo" <<'PY'
+import json,sys
+print(json.dumps({"tool_name":"functions.apply_patch","input":f"*** Begin Patch\n*** Update File: {sys.argv[1]}\n@@\n-print(1)\n+print(2)\n*** End Patch\n","session_id":"codex-patch-no-route","cwd":sys.argv[2]}))
+PY
+)
+patch_decision=$(printf '%s\n' "$patch_payload" | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py")
+if python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert d["decision"]=="block"' "$patch_decision"; then
+  ok "qualified functions.apply_patch without route is denied"
+else
+  bad "qualified functions.apply_patch without route should be denied [$patch_decision]"
+fi
+commit_decision=$(printf '%s\n' "{\"tool_name\":\"functions.exec_command\",\"input\":{\"command\":\"git commit -am source\"},\"session_id\":\"codex-commit-no-route\",\"cwd\":\"$TMP/repo\"}" \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py")
+if python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert d["decision"]=="block"' "$commit_decision"; then
+  ok "source-bearing functions.exec_command commit is denied"
+else
+  bad "source-bearing functions.exec_command commit should be denied [$commit_decision]"
+fi
+codex_route="$TMP/repo/.agent_reports/route.json"
+codex_compile="$ROOT/adapters/codex/bin/preflight.sh route --capability autopilot-code --capability-mode dev --intensity direct --cwd $TMP/repo --artifact-root $TMP/repo/.agent_reports --predicate atomic-outcome --predicate known-scope --predicate no-shared-contract --predicate no-resource-run --predicate no-artifact-handoff --predicate no-independent-verifier --predicate focused-verification --tracking untracked --spec-read not-applicable --drift-verdict no-project-spec --workflow-mode untracked --artifact-guard preflight-passed --inline-reason atomic-direct --output $codex_route"
+mkdir -p "$TMP/repo/.agent_reports"
+if eval "$codex_compile" >"$TMP/codex_compile.out" 2>"$TMP/codex_compile.err" \
+  && printf '%s\n' "{\"tool_name\":\"functions.exec_command\",\"input\":{\"command\":\"$codex_compile\"},\"session_id\":\"codex-bind\",\"cwd\":\"$TMP/repo\"}" \
+  | AGENT_HOME="$ROOT" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-read-marker.py" >"$TMP/codex_bind.out" 2>"$TMP/codex_bind.err" \
+  && [ ! -s "$TMP/codex_bind.out" ] && [ ! -s "$TMP/codex_bind.err" ] \
+  && printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"codex-bind","cwd":"%s"}\n' "$codex_source" "$TMP/repo" \
+    | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >"$TMP/codex_bind_allow.out" 2>"$TMP/codex_bind_allow.err" \
+  && [ ! -s "$TMP/codex_bind_allow.out" ] && [ ! -s "$TMP/codex_bind_allow.err" ]; then
+  ok "trusted local Codex compile binds silently and same cwd/session allows Write"
+else
+  bad "trusted local Codex compile should bind silently and allow same cwd/session [route=$(test -f "$codex_route" && echo yes || echo no) bind_out=$(cat "$TMP/codex_bind.out") bind_err=$(cat "$TMP/codex_bind.err") allow_out=$(cat "$TMP/codex_bind_allow.out") allow_err=$(cat "$TMP/codex_bind_allow.err")]"
+fi
+foreign_bind=$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"codex-foreign","cwd":"%s"}\n' "$codex_source" "$TMP/repo" \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py")
+if python3 -c 'import json,sys; assert json.loads(sys.argv[1])["decision"]=="block"' "$foreign_bind"; then
+  ok "foreign session cannot reuse trusted Codex material route"
+else
+  bad "foreign session should be denied [$foreign_bind]"
+fi
+codex_bind_marker_hash=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(b"material-route-session-v1\0" + sys.argv[1].encode()).hexdigest())' codex-bind)
+codex_bind_marker="$ROOT/.route-grounding/$codex_bind_marker_hash.json"
+printf '{"hook_event_name":"Stop","session_id":"codex-bind","cwd":"%s"}\n' "$TMP/repo" \
+  | MEM_STORE="$TMP/codex_hook_mem_stop" AGENT_HOME="$ROOT" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/sessionend-lifecycle.py" >/tmp/codex_stop_retention.out 2>/tmp/codex_stop_retention.err || true
+if [ -f "$codex_bind_marker" ]; then
+  ok "Codex Stop retains material route marker"
+else
+  bad "Codex Stop should retain material route marker"
+fi
+if printf '{"hook_event_name":"SessionEnd","session_id":"codex-bind","cwd":"%s"}\n' "$TMP/repo" \
+  | MEM_STORE="$TMP/codex_hook_mem" AGENT_HOME="$ROOT" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/sessionend-lifecycle.py" >"$TMP/codex_sessionend.out" 2>"$TMP/codex_sessionend.err" \
+  && [ ! -s "$TMP/codex_sessionend.out" ] \
+  && [ ! -e "$codex_bind_marker" ] \
+  && ! grep -q 'material-route\|route-guard' "$TMP/codex_sessionend.err"; then
+  ok "Codex SessionEnd clears material route without clear-path output"
+else
+  bad "Codex SessionEnd should clear the exact material marker without clear-path output [marker=$(test -e "$codex_bind_marker" && echo present || echo absent) out=$(cat "$TMP/codex_sessionend.out") err=$(cat "$TMP/codex_sessionend.err")]"
+fi
+if printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"parked","cwd":"%s"}\n' "$codex_source" "$TMP/repo" \
+  | AGENT_PARENT_PARK_ONLY=1 HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_parent_park_only.out 2>/tmp/codex_parent_park_only.err \
+  && [ ! -s /tmp/codex_parent_park_only.out ] && [ ! -s /tmp/codex_parent_park_only.err ]; then
+  ok "parent-park-only precedence returns silent success before material check"
+else
+  bad "parent-park-only must precede material check"
+fi
 if printf '{"tool_name":"Bash","tool_input":{"command":"printf x | tee %s"},"session_id":"shellteesid","cwd":"%s"}\n' "$TMP/runtime/projects/abc/memory/TEE.md" "$TMP/runtime" \
   | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_tee_hook.out 2>/tmp/codex_shell_tee_hook.err \
   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); assert d["decision"]=="block"; assert "memory" in d["reason"].lower() or "기억" in d["reason"]' /tmp/codex_shell_tee_hook.out \
