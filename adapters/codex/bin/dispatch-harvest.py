@@ -277,7 +277,7 @@ def main(argv: list[str]) -> int:
         ):
             native_rows.append((fields, metadata))
     if len(native_rows) == 1 and args.status == "all":
-        _fields, metadata = native_rows[0]
+        native_fields, metadata = native_rows[0]
         # Stop delivery means the exact batch reached a typed terminal or
         # recovery boundary, not that the worker produced a valid PASS/FAIL
         # envelope. Exact --status all harvest must consume runtime-error and
@@ -292,6 +292,10 @@ def main(argv: list[str]) -> int:
                 before_consume=lambda: mark_native_stop_harvest(
                     jobs, metadata["attempt_id"]
                 ),
+                # SD-91 migration: the old Stop bridge may have crashed before
+                # publishing delivered state. Exact done-row harvest is the
+                # only path allowed to consume that pending receipt.
+                allow_pending=native_fields[1] == "done",
             )
         except JoinContractError as exc:
             print("check=failed")

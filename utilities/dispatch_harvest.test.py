@@ -312,6 +312,65 @@ class HarvestTest(unittest.TestCase):
             jobs.read_text(encoding="utf-8"),
         )
 
+    def test_legacy_pending_receipt_is_recovered_only_after_exact_done_harvest(self):
+        attempt = "att-native-stop-pending"
+        session = "thread-native-stop-pending"
+        jobs = self.base / "native-stop-pending.jobs.log"
+        row = self.terminal_row(
+            attempt, "PASS", "none", status="done", name="native-stop-pending.jsonl"
+        )
+        row = row.replace("dispatch_depth=2", "dispatch_depth=1").rstrip("\n")
+        row += (
+            ",parent_completion_delivery=codex-stop-hook,"
+            f"parent_sid={session}\n"
+        )
+        jobs.write_text(row, encoding="utf-8")
+        digest = hashlib.sha256(session.encode("utf-8")).hexdigest()
+        state = jobs.parent / "parent-session-state" / f"{digest}.json"
+        state.parent.mkdir(parents=True, exist_ok=True)
+        state.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "parent_session_id_sha256": digest,
+                    "attempt_ids": [attempt],
+                    "delivered_attempt_ids": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "adapters/codex/bin/dispatch-harvest.py"),
+                "--jobs", str(jobs),
+                "--attempt-id", attempt,
+                "--status", "all",
+            ],
+            text=True,
+            capture_output=True,
+            env=self.env(),
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("parent_completion_receipt=consumed", result.stdout)
+        self.assertFalse(state.exists())
+
+        duplicate = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "adapters/codex/bin/dispatch-harvest.py"),
+                "--jobs", str(jobs),
+                "--attempt-id", attempt,
+                "--status", "all",
+            ],
+            text=True,
+            capture_output=True,
+            env=self.env(),
+        )
+        self.assertNotEqual(duplicate.returncode, 0)
+        self.assertIn("native-stop-receipt-not-delivered", duplicate.stdout)
+
     def test_ambiguous_or_legacy_selector_never_breadth_closes(self):
         for adapter in ("codex", "opencode"):
             with self.subTest(adapter=adapter, case="ambiguous"):

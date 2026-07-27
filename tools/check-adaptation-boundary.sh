@@ -834,7 +834,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'headless --check <worktree>' adapters/codex/README.md \
     || ! grep -Fq 'headless [--check] [--require-hook-trust]' adapters/codex/AGENTS.md \
     || ! grep -Fq 'dispatch --dry-run|--register|--start [--require-hook-trust]' adapters/codex/ADAPTATION.md \
-    || ! grep -Fq 'fails with `child_spawned=0` before registry writes' adapters/codex/README.md \
+    || ! grep -Fq 'always explicit `parent_completion_delivery=poll-fallback`' adapters/codex/README.md \
     || ! grep -Fq 'Registry writes and harvest rewrites are serialized with a `.lock` file' adapters/codex/README.md \
     || ! grep -Fq 'Registry writes and harvest rewrites are serialized with a `.lock` file' adapters/codex/ADAPTATION.md \
     || ! grep -Fq 'minimal typed worker prompt' adapters/codex/README.md \
@@ -984,10 +984,12 @@ check_codex_bin_wrappers() {
     || ! grep -Fq '"SessionStart"' adapters/codex/hooks/sessionstart-lifecycle.py \
     || ! grep -Fq 'hookSpecificOutput' adapters/codex/hooks/sessionstart-lifecycle.py \
     || ! grep -Fq 'run_preflight("session-end"' adapters/codex/hooks/sessionend-lifecycle.py \
-    || ! grep -Fq 'join_session_batch(' adapters/codex/hooks/sessionend-lifecycle.py \
-    || ! grep -Fq 'CODEX_STOP_JOIN_TIMEOUT' adapters/codex/hooks/sessionend-lifecycle.py \
+    || grep -Fq 'subprocess' adapters/codex/hooks/stop-lifecycle.py \
+    || grep -Fq 'session-end' adapters/codex/hooks/stop-lifecycle.py \
+    || grep -Fq 'join_session_batch(' adapters/codex/hooks/stop-lifecycle.py \
+    || grep -Fq 'decision' adapters/codex/hooks/stop-lifecycle.py \
     || ! grep -Fq 'parent_completion_harvested' adapters/codex/bin/dispatch-harvest.py \
-    || ! grep -Fq 'register_parent_stop_attempt(args, jobs)' adapters/codex/bin/dispatch-headless.py \
+    || grep -Fq 'register_parent_stop_attempt(args, jobs)' adapters/codex/bin/dispatch-headless.py \
     || grep -Fq 'sys.stdout.write(result.stdout)' adapters/codex/hooks/sessionend-lifecycle.py \
     || ! grep -Fq 'run_preflight("briefing"' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'token_budget_context(current_cwd, sid)' adapters/codex/hooks/userprompt-lifecycle.py \
@@ -1202,7 +1204,7 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'loop-info <oncall|note|study|drill|runtime-watch>' adapters/codex/README.md \
     || ! grep -Fq 'preflight.sh loop-info <loop>' adapters/codex/ADAPTATION.md \
     || ! grep -Fq 'Arbitrary detached shell output' adapters/codex/AGENTS.md \
-    || ! grep -Fq 'trusted native Stop bridge' adapters/codex/AGENTS.md; then
+    || ! grep -Fq 'no atomic idempotent wake' adapters/codex/AGENTS.md; then
     fail_msg "Codex docs must document loop-info support/fallback contracts"
   fi
 
@@ -1869,6 +1871,7 @@ check_codex_native_hook_projection() {
   hook_json="$hook_dir/hooks.json"
   session_bridge="$hook_dir/sessionstart-lifecycle.py"
   sessionend_bridge="$hook_dir/sessionend-lifecycle.py"
+  stop_bridge="$hook_dir/stop-lifecycle.py"
   prompt_bridge="$hook_dir/userprompt-lifecycle.py"
   permission_bridge="$hook_dir/permissionrequest-lifecycle.py"
   pre_bridge="$hook_dir/pretooluse-write-guard.py"
@@ -1880,7 +1883,7 @@ check_codex_native_hook_projection() {
     fail_msg "$hook_json is missing"
     return
   fi
-  for bridge in "$session_bridge" "$sessionend_bridge" "$prompt_bridge" "$permission_bridge" "$pre_bridge" "$post_bridge" "$read_bridge" "$launcher"; do
+  for bridge in "$session_bridge" "$sessionend_bridge" "$stop_bridge" "$prompt_bridge" "$permission_bridge" "$pre_bridge" "$post_bridge" "$read_bridge" "$launcher"; do
     if [ ! -x "$bridge" ]; then
       fail_msg "$bridge must be executable"
     fi
@@ -1892,7 +1895,7 @@ check_codex_native_hook_projection() {
     fail_msg "$hook_json must be valid JSON"
     cat /tmp/codex-hooks-json.err
   fi
-  for script in sessionstart-lifecycle.py sessionend-lifecycle.py userprompt-lifecycle.py permissionrequest-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py posttooluse-read-marker.py; do
+  for script in sessionstart-lifecycle.py sessionend-lifecycle.py stop-lifecycle.py userprompt-lifecycle.py permissionrequest-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py posttooluse-read-marker.py; do
     if ! grep -Fq "run-hook.sh\\\" $script" "$hook_json"; then
       fail_msg "$hook_json must register $script through the Codex hook launcher"
     fi
@@ -1907,8 +1910,8 @@ check_codex_native_hook_projection() {
   if ! grep -Fq '"SessionEnd"' "$hook_json" || ! grep -Fq 'sessionend-lifecycle.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex SessionEnd lifecycle bridge"
   fi
-  if ! grep -Fq '"Stop"' "$hook_json" || ! grep -Fq 'sessionend-lifecycle.py' "$hook_json"; then
-    fail_msg "$hook_json must register the Codex Stop lifecycle bridge as a session-end alias"
+  if ! grep -Fq '"Stop"' "$hook_json" || ! grep -Fq 'stop-lifecycle.py' "$hook_json"; then
+    fail_msg "$hook_json must register the dedicated silent no-op Codex Stop bridge"
   fi
   if ! grep -Fq '"UserPromptSubmit"' "$hook_json" || ! grep -Fq 'userprompt-lifecycle.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex UserPromptSubmit lifecycle bridge"
@@ -1966,9 +1969,10 @@ check_codex_native_hook_projection() {
     || ! grep -Fq '"$0" material-route check --tool Write --file "$file" --cwd "$(dirname "$file")" --session "$sid"' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'material-route", "check", "--tool", "Bash"' "$pre_bridge" \
     || ! grep -Fq 'material-route", "bind", "--route"' "$read_bridge" \
-    || ! grep -Fq 'if os.environ.get("AGENT_PARENT_PARK_ONLY") == "1":' "$pre_bridge" \
+    || grep -Fq 'AGENT_PARENT_PARK_ONLY' "$pre_bridge" \
+    || grep -Fq '"matcher": "*"' "$hook_json" \
     || ! grep -Fq 'SessionEnd' adapters/codex/hooks/sessionend-lifecycle.py \
-    || ! grep -Fq 'event == "sessionend"' adapters/codex/hooks/sessionend-lifecycle.py; then
+    || ! grep -Fq 'Stop is a' adapters/codex/hooks/sessionend-lifecycle.py; then
     fail_msg "Codex material-route write/check/bind call sites and SessionEnd-only clear must remain wired"
   fi
   if ! grep -Fq '"design"' "$post_bridge"; then
@@ -3188,7 +3192,7 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'check=hook-trust:review-needed' adapters/codex/README.md \
     || ! grep -Fq 'authoritative App Server `hooks/list`' adapters/codex/README.md \
     || ! grep -Fq 'authoritative App Server `hooks/list`' adapters/codex/ADAPTATION.md \
-    || ! grep -Fq 'current-hash hook trust before spawn' adapters/codex/AGENTS.md \
+    || ! grep -Fq 'does not force Stop/PreToolUse trust' adapters/codex/AGENTS.md \
     || ! grep -Fq 'doctor --runtime-strict' adapters/codex/README.md \
     || ! grep -Fq 'runtime-projection --require-hook-trust' adapters/codex/AGENTS.md \
     || ! grep -Fq 'check=hook-trust:review-needed' adapters/codex/ADAPTATION.md; then
@@ -3864,7 +3868,7 @@ check_fleet_depth2_liveness_regression() {
   out="${TMPDIR:-/tmp}/fleet-depth2-liveness-regression-$$.log"
   if ! PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT/tools" python3 -m unittest \
     fleet.tests.test_dispatch.CodexAttemptIdentityTest.test_namespace_local_numeric_pid_collision_is_not_process_authority \
-    fleet.tests.test_f15_rows.FoldingTest.test_portable_persona_child_is_visible_and_drives_exec_without_show_all \
+    fleet.tests.test_f15_rows.FoldingTest.test_portable_persona_child_is_visible_with_exec_hue_without_owner_track \
     >"$out" 2>&1; then
     fail_msg "Fleet dispatch-depth-2 classifier/default-view conformance regression"
     sed -n '1,160p' "$out"

@@ -77,12 +77,6 @@ from model_profile import (  # noqa: E402
     validate_registered_profile,
 )
 from codex_dispatch_terminal import inspect_terminal_attempt  # noqa: E402
-from codex_hook_definition_age import prove_parent_definition  # noqa: E402
-from dispatch_completion_join import (  # noqa: E402
-    JoinContractError,
-    parent_session_state_path,
-    register_parent_session_attempt,
-)
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 # Verification rigor is derived from intensity — CONVENTIONS §1.1 mapping table (SoT).
 # `--qa` is no longer a user-facing axis; optional, derived from --intensity when omitted.
@@ -99,7 +93,6 @@ INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "advers
 # standard+ per OPERATIONS.md §5.10 — the SD-78 runtime-owned completion clause
 # is scoped to this set for owner (conductor) launches only.
 _STANDARD_PLUS_INTENSITY = {"standard", "strong", "thorough", "adversarial"}
-PARENT_STOP_DELIVERY = "codex-stop-hook"
 
 # SD-15 (OPERATIONS §5.10 ⑨): immediate limit/auth failure patterns — homomorphic port of the Claude
 # wrapper's DEATH_PATTERNS. codex exec surfaces provider limit/auth failures as JSON
@@ -297,8 +290,7 @@ def _bind_runtime_parent(args: argparse.Namespace) -> None:
 
 
 def resolve_parent_completion_delivery(args: argparse.Namespace) -> str:
-    """Select native Stop only for the actual interactive Codex parent."""
-
+    """Interactive Codex has no atomic idempotent wake primitive."""
     current_thread = os.environ.get("CODEX_THREAD_ID") or os.environ.get(
         "CODEX_SESSION_ID"
     )
@@ -313,15 +305,7 @@ def resolve_parent_completion_delivery(args: argparse.Namespace) -> str:
         and args.parent_session_id == current_thread
         and os.environ.get("AGENT_DISPATCH_CHILD") != "1"
     ):
-        proof = prove_parent_definition(
-            current_thread,
-            hooks_path=Path(os.environ.get("CODEX_HOME", "~/.codex")).expanduser() / "hooks.json",
-            ledger_path=Path(args.agent_home) / ".dispatch" / "codex-hook-definition-ledger.json"
-            if getattr(args, "agent_home", None) else None,
-        )
-        args.parent_completion_reason = proof.reason
-        if proof.eligible:
-            return PARENT_STOP_DELIVERY
+        args.parent_completion_reason = "interactive-auto-wake-unsupported"
         return "poll-fallback"
     args.parent_completion_reason = "parent-identity-unmatched"
     return "poll-fallback"
@@ -329,46 +313,6 @@ def resolve_parent_completion_delivery(args: argparse.Namespace) -> str:
 
 def bind_parent_completion_delivery(args: argparse.Namespace) -> None:
     args.parent_completion_delivery = resolve_parent_completion_delivery(args)
-    if (
-        args.parent_completion_delivery == PARENT_STOP_DELIVERY
-        and getattr(args, "action", "") == "start"
-    ):
-        # This path cannot degrade after spawn: an untrusted Stop hook would
-        # strand an open child and return control to an unparked model parent.
-        args.require_hook_trust = True
-
-
-def register_parent_stop_attempt(args: argparse.Namespace, jobs: Path) -> None:
-    if args.parent_completion_delivery != PARENT_STOP_DELIVERY:
-        return
-    register_parent_session_attempt(
-        parent_session_state_path(jobs, args.parent_session_id),
-        args.parent_session_id,
-        args.attempt_id,
-    )
-
-
-def attempt_parent_delivery_matches(
-    jobs: Path,
-    attempt_id: str,
-    expected_delivery: str,
-) -> bool:
-    matches: list[dict[str, str]] = []
-    try:
-        lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return False
-    for line in lines:
-        fields = line.split("\t")
-        if len(fields) != 6:
-            continue
-        metadata = parse_registry_metadata(fields[5])
-        if metadata.get("attempt_id") == attempt_id:
-            matches.append(metadata)
-    return (
-        len(matches) == 1
-        and matches[0].get("parent_completion_delivery") == expected_delivery
-    )
 
 
 def fail(reason: str, code: int, **fields: str) -> int:
@@ -1695,16 +1639,6 @@ def main(argv: list[str]) -> int:
     if args.start:
         rc = check_runtime_projection(args.worktree, args.require_hook_trust)
         if rc != 0:
-            if args.parent_completion_delivery == PARENT_STOP_DELIVERY:
-                return fail(
-                    "codex-stop-hook-untrusted",
-                    69,
-                    detail=(
-                        "current-hash Stop/PreToolUse trust is required before "
-                        "interactive registered-child spawn"
-                    ),
-                    child_spawned="0",
-                )
             return rc
         if args.profile:
             home_root = resolve_agent_home() / ".dispatch" / "homes"
@@ -1889,27 +1823,6 @@ def main(argv: list[str]) -> int:
         except DispatchContractError as e:
             cancel_governor_reservation(governor, governor_root, reservation_token)
             return fail(e.reason, 73, detail=e.detail, child_spawned="0")
-        if (
-            action == "start"
-            and args.attempt_claimed
-            and args.parent_completion_delivery == PARENT_STOP_DELIVERY
-            and not attempt_parent_delivery_matches(
-                jobs,
-                args.attempt_id,
-                PARENT_STOP_DELIVERY,
-            )
-        ):
-            cancel_governor_reservation(governor, governor_root, reservation_token)
-            return fail(
-                "codex-stop-registration-mismatch",
-                69,
-                detail=(
-                    "the registered attempt predates native Stop delivery; create a "
-                    "fresh exact attempt before launch"
-                ),
-                attempt_id=args.attempt_id,
-                child_spawned="0",
-            )
         if args.attempt_claimed:
             try:
                 prompt_path.write_text(prompt_text, encoding="utf-8")
@@ -2142,42 +2055,6 @@ def main(argv: list[str]) -> int:
         args.child_pid = proc.pid
         args.child_pid_start = start_ticks
         args.launch_heartbeat = seed_launch_heartbeat(args, jobs, proc.pid, start_ticks)
-        if args.parent_completion_delivery == PARENT_STOP_DELIVERY:
-            try:
-                register_parent_stop_attempt(args, jobs)
-            except JoinContractError as exc:
-                try:
-                    os.killpg(proc.pid, signal.SIGTERM)
-                    proc.wait(timeout=1)
-                except (ProcessLookupError, subprocess.TimeoutExpired):
-                    try:
-                        os.killpg(proc.pid, signal.SIGKILL)
-                        proc.wait(timeout=1)
-                    except (ProcessLookupError, subprocess.TimeoutExpired):
-                        pass
-                cancel_governor_reservation(
-                    governor, governor_root, reservation_token
-                )
-                annotate_attempt_row(
-                    jobs,
-                    args.attempt_id,
-                    {"launch_outcome": "launch-cleanup-unverified"},
-                )
-                close_job_row(
-                    jobs,
-                    args.slug,
-                    args.worktree,
-                    "codex-stop-state-unavailable",
-                    "",
-                    args.attempt_id,
-                )
-                return fail(
-                    "codex-stop-state-unavailable",
-                    70,
-                    detail=str(exc),
-                    attempt_id=args.attempt_id,
-                    child_spawned="1",
-                )
         if args.launch_lifecycle == FOREGROUND_SCOPED:
             binding = args.parent_binding
             outcome = wait_foreground(

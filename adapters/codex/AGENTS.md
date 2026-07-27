@@ -59,10 +59,12 @@ The recommended footer fragment is `codex_setting/codex-config/tui-statusline.to
 
 Registered standard+ headless owners use the checked App Server completion
 supervisor: the runtime joins exact child batches and resumes the same thread once
-per batch. A direct registered depth-1 child started by the actual interactive
-Codex thread uses the trusted native Stop bridge: finish the turn and let Stop
-join outside the model; do not call a wait tool. Arbitrary detached shell output
-still does not auto-resume. For non-dispatch long-running work, obey `preflight.sh
+per batch. A general interactive Codex thread has no atomic idempotent wake
+primitive: its Stop hook never joins children and PreToolUse never parks all
+tools for completion. A direct registered depth-1 child is explicit
+`poll-fallback`; keep the parent conversational and do not promise automatic
+resume. Arbitrary detached shell output still does not auto-resume. For
+non-dispatch long-running work, obey `preflight.sh
 loop-info runtime-watch` and its explicit automatic-follow-up-impossible fallback
 instead of ending with a detached completion promise.
 
@@ -97,12 +99,14 @@ Launch registered jobs only through `preflight.sh dispatch
 `core/OPERATIONS.md`. Keep `capability_mode` separate from a non-owner
 `worker_mode`, which must equal its portable `unit`; a dispatch-depth-1 owner is
 `_kernel/owner` with no worker mode. `worker_role` and legacy `mode` are
-read-only metadata, not bootstrap identity. A native interactive Stop delivery
-forces current-hash hook trust before spawn, then admits no model tool until its
-typed receipt and only exact harvest afterward. In a declared polling fallback,
-wait with `preflight.sh dispatch-wait --attempt-id <id> --max 300..600`;
-otherwise monitor with `preflight.sh liveness [jobs.log]` and harvest with
-`preflight.sh harvest`.
+read-only metadata, not bootstrap identity. A direct interactive Codex launch is
+always explicit `poll-fallback`: it does not force Stop/PreToolUse trust, create
+parent Stop state, or park the model/tool loop. Keep the parent conversational.
+If an operator deliberately selects the finite polling fallback, use
+`preflight.sh dispatch-wait --attempt-id <id> --max 300..600`; otherwise monitor
+with `preflight.sh liveness [jobs.log]` and harvest with `preflight.sh harvest`.
+Legacy stamped Stop state is recovery-only and permits one exact terminal
+`--status all --attempt-id` harvest, never raw output or a broad selector.
 Conductors use `dispatch-chain` for ordinary checked dispatch-depth-2 nodes. A sealed
 2–4-way `parallel_group` uses one `dispatch-batch --parallel-group` call so all
 absent first-start legs are admitted atomically and launched concurrently; do not

@@ -376,21 +376,28 @@ def consume_parent_session_attempt(
     attempt_id: str,
     *,
     before_consume: Callable[[], bool] | None = None,
+    allow_pending: bool = False,
 ) -> bool:
-    """Consume one delivered receipt after a successful exact harvest."""
+    """Consume one exact receipt after a successful typed harvest.
+
+    ``allow_pending`` exists only for migration from the retired native Stop
+    bridge. Its caller must already have proved the exact attempt terminal.
+    """
 
     if not _safe_identity(attempt_id):
         return False
     with _parent_session_state_lock(path):
         state = _read_parent_session_state_unlocked(path, parent_session_id)
-        if state is None or attempt_id not in state.delivered_attempt_ids:
+        if state is None or attempt_id not in state.attempt_ids:
+            return False
+        if not allow_pending and attempt_id not in state.delivered_attempt_ids:
             return False
         if before_consume is not None and not before_consume():
             raise JoinContractError("parent-session-consume-commit-failed")
         attempts = set(state.attempt_ids)
         delivered = set(state.delivered_attempt_ids)
         attempts.remove(attempt_id)
-        delivered.remove(attempt_id)
+        delivered.discard(attempt_id)
         if attempts:
             _write_parent_session_state_unlocked(
                 path,
