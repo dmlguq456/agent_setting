@@ -1032,10 +1032,17 @@ class NoRegressionTest(unittest.TestCase):
         active = [SubAgent(agent_type="explore", active=True)]
         with_subs = self._rows(subagents=active)
         without_subs = self._rows(subagents=None)
-        lines_with = render._build_lines(with_subs, [], section="fleet", narrow=False,
-                                         malformed=0, term_width=168)
-        lines_without = render._build_lines(without_subs, [], section="fleet", narrow=False,
-                                            malformed=0, term_width=168)
+        # Freeze the animation frame so a 100 ms scheduler boundary cannot make
+        # this semantic comparison fail on spinner glyph alone.
+        with mock.patch.object(render.time, "time", return_value=1234.5):
+            lines_with = render._build_lines(
+                with_subs, [], section="fleet", narrow=False,
+                malformed=0, term_width=168,
+            )
+            lines_without = render._build_lines(
+                without_subs, [], section="fleet", narrow=False,
+                malformed=0, term_width=168,
+            )
         pulse_with = "".join(t for t, _k in lines_with[1])
         pulse_without = "".join(t for t, _k in lines_without[1])
         self.assertEqual(pulse_with, pulse_without,
