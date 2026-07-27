@@ -1125,6 +1125,177 @@ def _run_scheduler(command: list[str]) -> tuple[bool, str]:
     return result.returncode == 0, detail or f"exit={result.returncode}"
 
 
+_PROBE_DETAIL_LIMIT = 200
+
+
+def _probe_command(command: list[str]) -> tuple[bool, str]:
+    """Run one exact, read-only scheduler inspection command."""
+    allowed = {
+        (
+            "systemctl", "--user", "show", "agent-harness-update.timer",
+            "--property=LoadState,ActiveState,UnitFileState,LastTriggerUSec",
+        ),
+        (
+            "systemctl", "--user", "show", "agent-harness-update.service",
+            "--property=Result,ExecMainCode,ExecMainStatus",
+        ),
+        ("launchctl", "print", f"gui/{os.getuid()}/com.agent-harness.update"),
+    }
+    if tuple(command) not in allowed:
+        return False, "status probe command is not allowlisted"
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, str(exc)[:_PROBE_DETAIL_LIMIT]
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        return False, (detail or f"exit={result.returncode}")[:_PROBE_DETAIL_LIMIT]
+    # Parsers need the complete stdout payload. Only user-facing diagnostics
+    # are bounded; truncating `launchctl print` here can discard its exit data.
+    return True, (result.stdout or result.stderr or "").strip()
+
+
+def _probe_result(kind: str, detail: str = "") -> dict:
+    return {
+        "probe": "unavailable",
+        "loaded": None,
+        "active": None,
+        "enabled": None,
+        "last_trigger": None,
+        "last_result": None,
+        "exit_status": None,
+        "detail": detail[:_PROBE_DETAIL_LIMIT],
+    }
+
+
+def _key_values(output: str) -> dict[str, str]:
+    values = {}
+    for line in output.splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            values[key] = value.strip()
+    return values
+
+
+def _probe_systemd() -> dict:
+    _, timer = _systemd_paths()
+    timer_cmd = [
+        "systemctl", "--user", "show", timer.name,
+        "--property=LoadState,ActiveState,UnitFileState,LastTriggerUSec",
+    ]
+    ok, timer_output = _probe_command(timer_cmd)
+    if not ok:
+        return _probe_result("systemd", timer_output)
+    timer_values = _key_values(timer_output)
+    required = ("LoadState", "ActiveState", "UnitFileState")
+    if any(key not in timer_values for key in required):
+        return _probe_result("systemd", "systemd timer output is incomplete")
+    loaded_states = {"loaded": True, "not-found": False, "error": False, "masked": False}
+    active_states = {"active": True, "inactive": False, "failed": False, "deactivating": False, "activating": False}
+    enabled_states = {"enabled": True, "enabled-runtime": True, "disabled": False}
+    if (timer_values["LoadState"] not in loaded_states
+            or timer_values["ActiveState"] not in active_states
+            or timer_values["UnitFileState"] not in enabled_states):
+        return _probe_result("systemd", "systemd timer state is unrecognized")
+    last_trigger = timer_values.get("LastTriggerUSec", "").strip()
+    if last_trigger.casefold() in {"", "n/a", "never"}:
+        last_trigger = None
+    result = _probe_result("systemd")
+    result.update(
+        probe="ok",
+        loaded=loaded_states[timer_values["LoadState"]],
+        active=active_states[timer_values["ActiveState"]],
+        enabled=enabled_states[timer_values["UnitFileState"]],
+        last_trigger=last_trigger,
+        detail="systemd user timer inspected",
+    )
+    if last_trigger is None:
+        result["detail"] = "systemd user timer inspected; no recorded trigger"
+        return result
+    _, service = _systemd_paths()
+    service_cmd = [
+        "systemctl", "--user", "show", service.name,
+        "--property=Result,ExecMainCode,ExecMainStatus",
+    ]
+    service_ok, service_output = _probe_command(service_cmd)
+    if not service_ok:
+        result["detail"] = (
+            "systemd user timer inspected; last result unavailable: "
+            + service_output
+        )[:_PROBE_DETAIL_LIMIT]
+        return result
+    service_values = _key_values(service_output)
+    service_result = service_values.get("Result")
+    if service_result:
+        result["last_result"] = service_result
+    status = service_values.get("ExecMainStatus")
+    if status and re.fullmatch(r"-?\d+", status):
+        result["exit_status"] = int(status)
+    return result
+
+
+def _probe_launch_agent() -> dict:
+    domain = f"gui/{os.getuid()}/com.agent-harness.update"
+    ok, output = _probe_command(["launchctl", "print", domain])
+    if not ok:
+        return _probe_result("launch-agent", output)
+    state_match = re.search(r"^\s*state\s*=\s*(.*?)\s*$", output, re.MULTILINE)
+    if not state_match:
+        return _probe_result("launch-agent", "launchctl output has no state")
+    state_text = state_match.group(1).lower()
+    state = re.sub(r"[\s_-]+", "", state_text)
+    # A periodic LaunchAgent normally has no running process between triggers.
+    # Successful `launchctl print` proves that launchd has the job loaded; only
+    # a throttled job is treated as not currently armed for healthy scheduling.
+    active_states = {"running": True, "waiting": True, "exited": True,
+                     "notrunning": True, "throttled": False}
+    if state not in active_states:
+        return _probe_result("launch-agent", "launchctl state is unrecognized")
+    result = _probe_result("launch-agent")
+    result.update(probe="ok", loaded=True, active=active_states[state], enabled=True,
+                  detail=f"LaunchAgent inspected (state={state_text})")
+    exit_match = re.search(
+        r"^\s*last exit code\s*=\s*(.*?)\s*$",
+        output,
+        re.MULTILINE | re.IGNORECASE,
+    )
+    if exit_match:
+        value = exit_match.group(1).strip()
+        if value.casefold() in {"(never exited)", "never exited", "n/a"}:
+            return result
+        if not re.fullmatch(r"-?\d+", value):
+            return _probe_result("launch-agent", "launchctl last exit code is invalid")
+        result["exit_status"] = int(value)
+        result["last_result"] = "success" if result["exit_status"] == 0 else "failed"
+    return result
+
+
+def _probe_scheduler(kind: str) -> dict:
+    if kind == "systemd-user":
+        return _probe_systemd()
+    if kind == "launch-agent":
+        return _probe_launch_agent()
+    result = _probe_result(kind, "automatic updates are unsupported on this platform")
+    result["probe"] = "unsupported"
+    return result
+
+
+def _scheduler_health(kind: str, configured: bool, probe: dict) -> str:
+    if kind == "unsupported":
+        return "unsupported"
+    if not configured:
+        return "degraded" if probe.get("probe") == "ok" and probe.get("loaded") else "disabled"
+    if probe.get("probe") != "ok":
+        return "unknown"
+    if any(probe.get(key) is False for key in ("loaded", "active", "enabled")):
+        return "degraded"
+    if probe.get("exit_status") not in (None, 0):
+        return "degraded"
+    if probe.get("last_result") not in (None, "success", "Succeeded"):
+        return "degraded"
+    return "ok"
+
+
 def enable_auto_update() -> dict:
     with _distribution_lock():
         state = _load_state()
@@ -1208,11 +1379,19 @@ def auto_update_status() -> dict:
         paths = ()
     configured = bool(paths) and all(path.is_file() and not path.is_symlink() for path in paths)
     state = _load_state()
+    probe = _probe_scheduler(kind)
+    channel = state.get("channel", "stable") if state else None
+    pinned_version = state.get("pinned_version") if state and channel == "pinned" else None
     return {
         "status": "configured" if configured else "disabled",
         "kind": kind,
         "files": [str(path) for path in paths],
         "recorded": state.get("auto_update") if state else None,
+        "version": state.get("version") if state else None,
+        "channel": channel,
+        "pinned_version": pinned_version,
+        "health": _scheduler_health(kind, configured, probe),
+        "scheduler": probe,
     }
 
 

@@ -68,6 +68,13 @@ harness auto-update status
 harness runtime doctor --runtime all --strict
 ```
 
+`auto-update status` also reports the installed release, channel, and live
+scheduler health when Linux systemd-user or macOS LaunchAgent exposes it.
+Unavailable probes are reported as unknown; unsupported platforms are reported
+explicitly without changing the scheduler configuration. For a periodic
+LaunchAgent, `active` means the job is loaded and scheduled; its updater process
+does not need to remain running between triggers.
+
 `harness update` stages and verifies a new release before switching the active
 pointer, and rolls back on failure. Existing agent sessions still follow their
 runtime-specific re-invocation, new-session, or restart boundary; check

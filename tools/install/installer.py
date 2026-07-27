@@ -801,15 +801,33 @@ def cmd_auto_update(args):
             "exit": EXIT_FAIL,
             "lines": [f"auto-update {args.operation}: failed: {exc}"],
         }
+    detail = result["status"]
+    lines = [f"auto-update {args.operation}: {result['status']} ({result['kind']})"]
+    if args.operation == "status":
+        detail = f"{detail} ({result['kind']}) health={result['health']}"
+        scheduler = result["scheduler"]
+        display_state = {True: "yes", False: "no", None: "unknown"}
+        lines.extend([
+            f"managed release: version={result.get('version') or '-'} channel={result.get('channel') or '-'}",
+            f"scheduler health: {result['health']} ({scheduler.get('detail') or scheduler['probe']})",
+            "scheduler state: "
+            f"loaded={display_state.get(scheduler.get('loaded'), 'unknown')} "
+            f"active={display_state.get(scheduler.get('active'), 'unknown')} "
+            f"enabled={display_state.get(scheduler.get('enabled'), 'unknown')}",
+        ])
+        if scheduler.get("last_trigger") is not None:
+            lines.append(f"last trigger: {scheduler['last_trigger']}")
+        if scheduler.get("last_result") is not None:
+            exit_status = scheduler.get("exit_status")
+            exit_detail = f" (exit={exit_status})" if exit_status is not None else ""
+            lines.append(f"last result: {scheduler['last_result']}{exit_detail}")
     return {
         "operation": args.operation,
         "scheduler": result,
-        "checks": [{"id": "auto-update", "ok": True, "detail": result["status"]}],
+        "checks": [{"id": "auto-update", "ok": True, "detail": detail}],
         "drift": [],
         "exit": EXIT_OK,
-        "lines": [
-            f"auto-update {args.operation}: {result['status']} ({result['kind']})"
-        ],
+        "lines": lines,
     }
 
 
