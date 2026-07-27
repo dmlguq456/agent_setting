@@ -3411,6 +3411,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
         job_children = {}  # parent dispatch slug -> [dispatch-depth-2 jobs]
         orphans = []       # project-level fallback (parent dead/off-screen/no-env)
         loops_jobs = []    # no-parent-is-normal (cron loops) — no orphan marker
+        recovered_session_ids = set()
         visible_parent_slugs = {
             j.slug for j in group_jobs
             if j.slug and max(1, int(getattr(j, "depth", 1) or 1)) < 2
@@ -3429,6 +3430,10 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                     job_children.setdefault(j.parent_slug, []).append(j)
                 elif is_drill_case:
                     loops_jobs.append(j)
+                elif (getattr(j, "is_child", False) and j.parent_sid
+                      and j.parent_sid in shown_sids):
+                    children.setdefault(j.parent_sid, []).append(j)
+                    recovered_session_ids.add(j.parent_sid)
                 else:
                     # A malformed/stale parent edge must not make a live dispatch-depth-2 row
                     # disappear from Fleet. Surface it as a project-level orphan.
@@ -3617,26 +3622,28 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                     for child in kids
                 )
             )
+            recovered_session_owner = s.session_id in recovered_session_ids
+            suppress_session_stage = visible_route_owner or recovered_session_owner
             _n0 = len(lines)
             if _selectable_session(s):
                 _SELECTABLE.append(_select_entry(s, _n0))    # F-27 target map
             if _srow:
                 lines.extend(_srow(s, is_parent=bool(nested_n), child_count=nested_n,
                                    term_width=term_width,
-                                   show_projection_stage=not visible_route_owner))
+                                   show_projection_stage=not suppress_session_stage))
             else:
                 lines.append(_session_row(s, narrow, is_parent=bool(nested_n),
                                           child_count=nested_n,
                                           name_width=wide_name_width,
                                           ctx_width=wide_ctx_width,
-                                          show_projection_stage=not visible_route_owner,
+                                          show_projection_stage=not suppress_session_stage,
                                           stage_zone=wide_route_zone))
             if not (s.liveness in ("stale", "dead") or s.app_server or s.detached):
                 _sess_bold_ids.update(range(_n0, len(lines)))
             detail = _context_detail_row(s, term_width=term_width)
             if detail:
                 lines.extend(detail)
-            stage_rows = ([] if visible_route_owner else
+            stage_rows = ([] if suppress_session_stage else
                           _projection_stage_detail_rows(s, term_width=term_width))
             if stage_rows:
                 lines.extend(stage_rows)
