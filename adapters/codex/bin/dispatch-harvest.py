@@ -276,30 +276,32 @@ def main(argv: list[str]) -> int:
             and metadata.get("parent_sid")
         ):
             native_rows.append((fields, metadata))
-    if len(native_rows) == 1:
+    if len(native_rows) == 1 and args.status == "all":
         _fields, metadata = native_rows[0]
-        terminal = terminal_results.get(args.attempt_id or "")
-        if terminal is not None and terminal.get("state") == "valid":
-            try:
-                consumed = consume_parent_session_attempt(
-                    parent_session_state_path(
-                        jobs.resolve(), metadata["parent_sid"]
-                    ),
-                    metadata["parent_sid"],
-                    metadata["attempt_id"],
-                    before_consume=lambda: mark_native_stop_harvest(
-                        jobs, metadata["attempt_id"]
-                    ),
-                )
-            except JoinContractError as exc:
-                print("check=failed")
-                print(f"reason={exc}")
-                return 70
-            if not consumed:
-                print("check=failed")
-                print("reason=native-stop-receipt-not-delivered")
-                return 70
-            print("parent_completion_receipt=consumed")
+        # Stop delivery means the exact batch reached a typed terminal or
+        # recovery boundary, not that the worker produced a valid PASS/FAIL
+        # envelope. Exact --status all harvest must consume runtime-error and
+        # malformed/absent handoffs too, after reporting their bounded state.
+        try:
+            consumed = consume_parent_session_attempt(
+                parent_session_state_path(
+                    jobs.resolve(), metadata["parent_sid"]
+                ),
+                metadata["parent_sid"],
+                metadata["attempt_id"],
+                before_consume=lambda: mark_native_stop_harvest(
+                    jobs, metadata["attempt_id"]
+                ),
+            )
+        except JoinContractError as exc:
+            print("check=failed")
+            print(f"reason={exc}")
+            return 70
+        if not consumed:
+            print("check=failed")
+            print("reason=native-stop-receipt-not-delivered")
+            return 70
+        print("parent_completion_receipt=consumed")
     return 0
 
 

@@ -137,17 +137,21 @@ def collect_all(harness_filter=None, jobs_path=None):
             pass
     # Reserve strong process-owned identities before any PID-ordered fallback.
     # Codex uses this to prevent one same-cwd rollout from labeling two TUIs.
+    codex_tick = None
     try:
         prepare = getattr(modules.get("codex"), "prepare_tick", None)
         if prepare:
-            prepare(sessions)
+            codex_tick = prepare(sessions)
     except Exception:
         pass
     for s in sessions:
         fn = enrichers.get(s.harness)
         if fn:
             try:
-                fn(s)
+                if s.harness == "codex" and codex_tick is not None:
+                    fn(s, tick=codex_tick)
+                else:
+                    fn(s)
             except Exception:
                 pass  # enrichment failure never removes the backbone row
 

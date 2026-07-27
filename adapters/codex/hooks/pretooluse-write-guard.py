@@ -30,6 +30,18 @@ OPEN_DISPATCH_STATES = {"open", "running"}
 # Wrappers project the user-facing ``poll-fallback`` label as internal ``poll``.
 STRICT_TERMINAL_PARK_MODES = {"supervised", "poll"}
 MIN_PARK_WAIT_SECONDS = 300
+PRIMARY_PRETOOLUSE_TOOLS = frozenset(
+    {
+        "Write",
+        "Edit",
+        "MultiEdit",
+        "apply_patch",
+        "functions.apply_patch",
+        "Bash",
+        "Shell",
+        "functions.exec_command",
+    }
+)
 
 
 def hook_block(reason: str) -> int:
@@ -529,6 +541,15 @@ def main() -> int:
 
     name = tool_name(payload)
     args = tool_input(payload)
+    # Codex launches every matching hook definition concurrently. The trusted
+    # projection intentionally retains a specific write/shell definition plus
+    # a wildcard park-only definition. For their overlap, the specific bridge
+    # is the sole authority; otherwise both processes emit the same denial.
+    if (
+        os.environ.get("AGENT_PARENT_PARK_ONLY") == "1"
+        and name in PRIMARY_PRETOOLUSE_TOOLS
+    ):
+        return 0
     session_id = nested_string(payload, "session_id", "sessionID", "thread_id", "threadID")
     if not session_id:
         session_id = first_string(nested_mapping(payload, "session"), "id")
@@ -626,8 +647,11 @@ def main() -> int:
                 f"allowed ({status_hint}). Do not wait, inspect raw output, "
                 "or perform unrelated work"
             )
-        for attempt_id in native_attempts:
-            attempts.pop(attempt_id, None)
+        # The hashed native Stop batch is the immutable authority for this
+        # continuation. Once its exact harvest is proved, unrelated session
+        # rows must not re-block it; they are evaluated after this receipt is
+        # consumed on a later tool event.
+        return 0
     if attempts and not park_control_allowed(name, payload, args, attempts):
         attempt_list = ",".join(sorted(attempts))
         if os.environ.get("AGENT_DISPATCH_COMPLETION_MODE") == "supervised":

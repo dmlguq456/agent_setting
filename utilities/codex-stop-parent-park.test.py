@@ -70,8 +70,24 @@ class CodexStopParentParkTest(unittest.TestCase):
                 encoding="utf-8"
             )
         )["hooks"]
-        self.assertEqual(config["Stop"][0]["hooks"][0]["timeout"], 600)
+        self.assertEqual(config["Stop"][0]["hooks"][0]["timeout"], 7200)
+        self.assertEqual(HOOK.STOP_JOIN_TIMEOUT_MAX, 7140.0)
+        self.assertEqual(
+            config["Stop"][0]["hooks"][0]["timeout"]
+            - HOOK.STOP_JOIN_TIMEOUT_MAX,
+            60.0,
+        )
         self.assertEqual(config["SessionStart"][0]["hooks"][0]["timeout"], 30)
+        self.assertEqual(len(config["PreToolUse"]), 2)
+        self.assertEqual(
+            config["PreToolUse"][0]["matcher"],
+            r"Write|Edit|MultiEdit|apply_patch|functions\.apply_patch|Bash|Shell|functions\.exec_command",
+        )
+        self.assertEqual(config["PreToolUse"][1]["matcher"], "*")
+        self.assertIn(
+            "AGENT_PARENT_PARK_ONLY=1",
+            config["PreToolUse"][1]["hooks"][0]["command"],
+        )
 
     def test_no_children_schedules_memory_lifecycle_silently(self) -> None:
         with mock.patch.object(HOOK, "spawn_preflight") as spawn:
@@ -145,6 +161,59 @@ class CodexStopParentParkTest(unittest.TestCase):
                 HOOK.run_preflight("session-end")
         self.assertEqual(quiet.getvalue(), "diagnostic\n")
 
+    def test_runtime_stop_continuation_never_blocks_or_joins_again(self) -> None:
+        self.jobs.write_text(row(), encoding="utf-8")
+        payload = {
+            "hook_event_name": "Stop",
+            "cwd": "/repo",
+            "session_id": SESSION,
+            "stop_hook_active": True,
+        }
+        with mock.patch.object(HOOK, "load_payload", return_value=payload), \
+             mock.patch.object(HOOK, "is_worker_session", return_value=False), \
+             mock.patch.object(HOOK, "handle_stop") as handle, \
+             mock.patch.object(HOOK, "spawn_preflight") as spawn:
+            output = self.output(HOOK.main)
+        self.assertEqual(output, "")
+        handle.assert_not_called()
+        spawn.assert_not_called()
+
+    def test_runtime_stop_continuation_runs_lifecycle_after_harvest(self) -> None:
+        payload = {
+            "hook_event_name": "Stop",
+            "cwd": "/repo",
+            "session_id": SESSION,
+            "stop_hook_active": True,
+        }
+        with mock.patch.object(HOOK, "load_payload", return_value=payload), \
+             mock.patch.object(HOOK, "is_worker_session", return_value=False), \
+             mock.patch.object(HOOK, "handle_stop") as handle, \
+             mock.patch.object(HOOK, "spawn_preflight") as spawn:
+            output = self.output(HOOK.main)
+        self.assertEqual(output, "")
+        handle.assert_not_called()
+        spawn.assert_called_once_with("session-end", "/repo", SESSION)
+
+    def test_runtime_stop_continuation_leaves_invalid_state_for_recovery(self) -> None:
+        state = HOOK.parent_session_state_path(self.jobs, SESSION)
+        state.parent.mkdir(parents=True, exist_ok=True)
+        state.write_text("{}", encoding="utf-8")
+        payload = {
+            "hook_event_name": "Stop",
+            "cwd": "/repo",
+            "session_id": SESSION,
+            "stop_hook_active": True,
+        }
+        with mock.patch.object(HOOK, "load_payload", return_value=payload), \
+             mock.patch.object(HOOK, "is_worker_session", return_value=False), \
+             mock.patch.object(HOOK, "handle_stop") as handle, \
+             mock.patch.object(HOOK, "spawn_preflight") as spawn:
+            output = self.output(HOOK.main)
+        self.assertEqual(output, "")
+        self.assertTrue(state.exists())
+        handle.assert_not_called()
+        spawn.assert_not_called()
+
     def test_ready_batch_publishes_state_and_one_continuation(self) -> None:
         self.jobs.write_text(row(), encoding="utf-8")
         receipt = {
@@ -213,19 +282,75 @@ class CodexStopParentParkTest(unittest.TestCase):
             "parent_session_id": SESSION,
             "children": [],
         }
+        proof = mock.Mock(
+            eligible=True,
+            reason="parent-definition-proven",
+        )
         with mock.patch.object(
+            HOOK, "prove_parent_definition", return_value=proof
+        ), mock.patch.object(
             HOOK, "join_session_batch", return_value=receipt
         ), mock.patch.object(HOOK, "spawn_preflight") as spawn:
             output = self.output(lambda: HOOK.handle_stop("/repo", SESSION))
         value = json.loads(output)
         self.assertEqual(value["decision"], "block")
-        self.assertIn("End this continuation immediately", value["reason"])
+        self.assertIn("bounded two-hour native wait", value["reason"])
+        self.assertIn("operator re-entry is required", value["reason"])
+        self.assertIn("Automatic completion delivery is no longer active", value["reason"])
         self.assertIsNone(
             JOIN.read_parent_session_state(
                 HOOK.parent_session_state_path(self.jobs, SESSION), SESSION
             )
         )
         spawn.assert_not_called()
+
+    def test_predefinition_parent_keeps_inner_wait_below_legacy_outer_timeout(self) -> None:
+        self.jobs.write_text(row(), encoding="utf-8")
+        receipt = {
+            "schema_version": 1,
+            "state": "timeout",
+            "parent_session_id": SESSION,
+            "children": [],
+        }
+        proof = mock.Mock(
+            eligible=False,
+            reason="parent-older-than-definition",
+        )
+        with mock.patch.object(
+            HOOK, "prove_parent_definition", return_value=proof
+        ) as prove, mock.patch.object(
+            HOOK, "join_session_batch", return_value=receipt
+        ) as join:
+            output = self.output(lambda: HOOK.handle_stop("/repo", SESSION))
+        prove.assert_called_once_with(SESSION)
+        self.assertEqual(join.call_args.kwargs["timeout"], 540.0)
+        value = json.loads(output)
+        self.assertIn("compatibility native wait", value["reason"])
+        self.assertIn("parent-older-than-definition", value["reason"])
+
+    def test_current_definition_parent_retains_two_hour_inner_wait(self) -> None:
+        self.jobs.write_text(row(), encoding="utf-8")
+        receipt = {
+            "schema_version": 1,
+            "state": "timeout",
+            "parent_session_id": SESSION,
+            "children": [],
+        }
+        proof = mock.Mock(
+            eligible=True,
+            reason="parent-definition-proven",
+        )
+        with mock.patch.object(
+            HOOK, "prove_parent_definition", return_value=proof
+        ) as prove, mock.patch.object(
+            HOOK, "join_session_batch", return_value=receipt
+        ) as join:
+            output = self.output(lambda: HOOK.handle_stop("/repo", SESSION))
+        prove.assert_called_once_with(SESSION)
+        self.assertEqual(join.call_args.kwargs["timeout"], 7140.0)
+        value = json.loads(output)
+        self.assertIn("two-hour native wait", value["reason"])
+        self.assertIn("parent-definition-proven", value["reason"])
 
     def test_repeated_stop_does_not_join_delivered_open_attempt_again(self) -> None:
         self.jobs.write_text(row(), encoding="utf-8")

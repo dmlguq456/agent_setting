@@ -194,6 +194,31 @@ class ParentParkGuardTest(unittest.TestCase):
         self.assert_parked("Read")
         self.assert_parked("update_plan")
 
+    def test_wildcard_park_hook_yields_to_specific_write_shell_hook(self) -> None:
+        # Codex runs both matching PreToolUse definitions concurrently. The
+        # wildcard process must be silent for tools already owned by the
+        # specific write/shell matcher, leaving exactly one blocking authority.
+        commands = {
+            "Write": None,
+            "Edit": None,
+            "MultiEdit": None,
+            "apply_patch": None,
+            "functions.apply_patch": None,
+            "Bash": "git status --short",
+            "Shell": "git status --short",
+            "functions.exec_command": "git status --short",
+        }
+        self.assert_parked("Bash", commands["Bash"])
+        for name, command in commands.items():
+            with self.subTest(name=name):
+                self.assertIsNone(
+                    self.invoke(
+                        name,
+                        command,
+                        extra_env={"AGENT_PARENT_PARK_ONLY": "1"},
+                    )
+                )
+
     def test_only_exact_long_wait_and_typed_harvest_are_allowed(self) -> None:
         self.assertIsNone(
             self.invoke("Bash", f"utilities/dispatch-wait.sh --attempt-id {ATTEMPT} --max 600")
@@ -488,6 +513,25 @@ class ParentParkGuardTest(unittest.TestCase):
                 blocked = self.invoke(name, command)
                 self.assertEqual(blocked["decision"], "block")
                 self.assertIn("only exact preflight harvest", blocked["reason"])
+
+    def test_native_receipt_harvest_outranks_unrelated_open_attempt(self) -> None:
+        unrelated = "att-unrelated-open-child"
+        self.write_row("open", ATTEMPT, parent_sid=SESSION, native_stop=True)
+        self.write_row("open", unrelated, parent_sid=SESSION, append=True)
+        self.native_stop_state([ATTEMPT])
+
+        self.assertIsNone(
+            self.invoke(
+                "Bash",
+                f"adapters/codex/bin/preflight.sh harvest --attempt-id {ATTEMPT} --status all",
+            )
+        )
+        blocked = self.invoke(
+            "Bash",
+            f"adapters/codex/bin/preflight.sh harvest --attempt-id {unrelated} --status all",
+        )
+        self.assertEqual(blocked["decision"], "block")
+        self.assertIn("only exact preflight harvest", blocked["reason"])
 
     def test_native_stop_terminal_receipt_uses_status_all(self) -> None:
         self.write_row("done", ATTEMPT, parent_sid=SESSION, native_stop=True)

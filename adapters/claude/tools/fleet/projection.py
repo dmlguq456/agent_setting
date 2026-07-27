@@ -606,6 +606,15 @@ def _spec_phase_sequence(root, slug):
     return [(_spec_phase_display(name, i), state) for i, (name, state) in enumerate(phases)]
 
 
+def _spec_marker_is_terminal(root, slug):
+    """Terminal spec evidence is not live work for marker-only attribution."""
+    phases = _spec_phase_sequence(root, slug)
+    if phases:
+        return all(state in {"done", "skipped"} for _, state in phases)
+    _, phase = _spec_stage_parts(root, slug)
+    return bool(phase) and _spec_phase_state(phase) in {"done", "skipped"}
+
+
 def _artifact_latest_mtime(path):
     """Latest content mtime under an inferred plan dir (2-level glob covers
     ``plan/plan.md``, ``dev_logs/*``); falls back to the dir's own mtime."""
@@ -644,6 +653,8 @@ def _spec_marker_projection(entity, spec_markers, artifact_root=None, now=None):
     if selected is None:
         return None, MULTIPLE_SPEC_MARKERS, None
     root, slug, mtime = selected
+    if _spec_marker_is_terminal(root, slug):
+        return None, None, None
     topic, phase = _spec_stage_parts(root, slug)
     label = "spec"
     if topic:

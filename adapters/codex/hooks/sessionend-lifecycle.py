@@ -15,6 +15,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[3]
 PREFLIGHT = ROOT / "adapters" / "codex" / "bin" / "preflight.sh"
 sys.path.insert(0, str(ROOT / "utilities"))
+from codex_hook_definition_age import prove_parent_definition  # noqa: E402
 from dispatch_completion_join import (  # noqa: E402
     JoinContractError,
     current_session_children,
@@ -25,7 +26,10 @@ from dispatch_completion_join import (  # noqa: E402
     write_parent_session_state,
 )
 
-STOP_JOIN_TIMEOUT_MAX = 540.0
+# Keep one minute below the outer Stop command timeout in hooks.json so the
+# bridge can emit a typed receipt or recovery instruction before Codex kills it.
+STOP_JOIN_TIMEOUT_MAX = 7140.0
+LEGACY_STOP_JOIN_TIMEOUT_MAX = 540.0
 
 
 def first_string(mapping: dict[str, Any], *keys: str) -> str:
@@ -55,6 +59,18 @@ def nested_string(payload: dict[str, Any], *keys: str) -> str:
             if found:
                 return found
     return ""
+
+
+def nested_bool(payload: dict[str, Any], *keys: str) -> bool:
+    for key in keys:
+        value = payload.get(key)
+        if isinstance(value, bool):
+            return value
+    for key in ("context", "workspace", "session", "payload", "event", "input", "data"):
+        value = payload.get(key)
+        if isinstance(value, dict) and nested_bool(value, *keys):
+            return True
+    return False
 
 
 def cwd(payload: dict[str, Any]) -> str:
@@ -140,6 +156,29 @@ def bounded_float(name: str, default: float, maximum: float) -> float:
     return min(maximum, max(0.0, value))
 
 
+def stop_join_budget(event_session_id: str) -> tuple[float, str, str]:
+    """Keep the inner join within the Stop definition loaded by this parent.
+
+    A parent that predates the current hooks.json may still hold a native Stop
+    receipt stamped before the definition changed. Its Codex process retained
+    the legacy 600-second outer timeout, even though this script is loaded from
+    the current checkout. Fail closed to the legacy 540-second inner budget so
+    Codex cannot kill the hook before it emits typed recovery feedback.
+    """
+
+    proof = prove_parent_definition(event_session_id)
+    requested = bounded_float(
+        "CODEX_STOP_JOIN_TIMEOUT", 7140.0, STOP_JOIN_TIMEOUT_MAX
+    )
+    if proof.eligible:
+        return requested, "two-hour", proof.reason
+    return (
+        min(requested, LEGACY_STOP_JOIN_TIMEOUT_MAX),
+        "compatibility",
+        proof.reason,
+    )
+
+
 def emit_stop_block(reason: str) -> None:
     print(json.dumps({"decision": "block", "reason": reason}, separators=(",", ":")))
 
@@ -183,14 +222,15 @@ def handle_stop(event_cwd: str, event_session_id: str) -> None:
             )
             return
 
+        join_timeout, wait_generation, definition_reason = stop_join_budget(
+            event_session_id
+        )
         receipt = join_session_batch(
             jobs=jobs,
             parent_session_id=event_session_id,
             expected_attempts=attempts,
             interval=bounded_float("CODEX_STOP_JOIN_INTERVAL", 2.0, 10.0),
-            timeout=bounded_float(
-                "CODEX_STOP_JOIN_TIMEOUT", 540.0, STOP_JOIN_TIMEOUT_MAX
-            ),
+            timeout=join_timeout,
         )
         if receipt.get("state") == "ready":
             raw_children = receipt.get("children")
@@ -223,9 +263,12 @@ def handle_stop(event_cwd: str, event_session_id: str) -> None:
         if receipt.get("state") == "timeout":
             emit_stop_block(
                 "codex-stop-parent: exact registered child batch is still running after "
-                f"the bounded native wait; attempt(s)={attempt_list}. End this continuation "
-                "immediately without any tool call so the Stop hook can resume waiting "
-                "outside the model."
+                f"the bounded {wait_generation} native wait "
+                f"({definition_reason}); attempt(s)={attempt_list}. Automatic "
+                "completion delivery is no longer active after this single recovery "
+                "continuation; operator re-entry is required after the batch completes. "
+                "End this continuation without any tool call and do not start a model or "
+                "tool polling loop."
             )
             return
         raise JoinContractError("stop-receipt-state-invalid")
@@ -235,6 +278,33 @@ def handle_stop(event_cwd: str, event_session_id: str) -> None:
             f"({exc}). Do not run unrelated tools; reconcile the exact registered "
             "attempts through the operator recovery path."
         )
+
+
+def finish_stop_reentry(event_cwd: str, event_session_id: str) -> None:
+    """End a runtime-created Stop continuation without another block or join."""
+
+    jobs = dispatch_jobs_path()
+    try:
+        state_path = parent_session_state_path(jobs, event_session_id)
+        state = read_parent_session_batch_state(state_path, event_session_id)
+        if state is not None:
+            rows = current_session_children(
+                jobs,
+                event_session_id,
+                expected_attempts=set(state.attempt_ids),
+            )
+        else:
+            if state_path.exists():
+                return
+            rows = current_session_children(jobs, event_session_id)
+        if rows:
+            return
+        remove_parent_session_state(state_path)
+        spawn_preflight("session-end", event_cwd, event_session_id)
+    except JoinContractError:
+        # A continuation must never recursively block. Invalid state remains
+        # available for the explicit operator recovery path on a later turn.
+        return
 
 
 def main() -> int:
@@ -247,6 +317,12 @@ def main() -> int:
     event_session_id = session_id(payload)
     event = hook_event(payload).lower()
     if event == "stop":
+        # A blocking Stop result is itself replayed as a new model continuation.
+        # Codex marks that replay with stop_hook_active. Blocking that replay
+        # again creates an unbounded Stop -> continuation -> Stop cycle.
+        if nested_bool(payload, "stop_hook_active", "stopHookActive"):
+            finish_stop_reentry(event_cwd, event_session_id)
+            return 0
         # Stop owns interactive registered-child waiting. It emits a continuation
         # only for one typed receipt (or a bounded retry/recovery instruction).
         # Distillation remains detached, but only after no native child is open.

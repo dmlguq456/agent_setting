@@ -11,17 +11,20 @@ XDG_CONFIG_HOME="$HOME/.config"
 XDG_DATA_HOME="$HOME/.local/share"
 XDG_STATE_HOME="$HOME/.local/state"
 HARNESS_BIN_DIR="$HOME/.local/bin"
+CODEX_HOME="$HOME/.codex"
+CLAUDE_CONFIG_DIR="$HOME/.claude"
 HARNESS_ALLOW_FILE_RELEASES=1
 HARNESS_SCHEDULER_NO_ACTIVATE=1
 HARNESS_TEST_PLATFORM=linux
 AGENT_HOME="$ROOT"
-export HOME XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME HARNESS_BIN_DIR
+export HOME XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME HARNESS_BIN_DIR CODEX_HOME CLAUDE_CONFIG_DIR
 export HARNESS_ALLOW_FILE_RELEASES HARNESS_SCHEDULER_NO_ACTIVATE
 export HARNESS_TEST_PLATFORM AGENT_HOME ROOT TMP
 mkdir -p "$HOME"
 
 python3 - "$ROOT" "$TMP" <<'PY'
 import argparse
+import contextlib
 import hashlib
 import importlib.util
 import io
@@ -38,6 +41,15 @@ tmp = Path(sys.argv[2])
 sys.path.insert(0, str(root / "tools/install"))
 import distribution as d
 import installer
+os.environ["CODEX_HOME"] = str(Path(os.environ["HOME"]) / ".codex")
+
+# Status probes are read-only and must never depend on the host user bus.
+real_probe_command = d._probe_command
+probe_calls = []
+def unavailable_probe(command):
+    probe_calls.append(tuple(command))
+    return False, "probe unavailable (lifecycle fixture)"
+d._probe_command = unavailable_probe
 
 assets = tmp / "assets"
 assets.mkdir()
@@ -137,7 +149,114 @@ assert service.is_file() and timer.is_file()
 assert " update --auto" in service.read_text()
 assert "XDG_DATA_HOME=" + os.environ["XDG_DATA_HOME"] in service.read_text()
 assert "XDG_STATE_HOME=" + os.environ["XDG_STATE_HOME"] in service.read_text()
-assert d.auto_update_status()["status"] == "configured"
+status = d.auto_update_status()
+assert status["status"] == "configured"
+assert status["health"] == "unknown"
+assert status["scheduler"]["probe"] == "unavailable"
+assert len(probe_calls) == 1 and probe_calls[0][:3] == ("systemctl", "--user", "show")
+
+old_probe = d._probe_command
+old_run = d.subprocess.run
+def permission_denied(*args, **kwargs):
+    raise PermissionError("scheduler probe denied")
+d._probe_command = real_probe_command
+d.subprocess.run = permission_denied
+try:
+    denied = d.auto_update_status()
+    assert denied["status"] == "configured"
+    assert denied["health"] == "unknown"
+    assert denied["scheduler"]["probe"] == "unavailable"
+    assert "denied" in denied["scheduler"]["detail"]
+finally:
+    d.subprocess.run = old_run
+    d._probe_command = old_probe
+
+old_run = d.subprocess.run
+def unexpected_probe(*args, **kwargs):
+    raise AssertionError("non-owned status command reached subprocess")
+d.subprocess.run = unexpected_probe
+try:
+    allowed, detail = real_probe_command([
+        "systemctl", "--user", "show", "foreign.timer",
+        "--property=LoadState,ActiveState,UnitFileState,LastTriggerUSec",
+    ])
+    assert not allowed and "not allowlisted" in detail
+finally:
+    d.subprocess.run = old_run
+
+def status_fixture(platform, responses, files=True):
+    old_platform = os.environ.get("HARNESS_TEST_PLATFORM")
+    old_probe = d._probe_command
+    calls = []
+    os.environ["HARNESS_TEST_PLATFORM"] = platform
+    if platform == "darwin" and files:
+        path = d._launch_agent_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("fixture")
+    def fake_probe(command):
+        calls.append(tuple(command))
+        value = responses[len(calls) - 1]
+        return value
+    d._probe_command = fake_probe
+    try:
+        return d.auto_update_status(), calls
+    finally:
+        d._probe_command = old_probe
+        if old_platform is None:
+            os.environ.pop("HARNESS_TEST_PLATFORM", None)
+        else:
+            os.environ["HARNESS_TEST_PLATFORM"] = old_platform
+
+healthy_timer = "LoadState=loaded\nActiveState=active\nUnitFileState=enabled\nLastTriggerUSec=now\n"
+healthy_service = "Result=success\nExecMainStatus=0\n"
+healthy, calls = status_fixture("linux", [(True, healthy_timer), (True, healthy_service)])
+assert healthy["health"] == "ok" and healthy["scheduler"]["exit_status"] == 0
+assert len(calls) == 2
+never_timer = healthy_timer.replace("LastTriggerUSec=now", "LastTriggerUSec=n/a")
+never, calls = status_fixture("linux", [(True, never_timer)])
+assert never["health"] == "ok" and never["scheduler"]["last_trigger"] is None
+assert never["scheduler"]["last_result"] is None and len(calls) == 1
+failed, _ = status_fixture("linux", [(True, healthy_timer), (True, "Result=failed\nExecMainStatus=7\n")])
+assert failed["status"] == "configured" and failed["health"] == "degraded"
+assert failed["scheduler"]["exit_status"] == 7
+inactive_timer = healthy_timer.replace("ActiveState=active", "ActiveState=inactive")
+inactive, _ = status_fixture("linux", [(True, inactive_timer), (True, healthy_service)])
+assert inactive["health"] == "degraded" and inactive["scheduler"]["active"] is False
+no_service_result, _ = status_fixture("linux", [(True, healthy_timer), (False, "service unavailable")])
+assert no_service_result["health"] == "ok"
+assert no_service_result["scheduler"]["last_result"] is None
+assert "last result unavailable" in no_service_result["scheduler"]["detail"]
+launch_output = "state = not running\n" + ("fixture = value\n" * 20) + "last exit code = 0\n"
+launch, calls = status_fixture("darwin", [(True, launch_output)])
+assert launch["kind"] == "launch-agent" and launch["health"] == "ok"
+assert launch["scheduler"]["active"] is True and len(calls) == 1
+assert "state=not running" in launch["scheduler"]["detail"]
+old_run = d.subprocess.run
+def successful_launch_probe(command, **kwargs):
+    return subprocess.CompletedProcess(command, 0, stdout=launch_output, stderr="warning")
+d.subprocess.run = successful_launch_probe
+try:
+    allowed, complete_output = real_probe_command([
+        "launchctl", "print", f"gui/{os.getuid()}/com.agent-harness.update",
+    ])
+    assert allowed and complete_output == launch_output.strip()
+    assert "last exit code = 0" in complete_output
+finally:
+    d.subprocess.run = old_run
+launch_never, _ = status_fixture(
+    "darwin", [(True, "state = not running\nlast exit code = (never exited)\n")]
+)
+assert launch_never["health"] == "ok"
+assert launch_never["scheduler"]["last_result"] is None
+launch_failed, _ = status_fixture("darwin", [(True, "state = exited\nlast exit code = 5\n")])
+assert launch_failed["health"] == "degraded"
+assert launch_failed["scheduler"]["exit_status"] == 5
+malformed, _ = status_fixture("darwin", [(True, "state = running\nlast exit code = nope\n")])
+assert malformed["health"] == "unknown" and malformed["scheduler"]["probe"] == "unavailable"
+unsupported, calls = status_fixture("freebsd", [], files=False)
+assert unsupported["status"] == "disabled" and unsupported["health"] == "unsupported"
+assert calls == []
+os.environ["HARNESS_TEST_PLATFORM"] = "linux"
 
 same = d.update()
 assert same["status"] == "up-to-date"
@@ -320,6 +439,29 @@ assert blocked_dry_run["exit"] == installer.EXIT_BLOCKED
 installer.distribution.is_managed = original_is_managed
 installer.distribution.update = original_update
 
+status_args = argparse.Namespace(operation="status")
+original_status = installer.distribution.auto_update_status
+installer.distribution.auto_update_status = lambda: healthy
+try:
+    status_result = installer.cmd_auto_update(status_args)
+finally:
+    installer.distribution.auto_update_status = original_status
+assert status_result["checks"][0]["detail"] == "configured (systemd-user) health=ok"
+plain = io.StringIO()
+with contextlib.redirect_stdout(plain):
+    assert installer.emit(status_result, False) == 0
+assert "managed release:" in plain.getvalue()
+assert "scheduler state: loaded=yes active=yes enabled=yes" in plain.getvalue()
+assert "last trigger: now" in plain.getvalue()
+assert "last result: success (exit=0)" in plain.getvalue()
+encoded = io.StringIO()
+with contextlib.redirect_stdout(encoded):
+    assert installer.emit(status_result, True) == 0
+json_result = json.loads(encoded.getvalue())
+assert set(("operation", "scheduler", "checks", "drift", "exit")) <= json_result.keys()
+assert json_result["scheduler"]["health"] == "ok"
+assert encoded.getvalue().count("\n") == 1
+
 # The release builder is deterministic, adds the version marker, and excludes
 # report caches from the public payload.
 spec = importlib.util.spec_from_file_location(
@@ -454,8 +596,10 @@ XDG_DATA_HOME="$HOME/.local/share"
 XDG_STATE_HOME="$HOME/.local/state"
 HARNESS_BIN_DIR="$HOME/.local/bin"
 HARNESS_RELEASE_INDEX_URL="file://$INTEGRATION/release.json"
+CODEX_HOME="$HOME/.codex"
+CLAUDE_CONFIG_DIR="$HOME/.claude"
 export HOME XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME HARNESS_BIN_DIR
-export HARNESS_RELEASE_INDEX_URL
+export HARNESS_RELEASE_INDEX_URL CODEX_HOME CLAUDE_CONFIG_DIR
 mkdir -p "$HOME"
 
 set +e

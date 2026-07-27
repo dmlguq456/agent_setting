@@ -166,13 +166,13 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             self.assertEqual(entity.work_projection.stage_label, "spec topic-a")
 
     # (h) phases: absent, top-level status: present -> status fallback (value taken verbatim)
-    def test_h_status_fallback_when_no_phases_block(self):
+    def test_h_terminal_status_fallback_is_not_live_work(self):
         with tempfile.TemporaryDirectory() as tmp:
             _write_pipeline_state(tmp, "topic-a", "mode: library\nphase: complete\nstatus: complete\n")
             markers = {_marker_name("sid-a", tmp, "topic-a"): NOW}
             entity = _session(sid="sid-a", cwd=tmp)
             projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
-            self.assertEqual(entity.work_projection.stage_label, "spec topic-a ·complete")
+            self.assertEqual(entity.work_projection.source, "none")
 
     # (i) all three keys absent -> topic-only
     def test_i_no_recognized_keys_topic_only(self):
@@ -204,13 +204,37 @@ class SpecMarkerAttributionTest(unittest.TestCase):
             projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
             self.assertEqual(entity.work_projection.stage_label, "spec my-proj ·dev")
 
-    def test_j_root_marker_without_project_name_bare_label(self):
+    def test_j_root_terminal_marker_is_not_live_work(self):
         with tempfile.TemporaryDirectory() as tmp:
             _write_pipeline_state(tmp, None, "mode: library,cli\nphase: complete\nstatus: complete\n")
             markers = {_marker_name("sid-a", tmp): NOW}
             entity = _session(sid="sid-a", cwd=tmp)
             projection.attach_projections([entity], [], artifact_root=tmp, now=NOW, spec_markers=markers)
-            self.assertEqual(entity.work_projection.stage_label, "spec ·complete")
+            self.assertEqual(entity.work_projection.source, "none")
+
+    def test_terminal_done_and_skipped_sequence_is_suppressed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_pipeline_state(
+                tmp, "topic-a", "phases:\n  design: done\n  dev: deferred\n"
+            )
+            entity = _session(sid="sid-a", cwd=tmp)
+            projection.attach_projections(
+                [entity], [], artifact_root=tmp, now=NOW,
+                spec_markers={_marker_name("sid-a", tmp, "topic-a"): NOW},
+            )
+            self.assertEqual(entity.work_projection.source, "none")
+
+    def test_terminal_sequence_with_active_phase_remains_live(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_pipeline_state(
+                tmp, "topic-a", "phases:\n  design: done\n  dev: in_progress\n"
+            )
+            entity = _session(sid="sid-a", cwd=tmp)
+            projection.attach_projections(
+                [entity], [], artifact_root=tmp, now=NOW,
+                spec_markers={_marker_name("sid-a", tmp, "topic-a"): NOW},
+            )
+            self.assertEqual(entity.work_projection.source, "artifact-inferred")
 
     # (k) marker vs plans-glob freshness mediation
     def test_k_plans_dir_newer_keeps_code_stage(self):

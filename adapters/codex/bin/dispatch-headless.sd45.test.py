@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse,importlib.util,io,json,os,subprocess,sys,tempfile,unittest
+import uuid
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
@@ -274,7 +275,26 @@ class CodexSD78CompletionDelivery(unittest.TestCase):
         values.update(overrides)
         return argparse.Namespace(**values)
 
-    def test_interactive_depth_one_start_forces_native_stop_and_hook_trust(self):
+    @staticmethod
+    def uuidv7_for_ms(value):
+        return str(uuid.UUID(int=(value << 80) | (7 << 76) | (0x8 << 60)))
+
+    @staticmethod
+    def _popen_delegating_to_git(fake_proc):
+        """Only the codex-spawn Popen call (identified by launch-fence.py, the
+        actual spawn_worker command) is faked; every other subprocess.run call
+        inside main() (git, artifact-root.sh, ...) still needs a real Popen or
+        it breaks unrelated to the sentinel proof this test is checking."""
+        real_popen = subprocess.Popen
+
+        def _side_effect(cmd, *a, **kw):
+            if isinstance(cmd, list) and any("launch-fence.py" in str(part) for part in cmd):
+                return fake_proc
+            return real_popen(cmd, *a, **kw)
+
+        return _side_effect
+
+    def test_legacy_parent_downgrades_to_polling_with_format_reason(self):
         args = self.parent_args()
         with mock.patch.dict(
             os.environ,
@@ -282,8 +302,9 @@ class CodexSD78CompletionDelivery(unittest.TestCase):
             clear=False,
         ):
             WH.bind_parent_completion_delivery(args)
-        self.assertEqual(args.parent_completion_delivery, "codex-stop-hook")
-        self.assertTrue(args.require_hook_trust)
+        self.assertEqual(args.parent_completion_delivery, "poll-fallback")
+        self.assertEqual(args.parent_completion_reason, "parent-id-format-unproven")
+        self.assertFalse(args.require_hook_trust)
 
     def test_synthetic_parent_keeps_poll_fallback(self):
         args = self.parent_args(parent_session_id="thread-synthetic")
@@ -296,7 +317,7 @@ class CodexSD78CompletionDelivery(unittest.TestCase):
         self.assertEqual(args.parent_completion_delivery, "poll-fallback")
         self.assertFalse(args.require_hook_trust)
 
-    def test_interactive_registration_seals_native_delivery_without_trust_probe(self):
+    def test_legacy_registration_downgrades_without_trust_probe(self):
         args = self.parent_args(action="register")
         with mock.patch.dict(
             os.environ,
@@ -304,8 +325,33 @@ class CodexSD78CompletionDelivery(unittest.TestCase):
             clear=False,
         ):
             WH.bind_parent_completion_delivery(args)
-        self.assertEqual(args.parent_completion_delivery, "codex-stop-hook")
+        self.assertEqual(args.parent_completion_delivery, "poll-fallback")
+        self.assertEqual(args.parent_completion_reason, "parent-id-format-unproven")
         self.assertFalse(args.require_hook_trust)
+
+    def test_proven_uuidv7_parent_selects_native_stop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            hooks = root / "hooks.json"
+            hooks.write_text("{}", encoding="utf-8")
+            os.utime(hooks, ns=(2_000_000_000_000_000_000,) * 2)
+            args = self.parent_args(
+                parent_session_id=self.uuidv7_for_ms(2_000_000_000_001),
+                agent_home=str(root),
+            )
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "CODEX_HOME": str(root),
+                    "CODEX_THREAD_ID": args.parent_session_id,
+                    "AGENT_DISPATCH_CHILD": "0",
+                },
+                clear=False,
+            ):
+                WH.bind_parent_completion_delivery(args)
+        self.assertEqual(args.parent_completion_delivery, "codex-stop-hook")
+        self.assertEqual(args.parent_completion_reason, "parent-definition-proven")
+        self.assertTrue(args.require_hook_trust)
 
     def test_untrusted_native_stop_fails_before_registry_or_spawn(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -328,25 +374,91 @@ class CodexSD78CompletionDelivery(unittest.TestCase):
             with mock.patch.dict(
                 os.environ,
                 {
-                    "CODEX_THREAD_ID": "thread-native-parent",
+                    "CODEX_THREAD_ID": self.uuidv7_for_ms(2_000_000_000_001),
                     "AGENT_DISPATCH_CHILD": "0",
                     "AGENT_HOME": str(ROOT),
                 },
                 clear=False,
+            ), mock.patch.object(
+                WH, "prove_parent_definition",
+                return_value=mock.Mock(eligible=True, reason="parent-definition-proven"),
             ), mock.patch.object(
                 WH.shutil, "which", return_value="/usr/bin/codex"
             ), mock.patch.object(
                 WH, "check_runtime_projection", return_value=1
             ) as projection, mock.patch.object(
                 WH, "append_job"
-            ) as append, redirect_stdout(output):
+            ) as append, mock.patch.object(
+                WH, "task_prompt"
+            ) as task_prompt_sentinel, mock.patch.object(
+                WH, "dispatch_prompt"
+            ) as dispatch_prompt_sentinel, mock.patch.object(
+                WH.Path, "mkdir"
+            ) as mkdir_sentinel, mock.patch.object(
+                WH, "reserve_governor_token"
+            ) as governor_sentinel, mock.patch.object(
+                WH, "register_parent_stop_attempt"
+            ) as register_sentinel, mock.patch.object(
+                WH.subprocess, "Popen",
+                side_effect=self._popen_delegating_to_git(mock.Mock(pid=-1)),
+            ) as popen_sentinel, redirect_stdout(output):
                 rc = WH.main(argv)
         self.assertEqual(rc, 69, output.getvalue())
         projection.assert_called_once_with(str(repo.resolve()), True)
         append.assert_not_called()
+        task_prompt_sentinel.assert_not_called()
+        dispatch_prompt_sentinel.assert_not_called()
+        mkdir_sentinel.assert_not_called()
+        governor_sentinel.assert_not_called()
+        register_sentinel.assert_not_called()
+        worker_spawns = [
+            call for call in popen_sentinel.call_args_list
+            if call.args and any("launch-fence.py" in str(part) for part in call.args[0])
+        ]
+        self.assertEqual(worker_spawns, [])
         self.assertFalse(jobs.exists())
+        self.assertFalse((Path(tmp) / "parent-session-state").exists())
         self.assertIn("reason=codex-stop-hook-untrusted", output.getvalue())
         self.assertIn("child_spawned=0", output.getvalue())
+
+    def test_parent_before_equal_after_definition_boundary(self):
+        """The real (unmocked) prove_parent_definition ledger decides eligibility
+        at the millisecond boundary: before is rejected, equal and after are not."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            hooks = root / "hooks.json"
+            hooks.write_text("{}", encoding="utf-8")
+            os.utime(hooks, ns=(2_000_000_000_000_000_000,) * 2)
+
+            def bind_for(parent_ms):
+                args = self.parent_args(
+                    parent_session_id=self.uuidv7_for_ms(parent_ms),
+                    agent_home=str(root),
+                )
+                with mock.patch.dict(
+                    os.environ,
+                    {
+                        "CODEX_HOME": str(root),
+                        "CODEX_THREAD_ID": args.parent_session_id,
+                        "AGENT_DISPATCH_CHILD": "0",
+                    },
+                    clear=False,
+                ):
+                    WH.bind_parent_completion_delivery(args)
+                return args
+
+            before = bind_for(1_999_999_999_999)
+            self.assertEqual(before.parent_completion_delivery, "poll-fallback")
+            self.assertEqual(before.parent_completion_reason, "parent-older-than-definition")
+            self.assertFalse(before.require_hook_trust)
+
+            equal = bind_for(2_000_000_000_000)
+            self.assertEqual(equal.parent_completion_delivery, "codex-stop-hook")
+            self.assertEqual(equal.parent_completion_reason, "parent-definition-proven")
+
+            after = bind_for(2_000_000_000_001)
+            self.assertEqual(after.parent_completion_delivery, "codex-stop-hook")
+            self.assertEqual(after.parent_completion_reason, "parent-definition-proven")
 
     def test_successful_native_spawn_records_pending_exact_session_attempt(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -28,6 +28,8 @@ import re
 import sqlite3
 import time
 import urllib.request
+from collections import OrderedDict
+from dataclasses import dataclass
 
 from fleet.model import ContextEvidence, SESSION_WORK_SEC, SubAgent
 from fleet.token_budget import parse_codex_token_count
@@ -42,6 +44,18 @@ _PROC_PATHS = {}                                  # pid -> rollout reserved at c
 _CFG = {"ts": 0.0, "model": None, "effort": None}
 _TITLE_INDEX = {"stamp": None, "map": {}}      # native state stamps -> sid: title
 _SUBAGENT_INDEX = {}                  # runtime home -> (read time, stamp, map, available)
+_LIFECYCLE_CACHE_MAX = 512
+_LIFECYCLE_CACHE = OrderedDict()
+_LIFECYCLE_CACHE_EVICTIONS = 0
+
+
+@dataclass
+class _CodexTick:
+    """Collection-local Codex evidence frozen independently for each runtime home."""
+
+    default_home: str
+    proc_paths: dict
+    subagents_by_home: dict
 
 
 def _home():
@@ -133,55 +147,98 @@ def _rollout_home(path):
     return prefix if found and prefix else None
 
 
-def _latest_task_lifecycle(rollout_path, chunk=65536, max_scan=1048576):
+def _parse_latest_task_lifecycle(rollout_path, chunk=65536, max_scan=1048576):
     """Return the latest validated lifecycle pair, or ``None`` if it is ambiguous.
 
     Rows are consumed in physical JSONL order from the tail.  A terminal event is
     trusted only when the immediately preceding lifecycle starts the same turn.
     Invalid lifecycle rows fail closed instead of exposing an older state.
+
+    Raw filesystem errors deliberately reach the caller so the caching wrapper can
+    distinguish unreadable input from a readable, validated ``None`` result.
     """
     terminal = {"task_complete", "turn_aborted"}
-    try:
-        end = os.path.getsize(rollout_path)
-        floor = max(0, end - max_scan)
-        carry = b""
-        latest = None
-        with open(rollout_path, "rb") as f:
-            while end > floor:
-                start = max(floor, end - chunk)
-                f.seek(start)
-                data = f.read(end - start) + carry
-                lines = data.splitlines()
-                if start > 0:
-                    carry = lines.pop(0) if lines else data
-                for line in reversed(lines):
-                    try:
-                        row = json.loads(line)
-                    except Exception:
-                        continue
-                    if not isinstance(row, dict) or row.get("type") != "event_msg":
-                        continue
-                    payload = row.get("payload")
-                    event_type = (payload.get("type")
-                                  if isinstance(payload, dict) else None)
-                    if event_type not in terminal | {"task_started"}:
-                        continue
-                    turn_id = payload.get("turn_id")
-                    if not isinstance(turn_id, str) or not turn_id:
-                        return None
-                    if latest is None:
-                        latest = (event_type, turn_id)
-                        if event_type == "task_started":
-                            return latest
-                        continue
-                    # The latest event is terminal: establish its exact matching start.
-                    if event_type != "task_started" or turn_id != latest[1]:
-                        return None
-                    return latest
-                end = start
-    except OSError:
-        return None
+    end = os.path.getsize(rollout_path)
+    floor = max(0, end - max_scan)
+    carry = b""
+    latest = None
+    with open(rollout_path, "rb") as f:
+        while end > floor:
+            start = max(floor, end - chunk)
+            f.seek(start)
+            data = f.read(end - start) + carry
+            lines = data.splitlines()
+            if start > 0:
+                carry = lines.pop(0) if lines else data
+            for line in reversed(lines):
+                try:
+                    row = json.loads(line)
+                except Exception:
+                    continue
+                if not isinstance(row, dict) or row.get("type") != "event_msg":
+                    continue
+                payload = row.get("payload")
+                event_type = payload.get("type") if isinstance(payload, dict) else None
+                if event_type not in terminal | {"task_started"}:
+                    continue
+                turn_id = payload.get("turn_id")
+                if not isinstance(turn_id, str) or not turn_id:
+                    return None
+                if latest is None:
+                    latest = (event_type, turn_id)
+                    if event_type == "task_started":
+                        return latest
+                    continue
+                # The latest event is terminal: establish its exact matching start.
+                if event_type != "task_started" or turn_id != latest[1]:
+                    return None
+                return latest
+            end = start
     return None
+
+
+def _latest_task_lifecycle(rollout_path, chunk=65536, max_scan=1048576):
+    """Strong-stamp LRU around the raw lifecycle parser.
+
+    Resolve the caller's spelling once, then bind the cache key, both stats, and
+    parsed bytes to that exact canonical path. Readable ambiguity is cacheable;
+    transient I/O and changed-during-read input are not.
+    """
+    global _LIFECYCLE_CACHE_EVICTIONS
+    canonical_path = os.path.realpath(os.path.abspath(rollout_path))
+    key = (canonical_path, chunk, max_scan)
+    try:
+        before = os.stat(canonical_path)
+    except OSError:
+        _LIFECYCLE_CACHE.pop(key, None)
+        return None
+    stamp = (
+        before.st_dev, before.st_ino, before.st_size,
+        before.st_mtime_ns, before.st_ctime_ns,
+    )
+    cached = _LIFECYCLE_CACHE.get(key)
+    if cached is not None and cached[0] == stamp:
+        _LIFECYCLE_CACHE.move_to_end(key)
+        return cached[1]
+    try:
+        parsed = _parse_latest_task_lifecycle(canonical_path, chunk, max_scan)
+        after = os.stat(canonical_path)
+    except OSError:
+        _LIFECYCLE_CACHE.pop(key, None)
+        return None
+    after_stamp = (
+        after.st_dev, after.st_ino, after.st_size,
+        after.st_mtime_ns, after.st_ctime_ns,
+    )
+    if after_stamp != stamp:
+        _LIFECYCLE_CACHE.pop(key, None)
+        return None
+    _LIFECYCLE_CACHE[key] = (stamp, parsed)
+    _LIFECYCLE_CACHE.move_to_end(key)
+    while len(_LIFECYCLE_CACHE) > _LIFECYCLE_CACHE_MAX:
+        _LIFECYCLE_CACHE.popitem(last=False)
+        _LIFECYCLE_CACHE_EVICTIONS += 1
+    return parsed
 
 
 def _subagent_active(edge_status, rollout_path, updated_at=None, updated_at_ms=None,
@@ -214,28 +271,8 @@ def _subagent_active(edge_status, rollout_path, updated_at=None, updated_at_ms=N
     return True if age <= SESSION_WORK_SEC else None
 
 
-def _thread_subagents(home):
-    """Exact parent-thread subagents from the Codex state DB, read-only and fail-closed.
-
-    ``None`` means the source/schema is unavailable; a mapping means the source was
-    checked (a missing parent key therefore means zero observed children).  The edge is
-    the attribution authority: rollout cwd/mtime/title heuristics never attach children.
-    """
-    db_path = _state_db(home)
-    stamp = (
-        db_path,
-        _file_stamp(db_path),
-        _file_stamp(db_path + "-wal") if db_path else None,
-        _file_stamp(db_path + "-shm") if db_path else None,
-    )
-    now = time.time()
-    cached = _SUBAGENT_INDEX.get(home)
-    if cached and cached[1] == stamp and now - cached[0] < _INDEX_TTL:
-        return cached[2] if cached[3] else None
-    if not db_path:
-        _SUBAGENT_INDEX[home] = (now, stamp, {}, False)
-        return None
-
+def _build_thread_subagents(db_path):
+    """Build the exact spawn-edge mapping from one readable Codex state DB."""
     connection = None
     try:
         connection = sqlite3.connect("file:" + db_path + "?mode=ro", uri=True)
@@ -247,9 +284,6 @@ def _thread_subagents(home):
             "FROM thread_spawn_edges AS e "
             "JOIN threads AS t ON t.id = e.child_thread_id"
         ))
-    except (OSError, sqlite3.Error):
-        _SUBAGENT_INDEX[home] = (now, stamp, {}, False)
-        return None
     finally:
         if connection is not None:
             connection.close()
@@ -295,8 +329,45 @@ def _thread_subagents(home):
             continue                         # ambiguous linkage: omission beats misattribution
         parent_id, subagent = entries[0]
         mapped.setdefault(parent_id, []).append(subagent)
+    return mapped
+
+
+def _thread_subagents(home):
+    """Exact parent-thread subagents from the Codex state DB, read-only and fail-closed.
+
+    ``None`` means the source/schema is unavailable; a mapping means the source was
+    checked (a missing parent key therefore means zero observed children).  The edge is
+    the attribution authority: rollout cwd/mtime/title heuristics never attach children.
+    """
+    db_path = _state_db(home)
+    stamp = (
+        db_path,
+        _file_stamp(db_path),
+        _file_stamp(db_path + "-wal") if db_path else None,
+        _file_stamp(db_path + "-shm") if db_path else None,
+    )
+    now = time.time()
+    cached = _SUBAGENT_INDEX.get(home)
+    if cached and cached[1] == stamp and now - cached[0] < _INDEX_TTL:
+        return cached[2] if cached[3] else None
+    if not db_path:
+        _SUBAGENT_INDEX[home] = (now, stamp, {}, False)
+        return None
+    try:
+        mapped = _build_thread_subagents(db_path)
+    except (OSError, sqlite3.Error):
+        _SUBAGENT_INDEX[home] = (now, stamp, {}, False)
+        return None
     _SUBAGENT_INDEX[home] = (now, stamp, mapped, True)
     return mapped
+
+
+def _tick_subagents(tick, home):
+    """Return one home snapshot, loading it at most once in this collection."""
+    normalized = os.path.abspath(home)
+    if normalized not in tick.subagents_by_home:
+        tick.subagents_by_home[normalized] = _thread_subagents(normalized)
+    return tick.subagents_by_home[normalized]
 
 
 def _config_model_effort(home):
@@ -472,12 +543,14 @@ def prepare_tick(sessions):
     a prepass the older row can claim the newer process's sole fallback candidate
     and both rows display one session id/title. Reserve every owned fd first.
     """
-    home = _home()
+    home = os.path.abspath(_home())
     paths = {}
     claimed = set()
+    eligible = False
     for sess in sessions:
         if getattr(sess, "harness", None) != "codex" or not getattr(sess, "cwd", None):
             continue
+        eligible = True
         path = _proc_rollout(sess.pid, sess.cwd, home)
         if not path:
             continue
@@ -488,6 +561,15 @@ def prepare_tick(sessions):
     _PROC_PATHS.clear()
     _PROC_PATHS.update(paths)
     _FALLBACK_CLAIMS.update(ts=time.time(), sids=claimed)
+    tick = _CodexTick(default_home=home, proc_paths=dict(paths), subagents_by_home={})
+    homes = {home} if eligible else set()
+    homes.update(
+        rollout_home for rollout_home in (_rollout_home(path) for path in paths.values())
+        if rollout_home
+    )
+    for runtime_home in sorted(homes):
+        _tick_subagents(tick, runtime_home)
+    return tick
 
 
 def _tail_token_count(path, chunk=65536):
@@ -696,8 +778,8 @@ def account_usage():
     return _ACCT["data"]
 
 
-def enrich(sess):
-    home = _home()
+def enrich(sess, tick=None):
+    home = tick.default_home if tick is not None else _home()
     model, effort = _config_model_effort(home)
     if model:
         sess.model = model
@@ -705,7 +787,14 @@ def enrich(sess):
         sess.effort = effort
     if not sess.cwd:
         return
-    path = _PROC_PATHS.get(sess.pid) or _proc_rollout(sess.pid, sess.cwd, home) or _fallback_rollout(sess, home)
+    if tick is None:
+        path = (
+            _PROC_PATHS.get(sess.pid)
+            or _proc_rollout(sess.pid, sess.cwd, home)
+            or _fallback_rollout(sess, home)
+        )
+    else:
+        path = tick.proc_paths.get(sess.pid) or _fallback_rollout(sess, home)
     if not path:
         return                                       # no matching rollout → telemetry stays '—'
     # app-server is the session process in this client-server Codex version. Treating it as a
@@ -724,7 +813,11 @@ def enrich(sess):
         sidecar_title = titles.fresh_title(sess.session_id, harness="codex")
         sess.title = sidecar_title or native_title or sess.title
         sess.summary = titles.fresh_summary(sess.session_id, harness="codex")
-        subagent_index = _thread_subagents(_rollout_home(path) or home)
+        runtime_home = _rollout_home(path) or home
+        subagent_index = (
+            _tick_subagents(tick, runtime_home)
+            if tick is not None else _thread_subagents(runtime_home)
+        )
         if subagent_index is not None:
             sess.subagents = subagent_index.get(sess.session_id, [])
     try:
