@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""Thin conformance: preflight.sh `dispatch-owner` delegates to
+utilities/dispatch-owner.py, and the low-level `dispatch` arm still reaches
+the Codex wrapper directly, unchanged."""
+
+from pathlib import Path
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parents[3]
+PREFLIGHT = ROOT / "adapters" / "codex" / "bin" / "preflight.sh"
+
+
+class PreflightDispatchOwnerTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.home = Path(self.tmp.name)
+        (self.home / "core").mkdir(parents=True)
+        (self.home / "core" / "CORE.md").write_text("fixture\n", encoding="utf-8")
+        self.jobs = self.home / "jobs.log"
+        self.jobs.touch()
+        self.config = self.home / "dispatch-defaults.yaml"
+        self.config.write_text(
+            "schema_version: 1\ndepth1_owner: [claude]\nopencode:\n  relief_only: true\ncapabilities:\n",
+            encoding="utf-8",
+        )
+        self.env = {
+            **os.environ,
+            "AGENT_HOME": str(self.home),
+            "HOME": str(self.home),
+            "DISPATCH_DEFAULTS_CONFIG": str(self.config),
+        }
+
+    def test_dispatch_owner_arm_delegates_to_selector(self):
+        result = subprocess.run(
+            [str(PREFLIGHT), "dispatch-owner"],
+            text=True, capture_output=True, env=self.env, timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("usage: dispatch-owner", result.stdout)
+
+    def test_dispatch_owner_arm_selects_configured_adapter_end_to_end(self):
+        log_dir = self.home / "logs"
+        args = [
+            str(PREFLIGHT), "dispatch-owner", "--dry-run",
+            "--worktree", str(ROOT), "--slug", "conformance-owner-test",
+            "--capability", "autopilot-code", "--capability-mode", "debug",
+            "--qa", "standard", "--intensity", "standard",
+            "--dispatch-depth", "1", "--worker-type", "owner",
+            "--assigned-contract", "autopilot-code", "--owner", "autopilot-code",
+            "--model-profile", "deep", "--jobs", str(self.jobs), "--log-dir", str(log_dir),
+        ]
+        result = subprocess.run(args, text=True, capture_output=True, env=self.env, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("adapter=claude", result.stdout)
+        self.assertIn("selection_source=configured-normal", result.stdout)
+
+    def test_low_level_dispatch_arm_still_reaches_codex_wrapper_directly(self):
+        result = subprocess.run(
+            [str(PREFLIGHT), "dispatch"],
+            text=True, capture_output=True, env=self.env, timeout=20,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("dispatch-headless.py", result.stdout + result.stderr)
+        self.assertNotIn("usage: dispatch-owner", result.stdout + result.stderr)
+        self.assertNotIn("adapter=", result.stdout)
+
+
+if __name__ == "__main__":
+    unittest.main()
