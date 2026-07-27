@@ -13,6 +13,9 @@ import subprocess
 import sys
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "utilities"))
+from codex_hook_definition_age import prove_parent_definition  # noqa: E402
+
 
 class HookTrustError(RuntimeError):
     pass
@@ -202,6 +205,9 @@ def parser() -> argparse.ArgumentParser:
             "codex app-server --listen stdio://",
         ),
     )
+    value.add_argument("--parent-session-id")
+    value.add_argument("--ledger-path", type=Path)
+    value.add_argument("--lock-path", type=Path)
     return value
 
 
@@ -218,6 +224,21 @@ def main(argv: list[str] | None = None) -> int:
     except HookTrustError as exc:
         print(f"status=unavailable reason={exc}")
         return 69
+    if args.parent_session_id:
+        proof = prove_parent_definition(
+            args.parent_session_id,
+            hooks_path=hooks_file,
+            ledger_path=args.ledger_path,
+            lock_path=args.lock_path,
+        )
+        print(
+            f"parent_definition={'proven' if proof.eligible else 'unproven'} "
+            f"parent_reason={proof.reason} "
+            f"parent_start_ms={proof.parent_start_ms or '-'} "
+            f"definition_ms={proof.definition_ms or '-'}"
+        )
+        if not proof.eligible:
+            return 3
     print(
         f"status={'trusted' if trusted else 'review-needed'} "
         f"reason={reason} events={','.join(events) or '-'}"

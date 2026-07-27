@@ -70,7 +70,13 @@ class CodexStopParentParkTest(unittest.TestCase):
                 encoding="utf-8"
             )
         )["hooks"]
-        self.assertEqual(config["Stop"][0]["hooks"][0]["timeout"], 600)
+        self.assertEqual(config["Stop"][0]["hooks"][0]["timeout"], 7200)
+        self.assertEqual(HOOK.STOP_JOIN_TIMEOUT_MAX, 7140.0)
+        self.assertEqual(
+            config["Stop"][0]["hooks"][0]["timeout"]
+            - HOOK.STOP_JOIN_TIMEOUT_MAX,
+            60.0,
+        )
         self.assertEqual(config["SessionStart"][0]["hooks"][0]["timeout"], 30)
         self.assertEqual(len(config["PreToolUse"]), 2)
         self.assertEqual(
@@ -249,7 +255,9 @@ class CodexStopParentParkTest(unittest.TestCase):
             output = self.output(lambda: HOOK.handle_stop("/repo", SESSION))
         value = json.loads(output)
         self.assertEqual(value["decision"], "block")
-        self.assertIn("single timeout continuation", value["reason"])
+        self.assertIn("bounded two-hour native wait", value["reason"])
+        self.assertIn("operator re-entry is required", value["reason"])
+        self.assertIn("Automatic completion delivery is no longer active", value["reason"])
         self.assertIsNone(
             JOIN.read_parent_session_state(
                 HOOK.parent_session_state_path(self.jobs, SESSION), SESSION

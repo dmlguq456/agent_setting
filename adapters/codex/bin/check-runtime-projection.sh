@@ -99,13 +99,24 @@ hook_trust_check() {
   fi
   hook_out=""
   if [ -f "$hook_file" ] && [ -f "$helper" ] && command -v codex >/dev/null 2>&1; then
-    if hook_out=$(CODEX_HOME="$CODEX_HOME" timeout "$CLI_TIMEOUT" python3 "$helper" \
-      --hooks-file "$hook_file" --cwd "$AGENT_HOME" 2>/dev/null); then
+    if [ -n "${CODEX_PARENT_SESSION_ID:-}" ]; then
+      parent_args="--parent-session-id $CODEX_PARENT_SESSION_ID"
+      [ -n "${CODEX_PARENT_DEFINITION_LEDGER_PATH:-}" ] && parent_args="$parent_args --ledger-path $CODEX_PARENT_DEFINITION_LEDGER_PATH"
+      [ -n "${CODEX_PARENT_DEFINITION_LOCK_PATH:-}" ] && parent_args="$parent_args --lock-path $CODEX_PARENT_DEFINITION_LOCK_PATH"
+      # These values are harness-controlled dispatch paths, not shell code.
+      hook_out=$(CODEX_HOME="$CODEX_HOME" timeout "$CLI_TIMEOUT" python3 "$helper" \
+        --hooks-file "$hook_file" --cwd "$AGENT_HOME" \
+        $parent_args 2>/dev/null) && hook_rc=0 || hook_rc=$?
+    else
+      hook_out=$(CODEX_HOME="$CODEX_HOME" timeout "$CLI_TIMEOUT" python3 "$helper" \
+        --hooks-file "$hook_file" --cwd "$AGENT_HOME" 2>/dev/null) && hook_rc=0 || hook_rc=$?
+    fi
+    if [ "$hook_rc" -eq 0 ]; then
       printf 'check=hook-trust:ok current_hash=verified\n'
       [ -n "$hook_out" ] && printf 'hook_trust_detail=%s\n' "$hook_out"
       return 0
     else
-      hook_rc=$?
+      :
     fi
   else
     hook_rc=69

@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
+from contextlib import redirect_stdout
 from pathlib import Path
 import tempfile
 import unittest
@@ -125,6 +127,65 @@ class HookTrustStatusTest(unittest.TestCase):
         self.assertFalse(trusted)
         self.assertEqual(reason, "definition-set-mismatch")
         self.assertEqual(events, ["pre_tool_use", "stop"])
+
+    def test_parent_definition_proof_is_reported_with_typed_paths(self):
+        ledger = self.root / "ledger.json"
+        lock = self.root / "ledger.lock"
+        proof = mock.Mock(
+            eligible=True,
+            reason="parent-definition-proven",
+            parent_start_ms=2001,
+            definition_ms=2000,
+        )
+        output = io.StringIO()
+        with mock.patch.object(
+            TRUST, "inspect_trust",
+            return_value=(True, "current-hash-trusted", ["pre_tool_use", "stop"]),
+        ), mock.patch.object(
+            TRUST, "prove_parent_definition", return_value=proof,
+        ) as parent_proof, redirect_stdout(output):
+            rc = TRUST.main(
+                [
+                    "--hooks-file", str(self.hooks),
+                    "--cwd", str(self.root),
+                    "--parent-session-id", "parent-v7",
+                    "--ledger-path", str(ledger),
+                    "--lock-path", str(lock),
+                ]
+            )
+        self.assertEqual(rc, 0)
+        parent_proof.assert_called_once_with(
+            "parent-v7", hooks_path=self.hooks.absolute(),
+            ledger_path=ledger, lock_path=lock,
+        )
+        self.assertIn("parent_definition=proven", output.getvalue())
+        self.assertIn("parent_reason=parent-definition-proven", output.getvalue())
+        self.assertIn("status=trusted", output.getvalue())
+
+    def test_unproven_parent_cannot_be_overridden_by_current_hash_trust(self):
+        proof = mock.Mock(
+            eligible=False,
+            reason="parent-older-than-definition",
+            parent_start_ms=1999,
+            definition_ms=2000,
+        )
+        output = io.StringIO()
+        with mock.patch.object(
+            TRUST, "inspect_trust",
+            return_value=(True, "current-hash-trusted", ["pre_tool_use", "stop"]),
+        ), mock.patch.object(
+            TRUST, "prove_parent_definition", return_value=proof,
+        ), redirect_stdout(output):
+            rc = TRUST.main(
+                [
+                    "--hooks-file", str(self.hooks),
+                    "--cwd", str(self.root),
+                    "--parent-session-id", "older-parent",
+                ]
+            )
+        self.assertEqual(rc, 3)
+        self.assertIn("parent_definition=unproven", output.getvalue())
+        self.assertIn("parent_reason=parent-older-than-definition", output.getvalue())
 
 
 if __name__ == "__main__":

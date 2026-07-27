@@ -25,7 +25,9 @@ from dispatch_completion_join import (  # noqa: E402
     write_parent_session_state,
 )
 
-STOP_JOIN_TIMEOUT_MAX = 540.0
+# Keep one minute below the outer Stop command timeout in hooks.json so the
+# bridge can emit a typed receipt or recovery instruction before Codex kills it.
+STOP_JOIN_TIMEOUT_MAX = 7140.0
 
 
 def first_string(mapping: dict[str, Any], *keys: str) -> str:
@@ -201,7 +203,7 @@ def handle_stop(event_cwd: str, event_session_id: str) -> None:
             expected_attempts=attempts,
             interval=bounded_float("CODEX_STOP_JOIN_INTERVAL", 2.0, 10.0),
             timeout=bounded_float(
-                "CODEX_STOP_JOIN_TIMEOUT", 540.0, STOP_JOIN_TIMEOUT_MAX
+                "CODEX_STOP_JOIN_TIMEOUT", 7140.0, STOP_JOIN_TIMEOUT_MAX
             ),
         )
         if receipt.get("state") == "ready":
@@ -235,9 +237,11 @@ def handle_stop(event_cwd: str, event_session_id: str) -> None:
         if receipt.get("state") == "timeout":
             emit_stop_block(
                 "codex-stop-parent: exact registered child batch is still running after "
-                f"the bounded native wait; attempt(s)={attempt_list}. This is the single "
-                "timeout continuation. End it immediately without any tool call; do not "
-                "start a model or tool polling loop."
+                f"the bounded two-hour native wait; attempt(s)={attempt_list}. Automatic "
+                "completion delivery is no longer active after this single recovery "
+                "continuation; operator re-entry is required after the batch completes. "
+                "End this continuation without any tool call and do not start a model or "
+                "tool polling loop."
             )
             return
         raise JoinContractError("stop-receipt-state-invalid")

@@ -77,6 +77,7 @@ from model_profile import (  # noqa: E402
     validate_registered_profile,
 )
 from codex_dispatch_terminal import inspect_terminal_attempt  # noqa: E402
+from codex_hook_definition_age import prove_parent_definition  # noqa: E402
 from dispatch_completion_join import (  # noqa: E402
     JoinContractError,
     parent_session_state_path,
@@ -312,7 +313,17 @@ def resolve_parent_completion_delivery(args: argparse.Namespace) -> str:
         and args.parent_session_id == current_thread
         and os.environ.get("AGENT_DISPATCH_CHILD") != "1"
     ):
-        return PARENT_STOP_DELIVERY
+        proof = prove_parent_definition(
+            current_thread,
+            hooks_path=Path(os.environ.get("CODEX_HOME", "~/.codex")).expanduser() / "hooks.json",
+            ledger_path=Path(args.agent_home) / ".dispatch" / "codex-hook-definition-ledger.json"
+            if getattr(args, "agent_home", None) else None,
+        )
+        args.parent_completion_reason = proof.reason
+        if proof.eligible:
+            return PARENT_STOP_DELIVERY
+        return "poll-fallback"
+    args.parent_completion_reason = "parent-identity-unmatched"
     return "poll-fallback"
 
 
@@ -971,7 +982,8 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         f"registered_worker={int(bool(args.registered_worker))},"
         f"fallback_hop={args.fallback_hop},harness=codex,"
         f"completion_delivery={args.resolved_completion_delivery},"
-        f"parent_completion_delivery={args.parent_completion_delivery}"
+        f"parent_completion_delivery={args.parent_completion_delivery},"
+        f"parent_completion_reason={getattr(args, 'parent_completion_reason', 'unspecified')}"
     )
     if args.resolved_completion_delivery == "app-server-supervised":
         pipe += (
@@ -1561,10 +1573,10 @@ def main(argv: list[str]) -> int:
     _bind_runtime_parent(args)
     action = "start" if args.start else "register" if args.register else "dry-run"
     args.action = action
-    bind_parent_completion_delivery(args)
     if args.broker_request_id or args.launch_authority == "ancestor-broker":
         return fail("launch-broker-retired", 76, child_spawned="0")
     args.agent_home = resolve_agent_home()
+    bind_parent_completion_delivery(args)
     worktree = Path(args.worktree)
     if not worktree.is_dir():
         return fail("worktree-not-found", 66, worktree=args.worktree)
@@ -2243,6 +2255,7 @@ def main(argv: list[str]) -> int:
     print("runtime_surface=codex-exec-headless")
     print(f"completion_delivery={args.resolved_completion_delivery}")
     print(f"parent_completion_delivery={args.parent_completion_delivery}")
+    print(f"parent_completion_reason={getattr(args, 'parent_completion_reason', 'unspecified')}")
     print(
         "supervisor_lease_file="
         + (
