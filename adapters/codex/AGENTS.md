@@ -6,15 +6,23 @@ are siblings and none is another's reference implementation. Edit core first.
 
 ## Source Order
 
-Read `core/CORE.md` first; load the remaining documents only when the task
-touches the named domain.
+Codex has already loaded this file through the global instruction chain. Resolve
+`<agent-home>` from `${CODEX_HOME:-$HOME/.codex}/agent-harness` (falling back to
+the adapter's `agent-home.sh` resolver), and interpret every harness path below
+relative to that installed root, never relative to the working repository. Do
+not probe `<cwd>/core/CORE.md` or report it as a missing project file. Treat
+successful root resolution as silent bootstrap bookkeeping; mention it only
+when resolution fails or materially changes the task.
 
-1. `core/CORE.md`
-2. `core/WORKFLOW.md` for routing and tracked work
-3. `core/CONVENTIONS.md` for intensity, QA, roles, artifacts, and Skill rules
-4. `core/OPERATIONS.md` for git, worktrees, locks, and dispatch
-5. `core/MEMORY.md` for memory
-6. `capabilities/README.md`, `roles/README.md`, and `roles/MODES.md`
+Read `<agent-home>/core/CORE.md` first; load the remaining documents only when
+the task touches the named domain.
+
+1. `<agent-home>/core/CORE.md`
+2. `<agent-home>/core/WORKFLOW.md` for routing and tracked work
+3. `<agent-home>/core/CONVENTIONS.md` for intensity, QA, roles, artifacts, and Skill rules
+4. `<agent-home>/core/OPERATIONS.md` for git, worktrees, locks, and dispatch
+5. `<agent-home>/core/MEMORY.md` for memory
+6. `<agent-home>/capabilities/README.md`, `<agent-home>/roles/README.md`, and `<agent-home>/roles/MODES.md`
 
 For runtime-surface or parity changes, verify current official Codex/Claude
 documentation, then inspect the local realization. Separate runtime support,
