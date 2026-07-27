@@ -36,6 +36,10 @@ STATE_SCHEMA_VERSION = 1
 MAX_STATE_BYTES = 16384
 MAX_BATCH_ATTEMPTS = 4
 SESSION_PARENT_DELIVERY = "codex-stop-hook"
+MANAGED_SESSION_PARENT_DELIVERY = "codex-managed-gateway"
+SESSION_PARENT_DELIVERIES = frozenset(
+    {SESSION_PARENT_DELIVERY, MANAGED_SESSION_PARENT_DELIVERY}
+)
 
 
 class JoinContractError(RuntimeError):
@@ -1043,17 +1047,20 @@ def current_session_children(
     jobs: Path,
     parent_session_id: str,
     expected_attempts: set[str] | None = None,
+    parent_completion_delivery: str = SESSION_PARENT_DELIVERY,
 ) -> list[ChildRow]:
     """Return exact direct children owned by one interactive Codex session.
 
-    Only rows explicitly stamped for the native Stop delivery surface qualify.
-    Unmarked legacy rows remain on the disclosed polling fallback. The initial
-    lookup selects current open/running rows; an expected snapshot continues to
-    follow those same attempts after their status changes.
+    Only rows explicitly stamped for the selected parent-runtime delivery
+    surface qualify. Unmarked rows remain on the disclosed polling fallback.
+    The initial lookup selects current open/running rows; an expected snapshot
+    continues to follow those same attempts after their status changes.
     """
 
     if not parent_session_id:
         raise JoinContractError("parent-session-id-missing")
+    if parent_completion_delivery not in SESSION_PARENT_DELIVERIES:
+        raise JoinContractError("parent-completion-delivery-invalid")
     try:
         lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
     except FileNotFoundError:
@@ -1069,7 +1076,8 @@ def current_session_children(
         meta = _metadata(fields[5])
         if (
             meta.get("parent_sid") != parent_session_id
-            or meta.get("parent_completion_delivery") != SESSION_PARENT_DELIVERY
+            or meta.get("parent_completion_delivery")
+            != parent_completion_delivery
         ):
             continue
         if (
@@ -1290,18 +1298,27 @@ def join_session_batch(
     jobs: Path,
     parent_session_id: str,
     expected_attempts: set[str] | None = None,
+    parent_completion_delivery: str = SESSION_PARENT_DELIVERY,
     interval: float = 2.0,
     timeout: float = 540.0,
     liveness_command: list[str] | None = None,
     env: dict[str, str] | None = None,
 ) -> dict[str, object]:
-    """Join one native-Stop batch sealed to an interactive Codex session."""
+    """Join one exact batch sealed to an interactive parent session."""
 
-    initial = current_session_children(jobs, parent_session_id, expected_attempts)
+    initial = current_session_children(
+        jobs,
+        parent_session_id,
+        expected_attempts,
+        parent_completion_delivery,
+    )
     return _join_snapshot(
         initial=initial,
         refresh=lambda snapshot: current_session_children(
-            jobs, parent_session_id, snapshot
+            jobs,
+            parent_session_id,
+            snapshot,
+            parent_completion_delivery,
         ),
         identity={"parent_session_id": parent_session_id},
         interval=interval,
@@ -1317,7 +1334,13 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument("--jobs", default=os.environ.get("AGENT_DISPATCH_JOBS"))
     value.add_argument(
         "--parent-attempt-id",
-        default=os.environ.get("AGENT_DISPATCH_ATTEMPT_ID"),
+        default=None,
+    )
+    value.add_argument("--parent-session-id")
+    value.add_argument(
+        "--parent-completion-delivery",
+        choices=sorted(SESSION_PARENT_DELIVERIES),
+        default=SESSION_PARENT_DELIVERY,
     )
     value.add_argument("--attempt-id", action="append", default=[])
     value.add_argument("--interval", type=float, default=2.0)
@@ -1328,11 +1351,17 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    if not args.parent_attempt_id and not args.parent_session_id:
+        args.parent_attempt_id = os.environ.get("AGENT_DISPATCH_ATTEMPT_ID")
+    identity_name = (
+        "parent_session_id" if args.parent_session_id else "parent_attempt_id"
+    )
+    identity_value = args.parent_session_id or args.parent_attempt_id or "-"
     if not args.jobs:
         receipt = {
             "schema_version": SCHEMA_VERSION,
             "state": "contract-error",
-            "parent_attempt_id": args.parent_attempt_id or "-",
+            identity_name: identity_value,
             "reason": "jobs-path-missing",
             "children": [],
         }
@@ -1340,19 +1369,36 @@ def main(argv: list[str] | None = None) -> int:
         return 69
     liveness = [args.liveness_command] if args.liveness_command else None
     try:
-        receipt = join_batch(
-            jobs=Path(args.jobs),
-            parent_attempt_id=args.parent_attempt_id or "",
-            expected_attempts=set(args.attempt_id) if args.attempt_id else None,
-            interval=args.interval,
-            timeout=args.timeout,
-            liveness_command=liveness,
-        )
+        if bool(args.parent_attempt_id) == bool(args.parent_session_id):
+            raise JoinContractError("parent-identity-ambiguous")
+        if args.parent_session_id:
+            receipt = join_session_batch(
+                jobs=Path(args.jobs),
+                parent_session_id=args.parent_session_id,
+                expected_attempts=(
+                    set(args.attempt_id) if args.attempt_id else None
+                ),
+                parent_completion_delivery=args.parent_completion_delivery,
+                interval=args.interval,
+                timeout=args.timeout,
+                liveness_command=liveness,
+            )
+        else:
+            receipt = join_batch(
+                jobs=Path(args.jobs),
+                parent_attempt_id=args.parent_attempt_id or "",
+                expected_attempts=(
+                    set(args.attempt_id) if args.attempt_id else None
+                ),
+                interval=args.interval,
+                timeout=args.timeout,
+                liveness_command=liveness,
+            )
     except JoinContractError as exc:
         receipt = {
             "schema_version": SCHEMA_VERSION,
             "state": "contract-error",
-            "parent_attempt_id": args.parent_attempt_id or "-",
+            identity_name: identity_value,
             "reason": str(exc),
             "children": [],
         }

@@ -74,6 +74,13 @@ from model_profile import (  # noqa: E402
     validate_registered_profile,
 )
 from codex_dispatch_terminal import inspect_terminal_attempt  # noqa: E402
+from codex_managed_dispatch import (  # noqa: E402
+    MANAGED_PARENT_DELIVERY,
+    ManagedDispatchError,
+    launch_managed_completion_sidecar,
+    probe_managed_codex_parent,
+    registered_parent_delivery,
+)
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "adversarial"}
 # Verification rigor is derived from intensity — CONVENTIONS §1.1 mapping table (SoT).
@@ -205,7 +212,14 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--cooled-model")
     p.add_argument("--selection-source")
     p.add_argument("--launch-authority", choices=("conductor", "ancestor-broker"), default="conductor")
-    p.add_argument("--parent-harness", default=os.environ.get("AGENT_DISPATCH_CURRENT_HARNESS") or os.environ.get("AGENT_DISPATCH_OWNER_HARNESS") or "claude")
+    p.add_argument(
+        "--parent-harness",
+        default=(
+            os.environ.get("AGENT_DISPATCH_CURRENT_HARNESS")
+            or os.environ.get("AGENT_DISPATCH_OWNER_HARNESS")
+            or ("codex" if os.environ.get("CODEX_THREAD_ID") else "claude")
+        ),
+    )
     p.add_argument("--parent-transport", default=os.environ.get("AGENT_DISPATCH_CURRENT_TRANSPORT") or "unknown")
     p.add_argument("--parent-sandbox", default=os.environ.get("AGENT_DISPATCH_CURRENT_SANDBOX") or "unknown")
     # default None (not "unknown"): an explicitly supplied `--nested-eligibility
@@ -568,6 +582,122 @@ PROVEN_ASYNC_DENY = (
 _STANDARD_PLUS_INTENSITY = {"standard", "strong", "thorough", "adversarial"}
 
 
+def _bind_runtime_parent(args: argparse.Namespace) -> None:
+    """Bind a cross-harness direct child to the actual managed Codex thread."""
+
+    current_thread = os.environ.get("CODEX_THREAD_ID") or os.environ.get(
+        "CODEX_SESSION_ID"
+    )
+    if (
+        args.dispatch_depth == 1
+        and current_thread
+        and os.environ.get("AGENT_CODEX_MANAGED_PARENT_RUNTIME") == "codex"
+    ):
+        args.parent_session_id = current_thread
+        args.parent_slug = None
+        args.parent_harness = "codex"
+
+
+def resolve_parent_completion_delivery(args: argparse.Namespace) -> str:
+    """Select wake mechanics from the parent runtime, never the child runtime."""
+
+    args.managed_gateway_binding = None
+    current_thread = os.environ.get("CODEX_THREAD_ID") or os.environ.get(
+        "CODEX_SESSION_ID"
+    )
+    direct_registered = (
+        getattr(args, "action", "") in {"register", "start"}
+        and args.dispatch_depth == 1
+        and args.launch_lifecycle == DETACHED
+        and args.execution_surface == "registered-headless"
+        and bool(args.registered_worker)
+        and bool(args.parent_session_id)
+        and os.environ.get("AGENT_DISPATCH_CHILD") != "1"
+    )
+    if (
+        direct_registered
+        and args.parent_harness == "codex"
+        and args.parent_session_id == current_thread
+    ):
+        try:
+            args.managed_gateway_binding = probe_managed_codex_parent(
+                parent_harness=args.parent_harness,
+                parent_session_id=args.parent_session_id,
+            )
+        except ManagedDispatchError as exc:
+            args.parent_completion_reason = (
+                str(exc)
+                if os.environ.get("AGENT_CODEX_MANAGED_GATEWAY") == "1"
+                else "interactive-auto-wake-unsupported"
+            )
+            return "poll-fallback"
+        args.parent_completion_reason = "managed-single-ingress-live"
+        return MANAGED_PARENT_DELIVERY
+    if direct_registered and args.parent_harness == "claude":
+        args.parent_completion_reason = "claude-async-rewake-resume"
+        return "claude-parent-runtime"
+    args.parent_completion_reason = "parent-attempt-owned"
+    return "parent-runtime-supervised"
+
+
+def bind_parent_completion_delivery(args: argparse.Namespace) -> None:
+    args.parent_completion_delivery = resolve_parent_completion_delivery(args)
+
+
+def launch_parent_completion_sidecar(
+    args: argparse.Namespace,
+    jobs: Path,
+) -> None:
+    args.managed_sidecar_state = "not-selected"
+    args.managed_sidecar_reason = "-"
+    if args.parent_completion_delivery != MANAGED_PARENT_DELIVERY:
+        return
+    binding = getattr(args, "managed_gateway_binding", None)
+    if binding is None:
+        args.managed_sidecar_state = "launch-failed"
+        args.managed_sidecar_reason = "managed-binding-missing"
+        return
+    try:
+        sidecar = launch_managed_completion_sidecar(
+            binding=binding,
+            jobs=jobs,
+            parent_session_id=args.parent_session_id or "",
+            attempt_ids={args.attempt_id},
+        )
+    except ManagedDispatchError as exc:
+        args.managed_sidecar_state = "launch-failed"
+        args.managed_sidecar_reason = str(exc)
+        try:
+            annotate_attempt_row(
+                jobs,
+                args.attempt_id,
+                {"managed_delivery_state": "sidecar-launch-failed"},
+            )
+        except DispatchContractError:
+            pass
+        return
+    args.managed_sidecar_state = "running"
+    args.managed_sidecar_pid = sidecar.pid
+    args.managed_sealed_batch_id = sidecar.sealed_batch_id
+    args.managed_sidecar_log = sidecar.log_file
+    try:
+        recorded = annotate_attempt_row(
+            jobs,
+            args.attempt_id,
+            {
+                "managed_delivery_state": "sidecar-running",
+                "managed_sealed_batch_id": sidecar.sealed_batch_id,
+                "managed_sidecar_pid": str(sidecar.pid),
+                "managed_sidecar_log": str(sidecar.log_file),
+            },
+        )
+    except DispatchContractError:
+        recorded = False
+    if not recorded:
+        args.managed_sidecar_state = "running-unrecorded"
+        args.managed_sidecar_reason = "sidecar-metadata-unrecorded"
+
+
 def _async_deny_tools(args: argparse.Namespace) -> tuple[str, ...]:
     """SD-71/78: deny proven-fatal async tools for every Claude print turn."""
     return PROVEN_ASYNC_DENY
@@ -788,6 +918,10 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     )
     pipe += f",async_wait_policy={_async_wait_policy(args)}"
     pipe += f",completion_delivery={args.resolved_completion_delivery}"
+    pipe += (
+        f",parent_completion_delivery={args.parent_completion_delivery}"
+        f",parent_completion_reason={args.parent_completion_reason}"
+    )
     if args.profile:
         pipe += f",profile={args.profile}"
     pipe += f",artifact_root={args.artifact_root},log_file={args.log_path}"
@@ -1183,9 +1317,11 @@ def main(argv: list[str]) -> int:
     args.worktree = str(Path(args.worktree).resolve())
     action = "start" if args.start else "register" if args.register else "dry-run"
     args.action = action
+    _bind_runtime_parent(args)
     if args.broker_request_id or args.launch_authority == "ancestor-broker":
         return fail("launch-broker-retired", 76, child_spawned="0")
     args.agent_home = resolve_agent_home()
+    bind_parent_completion_delivery(args)
     worktree = Path(args.worktree)
     if not worktree.is_dir():
         return fail("worktree-not-found", 66, worktree=args.worktree)
@@ -1468,9 +1604,24 @@ def main(argv: list[str]) -> int:
                 args.attempt_claimed = attempt_launch_is_available(
                     jobs, args.attempt_id
                 )
+            if args.attempt_claimed:
+                recorded_delivery = registered_parent_delivery(
+                    jobs, args.attempt_id
+                )
+                if recorded_delivery != args.parent_completion_delivery:
+                    raise DispatchContractError(
+                        "attempt-parent-delivery-changed",
+                        (
+                            f"registered={recorded_delivery} "
+                            f"current={args.parent_completion_delivery}"
+                        ),
+                    )
         except DispatchContractError as e:
             cancel_governor_reservation(governor, governor_root, reservation_token)
             return fail(e.reason, 73, detail=e.detail, child_spawned="0")
+        except ManagedDispatchError as e:
+            cancel_governor_reservation(governor, governor_root, reservation_token)
+            return fail(str(e), 73, child_spawned="0")
         if args.attempt_claimed:
             try:
                 prompt_path.write_text(prompt_text, encoding="utf-8")
@@ -1577,6 +1728,29 @@ def main(argv: list[str]) -> int:
                         "owner), or set AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN=1 in a "
                         "long-lived container"),
                 attempt_id=args.attempt_id, child_spawned="0")
+        launch_parent_completion_sidecar(args, jobs)
+        if args.managed_sidecar_state == "launch-failed":
+            annotate_attempt_row(
+                jobs, args.attempt_id, {"launch_outcome": "never-launched"}
+            )
+            cancel_governor_reservation(
+                governor, governor_root, reservation_token
+            )
+            close_job_row(
+                jobs,
+                args.slug,
+                args.worktree,
+                "managed-sidecar-launch-failed",
+                "",
+                args.attempt_id,
+            )
+            return fail(
+                "managed-sidecar-launch-failed",
+                75,
+                detail=args.managed_sidecar_reason,
+                attempt_id=args.attempt_id,
+                child_spawned="0",
+            )
         def spawn_worker(gate_fd: int) -> subprocess.Popen:
             return subprocess.Popen(
                 [
@@ -1775,6 +1949,13 @@ def main(argv: list[str]) -> int:
     print("adapter=claude")
     print("runtime_surface=claude-print-headless")
     print(f"completion_delivery={args.resolved_completion_delivery}")
+    print(f"parent_completion_delivery={args.parent_completion_delivery}")
+    print(f"parent_completion_reason={args.parent_completion_reason}")
+    print(f"managed_sidecar_state={getattr(args, 'managed_sidecar_state', 'not-started')}")
+    print(f"managed_sidecar_reason={getattr(args, 'managed_sidecar_reason', '-')}")
+    print(f"managed_sidecar_pid={getattr(args, 'managed_sidecar_pid', '-')}")
+    print(f"managed_sealed_batch_id={getattr(args, 'managed_sealed_batch_id', '-')}")
+    print(f"managed_sidecar_log={getattr(args, 'managed_sidecar_log', '-')}")
     print(f"status={action}")
     print(f"worktree={args.worktree}")
     print(f"artifact_root={args.artifact_root}")
@@ -1844,7 +2025,11 @@ def main(argv: list[str]) -> int:
     print(f"prompt_file={prompt_path}")
     print(f"log_file={log_path}")
     print(f"command={command}")
-    return 0
+    return (
+        75
+        if getattr(args, "managed_sidecar_state", "") == "launch-failed"
+        else 0
+    )
 
 
 if __name__ == "__main__":

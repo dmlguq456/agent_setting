@@ -294,12 +294,12 @@ class CodexSD78CompletionDelivery(unittest.TestCase):
         return _side_effect
 
 
-    def test_interactive_parent_is_always_explicit_poll_fallback(self):
+    def test_unmanaged_interactive_parent_is_explicit_poll_fallback(self):
         args = self.parent_args()
         with mock.patch.dict(
             os.environ,
             {"CODEX_THREAD_ID": args.parent_session_id, "AGENT_DISPATCH_CHILD": "0"},
-            clear=False,
+            clear=True,
         ):
             WH.bind_parent_completion_delivery(args)
         self.assertEqual(args.parent_completion_delivery, "poll-fallback")
@@ -308,12 +308,107 @@ class CodexSD78CompletionDelivery(unittest.TestCase):
         )
         self.assertFalse(args.require_hook_trust)
 
+    def test_managed_interactive_parent_selects_single_ingress_gateway(self):
+        args = self.parent_args()
+        binding = object()
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CODEX_THREAD_ID": args.parent_session_id,
+                "AGENT_DISPATCH_CHILD": "0",
+                "AGENT_CODEX_MANAGED_GATEWAY": "1",
+                "AGENT_CODEX_MANAGED_PARENT_RUNTIME": "codex",
+            },
+            clear=True,
+        ), mock.patch.object(
+            WH, "probe_managed_codex_parent", return_value=binding
+        ) as probe:
+            WH.bind_parent_completion_delivery(args)
+        self.assertEqual(
+            args.parent_completion_delivery, WH.MANAGED_PARENT_DELIVERY
+        )
+        self.assertEqual(
+            args.parent_completion_reason, "managed-single-ingress-live"
+        )
+        self.assertIs(args.managed_gateway_binding, binding)
+        probe.assert_called_once_with(
+            parent_harness="codex",
+            parent_session_id=args.parent_session_id,
+        )
+
+    def test_managed_probe_failure_is_typed_poll_fallback(self):
+        args = self.parent_args()
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CODEX_THREAD_ID": args.parent_session_id,
+                "AGENT_DISPATCH_CHILD": "0",
+                "AGENT_CODEX_MANAGED_GATEWAY": "1",
+            },
+            clear=True,
+        ), mock.patch.object(
+            WH,
+            "probe_managed_codex_parent",
+            side_effect=WH.ManagedDispatchError("managed-gateway-not-ready"),
+        ):
+            WH.bind_parent_completion_delivery(args)
+        self.assertEqual(args.parent_completion_delivery, "poll-fallback")
+        self.assertEqual(
+            args.parent_completion_reason, "managed-gateway-not-ready"
+        )
+
+    def test_claude_parent_keeps_claude_wake_adapter_for_codex_child(self):
+        args = self.parent_args(
+            parent_harness="claude",
+            parent_session_id="claude-session",
+        )
+        with mock.patch.dict(
+            os.environ,
+            {"CLAUDE_CODE_SESSION_ID": "claude-session"},
+            clear=True,
+        ), mock.patch.object(WH, "probe_managed_codex_parent") as probe:
+            WH.bind_parent_completion_delivery(args)
+        self.assertEqual(
+            args.parent_completion_delivery, "claude-parent-runtime"
+        )
+        self.assertEqual(
+            args.parent_completion_reason, "claude-async-rewake-resume"
+        )
+        probe.assert_not_called()
+
+    def test_managed_sidecar_is_exact_singleton_and_registry_bounded(self):
+        args = self.parent_args()
+        args.parent_completion_delivery = WH.MANAGED_PARENT_DELIVERY
+        args.managed_gateway_binding = object()
+        args.attempt_id = "att-managed"
+        sidecar = argparse.Namespace(
+            pid=4242,
+            sealed_batch_id="batch-managed",
+            log_file=Path("/tmp/managed.jsonl"),
+        )
+        with mock.patch.object(
+            WH, "launch_managed_completion_sidecar", return_value=sidecar
+        ) as launch, mock.patch.object(
+            WH, "annotate_attempt_row", return_value=True
+        ) as annotate:
+            WH.launch_parent_completion_sidecar(args, Path("/tmp/jobs.log"))
+        launch.assert_called_once_with(
+            binding=args.managed_gateway_binding,
+            jobs=Path("/tmp/jobs.log"),
+            parent_session_id=args.parent_session_id,
+            attempt_ids={"att-managed"},
+        )
+        self.assertEqual(args.managed_sidecar_state, "running")
+        self.assertEqual(args.managed_sidecar_pid, 4242)
+        metadata = annotate.call_args.args[2]
+        self.assertNotIn("raw", "".join(metadata))
+
     def test_interactive_registration_does_not_force_hook_trust(self):
         args = self.parent_args(action="register")
         with mock.patch.dict(
             os.environ,
             {"CODEX_THREAD_ID": args.parent_session_id, "AGENT_DISPATCH_CHILD": "0"},
-            clear=False,
+            clear=True,
         ):
             WH.bind_parent_completion_delivery(args)
         self.assertEqual(args.parent_completion_delivery, "poll-fallback")

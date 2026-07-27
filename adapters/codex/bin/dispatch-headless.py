@@ -77,6 +77,13 @@ from model_profile import (  # noqa: E402
     validate_registered_profile,
 )
 from codex_dispatch_terminal import inspect_terminal_attempt  # noqa: E402
+from codex_managed_dispatch import (  # noqa: E402
+    MANAGED_PARENT_DELIVERY,
+    ManagedDispatchError,
+    launch_managed_completion_sidecar,
+    probe_managed_codex_parent,
+    registered_parent_delivery,
+)
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 # Verification rigor is derived from intensity — CONVENTIONS §1.1 mapping table (SoT).
 # `--qa` is no longer a user-facing axis; optional, derived from --intensity when omitted.
@@ -215,7 +222,19 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--cooled-model")
     p.add_argument("--selection-source")
     p.add_argument("--launch-authority", choices=("conductor", "ancestor-broker"), default="conductor")
-    p.add_argument("--parent-harness", default=os.environ.get("AGENT_DISPATCH_CURRENT_HARNESS") or os.environ.get("AGENT_DISPATCH_OWNER_HARNESS") or "codex")
+    p.add_argument(
+        "--parent-harness",
+        default=(
+            os.environ.get("AGENT_DISPATCH_CURRENT_HARNESS")
+            or os.environ.get("AGENT_DISPATCH_OWNER_HARNESS")
+            or (
+                "claude"
+                if os.environ.get("CLAUDE_CODE_SESSION_ID")
+                and not os.environ.get("CODEX_THREAD_ID")
+                else "codex"
+            )
+        ),
+    )
     p.add_argument("--parent-transport", default=os.environ.get("AGENT_DISPATCH_CURRENT_TRANSPORT") or "unknown")
     p.add_argument("--parent-sandbox", default=os.environ.get("AGENT_DISPATCH_CURRENT_SANDBOX") or "unknown")
     # default None (not "unknown"): an explicitly supplied `--nested-eligibility
@@ -290,29 +309,113 @@ def _bind_runtime_parent(args: argparse.Namespace) -> None:
 
 
 def resolve_parent_completion_delivery(args: argparse.Namespace) -> str:
-    """Interactive Codex has no atomic idempotent wake primitive."""
+    """Select the checked parent-runtime adapter for a direct Codex child."""
+    args.managed_gateway_binding = None
     current_thread = os.environ.get("CODEX_THREAD_ID") or os.environ.get(
         "CODEX_SESSION_ID"
     )
-    if (
+    direct_registered = (
         getattr(args, "action", "") in {"register", "start"}
         and args.dispatch_depth == 1
         and args.launch_lifecycle == DETACHED
         and args.execution_surface == "registered-headless"
         and bool(args.registered_worker)
+        and bool(args.parent_session_id)
+        and os.environ.get("AGENT_DISPATCH_CHILD") != "1"
+    )
+    if (
+        direct_registered
         and args.parent_harness == "codex"
         and bool(current_thread)
         and args.parent_session_id == current_thread
-        and os.environ.get("AGENT_DISPATCH_CHILD") != "1"
     ):
-        args.parent_completion_reason = "interactive-auto-wake-unsupported"
+        try:
+            args.managed_gateway_binding = probe_managed_codex_parent(
+                parent_harness=args.parent_harness,
+                parent_session_id=args.parent_session_id,
+            )
+        except ManagedDispatchError as exc:
+            if os.environ.get("AGENT_CODEX_MANAGED_GATEWAY") == "1":
+                args.parent_completion_reason = str(exc)
+            else:
+                args.parent_completion_reason = (
+                    "interactive-auto-wake-unsupported"
+                )
+            return "poll-fallback"
+        args.parent_completion_reason = "managed-single-ingress-live"
+        return MANAGED_PARENT_DELIVERY
+    if direct_registered and args.parent_harness == "claude":
+        args.parent_completion_reason = "claude-async-rewake-resume"
+        return "claude-parent-runtime"
+    if direct_registered:
+        args.parent_completion_reason = "parent-identity-unmatched"
         return "poll-fallback"
-    args.parent_completion_reason = "parent-identity-unmatched"
-    return "poll-fallback"
+    args.parent_completion_reason = "parent-attempt-owned"
+    return "parent-runtime-supervised"
 
 
 def bind_parent_completion_delivery(args: argparse.Namespace) -> None:
     args.parent_completion_delivery = resolve_parent_completion_delivery(args)
+
+
+def launch_parent_completion_sidecar(
+    args: argparse.Namespace,
+    jobs: Path,
+) -> None:
+    """Attach one exact joiner after a managed direct child is live."""
+
+    args.managed_sidecar_state = "not-selected"
+    args.managed_sidecar_reason = "-"
+    if args.parent_completion_delivery != MANAGED_PARENT_DELIVERY:
+        return
+    binding = getattr(args, "managed_gateway_binding", None)
+    if binding is None:
+        args.managed_sidecar_state = "launch-failed"
+        args.managed_sidecar_reason = "managed-binding-missing"
+        return
+    try:
+        sidecar = launch_managed_completion_sidecar(
+            binding=binding,
+            jobs=jobs,
+            parent_session_id=args.parent_session_id or "",
+            attempt_ids={args.attempt_id},
+        )
+    except ManagedDispatchError as exc:
+        args.managed_sidecar_state = "launch-failed"
+        args.managed_sidecar_reason = str(exc)
+        try:
+            annotate_attempt_row(
+                jobs,
+                args.attempt_id,
+                {
+                    "managed_delivery_state": "sidecar-launch-failed",
+                },
+            )
+        except DispatchContractError:
+            pass
+        return
+    args.managed_sidecar_state = "running"
+    args.managed_sidecar_pid = sidecar.pid
+    args.managed_sealed_batch_id = sidecar.sealed_batch_id
+    args.managed_sidecar_log = sidecar.log_file
+    try:
+        recorded = annotate_attempt_row(
+            jobs,
+            args.attempt_id,
+            {
+                "managed_delivery_state": "sidecar-running",
+                "managed_sealed_batch_id": sidecar.sealed_batch_id,
+                "managed_sidecar_pid": str(sidecar.pid),
+                "managed_sidecar_log": str(sidecar.log_file),
+            },
+        )
+    except DispatchContractError:
+        recorded = False
+    if not recorded:
+        # The immutable delivery stamp still lets this exact sidecar join. Keep
+        # the launch successful while making the observability loss explicit.
+        args.managed_sidecar_state = "running-unrecorded"
+        args.managed_sidecar_reason = "sidecar-metadata-unrecorded"
 
 
 def fail(reason: str, code: int, **fields: str) -> int:
@@ -1820,9 +1923,24 @@ def main(argv: list[str]) -> int:
                 args.attempt_claimed = attempt_launch_is_available(
                     jobs, args.attempt_id
                 )
+            if args.attempt_claimed:
+                recorded_delivery = registered_parent_delivery(
+                    jobs, args.attempt_id
+                )
+                if recorded_delivery != args.parent_completion_delivery:
+                    raise DispatchContractError(
+                        "attempt-parent-delivery-changed",
+                        (
+                            f"registered={recorded_delivery} "
+                            f"current={args.parent_completion_delivery}"
+                        ),
+                    )
         except DispatchContractError as e:
             cancel_governor_reservation(governor, governor_root, reservation_token)
             return fail(e.reason, 73, detail=e.detail, child_spawned="0")
+        except ManagedDispatchError as e:
+            cancel_governor_reservation(governor, governor_root, reservation_token)
+            return fail(str(e), 73, child_spawned="0")
         if args.attempt_claimed:
             try:
                 prompt_path.write_text(prompt_text, encoding="utf-8")
@@ -1933,6 +2051,29 @@ def main(argv: list[str]) -> int:
                         "owner), or set AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN=1 in a "
                         "long-lived container"),
                 attempt_id=args.attempt_id, child_spawned="0")
+        launch_parent_completion_sidecar(args, jobs)
+        if args.managed_sidecar_state == "launch-failed":
+            annotate_attempt_row(
+                jobs, args.attempt_id, {"launch_outcome": "never-launched"}
+            )
+            cancel_governor_reservation(
+                governor, governor_root, reservation_token
+            )
+            close_job_row(
+                jobs,
+                args.slug,
+                args.worktree,
+                "managed-sidecar-launch-failed",
+                "",
+                args.attempt_id,
+            )
+            return fail(
+                "managed-sidecar-launch-failed",
+                75,
+                detail=args.managed_sidecar_reason,
+                attempt_id=args.attempt_id,
+                child_spawned="0",
+            )
         def spawn_worker(gate_fd: int) -> subprocess.Popen:
             return subprocess.Popen(
                 [
@@ -2133,6 +2274,11 @@ def main(argv: list[str]) -> int:
     print(f"completion_delivery={args.resolved_completion_delivery}")
     print(f"parent_completion_delivery={args.parent_completion_delivery}")
     print(f"parent_completion_reason={getattr(args, 'parent_completion_reason', 'unspecified')}")
+    print(f"managed_sidecar_state={getattr(args, 'managed_sidecar_state', 'not-started')}")
+    print(f"managed_sidecar_reason={getattr(args, 'managed_sidecar_reason', '-')}")
+    print(f"managed_sidecar_pid={getattr(args, 'managed_sidecar_pid', '-')}")
+    print(f"managed_sealed_batch_id={getattr(args, 'managed_sealed_batch_id', '-')}")
+    print(f"managed_sidecar_log={getattr(args, 'managed_sidecar_log', '-')}")
     print(
         "supervisor_lease_file="
         + (
@@ -2233,7 +2379,11 @@ def main(argv: list[str]) -> int:
     print(f"prompt_file={prompt_path}")
     print(f"log_file={log_path}")
     print(f"command={command}")
-    return 0
+    return (
+        75
+        if getattr(args, "managed_sidecar_state", "") == "launch-failed"
+        else 0
+    )
 
 
 if __name__ == "__main__":

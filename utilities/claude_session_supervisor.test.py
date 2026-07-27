@@ -27,11 +27,12 @@ def owner_row(status: str = "open") -> str:
     )
 
 
-def child_row(status: str = "open") -> str:
+def child_row(status: str = "open", harness: str = "claude") -> str:
     return (
         f"2026-07-23T00:00:00Z\t{status}\t/repo\t/wt\tchild\t"
         "attempt_schema_version=2,dispatch_depth=2,transport=headless,"
         "execution_surface=registered-headless,registered_worker=1,"
+        f"harness={harness},"
         f"attempt_id=att-child,parent_attempt_id={PARENT},note=RAW_CLAUDE_SENTINEL\n"
     )
 
@@ -189,6 +190,21 @@ class ClaudeSessionSupervisorTest(unittest.TestCase):
         self.assertEqual(len(trace), 1)
         self.assertFalse(trace[0]["resume"])
         self.assertFalse(self.state.exists())
+
+    def test_codex_child_uses_same_claude_resume_adapter(self):
+        self.jobs.write_text(
+            owner_row() + child_row(harness="codex"), encoding="utf-8"
+        )
+        result = self.run_supervisor()
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        trace = [json.loads(line) for line in self.trace.read_text().splitlines()]
+        turns = [row for row in trace if row["event"] == "turn-start"]
+        self.assertEqual(len(turns), 2)
+        self.assertFalse(turns[0]["resume"])
+        self.assertTrue(turns[1]["resume"])
+        self.assertEqual(turns[0]["session"], turns[1]["session"])
+        self.assertEqual(turns[1]["delivered"], ["att-child"])
+        self.assertNotIn("RAW_CLAUDE_SENTINEL", result.stdout)
 
     def test_missing_result_has_no_false_terminal(self):
         broken = self.base / "broken.py"
