@@ -119,7 +119,8 @@ sessions:
 |---|---|---|
 | `cards/` | Layer 1 user-owned task/project cards | user data; never commit to the harness repo |
 | `_layer2/` | Layer 2 agent-owned notes, catalogs, and source-to-card routing rows | mutable board data; never commit to the harness repo |
-| `_triage/`, `_feedback/`, `_change_review/` | approval, feedback, and change-review queues | runtime/user state; never commit to the harness repo |
+| `_triage/` | retired review queue (read-only history) | runtime history; never commit to the harness repo |
+| `_feedback/`, `_change_review/` | feedback and change-review queues | runtime/user state; never commit to the harness repo |
 | `digests/`, `oncall/`, `study/`, `manual/` | daily summaries, operator reports, study proposals, and board manual content | state/docs for the notes root; never commit to the harness repo unless intentionally mirrored in a separate notes repo |
 
 The neutral name for the UI/application that reads and updates this state is:

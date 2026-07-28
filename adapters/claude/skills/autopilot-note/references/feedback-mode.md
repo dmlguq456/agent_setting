@@ -2,6 +2,8 @@
 
 Through v48, the worklog-board review queue supported only a one-way _agent proposal → human approval_ flow. v49–v50 add a **human-to-agent feedback channel** that closes the loop; see worklog-board PRD §16. Feedback submitted from the app accumulates in the `<target>/_feedback/<id>.md` queue (written by the app as a filesystem sidecar, analogous to `_triage`, and scheduled for DB migration). This mode consumes that queue, processes each branch, and **surfaces the result back in the review queue for user approval**.
 
+The A-branch `_triage` proposal-regeneration path is obsolete after the review surface was retired and remains only as a compatibility data path until the `poll-feedback` daemon is cleaned up.
+
 > **Invariant: every application passes through review approval; there is no automatic application.** User feedback expresses _intent_; review approval makes it _final_. This mode stops at regenerating proposals or preparing code changes. DB writes and merges belong to the approval or harvest step.
 
 This is a lightweight, per-item path rather than the full Stage A–F pipeline. It defaults to light-tier, with verification rigor derived from `--intensity`, and should remain immediate and inexpensive. Trigger it immediately after app submission (PRD §16.5 Q1) or through short polling.

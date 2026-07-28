@@ -373,10 +373,11 @@ Numeric prefixes such as `00_`, `01_`, `02_`, and `05_` are retired. Use plain n
 | `<agent-notes-root>/_layer2/notes/` | Agent | Readable note row derived from one artifact | `autopilot-note` or board-approved migration |
 | `<agent-notes-root>/_layer2/{backbones,tasks,papers}/` | Agent | Reusable-axis, task, and paper catalogs | `autopilot-note` emergence or board-approved edit |
 | `<agent-notes-root>/cards/` | User | Layer 1 task and project cards | Worklog-board UI or direct user edit |
-| `<agent-notes-root>/_triage`, `_feedback`, `_change_review` | User-agent queue | New-card proposals, feedback, and code-change review | Worklog-board UI plus `autopilot-note --feedback` |
-| `<agent-notes-root>/digests`, `oncall`, `study`, `manual` | Loops and operators | Digests, reports, proposals, and manuals | Loop or board UI |
+| `<agent-notes-root>/_triage` | Retired review history | Read-only legacy records | Preserved until daemon cleanup |
+| `<agent-notes-root>/_feedback`, `_change_review` | User-agent queues | Feedback and code-change review | Worklog-board UI plus `autopilot-note --feedback` |
+| `<agent-notes-root>/digests`, `oncall`, `study`, `manual` | Loops and operators | Digests, reports, and manuals | Loop or board UI |
 
-`_layer2/`, the three queues, and the local board DB are mutable runtime or user state and must not be committed to the harness repository. They may live in a separate notes repository, still independent of harness core and adapters. `<worklog-board-app>` displays this root and processes approval or review. Changes to the app belong to `autopilot-code` in the app repository; harness migration must not move or delete board data.
+`_layer2/`, the two active queues, the retired `_triage` history, and the local board DB are mutable runtime or user state and must not be committed to the harness repository. They may live in a separate notes repository, still independent of harness core and adapters. `<worklog-board-app>` displays this root and processes feedback or review. Changes to the app belong to `autopilot-code` in the app repository; harness migration must not move or delete board data.
 
 ## 7. Routing Changes After the Initial Build
 

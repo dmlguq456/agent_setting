@@ -6,7 +6,7 @@ worklog-board uses a _two-layer_ model (PRD v18, 2026-06-09):
 |---|---|---|
 | Owner | **User** — creates items directly on the board | **Agent (this skill)** — organizes source artifacts |
 | Unit | `kind: task` and `kind: project` cards | `backbones/`, `tasks/`, and `papers/` catalogs plus `notes/` artifact-note rows |
-| This skill | _Read-only_ matching; proposes new items only through `_triage/` | _Writes_ note rows and emerging catalog entries |
+| This skill | _Read-only_ matching; does not create Layer 1 cards | _Writes_ note rows and emerging catalog entries |
 
 **The link is the `_layer2/notes/<id>.md` row.** One note connects both layers through `card_id` (→ L1 card), `backbone_ids` and `task_ids` (→ L2 axes), and `paper_id` (→ papers). These note rows are the primary output of this skill.
 
@@ -25,8 +25,12 @@ task_ids: [sep]                 # → _layer2/tasks/<slug>.md (M:N)
 paper_id: tf-restormer-icml2026 # → _layer2/papers/<slug>.md (optional)
 intent: 원천기술                # 원천기술 | 상용화 | 논문 | 수탁
 work_status: 검증               # 탐색 | 검증 | 통합 | 출시 | null (divergence stage)
-routing_status: inbox           # inbox | confirmed | manual; unattended cron always stages an inbox proposal. Only user confirmation promotes it.
-routing_confidence: 0.82        # 0–1 routing confidence; never auto-confirms, only sorts/highlights /triage and home
+routing_status: confirmed       # confirmed is the default; manual remains for legacy records
+                                # The board database owns this field for notes it already holds:
+                                # fs→DB ingestion deliberately excludes it from its UPDATE set, so a
+                                # Markdown edit reaches the board only for a note the board has not
+                                # ingested yet. Changing it for existing notes is a database operation.
+routing_confidence: 0.82        # 0–1 routing confidence; ordering/highlighting signal for the board and home
 routing_reason: "TF window ablation → matches ICML TF-Restormer task keywords"
 matched_signals: [project:TF-Restormer, path:plans/2026-..._exp-043, kw:ablation]
 run_id: run-20260610-0500       # Nightly batch that created this note

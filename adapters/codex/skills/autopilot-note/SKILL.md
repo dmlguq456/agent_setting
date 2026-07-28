@@ -1,6 +1,6 @@
 ---
 name: autopilot-note
-description: "Use when existing artifacts must be collected, digested, triaged, or routed into a durable note workflow. Not for storing one scoped memory item or for performing the primary research, code, or document work."
+description: "Use when existing artifacts must be collected, digested, organized, or routed into a durable note workflow. Not for storing one scoped memory item or for performing the primary research, code, or document work."
 ---
 
 # autopilot-note
@@ -29,8 +29,8 @@ contract. It is adapter-owned output, not a legacy compatibility Skill copy.
 - Identifier: `autopilot-note`
 - Invocation class: `entry-router`
 - Supported modes: `none`
-- Argument shape: `[--scope today|yesterday|since <date>|all] [--from <artifact-path>] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]`
-- Portable meaning: Route and note artifacts, producing digests and triage proposals.
+- Argument shape: `[--scope today|yesterday|since <date>|all] [--from <artifact-path>] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--source <list>]`
+- Portable meaning: Route and note artifacts, producing digests.
 
 
 

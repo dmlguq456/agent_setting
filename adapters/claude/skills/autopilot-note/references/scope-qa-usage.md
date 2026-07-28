@@ -21,7 +21,6 @@ Sources 1–6 are active through Phase 2. Enable source 7 only in Phase 3 or wit
 | `<target>/_layer2/notes/<id>.md` | **L2** | Primary output: one artifact becomes one note row with routing frontmatter and a readable body |
 | `<target>/_layer2/{backbones,tasks,papers}/<slug>.md` | **L2** | Catalog entry referenced by a note; emerge and log it when absent, following the directory README schema |
 | `<target>/cards/**.md` | **L1** | Read-only matching targets for note `card_id`; never modify body or frontmatter |
-| `<target>/_triage/{date}_<seq>.md` | **L1 proposal** | Proposed project or task card read by the worklog-board `/triage` UI |
 | `<target>/digests/YYYY-MM-DD.md` | — | Daily digest; prepend the new entry and preserve history |
 | `<artifact-root>/notes/{date}/` | — | This skill's routing log: T1 result table, T2 source scan, and T3 reviewer evidence |
 
@@ -45,7 +44,7 @@ Verification rigor is derived deterministically from `--intensity`, not selected
 |---|---|
 | **quick** | Classify routing, produce the Stage C dry summary, and apply automatically. Use for bulk backfills or one-time lightweight work. No reviewer rounds or polish. |
 | **light** (default) | Add one fast reviewer on linking precision and one batched editorial polish pass in Stage D.5. Use for daily cron. |
-| **standard** | Add one deep reviewer, two fast reviewers for linking precision, note narrative, and catalog/triage quality, plus one fast source-to-note fact checker. One round. Use for weekly cleanup. |
+| **standard** | Add one deep reviewer, two fast reviewers for linking precision, note narrative, and catalog emergence quality, plus one fast source-to-note fact checker. One round. Use for weekly cleanup. |
 | **thorough** | Use two deep reviewers, two fast reviewers, and one fast fact checker for two rounds. Use for monthly cleanup or Notion-migration verification. |
 | **adversarial** | Add one external adversary (the review unit dispatched to the codex harness via `stage-dispatch-fallback`) to thorough. Use for high-stakes work such as initial Phase 3 Notion migration verification. |
 
@@ -55,7 +54,7 @@ Reviewer axes:
 
 - _Linking precision_ (deep reviewer): confirm that note `card_id`, `backbone_ids`, and `task_ids` point to the right L1 cards and L2 catalogs.
 - _Note narrative_ (fast reviewer): confirm that the body accurately and readably summarizes the source's results, decisions, and metrics and remains valid Markdown.
-- _Emergence and triage quality_ (fast reviewer): confirm that new catalog entries and L1 card proposals have complete frontmatter and adequate evidence.
+- _Catalog emergence quality_ (fast reviewer): confirm that new catalog entries have complete frontmatter and adequate evidence.
 
 ## Examples
 
@@ -74,9 +73,6 @@ Reviewer axes:
 
 # Regenerate only the digest
 /autopilot-note --scope today --digest-only
-
-# Summarize only new L1 card proposals
-/autopilot-note --triage-only
 
 # Phase 3 Notion migration
 /autopilot-note --scope since 2026-01-01 --source notion --intensity adversarial
@@ -104,8 +100,7 @@ Reviewer axes:
 
 After success, recommend that the user:
 
-1. Confirm new L1 card proposals in the worklog-board `/triage` view when `M > 0`.
-2. Attach ambient or inbox notes in `/hubs` when `A > 0`.
-3. Review the digest in TodayDigest on the worklog-board home page.
-4. Enrich emerged backbone and task metadata weekly.
-5. Inspect `.last_run.yaml` for cron consistency and prolonged inactivity.
+1. Correct low-confidence or ambient card attribution in the board note screen when `A > 0`.
+2. Review the digest in TodayDigest on the worklog-board home page.
+3. Enrich emerged backbone and task metadata weekly.
+4. Inspect `.last_run.yaml` for cron consistency and prolonged inactivity.
