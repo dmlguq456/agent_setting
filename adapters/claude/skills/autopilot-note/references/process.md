@@ -129,6 +129,10 @@ Resolve `<worklog-board-app>` only from `WORKLOG_BOARD_APP`. If it is unset, rep
 
 Load the board's own environment before the publish commands: from `<worklog-board-app>`, source `.env.local` and then `ops/cron/.agent.env` when each exists. Those files carry the remote database URL and token. Without them the board tooling silently falls back to its local file database, so the commands report success while the served board never changes. Record which credential sources were loaded in T2.
 
-From `<worklog-board-app>`, run `npm run migrate:fs-to-db`, then only after success `npm run reindex:search`. Both are idempotent and safe to rerun. `npx tsx scripts/verify-migration.ts` is optional verification. Command or configuration failure is non-fatal to durable Markdown but never silent.
+From `<worklog-board-app>`, run `npm run migrate:fs-to-db`, then only after success `npm run reindex:search`. Both are idempotent and safe to rerun. `npx tsx scripts/verify-migration.ts` is optional verification.
+
+`migrate:fs-to-db` carries notes and catalogs only. When this run wrote or changed a digest, also run `npx tsx scripts/ingest-ops.ts --apply`, which is the ingestion path for digest, operator-report, and manual Markdown. Publishing a digest-bearing run without it leaves the board's digest surface stale even though every command reported success.
+
+Command or configuration failure is non-fatal to durable Markdown but never silent.
 
 Stage G finalizes a T1 `publish cycle` row with `published`, `skipped`, or `failed`, adds the one-line result to the prepared user report, then emits that report.
