@@ -188,6 +188,8 @@ class ClaudeSD78CompletionDelivery(unittest.TestCase):
         self.assertTrue(prompt.startswith("Runtime-owned completion join (SD-78):"))
         self.assertIn("same Claude session once", prompt)
         self.assertIn("Do not call dispatch-wait", prompt)
+        self.assertIn("a supervised owner yields the current turn", prompt)
+        self.assertNotIn("poll in the current turn", prompt)
 
     def test_supervised_shell_uses_session_bridge_without_no_persistence(self):
         args = _shell_command_args(
@@ -235,6 +237,102 @@ class ClaudeSD78CompletionDelivery(unittest.TestCase):
         with mock.patch.object(WH, "task_prompt", return_value=("do the thing", "cli")):
             prompt, _source = WH.dispatch_prompt(args)
         self.assertNotIn("Runtime-owned completion join", prompt)
+
+
+class ClaudeChildParentRuntimeDelivery(unittest.TestCase):
+    @staticmethod
+    def parent_args(**overrides):
+        values = dict(
+            action="start",
+            dispatch_depth=1,
+            launch_lifecycle=WH.DETACHED,
+            execution_surface="registered-headless",
+            registered_worker=1,
+            parent_harness="codex",
+            parent_session_id="thread-codex-parent",
+            parent_slug=None,
+        )
+        values.update(overrides)
+        return argparse.Namespace(**values)
+
+    def test_codex_parent_selects_gateway_for_claude_child(self):
+        args = self.parent_args()
+        binding = object()
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CODEX_THREAD_ID": args.parent_session_id,
+                "AGENT_DISPATCH_CHILD": "0",
+                "AGENT_CODEX_MANAGED_GATEWAY": "1",
+                "AGENT_CODEX_MANAGED_PARENT_RUNTIME": "codex",
+            },
+            clear=True,
+        ), mock.patch.object(
+            WH, "probe_managed_codex_parent", return_value=binding
+        ):
+            WH.bind_parent_completion_delivery(args)
+        self.assertEqual(
+            args.parent_completion_delivery, WH.MANAGED_PARENT_DELIVERY
+        )
+        self.assertIs(args.managed_gateway_binding, binding)
+
+    def test_claude_parent_keeps_claude_runtime_wake_adapter(self):
+        args = self.parent_args(
+            parent_harness="claude",
+            parent_session_id="claude-session",
+        )
+        with mock.patch.dict(
+            os.environ,
+            {"CLAUDE_CODE_SESSION_ID": "claude-session"},
+            clear=True,
+        ), mock.patch.object(WH, "probe_managed_codex_parent") as probe:
+            WH.bind_parent_completion_delivery(args)
+        self.assertEqual(
+            args.parent_completion_delivery, "claude-parent-runtime"
+        )
+        self.assertEqual(
+            args.parent_completion_reason, "claude-async-rewake-resume"
+        )
+        probe.assert_not_called()
+
+    def test_managed_codex_identity_overrides_synthetic_direct_parent(self):
+        args = self.parent_args(
+            parent_harness="claude",
+            parent_session_id="synthetic",
+            parent_slug="synthetic-owner",
+        )
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CODEX_THREAD_ID": "thread-real",
+                "AGENT_CODEX_MANAGED_PARENT_RUNTIME": "codex",
+            },
+            clear=True,
+        ):
+            WH._bind_runtime_parent(args)
+        self.assertEqual(args.parent_session_id, "thread-real")
+        self.assertEqual(args.parent_harness, "codex")
+        self.assertIsNone(args.parent_slug)
+
+    def test_depth_two_child_never_uses_root_gateway(self):
+        args = self.parent_args(
+            dispatch_depth=2,
+            parent_harness="codex",
+            parent_session_id="thread-codex-parent",
+        )
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CODEX_THREAD_ID": "thread-codex-parent",
+                "AGENT_CODEX_MANAGED_GATEWAY": "1",
+            },
+            clear=True,
+        ), mock.patch.object(WH, "probe_managed_codex_parent") as probe:
+            WH.bind_parent_completion_delivery(args)
+        self.assertEqual(
+            args.parent_completion_delivery, "parent-runtime-supervised"
+        )
+        probe.assert_not_called()
 
 
 if __name__=="__main__": unittest.main()

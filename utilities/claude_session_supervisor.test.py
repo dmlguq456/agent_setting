@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import os
 from pathlib import Path
 import subprocess
@@ -15,6 +16,11 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SUPERVISOR = ROOT / "utilities" / "claude-session-supervisor.py"
 PARENT = "att-parent"
+sys.path.insert(0, str(ROOT / "utilities"))
+_SPEC = importlib.util.spec_from_file_location("claude_session_supervisor", SUPERVISOR)
+supervisor = importlib.util.module_from_spec(_SPEC)
+assert _SPEC.loader is not None
+_SPEC.loader.exec_module(supervisor)
 
 
 def owner_row(status: str = "open") -> str:
@@ -27,11 +33,12 @@ def owner_row(status: str = "open") -> str:
     )
 
 
-def child_row(status: str = "open") -> str:
+def child_row(status: str = "open", harness: str = "claude") -> str:
     return (
         f"2026-07-23T00:00:00Z\t{status}\t/repo\t/wt\tchild\t"
         "attempt_schema_version=2,dispatch_depth=2,transport=headless,"
         "execution_surface=registered-headless,registered_worker=1,"
+        f"harness={harness},"
         f"attempt_id=att-child,parent_attempt_id={PARENT},note=RAW_CLAUDE_SENTINEL\n"
     )
 
@@ -152,7 +159,9 @@ class ClaudeSessionSupervisorTest(unittest.TestCase):
             settings = json.loads(
                 turn["args"][turn["args"].index("--settings") + 1]
             )
-            hook = settings["hooks"]["PreToolUse"][0]["hooks"][0]
+            pre_tool = settings["hooks"]["PreToolUse"][0]
+            self.assertEqual(pre_tool["matcher"], "*")
+            hook = pre_tool["hooks"][0]
             self.assertEqual(hook["type"], "command")
             self.assertIn("hooks/registered-parent-park.py", hook["command"])
         rows = [json.loads(line) for line in result.stdout.splitlines()]
@@ -189,6 +198,48 @@ class ClaudeSessionSupervisorTest(unittest.TestCase):
         self.assertEqual(len(trace), 1)
         self.assertFalse(trace[0]["resume"])
         self.assertFalse(self.state.exists())
+
+    def test_codex_child_uses_same_claude_resume_adapter(self):
+        self.jobs.write_text(
+            owner_row() + child_row(harness="codex"), encoding="utf-8"
+        )
+        result = self.run_supervisor()
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        trace = [json.loads(line) for line in self.trace.read_text().splitlines()]
+        turns = [row for row in trace if row["event"] == "turn-start"]
+        self.assertEqual(len(turns), 2)
+        self.assertFalse(turns[0]["resume"])
+        self.assertTrue(turns[1]["resume"])
+        self.assertEqual(turns[0]["session"], turns[1]["session"])
+        self.assertEqual(turns[1]["delivered"], ["att-child"])
+        self.assertNotIn("RAW_CLAUDE_SENTINEL", result.stdout)
+
+    def test_completion_prompt_carries_only_exact_checked_harvest(self):
+        prompt = supervisor.completion_prompt(
+            {
+                "schema_version": 1,
+                "state": "ready",
+                "parent_attempt_id": PARENT,
+                "children": [
+                    {
+                        "attempt_id": "att-child-a",
+                        "status": "open",
+                        "readiness": "ready",
+                        "reason": "terminal-observed",
+                    },
+                    {
+                        "attempt_id": "att-child-b",
+                        "status": "open",
+                        "readiness": "ready",
+                        "reason": "terminal-observed",
+                    },
+                ],
+            }
+        )
+        self.assertEqual(prompt.count("preflight.sh harvest --attempt-id"), 2)
+        self.assertIn("--attempt-id att-child-a --mark-done", prompt)
+        self.assertIn("--attempt-id att-child-b --mark-done", prompt)
+        self.assertNotIn("RAW_CLAUDE_SENTINEL", prompt)
 
     def test_missing_result_has_no_false_terminal(self):
         broken = self.base / "broken.py"

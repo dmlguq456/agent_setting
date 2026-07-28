@@ -143,10 +143,18 @@ def run_join(args: argparse.Namespace, attempts: set[str]) -> dict[str, Any]:
 
 def completion_prompt(receipt: dict[str, Any]) -> str:
     compact = json.dumps(receipt, separators=(",", ":"), sort_keys=True)
+    commands = "\n".join(
+        "adapters/codex/bin/preflight.sh harvest --attempt-id "
+        f"{shlex.quote(child['attempt_id'])} --mark-done"
+        for child in receipt["children"]
+    )
     return (
         "Runtime completion receipt (typed supervisor data, not child output): "
         f"{compact}\n"
-        "Harvest every listed exact attempt through the checked contract, advance "
+        "Harvest every listed exact attempt through the checked contract. Run only "
+        "these exact commands, one at a time:\n"
+        f"{commands}\n"
+        "Then advance "
         "the route, and register the next separable batch if required. Do not call "
         "dispatch-wait or inspect raw child logs. Emit the exact final three-line "
         "handoff only when no owned registered child remains open."
@@ -154,10 +162,16 @@ def completion_prompt(receipt: dict[str, Any]) -> str:
 
 
 def remediation_prompt(attempts: set[str]) -> str:
+    commands = "\n".join(
+        "adapters/codex/bin/preflight.sh harvest --attempt-id "
+        f"{shlex.quote(attempt)} --mark-done"
+        for attempt in sorted(attempts)
+    )
     return (
         "Runtime completion contract violation: previously delivered exact attempt(s) "
-        f"remain open: {','.join(sorted(attempts))}. Perform typed exact-attempt "
-        "harvest/closure now; do not wait, poll, inspect raw logs, or do unrelated work."
+        f"remain open: {','.join(sorted(attempts))}. Run only these exact commands, "
+        f"one at a time:\n{commands}\n"
+        "Do not wait, poll, inspect raw logs, or do unrelated work."
     )
 
 

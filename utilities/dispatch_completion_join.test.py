@@ -53,15 +53,18 @@ def session_row(
     slug: str,
     *,
     native: bool = True,
+    delivery: str | None = None,
+    harness: str = "codex",
 ) -> str:
     meta = (
         "attempt_schema_version=2,dispatch_depth=1,transport=headless,"
         "execution_surface=registered-headless,registered_worker=1,"
         "launch_claimed=1,"
-        f"attempt_id={attempt},parent_sid={parent_session}"
+        f"attempt_id={attempt},parent_sid={parent_session},harness={harness}"
     )
-    if native:
-        meta += ",parent_completion_delivery=codex-stop-hook"
+    selected_delivery = delivery or ("codex-stop-hook" if native else "")
+    if selected_delivery:
+        meta += f",parent_completion_delivery={selected_delivery}"
     if status == "done":
         meta += ",launch_outcome=never-launched"
     return f"2026-07-23T00:00:00Z\t{status}\t/repo\t/wt\t{slug}\t{meta}\n"
@@ -346,6 +349,45 @@ class DispatchCompletionJoinTest(unittest.TestCase):
             {child["attempt_id"] for child in receipt["children"]},
             {"att-a", "att-b"},
         )
+
+    def test_managed_session_batch_selects_exact_cross_harness_attempts(self):
+        session = "thread-managed"
+        managed = JOIN.MANAGED_SESSION_PARENT_DELIVERY
+        self.jobs.write_text(
+            session_row(
+                "done", "att-codex", session, "codex-child",
+                delivery=managed, harness="codex",
+            )
+            + session_row(
+                "done", "att-claude", session, "claude-child",
+                delivery=managed, harness="claude",
+            )
+            + session_row(
+                "done", "att-legacy", session, "legacy-child",
+                delivery=JOIN.SESSION_PARENT_DELIVERY,
+            )
+            + session_row(
+                "done", "att-foreign", "thread-other", "foreign-child",
+                delivery=managed,
+            ),
+            encoding="utf-8",
+        )
+        receipt = JOIN.join_session_batch(
+            jobs=self.jobs,
+            parent_session_id=session,
+            expected_attempts={"att-codex", "att-claude"},
+            parent_completion_delivery=managed,
+            interval=0.02,
+            timeout=1,
+            liveness_command=[str(self.live)],
+        )
+        self.assertEqual(receipt["state"], "ready")
+        self.assertEqual(
+            {child["attempt_id"] for child in receipt["children"]},
+            {"att-codex", "att-claude"},
+        )
+        self.assertNotIn("att-legacy", json.dumps(receipt))
+        self.assertNotIn("att-foreign", json.dumps(receipt))
 
     def test_parent_session_state_is_atomic_bounded_and_hashed(self):
         session = "thread-private"

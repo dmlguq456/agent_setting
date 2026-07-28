@@ -71,7 +71,13 @@ def main() -> int:
         rows = current_children(registry, parent_attempt)
     except JoinContractError:
         return deny("runtime-supervised-parent: exact child registry contract is invalid")
-    open_attempts = pending_attempt_ids(rows)
+    # A terminal+quiescent process can still have an open registry row that the
+    # delivered receipt requires the parent to harvest.  Process liveness alone
+    # therefore cannot release the guard at the exact closure boundary.
+    open_attempts = {
+        row.attempt_id for row in rows if row.status in {"open", "running"}
+    }
+    open_attempts.update(pending_attempt_ids(rows))
     if not open_attempts:
         return 0
 

@@ -833,8 +833,10 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'native Skills, native Agents, and native Modes' adapters/codex/ADAPTATION.md \
     || ! grep -Fq 'headless --check <worktree>' adapters/codex/README.md \
     || ! grep -Fq 'headless [--check] [--require-hook-trust]' adapters/codex/AGENTS.md \
-    || ! grep -Fq 'dispatch --dry-run|--register|--start [--require-hook-trust]' adapters/codex/ADAPTATION.md \
-    || ! grep -Fq 'fails with `child_spawned=0` before registry writes' adapters/codex/README.md \
+    || ! grep -Fq 'Use `dispatch --dry-run|--register|--start`' adapters/codex/ADAPTATION.md \
+    || ! grep -Fq 'checked managed Codex parent records `codex-managed-gateway`' adapters/codex/README.md \
+    || ! grep -Fq 'parent runtime, not the child' adapters/codex/ADAPTATION.md \
+    || ! grep -Fq '`codex-managed-gateway`' adapters/codex/ADAPTATION.md \
     || ! grep -Fq 'Registry writes and harvest rewrites are serialized with a `.lock` file' adapters/codex/README.md \
     || ! grep -Fq 'Registry writes and harvest rewrites are serialized with a `.lock` file' adapters/codex/ADAPTATION.md \
     || ! grep -Fq 'minimal typed worker prompt' adapters/codex/README.md \
@@ -984,10 +986,12 @@ check_codex_bin_wrappers() {
     || ! grep -Fq '"SessionStart"' adapters/codex/hooks/sessionstart-lifecycle.py \
     || ! grep -Fq 'hookSpecificOutput' adapters/codex/hooks/sessionstart-lifecycle.py \
     || ! grep -Fq 'run_preflight("session-end"' adapters/codex/hooks/sessionend-lifecycle.py \
-    || ! grep -Fq 'join_session_batch(' adapters/codex/hooks/sessionend-lifecycle.py \
-    || ! grep -Fq 'CODEX_STOP_JOIN_TIMEOUT' adapters/codex/hooks/sessionend-lifecycle.py \
+    || grep -Fq 'subprocess' adapters/codex/hooks/stop-lifecycle.py \
+    || grep -Fq 'session-end' adapters/codex/hooks/stop-lifecycle.py \
+    || grep -Fq 'join_session_batch(' adapters/codex/hooks/stop-lifecycle.py \
+    || grep -Fq 'decision' adapters/codex/hooks/stop-lifecycle.py \
     || ! grep -Fq 'parent_completion_harvested' adapters/codex/bin/dispatch-harvest.py \
-    || ! grep -Fq 'register_parent_stop_attempt(args, jobs)' adapters/codex/bin/dispatch-headless.py \
+    || grep -Fq 'register_parent_stop_attempt(args, jobs)' adapters/codex/bin/dispatch-headless.py \
     || grep -Fq 'sys.stdout.write(result.stdout)' adapters/codex/hooks/sessionend-lifecycle.py \
     || ! grep -Fq 'run_preflight("briefing"' adapters/codex/hooks/userprompt-lifecycle.py \
     || ! grep -Fq 'token_budget_context(current_cwd, sid)' adapters/codex/hooks/userprompt-lifecycle.py \
@@ -1202,7 +1206,9 @@ check_codex_bin_wrappers() {
   if ! grep -Fq 'loop-info <oncall|note|study|drill|runtime-watch>' adapters/codex/README.md \
     || ! grep -Fq 'preflight.sh loop-info <loop>' adapters/codex/ADAPTATION.md \
     || ! grep -Fq 'Arbitrary detached shell output' adapters/codex/AGENTS.md \
-    || ! grep -Fq 'trusted native Stop bridge' adapters/codex/AGENTS.md; then
+    || ! grep -Fq '`utilities/codex-managed-entry.py`' adapters/codex/AGENTS.md \
+    || ! grep -Fq 'Managed completion never uses Stop continuation' adapters/codex/AGENTS.md \
+    || ! grep -Fq 'Unmanaged new Codex sessions use finite' adapters/codex/AGENTS.md; then
     fail_msg "Codex docs must document loop-info support/fallback contracts"
   fi
 
@@ -1274,7 +1280,7 @@ check_codex_utility_projection() {
   # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
   # leak window where a newly added utility silently has no projection decision).
   UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh worktree-cleanup.py dispatch-route.sh dispatch-defaults.py token-budget.py token-budget-experiment.py worker_bootstrap.py"
-  UTILITY_DEFERRED="codex_hook_definition_age.py model_profile.py artifact-root.test.sh dispatch-artifact-root.test.py worktree-cleanup.test.py dispatch-liveness.sh dispatch-liveness.test.sh dispatch_liveness_matrix.test.py dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py capability-route.py capability_route.test.py compose-route.py compose_route.test.py dispatch-broker.py dispatch_broker.test.py dispatch-node.py dispatch_node.test.py dispatch-owner.py dispatch-progress.py dispatch_progress.test.py dispatch-registry.py dispatch_registry.test.py dispatch-orphan-watch.py dispatch_orphan_watch.test.py dispatch_adapters_v11.test.py dispatch_contract.py dispatch_mode_contract.py dispatch-observed-liveness.py dispatch_supervisor_terminal.py dispatch_contract.test.py dispatch_completion_marker.test.py dispatch_harvest.test.py dispatch_v20.test.py dispatch_lifecycle.py dispatch_lifecycle.test.py dispatch-attempt-ready.py dispatch-batch.py launch-fence.py replica_batch_contract.py nested-dispatch-eligibility.py nested_dispatch_eligibility.test.py stage-dispatch-fallback.py stage_dispatch_fallback.test.py stage_dispatch_capacity.test.py spec-transaction.py spec_transaction.test.py worker-route-guard.py worker_route_guard.test.py model-worker-governor.py model_worker_governor.test.py resource-runner.py resource_runner.test.py worker_bootstrap.test.py worker_dispatch_prompt.test.py verify-files.sh verify-files.test.sh worktree-residue.py worktree_residue.test.py dispatch_codex_nocommit_fixture.test.py codex_dispatch_terminal.py codex_dispatch_terminal.test.py claude-session-supervisor.py claude_session_supervisor.test.py codex-app-server-supervisor.py codex_app_server_supervisor.test.py dispatch_completion_join.py dispatch_completion_join.test.py registered_parent_park.test.py capability-grounding.sh"
+  UTILITY_DEFERRED="codex_hook_definition_age.py model_profile.py artifact-root.test.sh dispatch-artifact-root.test.py worktree-cleanup.test.py dispatch-liveness.sh dispatch-liveness.test.sh dispatch_liveness_matrix.test.py dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py capability-route.py capability_route.test.py compose-route.py compose_route.test.py dispatch-broker.py dispatch_broker.test.py dispatch-node.py dispatch_node.test.py dispatch-owner.py dispatch-progress.py dispatch_progress.test.py dispatch-registry.py dispatch_registry.test.py dispatch-orphan-watch.py dispatch_orphan_watch.test.py dispatch_adapters_v11.test.py dispatch_contract.py dispatch_mode_contract.py dispatch-observed-liveness.py dispatch_supervisor_terminal.py dispatch_contract.test.py dispatch_completion_marker.test.py dispatch_harvest.test.py dispatch_v20.test.py dispatch_lifecycle.py dispatch_lifecycle.test.py dispatch-attempt-ready.py dispatch-batch.py launch-fence.py replica_batch_contract.py nested-dispatch-eligibility.py nested_dispatch_eligibility.test.py stage-dispatch-fallback.py stage_dispatch_fallback.test.py stage_dispatch_capacity.test.py spec-transaction.py spec_transaction.test.py worker-route-guard.py worker_route_guard.test.py model-worker-governor.py model_worker_governor.test.py resource-runner.py resource_runner.test.py worker_bootstrap.test.py worker_dispatch_prompt.test.py verify-files.sh verify-files.test.sh worktree-residue.py worktree_residue.test.py dispatch_codex_nocommit_fixture.test.py codex_dispatch_terminal.py codex_dispatch_terminal.test.py claude-session-supervisor.py claude_session_supervisor.test.py codex-app-server-supervisor.py codex_app_server_supervisor.test.py dispatch_completion_join.py dispatch_completion_join.test.py registered_parent_park.test.py capability-grounding.sh codex-managed-completion.py codex-managed-entry.py codex-managed-gateway.py codex_managed_dispatch.py"
   utility_count=0
   for f in utilities/*; do
     [ -f "$f" ] || continue
@@ -1869,6 +1875,7 @@ check_codex_native_hook_projection() {
   hook_json="$hook_dir/hooks.json"
   session_bridge="$hook_dir/sessionstart-lifecycle.py"
   sessionend_bridge="$hook_dir/sessionend-lifecycle.py"
+  stop_bridge="$hook_dir/stop-lifecycle.py"
   prompt_bridge="$hook_dir/userprompt-lifecycle.py"
   permission_bridge="$hook_dir/permissionrequest-lifecycle.py"
   pre_bridge="$hook_dir/pretooluse-write-guard.py"
@@ -1880,7 +1887,7 @@ check_codex_native_hook_projection() {
     fail_msg "$hook_json is missing"
     return
   fi
-  for bridge in "$session_bridge" "$sessionend_bridge" "$prompt_bridge" "$permission_bridge" "$pre_bridge" "$post_bridge" "$read_bridge" "$launcher"; do
+  for bridge in "$session_bridge" "$sessionend_bridge" "$stop_bridge" "$prompt_bridge" "$permission_bridge" "$pre_bridge" "$post_bridge" "$read_bridge" "$launcher"; do
     if [ ! -x "$bridge" ]; then
       fail_msg "$bridge must be executable"
     fi
@@ -1892,7 +1899,7 @@ check_codex_native_hook_projection() {
     fail_msg "$hook_json must be valid JSON"
     cat /tmp/codex-hooks-json.err
   fi
-  for script in sessionstart-lifecycle.py sessionend-lifecycle.py userprompt-lifecycle.py permissionrequest-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py posttooluse-read-marker.py; do
+  for script in sessionstart-lifecycle.py sessionend-lifecycle.py stop-lifecycle.py userprompt-lifecycle.py permissionrequest-lifecycle.py pretooluse-write-guard.py posttooluse-design-check.py posttooluse-read-marker.py; do
     if ! grep -Fq "run-hook.sh\\\" $script" "$hook_json"; then
       fail_msg "$hook_json must register $script through the Codex hook launcher"
     fi
@@ -1907,8 +1914,8 @@ check_codex_native_hook_projection() {
   if ! grep -Fq '"SessionEnd"' "$hook_json" || ! grep -Fq 'sessionend-lifecycle.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex SessionEnd lifecycle bridge"
   fi
-  if ! grep -Fq '"Stop"' "$hook_json" || ! grep -Fq 'sessionend-lifecycle.py' "$hook_json"; then
-    fail_msg "$hook_json must register the Codex Stop lifecycle bridge as a session-end alias"
+  if ! grep -Fq '"Stop"' "$hook_json" || ! grep -Fq 'stop-lifecycle.py' "$hook_json"; then
+    fail_msg "$hook_json must register the dedicated silent no-op Codex Stop bridge"
   fi
   if ! grep -Fq '"UserPromptSubmit"' "$hook_json" || ! grep -Fq 'userprompt-lifecycle.py' "$hook_json"; then
     fail_msg "$hook_json must register the Codex UserPromptSubmit lifecycle bridge"
@@ -1966,9 +1973,10 @@ check_codex_native_hook_projection() {
     || ! grep -Fq '"$0" material-route check --tool Write --file "$file" --cwd "$(dirname "$file")" --session "$sid"' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'material-route", "check", "--tool", "Bash"' "$pre_bridge" \
     || ! grep -Fq 'material-route", "bind", "--route"' "$read_bridge" \
-    || ! grep -Fq 'if os.environ.get("AGENT_PARENT_PARK_ONLY") == "1":' "$pre_bridge" \
+    || grep -Fq 'AGENT_PARENT_PARK_ONLY' "$pre_bridge" \
+    || grep -Fq '"matcher": "*"' "$hook_json" \
     || ! grep -Fq 'SessionEnd' adapters/codex/hooks/sessionend-lifecycle.py \
-    || ! grep -Fq 'event == "sessionend"' adapters/codex/hooks/sessionend-lifecycle.py; then
+    || ! grep -Fq 'Stop is a' adapters/codex/hooks/sessionend-lifecycle.py; then
     fail_msg "Codex material-route write/check/bind call sites and SessionEnd-only clear must remain wired"
   fi
   if ! grep -Fq '"design"' "$post_bridge"; then
@@ -2306,7 +2314,7 @@ check_opencode_utility_projection() {
   # top-level utilities/* entry must be classified projected or deferred, else fail loud (closes the
   # leak window where a newly added utility silently has no projection decision).
   UTILITY_PROJECTED="agent-home.sh artifact-root.sh agent-worklog-state.sh harness-status.sh worktree-cleanup.py dispatch-route.sh dispatch-defaults.py worker_bootstrap.py"
-  UTILITY_DEFERRED="codex_hook_definition_age.py model_profile.py artifact-root.test.sh dispatch-artifact-root.test.py worktree-cleanup.test.py dispatch-liveness.sh dispatch-liveness.test.sh dispatch_liveness_matrix.test.py dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py token-budget.py token-budget-experiment.py capability-route.py capability_route.test.py compose-route.py compose_route.test.py dispatch-broker.py dispatch_broker.test.py dispatch-node.py dispatch_node.test.py dispatch-owner.py dispatch-progress.py dispatch_progress.test.py dispatch-registry.py dispatch_registry.test.py dispatch-orphan-watch.py dispatch_orphan_watch.test.py dispatch_adapters_v11.test.py dispatch_contract.py dispatch_mode_contract.py dispatch-observed-liveness.py dispatch_supervisor_terminal.py dispatch_contract.test.py dispatch_completion_marker.test.py dispatch_harvest.test.py dispatch_v20.test.py dispatch_lifecycle.py dispatch_lifecycle.test.py dispatch-attempt-ready.py dispatch-batch.py launch-fence.py replica_batch_contract.py nested-dispatch-eligibility.py nested_dispatch_eligibility.test.py stage-dispatch-fallback.py stage_dispatch_fallback.test.py stage_dispatch_capacity.test.py spec-transaction.py spec_transaction.test.py worker-route-guard.py worker_route_guard.test.py model-worker-governor.py model_worker_governor.test.py resource-runner.py resource_runner.test.py worker_bootstrap.test.py worker_dispatch_prompt.test.py verify-files.sh verify-files.test.sh worktree-residue.py worktree_residue.test.py dispatch_codex_nocommit_fixture.test.py codex_dispatch_terminal.py codex_dispatch_terminal.test.py claude-session-supervisor.py claude_session_supervisor.test.py codex-app-server-supervisor.py codex_app_server_supervisor.test.py dispatch_completion_join.py dispatch_completion_join.test.py registered_parent_park.test.py capability-grounding.sh"
+  UTILITY_DEFERRED="codex_hook_definition_age.py model_profile.py artifact-root.test.sh dispatch-artifact-root.test.py worktree-cleanup.test.py dispatch-liveness.sh dispatch-liveness.test.sh dispatch_liveness_matrix.test.py dispatch-wait.sh dispatch-wait.test.sh dispatch-concurrency.test.sh usage-check.sh usage-check.test.sh dispatch-route.test.sh extract_web_figures.py token-budget.py token-budget-experiment.py capability-route.py capability_route.test.py compose-route.py compose_route.test.py dispatch-broker.py dispatch_broker.test.py dispatch-node.py dispatch_node.test.py dispatch-owner.py dispatch-progress.py dispatch_progress.test.py dispatch-registry.py dispatch_registry.test.py dispatch-orphan-watch.py dispatch_orphan_watch.test.py dispatch_adapters_v11.test.py dispatch_contract.py dispatch_mode_contract.py dispatch-observed-liveness.py dispatch_supervisor_terminal.py dispatch_contract.test.py dispatch_completion_marker.test.py dispatch_harvest.test.py dispatch_v20.test.py dispatch_lifecycle.py dispatch_lifecycle.test.py dispatch-attempt-ready.py dispatch-batch.py launch-fence.py replica_batch_contract.py nested-dispatch-eligibility.py nested_dispatch_eligibility.test.py stage-dispatch-fallback.py stage_dispatch_fallback.test.py stage_dispatch_capacity.test.py spec-transaction.py spec_transaction.test.py worker-route-guard.py worker_route_guard.test.py model-worker-governor.py model_worker_governor.test.py resource-runner.py resource_runner.test.py worker_bootstrap.test.py worker_dispatch_prompt.test.py verify-files.sh verify-files.test.sh worktree-residue.py worktree_residue.test.py dispatch_codex_nocommit_fixture.test.py codex_dispatch_terminal.py codex_dispatch_terminal.test.py claude-session-supervisor.py claude_session_supervisor.test.py codex-app-server-supervisor.py codex_app_server_supervisor.test.py dispatch_completion_join.py dispatch_completion_join.test.py registered_parent_park.test.py capability-grounding.sh codex-managed-completion.py codex-managed-entry.py codex-managed-gateway.py codex_managed_dispatch.py"
   utility_count=0
   for f in utilities/*; do
     [ -f "$f" ] || continue
@@ -3188,7 +3196,7 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'check=hook-trust:review-needed' adapters/codex/README.md \
     || ! grep -Fq 'authoritative App Server `hooks/list`' adapters/codex/README.md \
     || ! grep -Fq 'authoritative App Server `hooks/list`' adapters/codex/ADAPTATION.md \
-    || ! grep -Fq 'current-hash hook trust before spawn' adapters/codex/AGENTS.md \
+    || ! grep -Fq 'does not force Stop/PreToolUse trust' adapters/codex/AGENTS.md \
     || ! grep -Fq 'doctor --runtime-strict' adapters/codex/README.md \
     || ! grep -Fq 'runtime-projection --require-hook-trust' adapters/codex/AGENTS.md \
     || ! grep -Fq 'check=hook-trust:review-needed' adapters/codex/ADAPTATION.md; then
@@ -3864,7 +3872,7 @@ check_fleet_depth2_liveness_regression() {
   out="${TMPDIR:-/tmp}/fleet-depth2-liveness-regression-$$.log"
   if ! PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT/tools" python3 -m unittest \
     fleet.tests.test_dispatch.CodexAttemptIdentityTest.test_namespace_local_numeric_pid_collision_is_not_process_authority \
-    fleet.tests.test_f15_rows.FoldingTest.test_portable_persona_child_is_visible_and_drives_exec_without_show_all \
+    fleet.tests.test_f15_rows.FoldingTest.test_portable_persona_child_is_visible_with_exec_hue_without_owner_track \
     >"$out" 2>&1; then
     fail_msg "Fleet dispatch-depth-2 classifier/default-view conformance regression"
     sed -n '1,160p' "$out"

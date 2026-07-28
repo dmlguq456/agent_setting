@@ -55,6 +55,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh status [cwd] [session-id]
        preflight.sh permissions
        preflight.sh tui-config
+       preflight.sh managed-entry [--check] --codex-home <private-dir> --state-dir <private-dir> --workspace <dir> [--jobs <jobs.log>] [-- client-args...]
        preflight.sh subagent-info [--check]
        preflight.sh headless [--check] [--require-hook-trust] <worktree>
        preflight.sh nested-headless --parent-harness <h> --parent-transport <t> --parent-sandbox <s> --child-harness <h> --launch-authority <authority> --worktree <path> [--json]
@@ -171,6 +172,7 @@ doctor() {
   doctor_check hook-bridges python3 -c 'import pathlib, sys; [compile(pathlib.Path(p).read_text(encoding="utf-8"), p, "exec") for p in sys.argv[1:]]' \
     "$ROOT/adapters/codex/hooks/sessionstart-lifecycle.py" \
     "$ROOT/adapters/codex/hooks/sessionend-lifecycle.py" \
+    "$ROOT/adapters/codex/hooks/stop-lifecycle.py" \
     "$ROOT/adapters/codex/hooks/userprompt-lifecycle.py" \
     "$ROOT/adapters/codex/hooks/permissionrequest-lifecycle.py" \
     "$ROOT/adapters/codex/hooks/pretooluse-write-guard.py" \
@@ -463,6 +465,10 @@ EOF
     [ "$#" -eq 1 ] || { echo "codex preflight: tui-config accepts no arguments" >&2; exit 64; }
     AGENT_HOME="$AGENT_ROOT" "$ROOT/adapters/codex/bin/apply-tui-config.sh"
     ;;
+  managed-entry)
+    shift
+    exec python3 "$ROOT/utilities/codex-managed-entry.py" "$@"
+    ;;
   headless)
     shift
     check_only=0
@@ -521,7 +527,7 @@ dispatch_input_validation=capability-info,capability-mode-catalog,optional-worke
 worker_startup_signal=wrapper-validated-metadata-or-immutable-route
 worker_startup_signal_contract=dispatch-wrapper-validates-before-materializing-prompt; worker rechecks only for safety
 physical_project_agents_masking=unsupported-runtime-auto-discovery-may-remain
-constraints=main-or-owner-dispatched,max-dispatch-depth-2-for-standard-plus-owner,register-open-job,exact-parent-parking,explicit-capability-mode-qa-intensity-dispatch_depth-parent-parent_sid,transcript-liveness-required
+constraints=main-or-owner-dispatched,max-dispatch-depth-2-for-standard-plus-owner,register-open-job,headless-owner-supervisor-or-managed-gateway-or-interactive-poll-fallback,explicit-capability-mode-qa-intensity-dispatch_depth-parent-parent_sid,transcript-liveness-required
 claude_headless=unsupported
 fallback=checked-dispatch-chain-or-structured-degradation
 EOF

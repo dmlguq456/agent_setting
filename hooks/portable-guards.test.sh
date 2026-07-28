@@ -733,7 +733,7 @@ if "$CODEX" headless >/tmp/codex_headless.out 2>/tmp/codex_headless.err \
   && grep -q '^worker_startup_signal_contract=dispatch-wrapper-validates-before-materializing-prompt; worker rechecks only for safety$' /tmp/codex_headless.out \
   && grep -q '^broker_lifecycle=retired-status-stop-only$' /tmp/codex_headless.out \
   && grep -q '^launch_authority=conductor$' /tmp/codex_headless.out \
-  && grep -q '^constraints=main-or-owner-dispatched,max-dispatch-depth-2-for-standard-plus-owner,register-open-job,exact-parent-parking,explicit-capability-mode-qa-intensity-dispatch_depth-parent-parent_sid,transcript-liveness-required$' /tmp/codex_headless.out; then
+  && grep -q '^constraints=main-or-owner-dispatched,max-dispatch-depth-2-for-standard-plus-owner,register-open-job,headless-owner-supervisor-or-managed-gateway-or-interactive-poll-fallback,explicit-capability-mode-qa-intensity-dispatch_depth-parent-parent_sid,transcript-liveness-required$' /tmp/codex_headless.out; then
   ok "codex headless wrapper reports dispatch contract"
 else
   bad "codex headless wrapper should report dispatch contract"
@@ -760,7 +760,7 @@ fi
 if AGENT_HOME="$ROOT" CODEX_HOME="$TMP/codex_headless_home" "$ROOT/adapters/codex/bin/install-runtime-projection.sh" >/tmp/codex_headless_install.out 2>/tmp/codex_headless_install.err \
   && AGENT_HOME="$ROOT" CODEX_HOME="$TMP/codex_headless_home" "$CODEX" headless --check "$TMP/repo" >/tmp/codex_headless_check.out 2>/tmp/codex_headless_check.err \
   && grep -q '^runtime_projection=ok$' /tmp/codex_headless_check.out \
-  && grep -q '^check=hook-trust:review-needed' /tmp/codex_headless_check.out \
+  && grep -q '^check=hook-trust:skipped reason=authoritative-current-hash-check-not-requested' /tmp/codex_headless_check.out \
   && grep -q '^check=ok$' /tmp/codex_headless_check.out; then
   ok "codex headless check validates runtime projection"
 else
@@ -1997,7 +1997,7 @@ if python3 -m json.tool "$TMP/codex_hook_home/.codex/hooks.json" >/tmp/codex_hoo
   && grep -q 'pretooluse-write-guard.py' /tmp/codex_hook_json.out \
   && grep -q 'posttooluse-read-marker.py' /tmp/codex_hook_json.out \
   && grep -q 'posttooluse-design-check.py' /tmp/codex_hook_json.out \
-  && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); h=d["hooks"]["PreToolUse"]; c0=h[0]["hooks"][0]["command"]; c1=h[1]["hooks"][0]["command"]; assert h[0]["matcher"]==r"Write|Edit|MultiEdit|apply_patch|functions\.apply_patch|Bash|Shell|functions\.exec_command"; assert h[1]["matcher"]=="*"; assert "AGENT_PARENT_PARK_ONLY=1" not in c0; assert "AGENT_PARENT_PARK_ONLY=1" in c1' "$TMP/codex_hook_home/.codex/hooks.json" \
+  && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); h=d["hooks"]["PreToolUse"]; assert len(h)==1; assert h[0]["matcher"]==r"Write|Edit|MultiEdit|apply_patch|functions\.apply_patch|Bash|Shell|functions\.exec_command"; assert "AGENT_PARENT_PARK_ONLY=1" not in h[0]["hooks"][0]["command"]; assert "stop-lifecycle.py" in d["hooks"]["Stop"][0]["hooks"][0]["command"]' "$TMP/codex_hook_home/.codex/hooks.json" \
   && printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo/f" "$TMP/repo" \
     | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_hook.out 2>/tmp/codex_hook.err \
   && [ ! -s /tmp/codex_hook.out ]; then
@@ -2067,11 +2067,11 @@ fi
 codex_bind_marker_hash=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(b"material-route-session-v1\0" + sys.argv[1].encode()).hexdigest())' codex-bind)
 codex_bind_marker="$ROOT/.route-grounding/$codex_bind_marker_hash.json"
 printf '{"hook_event_name":"Stop","session_id":"codex-bind","cwd":"%s"}\n' "$TMP/repo" \
-  | MEM_STORE="$TMP/codex_hook_mem_stop" AGENT_HOME="$ROOT" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/sessionend-lifecycle.py" >/tmp/codex_stop_retention.out 2>/tmp/codex_stop_retention.err || true
-if [ -f "$codex_bind_marker" ]; then
-  ok "Codex Stop retains material route marker"
+  | MEM_STORE="$TMP/codex_hook_mem_stop" AGENT_HOME="$ROOT" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/stop-lifecycle.py" >/tmp/codex_stop_retention.out 2>/tmp/codex_stop_retention.err || true
+if [ -f "$codex_bind_marker" ] && [ ! -s /tmp/codex_stop_retention.out ] && [ ! -s /tmp/codex_stop_retention.err ]; then
+  ok "Codex Stop is a silent no-op and retains material route marker"
 else
-  bad "Codex Stop should retain material route marker"
+  bad "Codex Stop should be a silent no-op that retains material route marker"
 fi
 if printf '{"hook_event_name":"SessionEnd","session_id":"codex-bind","cwd":"%s"}\n' "$TMP/repo" \
   | MEM_STORE="$TMP/codex_hook_mem" AGENT_HOME="$ROOT" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/sessionend-lifecycle.py" >"$TMP/codex_sessionend.out" 2>"$TMP/codex_sessionend.err" \
@@ -2084,10 +2084,11 @@ else
 fi
 if printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"parked","cwd":"%s"}\n' "$codex_source" "$TMP/repo" \
   | AGENT_PARENT_PARK_ONLY=1 HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_parent_park_only.out 2>/tmp/codex_parent_park_only.err \
-  && [ ! -s /tmp/codex_parent_park_only.out ] && [ ! -s /tmp/codex_parent_park_only.err ]; then
-  ok "parent-park-only precedence returns silent success before material check"
+  && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); assert d["decision"]=="block"; assert "route" in d["reason"]' /tmp/codex_parent_park_only.out \
+  && [ ! -s /tmp/codex_parent_park_only.err ]; then
+  ok "retired parent-park-only marker cannot bypass the material guard"
 else
-  bad "parent-park-only must precede material check"
+  bad "retired parent-park-only marker must not bypass the material guard"
 fi
 if printf '{"tool_name":"Bash","tool_input":{"command":"printf x | tee %s"},"session_id":"shellteesid","cwd":"%s"}\n' "$TMP/runtime/projects/abc/memory/TEE.md" "$TMP/runtime" \
   | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_tee_hook.out 2>/tmp/codex_shell_tee_hook.err \
@@ -2752,7 +2753,8 @@ fi
 # 재홈 2026-07-22: the agent-modes surface retired for surface=unit-catalog (per-family
 # unit-family= lines). Until the §6.1-owned baseline refresh renames
 # native-bootstrap:agent-modes-total -> unit-catalog:total, accept exactly that
-# two-warning transition state and nothing else; any other warning still fails.
+# transition warnings plus the already-open Codex bootstrap baseline drift; any
+# other warning still fails.
 if python3 "$ROOT/tools/context-footprint.py" --root "$ROOT" --skip-runtime --skip-hooks >"$TMP/context_footprint.out" 2>"$TMP/context_footprint.err" \
   && grep -q '^context_footprint_report=1' "$TMP/context_footprint.out" \
   && grep -q '^surface=codex-plugin ' "$TMP/context_footprint.out" \
@@ -2762,7 +2764,8 @@ if python3 "$ROOT/tools/context-footprint.py" --root "$ROOT" --skip-runtime --sk
   && grep -q '^unit-family=qa ' "$TMP/context_footprint.out" \
   && ! grep -q '^surface=native-bootstrap-agent-modes' "$TMP/context_footprint.out" \
   && { grep -q '^status=ok' "$TMP/context_footprint.out" \
-    || { grep -q '^status=warn warnings=2$' "$TMP/context_footprint.out" \
+    || { grep -q '^status=warn warnings=3$' "$TMP/context_footprint.out" \
+      && grep -q 'bootstrap:codex footprint regression' "$TMP/context_footprint.out" \
       && grep -q 'missing from context footprint baseline: unit-catalog:total' "$TMP/context_footprint.out" \
       && grep -q 'was not measured: native-bootstrap:agent-modes-total' "$TMP/context_footprint.out"; }; }; then
   ok "context-footprint reports bootstrap and skill metadata without runtime hooks"
@@ -2781,7 +2784,7 @@ if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/install-run
   && grep -q '^check=agent-utilities:ok' "$TMP/codex_rp2.out" \
   && grep -q '^check=agent-config:ok' "$TMP/codex_rp2.out" \
   && grep -q '^check=agent-scaffolds:ok' "$TMP/codex_rp2.out" \
-  && grep -q '^check=hook-trust:review-needed' "$TMP/codex_rp2.out" \
+  && grep -q '^check=hook-trust:skipped reason=authoritative-current-hash-check-not-requested' "$TMP/codex_rp2.out" \
   && grep -q '^check=hooks-json:ok' "$TMP/codex_rp2.out" \
   && grep -q '^check=skill-link:autopilot-code:ok' "$TMP/codex_rp2.out" \
   && grep -q '^check=skill-discovery:native' "$TMP/codex_rp2.out" \
@@ -2848,17 +2851,17 @@ trusted_hash = "sha256:test"
 [hooks.state."$RPHOME/hooks.json:post_tool_use:0:0"]
 trusted_hash = "sha256:test"
 EOF
-if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection >"$TMP/codex_rp_stop_trust.out" 2>"$TMP/codex_rp_stop_trust.err" \
-  && grep -q '^check=hook-trust:review-needed missing=stop$' "$TMP/codex_rp_stop_trust.out" \
-  && grep -q '^status=ok' "$TMP/codex_rp_stop_trust.out"; then
-  ok "codex runtime-projection requires distinct Stop hook trust"
+if ! AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection --require-hook-trust >"$TMP/codex_rp_stop_trust.out" 2>"$TMP/codex_rp_stop_trust.err" \
+  && grep -q '^check=hook-trust:review-needed reason=current-hash-not-trusted$' "$TMP/codex_rp_stop_trust.out" \
+  && grep -q '^status=failed' "$TMP/codex_rp_stop_trust.out"; then
+  ok "codex strict runtime-projection rejects stale static hook metadata"
 else
-  bad "codex runtime-projection should require distinct Stop hook trust"
+  bad "codex strict runtime-projection must use authoritative current-hash trust"
 fi
 if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection --require-hook-trust >"$TMP/codex_rp_strict_missing.out" 2>"$TMP/codex_rp_strict_missing.err"; then
   bad "codex strict runtime-projection should fail when hook trust is missing"
 else
-  grep -q '^check=hook-trust:review-needed missing=stop$' "$TMP/codex_rp_strict_missing.out" && ok "codex strict runtime-projection requires complete hook trust" || bad "codex strict runtime-projection missing trust output wrong"
+  grep -q '^check=hook-trust:review-needed reason=current-hash-not-trusted$' "$TMP/codex_rp_strict_missing.out" && ok "codex strict runtime-projection requires complete current-hash trust" || bad "codex strict runtime-projection missing trust output wrong"
 fi
 if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_REQUIRE_HOOK_TRUST=1 CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection >"$TMP/codex_rp_trust.out" 2>"$TMP/codex_rp_trust.err"; then
   bad "codex runtime-projection should fail when hook trust is required but missing"
@@ -2882,12 +2885,13 @@ trusted_hash = "sha256:test"
 [hooks.state."$RPHOME/hooks.json:stop:0:0"]
 trusted_hash = "sha256:test"
 EOF
-if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection --require-hook-trust >"$TMP/codex_rp_stop_alias.out" 2>"$TMP/codex_rp_stop_alias.err" \
-  && grep -q '^check=hook-trust:ok session_end=stop-alias$' "$TMP/codex_rp_stop_alias.out" \
-  && grep -q '^status=ok' "$TMP/codex_rp_stop_alias.out"; then
-  ok "codex runtime-projection accepts Stop trust as SessionEnd alias"
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" runtime-projection --require-hook-trust >"$TMP/codex_rp_stop_alias.out" 2>"$TMP/codex_rp_stop_alias.err"; then
+  bad "codex strict runtime-projection should not accept a static Stop alias"
+elif grep -q '^check=hook-trust:review-needed reason=current-hash-not-trusted$' "$TMP/codex_rp_stop_alias.out" \
+  && ! grep -q 'session_end=stop-alias' "$TMP/codex_rp_stop_alias.out"; then
+  ok "codex runtime-projection does not alias Stop trust to SessionEnd"
 else
-  bad "codex runtime-projection should accept Stop trust as SessionEnd alias"
+  bad "codex runtime-projection should reject Stop-as-SessionEnd alias metadata"
 fi
 if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" doctor --runtime >"$TMP/codex_doctor_runtime.out" 2>"$TMP/codex_doctor_runtime.err" \
   && grep -q '^check=runtime-projection:ok' "$TMP/codex_doctor_runtime.out" \
@@ -2897,13 +2901,14 @@ if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=
 else
   bad "codex doctor --runtime should include runtime projection validation"
 fi
-if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" doctor --runtime-strict >"$TMP/codex_doctor_runtime_strict.out" 2>"$TMP/codex_doctor_runtime_strict.err" \
-  && grep -q '^check=runtime-projection:ok' "$TMP/codex_doctor_runtime_strict.out" \
+if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" CODEX_RUNTIME_PROJECTION_CLI_TIMEOUT=2 "$CODEX" doctor --runtime-strict >"$TMP/codex_doctor_runtime_strict.out" 2>"$TMP/codex_doctor_runtime_strict.err"; then
+  bad "codex doctor --runtime-strict should fail closed on stale hook trust"
+elif grep -q '^check=runtime-projection:failed' "$TMP/codex_doctor_runtime_strict.out" \
   && grep -q '^check=native-subagents:ok' "$TMP/codex_doctor_runtime_strict.out" \
-  && grep -q '^status=ok' "$TMP/codex_doctor_runtime_strict.out"; then
-  ok "codex doctor --runtime-strict requires and accepts complete hook trust"
+  && grep -q '^status=failed' "$TMP/codex_doctor_runtime_strict.out"; then
+  ok "codex doctor --runtime-strict fails closed without current-hash trust"
 else
-  bad "codex doctor --runtime-strict should require and accept complete hook trust"
+  bad "codex doctor --runtime-strict fail-closed result is incomplete"
 fi
 if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/install-runtime-projection.sh" >/dev/null 2>&1 \
   && AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >/dev/null 2>&1; then

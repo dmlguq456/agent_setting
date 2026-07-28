@@ -77,11 +77,12 @@ from model_profile import (  # noqa: E402
     validate_registered_profile,
 )
 from codex_dispatch_terminal import inspect_terminal_attempt  # noqa: E402
-from codex_hook_definition_age import prove_parent_definition  # noqa: E402
-from dispatch_completion_join import (  # noqa: E402
-    JoinContractError,
-    parent_session_state_path,
-    register_parent_session_attempt,
+from codex_managed_dispatch import (  # noqa: E402
+    MANAGED_PARENT_DELIVERY,
+    ManagedDispatchError,
+    launch_managed_completion_sidecar,
+    probe_managed_codex_parent,
+    registered_parent_delivery,
 )
 QA_LEVELS = {"quick", "light", "standard", "thorough", "adversarial"}
 # Verification rigor is derived from intensity — CONVENTIONS §1.1 mapping table (SoT).
@@ -99,7 +100,6 @@ INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "advers
 # standard+ per OPERATIONS.md §5.10 — the SD-78 runtime-owned completion clause
 # is scoped to this set for owner (conductor) launches only.
 _STANDARD_PLUS_INTENSITY = {"standard", "strong", "thorough", "adversarial"}
-PARENT_STOP_DELIVERY = "codex-stop-hook"
 
 # SD-15 (OPERATIONS §5.10 ⑨): immediate limit/auth failure patterns — homomorphic port of the Claude
 # wrapper's DEATH_PATTERNS. codex exec surfaces provider limit/auth failures as JSON
@@ -222,7 +222,19 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--cooled-model")
     p.add_argument("--selection-source")
     p.add_argument("--launch-authority", choices=("conductor", "ancestor-broker"), default="conductor")
-    p.add_argument("--parent-harness", default=os.environ.get("AGENT_DISPATCH_CURRENT_HARNESS") or os.environ.get("AGENT_DISPATCH_OWNER_HARNESS") or "codex")
+    p.add_argument(
+        "--parent-harness",
+        default=(
+            os.environ.get("AGENT_DISPATCH_CURRENT_HARNESS")
+            or os.environ.get("AGENT_DISPATCH_OWNER_HARNESS")
+            or (
+                "claude"
+                if os.environ.get("CLAUDE_CODE_SESSION_ID")
+                and not os.environ.get("CODEX_THREAD_ID")
+                else "codex"
+            )
+        ),
+    )
     p.add_argument("--parent-transport", default=os.environ.get("AGENT_DISPATCH_CURRENT_TRANSPORT") or "unknown")
     p.add_argument("--parent-sandbox", default=os.environ.get("AGENT_DISPATCH_CURRENT_SANDBOX") or "unknown")
     # default None (not "unknown"): an explicitly supplied `--nested-eligibility
@@ -297,78 +309,113 @@ def _bind_runtime_parent(args: argparse.Namespace) -> None:
 
 
 def resolve_parent_completion_delivery(args: argparse.Namespace) -> str:
-    """Select native Stop only for the actual interactive Codex parent."""
-
+    """Select the checked parent-runtime adapter for a direct Codex child."""
+    args.managed_gateway_binding = None
     current_thread = os.environ.get("CODEX_THREAD_ID") or os.environ.get(
         "CODEX_SESSION_ID"
     )
-    if (
+    direct_registered = (
         getattr(args, "action", "") in {"register", "start"}
         and args.dispatch_depth == 1
         and args.launch_lifecycle == DETACHED
         and args.execution_surface == "registered-headless"
         and bool(args.registered_worker)
+        and bool(args.parent_session_id)
+        and os.environ.get("AGENT_DISPATCH_CHILD") != "1"
+    )
+    if (
+        direct_registered
         and args.parent_harness == "codex"
         and bool(current_thread)
         and args.parent_session_id == current_thread
-        and os.environ.get("AGENT_DISPATCH_CHILD") != "1"
     ):
-        proof = prove_parent_definition(
-            current_thread,
-            hooks_path=Path(os.environ.get("CODEX_HOME", "~/.codex")).expanduser() / "hooks.json",
-            ledger_path=Path(args.agent_home) / ".dispatch" / "codex-hook-definition-ledger.json"
-            if getattr(args, "agent_home", None) else None,
-        )
-        args.parent_completion_reason = proof.reason
-        if proof.eligible:
-            return PARENT_STOP_DELIVERY
+        try:
+            args.managed_gateway_binding = probe_managed_codex_parent(
+                parent_harness=args.parent_harness,
+                parent_session_id=args.parent_session_id,
+            )
+        except ManagedDispatchError as exc:
+            if os.environ.get("AGENT_CODEX_MANAGED_GATEWAY") == "1":
+                args.parent_completion_reason = str(exc)
+            else:
+                args.parent_completion_reason = (
+                    "interactive-auto-wake-unsupported"
+                )
+            return "poll-fallback"
+        args.parent_completion_reason = "managed-single-ingress-live"
+        return MANAGED_PARENT_DELIVERY
+    if direct_registered and args.parent_harness == "claude":
+        args.parent_completion_reason = "claude-async-rewake-resume"
+        return "claude-parent-runtime"
+    if direct_registered:
+        args.parent_completion_reason = "parent-identity-unmatched"
         return "poll-fallback"
-    args.parent_completion_reason = "parent-identity-unmatched"
-    return "poll-fallback"
+    args.parent_completion_reason = "parent-attempt-owned"
+    return "parent-runtime-supervised"
 
 
 def bind_parent_completion_delivery(args: argparse.Namespace) -> None:
     args.parent_completion_delivery = resolve_parent_completion_delivery(args)
-    if (
-        args.parent_completion_delivery == PARENT_STOP_DELIVERY
-        and getattr(args, "action", "") == "start"
-    ):
-        # This path cannot degrade after spawn: an untrusted Stop hook would
-        # strand an open child and return control to an unparked model parent.
-        args.require_hook_trust = True
 
 
-def register_parent_stop_attempt(args: argparse.Namespace, jobs: Path) -> None:
-    if args.parent_completion_delivery != PARENT_STOP_DELIVERY:
-        return
-    register_parent_session_attempt(
-        parent_session_state_path(jobs, args.parent_session_id),
-        args.parent_session_id,
-        args.attempt_id,
-    )
-
-
-def attempt_parent_delivery_matches(
+def launch_parent_completion_sidecar(
+    args: argparse.Namespace,
     jobs: Path,
-    attempt_id: str,
-    expected_delivery: str,
-) -> bool:
-    matches: list[dict[str, str]] = []
+) -> None:
+    """Prelaunch one exact joiner before the managed direct child spawn claim."""
+
+    args.managed_sidecar_state = "not-selected"
+    args.managed_sidecar_reason = "-"
+    if args.parent_completion_delivery != MANAGED_PARENT_DELIVERY:
+        return
+    binding = getattr(args, "managed_gateway_binding", None)
+    if binding is None:
+        args.managed_sidecar_state = "launch-failed"
+        args.managed_sidecar_reason = "managed-binding-missing"
+        return
     try:
-        lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return False
-    for line in lines:
-        fields = line.split("\t")
-        if len(fields) != 6:
-            continue
-        metadata = parse_registry_metadata(fields[5])
-        if metadata.get("attempt_id") == attempt_id:
-            matches.append(metadata)
-    return (
-        len(matches) == 1
-        and matches[0].get("parent_completion_delivery") == expected_delivery
-    )
+        sidecar = launch_managed_completion_sidecar(
+            binding=binding,
+            jobs=jobs,
+            parent_session_id=args.parent_session_id or "",
+            attempt_ids={args.attempt_id},
+        )
+    except ManagedDispatchError as exc:
+        args.managed_sidecar_state = "launch-failed"
+        args.managed_sidecar_reason = str(exc)
+        try:
+            annotate_attempt_row(
+                jobs,
+                args.attempt_id,
+                {
+                    "managed_delivery_state": "sidecar-launch-failed",
+                },
+            )
+        except DispatchContractError:
+            pass
+        return
+    args.managed_sidecar_state = "running"
+    args.managed_sidecar_pid = sidecar.pid
+    args.managed_sealed_batch_id = sidecar.sealed_batch_id
+    args.managed_sidecar_log = sidecar.log_file
+    try:
+        recorded = annotate_attempt_row(
+            jobs,
+            args.attempt_id,
+            {
+                "managed_delivery_state": "sidecar-running",
+                "managed_sealed_batch_id": sidecar.sealed_batch_id,
+                "managed_sidecar_pid": str(sidecar.pid),
+                "managed_sidecar_log": str(sidecar.log_file),
+            },
+        )
+    except DispatchContractError:
+        recorded = False
+    if not recorded:
+        # The immutable delivery stamp still lets this exact sidecar join. Keep
+        # the launch successful while making the observability loss explicit.
+        args.managed_sidecar_state = "running-unrecorded"
+        args.managed_sidecar_reason = "sidecar-metadata-unrecorded"
 
 
 def fail(reason: str, code: int, **fields: str) -> int:
@@ -1695,16 +1742,6 @@ def main(argv: list[str]) -> int:
     if args.start:
         rc = check_runtime_projection(args.worktree, args.require_hook_trust)
         if rc != 0:
-            if args.parent_completion_delivery == PARENT_STOP_DELIVERY:
-                return fail(
-                    "codex-stop-hook-untrusted",
-                    69,
-                    detail=(
-                        "current-hash Stop/PreToolUse trust is required before "
-                        "interactive registered-child spawn"
-                    ),
-                    child_spawned="0",
-                )
             return rc
         if args.profile:
             home_root = resolve_agent_home() / ".dispatch" / "homes"
@@ -1886,30 +1923,24 @@ def main(argv: list[str]) -> int:
                 args.attempt_claimed = attempt_launch_is_available(
                     jobs, args.attempt_id
                 )
+            if args.attempt_claimed:
+                recorded_delivery = registered_parent_delivery(
+                    jobs, args.attempt_id
+                )
+                if recorded_delivery != args.parent_completion_delivery:
+                    raise DispatchContractError(
+                        "attempt-parent-delivery-changed",
+                        (
+                            f"registered={recorded_delivery} "
+                            f"current={args.parent_completion_delivery}"
+                        ),
+                    )
         except DispatchContractError as e:
             cancel_governor_reservation(governor, governor_root, reservation_token)
             return fail(e.reason, 73, detail=e.detail, child_spawned="0")
-        if (
-            action == "start"
-            and args.attempt_claimed
-            and args.parent_completion_delivery == PARENT_STOP_DELIVERY
-            and not attempt_parent_delivery_matches(
-                jobs,
-                args.attempt_id,
-                PARENT_STOP_DELIVERY,
-            )
-        ):
+        except ManagedDispatchError as e:
             cancel_governor_reservation(governor, governor_root, reservation_token)
-            return fail(
-                "codex-stop-registration-mismatch",
-                69,
-                detail=(
-                    "the registered attempt predates native Stop delivery; create a "
-                    "fresh exact attempt before launch"
-                ),
-                attempt_id=args.attempt_id,
-                child_spawned="0",
-            )
+            return fail(str(e), 73, child_spawned="0")
         if args.attempt_claimed:
             try:
                 prompt_path.write_text(prompt_text, encoding="utf-8")
@@ -2020,6 +2051,29 @@ def main(argv: list[str]) -> int:
                         "owner), or set AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN=1 in a "
                         "long-lived container"),
                 attempt_id=args.attempt_id, child_spawned="0")
+        launch_parent_completion_sidecar(args, jobs)
+        if args.managed_sidecar_state == "launch-failed":
+            annotate_attempt_row(
+                jobs, args.attempt_id, {"launch_outcome": "never-launched"}
+            )
+            cancel_governor_reservation(
+                governor, governor_root, reservation_token
+            )
+            close_job_row(
+                jobs,
+                args.slug,
+                args.worktree,
+                "managed-sidecar-launch-failed",
+                "",
+                args.attempt_id,
+            )
+            return fail(
+                "managed-sidecar-launch-failed",
+                75,
+                detail=args.managed_sidecar_reason,
+                attempt_id=args.attempt_id,
+                child_spawned="0",
+            )
         def spawn_worker(gate_fd: int) -> subprocess.Popen:
             return subprocess.Popen(
                 [
@@ -2142,42 +2196,6 @@ def main(argv: list[str]) -> int:
         args.child_pid = proc.pid
         args.child_pid_start = start_ticks
         args.launch_heartbeat = seed_launch_heartbeat(args, jobs, proc.pid, start_ticks)
-        if args.parent_completion_delivery == PARENT_STOP_DELIVERY:
-            try:
-                register_parent_stop_attempt(args, jobs)
-            except JoinContractError as exc:
-                try:
-                    os.killpg(proc.pid, signal.SIGTERM)
-                    proc.wait(timeout=1)
-                except (ProcessLookupError, subprocess.TimeoutExpired):
-                    try:
-                        os.killpg(proc.pid, signal.SIGKILL)
-                        proc.wait(timeout=1)
-                    except (ProcessLookupError, subprocess.TimeoutExpired):
-                        pass
-                cancel_governor_reservation(
-                    governor, governor_root, reservation_token
-                )
-                annotate_attempt_row(
-                    jobs,
-                    args.attempt_id,
-                    {"launch_outcome": "launch-cleanup-unverified"},
-                )
-                close_job_row(
-                    jobs,
-                    args.slug,
-                    args.worktree,
-                    "codex-stop-state-unavailable",
-                    "",
-                    args.attempt_id,
-                )
-                return fail(
-                    "codex-stop-state-unavailable",
-                    70,
-                    detail=str(exc),
-                    attempt_id=args.attempt_id,
-                    child_spawned="1",
-                )
         if args.launch_lifecycle == FOREGROUND_SCOPED:
             binding = args.parent_binding
             outcome = wait_foreground(
@@ -2256,6 +2274,11 @@ def main(argv: list[str]) -> int:
     print(f"completion_delivery={args.resolved_completion_delivery}")
     print(f"parent_completion_delivery={args.parent_completion_delivery}")
     print(f"parent_completion_reason={getattr(args, 'parent_completion_reason', 'unspecified')}")
+    print(f"managed_sidecar_state={getattr(args, 'managed_sidecar_state', 'not-started')}")
+    print(f"managed_sidecar_reason={getattr(args, 'managed_sidecar_reason', '-')}")
+    print(f"managed_sidecar_pid={getattr(args, 'managed_sidecar_pid', '-')}")
+    print(f"managed_sealed_batch_id={getattr(args, 'managed_sealed_batch_id', '-')}")
+    print(f"managed_sidecar_log={getattr(args, 'managed_sidecar_log', '-')}")
     print(
         "supervisor_lease_file="
         + (
@@ -2356,7 +2379,11 @@ def main(argv: list[str]) -> int:
     print(f"prompt_file={prompt_path}")
     print(f"log_file={log_path}")
     print(f"command={command}")
-    return 0
+    return (
+        75
+        if getattr(args, "managed_sidecar_state", "") == "launch-failed"
+        else 0
+    )
 
 
 if __name__ == "__main__":
