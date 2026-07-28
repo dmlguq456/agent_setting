@@ -109,4 +109,6 @@ At the same point, create `experiments/{date}_{slug}/run.json` with `status: "ru
 
 **S3-4. Escalate convergence failures on user request.** For prompts such as `loss 가 안 떨어져`, `NaN`, or `수렴 이상`, dispatch the `qa/ml-debug` unit. Provide the experiment directory, symptom, available logs, and `experiment_spec.md`. Check data shape/range/NaN/balance, model initialization/freezing/gradient flow, loss scale/sign/stability, optimizer learning rate/weight decay/warmup, and batch/device/mixed precision. Return the one or two most likely causes plus commands that distinguish them.
 
+After `experiment_spec.md`, scaffold files, pending `_RUNLOG.md`, and running `run.json` are durable, invoke `/autopilot-note --from <experiment-path>` as the unskippable setup-terminal `follow-up note cycle`. Eval repeats it and updates the same note idempotently.
+
 After training, continue with `/autopilot-lab "결과 평가"` in eval mode.

@@ -2,7 +2,7 @@
 # GENERATED METADATA — edit harness-manifest.json, then run tools/generate.py.
 name: autopilot-note
 description: "Use when existing artifacts must be collected, digested, triaged, or routed into a durable note workflow. Not for storing one scoped memory item or for performing the primary research, code, or document work."
-argument-hint: "[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]"
+argument-hint: "[--scope today|yesterday|since <date>|all] [--from <artifact-path>] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]"
 metadata:
   group: entry
   fam: ops

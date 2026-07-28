@@ -119,6 +119,10 @@ Phase 0 incremental pass (typically 10-20% of files) does not justify a composed
 route — run it in the owner session and reserve compose-on-demand for large,
 fan-out analyses.
 
+## Completion
+
+Once the selected mode's analysis directory and QA evidence are durable, run the default `follow-up note cycle` with `autopilot-note --from <analysis-project-output-path>` unless explicitly omitted, per `WORKFLOW.md §0.2`. This applies across code, paper, and doc modes without duplicating their mode procedures.
+
 ## Reference Index
 
 | File | When to load (mandatory) | Content |
