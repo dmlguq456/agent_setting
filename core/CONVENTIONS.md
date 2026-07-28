@@ -495,7 +495,7 @@ When `spec/pipeline_state.yaml` exists, read it and activate every applicable ap
 | lab | `experiments/<date>_<slug>/` plus `_RUNLOG.md` |
 | draft | `documents/<date>_<name>/` |
 | refine | Target artifact plus `_internal/versions/v{N}/` |
-| note | Run logs in artifact root plus routed cards, digests, and triage under the configured notes target |
+| note | Run logs in artifact root plus routed cards and digests under the configured notes target |
 | apply | Real source outside artifact root; git branch and commit provide versions, with apply logs under the cheatsheet artifact |
 
 ### §6.6. Autopilot Intake Gate

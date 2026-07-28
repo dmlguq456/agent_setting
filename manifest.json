@@ -129,11 +129,11 @@
       "group": "entry",
       "fam": "ops",
       "modes": [],
-      "blurb": "Route and note artifacts, producing digests and triage proposals.",
+      "blurb": "Route and note artifacts, producing digests.",
       "invocation_class": "entry-router",
-      "use_when": "Use when existing artifacts must be collected, digested, triaged, or routed into a durable note workflow.",
+      "use_when": "Use when existing artifacts must be collected, digested, organized, or routed into a durable note workflow.",
       "not_for": "Not for storing one scoped memory item or for performing the primary research, code, or document work.",
-      "argument_hint": "[--scope today|yesterday|since <date>|all] [--from <artifact-path>] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]"
+      "argument_hint": "[--scope today|yesterday|since <date>|all] [--from <artifact-path>] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--source <list>]"
     },
     {
       "slug": "skill__autopilot-refine",

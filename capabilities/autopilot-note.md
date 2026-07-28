@@ -10,8 +10,8 @@ This is the portable capability contract for `autopilot-note`. It defines runtim
 | Identifier | `autopilot-note` |
 | Group | `entry` |
 | Supported modes | `none` |
-| Portable meaning | Route and note artifacts, producing digests and triage proposals. |
-| Argument shape | `[--scope today\|yesterday\|since <date>\|all] [--from <artifact-path>] [--target <notes-root>] [--dry-run] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial] [--digest-only] [--triage-only] [--source <list>]` |
+| Portable meaning | Route and note artifacts, producing digests. |
+| Argument shape | `[--scope today\|yesterday\|since <date>\|all] [--from <artifact-path>] [--target <notes-root>] [--dry-run] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial] [--digest-only] [--source <list>]` |
 | Execution topology | `map-reduce`; registry `capabilities/topologies.json` |
 | Entry load phase | `post-approval`; owner contract `capabilities/autopilot-note.md` |
 
@@ -22,13 +22,12 @@ two-layer model. Scan
 `<artifact-root>/{research,documents,plans,analysis_project}/`, `experiments/`,
 and `git log` for changes since the previous run. Convert each item into a
 **Layer 2 artifact note** at `<agent-notes-root>/_layer2/notes/<id>.md` and link
-it to the user's **Layer 1** cards under `<agent-notes-root>/cards/`. Five-way
-routing creates an L2 row automatically; proposes linking `card_id` to an
-existing L1 card as `routing_status: inbox` with confidence/reason (unattended
-cron never confirms; the user confirms in `/triage`); links
+it to the user's **Layer 1** cards under `<agent-notes-root>/cards/`. Four-way
+routing creates an L2 row automatically; links `card_id` to an existing L1 card
+with `routing_status: confirmed`, confidence, and reason; links
 `backbone_ids`/`task_ids` to the L2 catalog, creating entries when necessary;
-proposes a new L1 card during triage; or parks an ambient `card_id: null` note as
-the fallback. Append daily digests to
+or parks an unmatched ambient `card_id: null` note with `routing_status:
+confirmed`. `routing_confidence` is an ordering and emphasis signal. Append daily digests to
 `<agent-notes-root>/digests/YYYY-MM-DD.md`. Processing is idempotent. Routine
 cron uses `quick` intensity and its derived rigor; use `standard+` for weekly
 bulk consolidation, Notion migration, or pre-handoff cleanup. Source 6 is the
