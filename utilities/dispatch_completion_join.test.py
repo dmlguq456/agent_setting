@@ -636,5 +636,115 @@ class DispatchCompletionJoinTest(unittest.TestCase):
         )
 
 
+class FinishedChildClosure(unittest.TestCase):
+    """The supervised owner has no legal way to close a route-bound child.
+
+    `dispatch-harvest --mark-done` refuses a route-bound node with
+    `route-completion-required`, and the park hook admits only that harvest
+    command — so the supervisor must close it from evidence itself or the batch
+    deadlocks (observed 5x on 2026-07-28).
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.base = Path(self.tmp.name)
+        # artifact-root.sh resolves the canonical root from the worktree, so the
+        # fixture must present a real one rather than an arbitrary directory.
+        self.artifact = self.base / ".agent_reports"
+        self.artifact.mkdir()
+        self.jobs = self.base / "jobs.log"
+        self.jobs.touch()
+
+    def child(self, *, route: bool = True, verdict: str = "PASS",
+              artifact: str | None = "brief.md") -> JOIN.ChildRow:
+        log = self.base / "child.claude.jsonl"
+        target = "-" if artifact is None else str(self.artifact / artifact)
+        if artifact is not None:
+            (self.artifact / artifact).write_text("evidence\n", encoding="utf-8")
+        log.write_text(
+            json.dumps({"type": "system", "subtype": "init"}) + "\n"
+            + json.dumps({
+                "type": "result", "subtype": "success", "is_error": False,
+                "result": f"artifact: {target}\nverdict: {verdict}\nblocker: none",
+            }) + "\n",
+            encoding="utf-8",
+        )
+        meta = {
+            "attempt_id": "att-child", "dispatch_depth": "2",
+            "transport": "headless", "execution_surface": "registered-headless",
+            "registered_worker": "1", "fallback_hop": "same-harness-headless",
+            "harness": "claude", "log_file": str(log),
+            "artifact_root": str(self.artifact),
+        }
+        if route:
+            meta["route_file"] = str(self.base / "route.json")
+            meta["route_node"] = "frame"
+        raw = "\t".join([
+            "2026-07-28T06:00:00.000000Z", "open", str(self.base), str(self.base),
+            "child-slug", ",".join(f"{k}={v}" for k, v in meta.items()),
+        ])
+        return JOIN.ChildRow(
+            order=0, status="open", slug="child-slug", attempt_id="att-child",
+            raw=raw, metadata=meta,
+        )
+
+    def test_route_bound_child_is_closed_through_the_completion_path(self):
+        calls: list[list[str]] = []
+
+        def fake_completion(command):
+            calls.append(command)
+            return ""
+
+        real = JOIN.run_route_completion
+        JOIN.run_route_completion = fake_completion
+        try:
+            reason = JOIN.close_finished_child(self.child(), jobs=self.jobs)
+        finally:
+            JOIN.run_route_completion = real
+        self.assertEqual(reason, "")
+        self.assertEqual(len(calls), 1)
+        command = calls[0]
+        self.assertIn("complete", command)
+        self.assertIn("capability-route.py", " ".join(command))
+        # exact attempt metadata, not a bare mark-done
+        for flag in ("--attempt-id", "--node", "--evidence", "--jobs",
+                     "--execution-surface", "--fallback-hop"):
+            self.assertIn(flag, command)
+        self.assertNotIn("--mark-done", command)
+
+    def test_absent_terminal_evidence_never_invents_completion(self):
+        row_without_log = self.child()
+        row_without_log.metadata["log_file"] = str(self.base / "missing.jsonl")
+        called = []
+        real = JOIN.run_route_completion
+        JOIN.run_route_completion = lambda command: called.append(command) or ""
+        try:
+            reason = JOIN.close_finished_child(row_without_log, jobs=self.jobs)
+        finally:
+            JOIN.run_route_completion = real
+        self.assertTrue(reason.startswith("terminal-"), reason)
+        self.assertEqual(called, [])
+
+    def test_child_without_an_artifact_stays_open(self):
+        reason = JOIN.close_finished_child(self.child(artifact=None), jobs=self.jobs)
+        self.assertTrue(reason.startswith("evidence-"), reason)
+
+    def test_non_route_bound_child_is_left_to_the_harvest_path(self):
+        reason = JOIN.close_finished_child(self.child(route=False), jobs=self.jobs)
+        self.assertEqual(reason, "not-route-bound")
+
+    def test_rejected_completion_keeps_the_child_unresolved(self):
+        real = JOIN.run_route_completion
+        JOIN.run_route_completion = lambda command: "completion-rejected"
+        try:
+            outcomes = JOIN.reconcile_finished_children(
+                {"att-child": self.child()}, {"att-child"}, jobs=self.jobs
+            )
+        finally:
+            JOIN.run_route_completion = real
+        self.assertEqual(outcomes, {"att-child": "completion-rejected"})
+
+
 if __name__ == "__main__":
     unittest.main()
