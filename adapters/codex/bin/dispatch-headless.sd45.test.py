@@ -352,7 +352,7 @@ class CodexSD78CompletionDelivery(unittest.TestCase):
         return _side_effect
 
 
-    def test_unmanaged_interactive_parent_is_explicit_poll_fallback(self):
+    def test_unmanaged_interactive_parent_is_identified_then_blocked(self):
         args = self.parent_args()
         with mock.patch.dict(
             os.environ,
@@ -364,7 +364,66 @@ class CodexSD78CompletionDelivery(unittest.TestCase):
         self.assertEqual(
             args.parent_completion_reason, "interactive-auto-wake-unsupported"
         )
+        with self.assertRaises(WH.DispatchContractError) as raised:
+            WH.validate_interactive_parent_launch(args)
+        self.assertEqual(raised.exception.reason, "managed-entry-required")
         self.assertFalse(args.require_hook_trust)
+
+    def test_actual_codex_caller_overrides_synthetic_claude_parent_metadata(self):
+        args = self.parent_args(
+            parent_harness="claude",
+            parent_session_id="synthetic-claude-session",
+            parent_slug="synthetic-claude-owner",
+        )
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CODEX_THREAD_ID": "thread-real",
+                "AGENT_DISPATCH_CALLER_HARNESS": "codex",
+                "AGENT_DISPATCH_CHILD": "0",
+            },
+            clear=True,
+        ):
+            WH._bind_runtime_parent(args)
+            WH.bind_parent_completion_delivery(args)
+            with self.assertRaises(WH.DispatchContractError) as raised:
+                WH.validate_interactive_parent_launch(args)
+        self.assertEqual(args.parent_harness, "codex")
+        self.assertEqual(args.parent_session_id, "thread-real")
+        self.assertIsNone(args.parent_slug)
+        self.assertEqual(args.parent_completion_delivery, "poll-fallback")
+        self.assertEqual(raised.exception.reason, "managed-entry-required")
+
+    def test_actual_claude_caller_overrides_synthetic_codex_parent_metadata(self):
+        args = self.parent_args(
+            parent_harness="codex",
+            parent_session_id="synthetic-codex-thread",
+            parent_slug="synthetic-codex-owner",
+        )
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CLAUDE_CODE_SESSION_ID": "claude-session-real",
+                "AGENT_DISPATCH_CALLER_HARNESS": "claude",
+                "AGENT_DISPATCH_CHILD": "0",
+            },
+            clear=True,
+        ):
+            WH._bind_runtime_parent(args)
+            WH.bind_parent_completion_delivery(args)
+            WH.validate_interactive_parent_launch(args)
+        self.assertEqual(args.parent_harness, "claude")
+        self.assertEqual(args.parent_session_id, "claude-session-real")
+        self.assertIsNone(args.parent_slug)
+        self.assertEqual(args.parent_completion_delivery, "claude-parent-runtime")
+
+    def test_low_level_operator_can_explicitly_select_finite_poll_recovery(self):
+        args = self.parent_args(allow_unmanaged_parent_poll=True)
+        args.parent_completion_delivery = "poll-fallback"
+        WH.validate_interactive_parent_launch(args)
+        self.assertEqual(
+            args.parent_completion_reason, "operator-authorized-unmanaged-poll"
+        )
 
     def test_managed_interactive_parent_selects_single_ingress_gateway(self):
         args = self.parent_args()
@@ -389,6 +448,7 @@ class CodexSD78CompletionDelivery(unittest.TestCase):
             args.parent_completion_reason, "managed-single-ingress-live"
         )
         self.assertIs(args.managed_gateway_binding, binding)
+        WH.validate_interactive_parent_launch(args)
         probe.assert_called_once_with(
             parent_harness="codex",
             parent_session_id=args.parent_session_id,
@@ -414,6 +474,9 @@ class CodexSD78CompletionDelivery(unittest.TestCase):
         self.assertEqual(
             args.parent_completion_reason, "managed-gateway-not-ready"
         )
+        with self.assertRaises(WH.DispatchContractError) as raised:
+            WH.validate_interactive_parent_launch(args)
+        self.assertEqual(raised.exception.reason, "managed-entry-required")
 
     def test_claude_parent_keeps_claude_wake_adapter_for_codex_child(self):
         args = self.parent_args(
@@ -470,6 +533,8 @@ class CodexSD78CompletionDelivery(unittest.TestCase):
         ):
             WH.bind_parent_completion_delivery(args)
         self.assertEqual(args.parent_completion_delivery, "poll-fallback")
+        with self.assertRaises(WH.DispatchContractError):
+            WH.validate_interactive_parent_launch(args)
         self.assertFalse(args.require_hook_trust)
 
     def test_wrapper_has_no_native_stop_stamp_or_state_writer(self):

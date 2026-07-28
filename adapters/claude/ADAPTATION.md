@@ -135,7 +135,12 @@ main/orchestrator chooses per job and the wrapper only reflects that choice:
   that launches a Claude child uses the checked `codex-managed-gateway` only
   when that parent was created through the explicit managed entry; its
   completion sidecar is control-only and never becomes a Claude or Codex
-  approval client. An unmanaged Codex parent remains `poll-fallback`.
+  approval client. The selector preserves the actual Codex caller independently
+  of the chosen Claude owner. A new unmanaged interactive Codex parent then
+  fails with `managed-entry-required` before registry mutation or spawn instead
+  of entering model-owned polling. Only a human using the low-level wrapper may
+  explicitly authorize bounded poll recovery; portable owner/model routes
+  cannot select that override.
 - A route-bound headless job carries a sealed `model_profile` independently of
   its behavioral `model_role`. The wrapper resolves `deep`, `balanced-deep`,
   `light`, or `mini` through `config/models.conf`; it rejects caller replacement

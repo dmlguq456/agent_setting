@@ -96,6 +96,12 @@ class AdapterV11Test(unittest.TestCase):
             "--jobs",str(jobs)]
    env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),
         "CLAUDE_CONFIG_DIR":str(claude_config)}
+   for runtime_key in (
+    "CODEX_THREAD_ID", "CODEX_SESSION_ID", "CLAUDE_CODE_SESSION_ID",
+    "OPENCODE_SESSION_ID", "AGENT_DISPATCH_CALLER_HARNESS",
+    "AGENT_DISPATCH_CURRENT_HARNESS",
+   ):
+    env.pop(runtime_key,None)
    result=subprocess.run(command,text=True,capture_output=True,env=env)
    self.assertEqual(result.returncode,0,result.stdout+result.stderr)
    self.assertIn("nested_headless_network=1",result.stdout)
