@@ -81,6 +81,35 @@ class NestedEligibilityTest(unittest.TestCase):
             "codex-owner-network-contract+direct-auth+headless-check",
         )
 
+    def test_preflight_reason_word_becomes_the_failure_class(self):
+        # A route reads `failure_class` back to decide whether another hop is
+        # worth attempting, so it must carry the preflight's own enum rather
+        # than a joined diagnostic blob.
+        result = mock.Mock(
+            returncode=65,
+            stdout=("check=failed\nreason=invalid-worktree-codex-mount-target\n"
+                    "detail=.codex must be a directory while the Codex sandbox is enabled\n"),
+            stderr="",
+        )
+        with tempfile.TemporaryDirectory() as worktree, \
+             mock.patch.object(N, "auth_check", return_value=(True, "")), \
+             mock.patch.object(N.subprocess, "run", return_value=result):
+            self.assertEqual(
+                N.command_check("codex", worktree),
+                ("unsupported", "direct-headless-check",
+                 "invalid-worktree-codex-mount-target"),
+            )
+
+    def test_unstructured_preflight_failure_keeps_the_joined_detail(self):
+        result = mock.Mock(returncode=69, stdout="", stderr="boom\nsecond line")
+        with tempfile.TemporaryDirectory() as worktree, \
+             mock.patch.object(N, "auth_check", return_value=(True, "")), \
+             mock.patch.object(N.subprocess, "run", return_value=result):
+            self.assertEqual(
+                N.command_check("codex", worktree),
+                ("unsupported", "direct-headless-check", "boom;second line"),
+            )
+
     def test_runtime_surface_label_is_not_a_transport_tuple_value(self):
         with tempfile.TemporaryDirectory() as worktree, \
              mock.patch.object(N, "command_check") as checked:

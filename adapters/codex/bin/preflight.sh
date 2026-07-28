@@ -547,6 +547,21 @@ EOF
       printf 'check=failed\nreason=not-a-git-worktree\nworktree=%s\n' "$worktree"
       exit 65
     fi
+    # The sandboxed runtime mounts <worktree>/.codex, so a file or symlink there
+    # kills the spawn with exit 65. dispatch-headless.py already refuses that
+    # shape, but only after this probe has already answered `supported` — the
+    # readiness synthesis OPERATIONS §5.10 (SD-48) forbids. Refuse it here so the
+    # eligibility tuple is honestly `unsupported` before an attempt is burned.
+    # Both signals that disable the inner mount sandbox in the wrapper's
+    # `effective_runtime_sandbox` are honored, so this never rejects a shape the
+    # wrapper itself would have accepted.
+    if [ "${CODEX_DISPATCH_SANDBOX_FORCE:-}" != "danger-full-access" ] \
+      && [ "${AGENT_DISPATCH_CHILD:-}" != "1" ] \
+      && { [ -L "$worktree/.codex" ] || { [ -e "$worktree/.codex" ] && [ ! -d "$worktree/.codex" ]; }; }; then
+      printf 'check=failed\nreason=invalid-worktree-codex-mount-target\ndetail=.codex must be a directory while the Codex sandbox is enabled\npath=%s\nworktree=%s\n' \
+        "$worktree/.codex" "$worktree"
+      exit 65
+    fi
     if [ "$require_hook_trust" -eq 1 ]; then
       CODEX_REQUIRE_HOOK_TRUST=1 codex_runtime_projection_check
     else

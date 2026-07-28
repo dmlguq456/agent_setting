@@ -177,6 +177,62 @@ class CodexSandboxMountShape(unittest.TestCase):
             self.assertIn("child_spawned=0", output)
             self.assertFalse(jobs.exists())
 
+    def _preflight_check(self, worktree, extra_env=None):
+        """Run `preflight.sh headless --check` with a stub `codex` on PATH.
+
+        The mount shape is a property of the worktree, so the probe must reach a
+        verdict without a real Codex install deciding the outcome first.
+        """
+        bin_dir = worktree.parent / "stub-bin"
+        bin_dir.mkdir(exist_ok=True)
+        stub = bin_dir / "codex"
+        stub.write_text("#!/bin/sh\nexit 0\n")
+        stub.chmod(0o755)
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("AGENT_DISPATCH_CHILD", "CODEX_DISPATCH_SANDBOX_FORCE")}
+        env["AGENT_HOME"] = str(ROOT)
+        env["PATH"] = "%s:%s" % (bin_dir, env.get("PATH", ""))
+        env.update(extra_env or {})
+        return subprocess.run(
+            [str(ROOT / "adapters/codex/bin/preflight.sh"), "headless", "--check", str(worktree)],
+            text=True, capture_output=True, env=env, timeout=60,
+        )
+
+    def _worktree_with_mount(self, tmp, make_target):
+        worktree = Path(tmp) / "repo"
+        worktree.mkdir()
+        subprocess.run(["git", "init", "-q", str(worktree)], check=True)
+        make_target(worktree / ".codex")
+        return worktree
+
+    def test_eligibility_probe_rejects_file_shape_before_any_attempt(self):
+        # SD-48: the checked tuple must not report `supported` for a shape the
+        # wrapper will refuse at spawn — that burns an attempt per hop.
+        with tempfile.TemporaryDirectory() as tmp:
+            worktree = self._worktree_with_mount(tmp, lambda target: target.write_text(""))
+            result = self._preflight_check(worktree)
+        self.assertEqual(result.returncode, 65, result.stdout + result.stderr)
+        self.assertIn("reason=invalid-worktree-codex-mount-target", result.stdout)
+
+    def test_eligibility_probe_rejects_symlink_shape(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            worktree = self._worktree_with_mount(
+                tmp, lambda target: target.symlink_to(Path(tmp) / "absent")
+            )
+            result = self._preflight_check(worktree)
+        self.assertEqual(result.returncode, 65, result.stdout + result.stderr)
+        self.assertIn("reason=invalid-worktree-codex-mount-target", result.stdout)
+
+    def test_eligibility_probe_honors_the_disabled_inner_sandbox_signal(self):
+        # `AGENT_DISPATCH_CHILD=1` is one of the two signals that make
+        # effective_runtime_sandbox `danger-full-access`, where the wrapper
+        # itself accepts the shape. The probe must not be stricter than the
+        # wrapper it speaks for.
+        with tempfile.TemporaryDirectory() as tmp:
+            worktree = self._worktree_with_mount(tmp, lambda target: target.write_text(""))
+            result = self._preflight_check(worktree, {"AGENT_DISPATCH_CHILD": "1"})
+        self.assertNotIn("invalid-worktree-codex-mount-target", result.stdout + result.stderr)
+
 
 class CodexSD45(unittest.TestCase):
  def test_route_consumer_and_scope_refusal(self):

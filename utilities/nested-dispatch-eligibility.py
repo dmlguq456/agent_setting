@@ -84,7 +84,27 @@ def command_check(child_harness: str, worktree: str) -> tuple[str, str, str]:
     if result.returncode == 0:
         return "supported", "direct-auth+headless-check", ""
     detail = (result.stdout + "\n" + result.stderr).strip().replace("\n", ";")
-    return "unsupported", "direct-headless-check", detail or f"exit-{result.returncode}"
+    return (
+        "unsupported",
+        "direct-headless-check",
+        preflight_failure_reason(result.stdout) or detail or f"exit-{result.returncode}",
+    )
+
+
+def preflight_failure_reason(output: str) -> str:
+    """Return the adapter preflight's own `reason=` word, when it emitted one.
+
+    A checked hop records this value as its `failure_class`, and a route reads it
+    back to decide whether the failure is worth another attempt. The joined
+    stdout+stderr blob is a diagnostic string, not a class, so prefer the
+    structured word the preflight already prints and fall back only when absent.
+    """
+
+    for line in output.splitlines():
+        key, sep, value = line.strip().partition("=")
+        if sep and key == "reason" and value:
+            return value
+    return ""
 
 
 def evaluate(args: argparse.Namespace) -> dict[str, str]:
