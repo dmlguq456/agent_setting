@@ -2,6 +2,8 @@
 
 ### Stage A — Source scan
 
+If one or more repeatable `--from <artifact-path>` values are supplied, process those exact source artifacts directly, bypassing the date filter, `--scope`, and `<artifact-root>/notes/.last_run.yaml`, and return the same tuple used by Stage B. If `--scope` is also present, `--from` takes precedence, the scope is ignored, and report one warning. For `autopilot-note`, `--from` selects source artifacts; it is not resume or re-entry.
+
 1. Read `last_run_ts` from `<artifact-root>/notes/.last_run.yaml`. If absent, use the start of `--scope`.
 2. Apply the time filter to all six source branches (`mtime > last_run_ts`). With `--source`, scan only the specified source.
 3. Return `[(source_type, path, mtime, summary_excerpt)]`.
@@ -103,9 +105,9 @@ Write `<artifact-root>/notes/{date}/pipeline_summary.md` using the three-tier la
 - **T2:** raw scan log by source
 - **T3:** light+ reviewer log
 
-Update `.last_run.yaml`.
+For an ordinary scoped run, update `.last_run.yaml`. Any run containing `--from` leaves `.last_run.yaml` unchanged and records that fact in T1.
 
-Keep the final user-facing report within eight lines and use the user's communication language unless another audience contract applies. Its content should cover:
+Prepare, but do not emit, the final user-facing report within eight lines and reserve one line for the `publish cycle` outcome from Stage G. Use the user's communication language unless another audience contract applies. Its content should cover:
 
 ```
 ✓ autopilot-note complete — <scope> · run-<YYYYMMDD-HHMM>
@@ -118,3 +120,13 @@ Keep the final user-facing report within eight lines and use the user's communic
 
 Next: review this run's <N> items on worklog-board home or `/triage`, then approve, revise, or discard them to promote confirmed routing. Unattended runs never auto-confirm. If M > 0, also confirm the <M> new L1 card proposals.
 ```
+
+### Stage G — Publish
+
+Stage G always follows Stage F when Stage D or E wrote at least one note, catalog, or digest Markdown file. Its execution is deterministic, not agent judgment. The closed skip set is exactly `--dry-run` and “this run wrote no note, catalog, or digest Markdown.” A skip adds explicit T1 and user-report status. `--digest-only` publishes when it wrote the digest; other modes are governed by actual writes, not another flag list.
+
+Resolve `<worklog-board-app>` only from `WORKLOG_BOARD_APP`. If it is unset, report missing configuration, mark the publish cycle `failed`, and stop Stage G without guessing a personal path. With `--target`, compare the board app's effective `LAYER2_DIR` to `<target>/_layer2`; run no publish command unless they match. Missing or mismatched configuration is a reported non-fatal publish failure.
+
+From `<worklog-board-app>`, run `npm run migrate:fs-to-db`, then only after success `npm run reindex:search`. Both are idempotent and safe to rerun. `npx tsx scripts/verify-migration.ts` is optional verification. Command or configuration failure is non-fatal to durable Markdown but never silent.
+
+Stage G finalizes a T1 `publish cycle` row with `published`, `skipped`, or `failed`, adds the one-line result to the prepared user report, then emits that report.

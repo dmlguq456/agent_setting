@@ -123,6 +123,8 @@ complete status when this evidence is absent or failing.
 
 ## Relay
 
+Before returning the brief, run the default `follow-up note cycle` by invoking `autopilot-note --from <plan-artifact-path>` after report and completion artifacts are durable, unless the user explicitly requested omission, per `WORKFLOW.md §0.2`. Live publication remains owned by the note cycle.
+
 Return a concise 2–3 paragraph brief in the conversation language, not only a path. Include final status and commit hash, 3–5 concrete deliverables, any report/evidence discrepancy, and obvious next steps.
 
 ## Task

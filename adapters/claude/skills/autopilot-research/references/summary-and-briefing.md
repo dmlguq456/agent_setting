@@ -22,3 +22,5 @@ Read `{artifact_dir}/00_briefing.md` and present:
 4. A short invitation to ask follow-up questions, phrased naturally in the user's communication language.
 
 Do not hard-code a Korean or English closing sentence. Match the language and tone of the current user conversation.
+
+After `pipeline_summary` is durable, run the default `follow-up note cycle` on the research artifact directory with `autopilot-note --from <research-artifact-path>` unless explicitly omitted, per `WORKFLOW.md §0.2`.

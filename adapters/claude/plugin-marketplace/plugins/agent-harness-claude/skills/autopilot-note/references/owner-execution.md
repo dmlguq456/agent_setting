@@ -2,7 +2,7 @@
 
 Accumulation and routing entrypoint. Read artifacts from other capabilities, convert each trackable artifact into a Layer 2 note row, and propose links to user-owned Layer 1 cards. This file defines routing, invocation forms, and constraints; load a reference only when its detailed data model or procedure is needed.
 
-> **Output convention**: Store run logs, digest staging, and reviewer logs under `<artifact-root>/notes/{date}/` using the CONVENTIONS §5 (`<agent-home>/core/CONVENTIONS.md#5-skill-output-convention--t1t2t3`) 3-tier layout. Durable Layer 2 notes live at `<target>/_layer2/notes/<id>.md`; user-owned Layer 1 cards live at `<target>/cards/**.md`. These stores are separate from the run artifact.
+> **Output convention**: Store run logs, digest staging, and reviewer logs under `<artifact-root>/notes/{date}/` using the CONVENTIONS §5 (`<agent-home>/core/CONVENTIONS.md#5-skill-output-convention--t1t2t3`) 3-tier layout. Durable Layer 2 notes live at `<target>/_layer2/notes/<id>.md`; user-owned Layer 1 cards live at `<target>/cards/**.md`. These stores are separate from the run artifact. The worklog board DB is the target of the Stage G `publish cycle`; run artifacts and Markdown stores remain separate source surfaces. See `process.md` for the procedure.
 
 ## Invocation
 
@@ -19,16 +19,19 @@ Use a deterministic note ID derived from date plus source-path hash. Reprocessin
 
 | Form | Behavior |
 |---|---|
-| `autopilot-note` | Run Stages A-F with `--scope today` |
+| `autopilot-note` | Run Stages A-G with `--scope today` |
 | `--scope yesterday` | Process changes from the previous local midnight interval |
 | `--scope since 2026-05-20` | Process changes since the explicit date |
 | `--scope all` | Scan all supported sources for an initial historical import |
+| `--from <artifact-path>` | Repeatably select exact source artifacts, bypass date scope and `.last_run.yaml`, and leave cursor state unchanged; existing note-ID/frontmatter-`source` idempotency applies |
 | `--dry-run` | Run Stages A-C, write nothing, and show the routing plan |
 | `--digest-only` | Run Stage E against existing notes |
 | `--triage-only` | Run only the Stage D proposal path for new Layer 1 cards or task links |
 | `--source plans,experiment` | Restrict scanning to the listed source families |
 | `--target <notes-root>` | Override the configured notes root and derive `cards/`, `_layer2/`, `_triage/`, and `digests/` beneath it |
-| `--feedback` | Process pending `_feedback/` items through the lightweight bidirectional feedback flow rather than Stages A-F |
+| `--feedback` | Process pending `_feedback/` items through the lightweight bidirectional feedback flow rather than Stages A-G |
+
+For `autopilot-note`, `--from` selects sources rather than resuming a stage. When combined with `--scope`, it takes precedence, ignores the scope, and reports one warning.
 
 ## Routing Rules
 
@@ -65,4 +68,4 @@ Follow an explicit artifact or audience language when provided. Otherwise, write
 | `scope-qa-usage.md` | When resolving sources, outputs, rigor, boundaries, or post-run checks | Six input families, output locations, intensity-derived rigor, examples, when-not-to-use guidance, and checklist |
 | `feedback-mode.md` | When processing `--feedback` | Feedback inputs, proposal/UI-code routing, risk branches, completion state, and boundaries |
 | `resolution.md` | When running Stage A or C matching | Source-change detection and target resolution for cards, backbones, tasks, papers, intent, and work status |
-| `process.md` | When running Stages A-F (required) | Scan, analyze, match, verify, apply, `editorial/polish` unit polish, digest, and report |
+| `process.md` | When running Stages A-G (required) | Scan, analyze, match, verify, apply, `editorial/polish` unit polish, digest, `publish cycle`, and report |

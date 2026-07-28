@@ -13,7 +13,7 @@ Evaluate a completed checkpoint from the latest setup experiment or from `--pare
 | E3-3 compare | `research/research-survey` unit | `REPORT.md`, `research/`, and `analysis_project/paper/` | Comparison section in `REPORT.md` | Dispatched dispatch depth 2 |
 | E3-4/E3-5 report assembly (report worker) | `editorial/report` unit or draft handoff | metrics, figures, STORY inputs | `REPORT.md`, `STORY.md`, `summary.md` | Dispatched dispatch depth 2 |
 | Independent verification | `qa/test` unit, read-only | Final artifacts | Verdict record under `_internal/` | Dispatched dispatch depth 2, read-only |
-| Spec/note sync | `autopilot-spec` update, `autopilot-note` | Final results | Spec snapshot, note rows | After results are final |
+| Follow-up note cycle | `autopilot-spec` update when applicable, then `autopilot-note` | Finalized experiment results | Note rows | Always after terminal E3-4; cannot be skipped; `/autopilot-note --from <experiment-path>` |
 
 The dispatch-depth-1 owner integrates worker outputs, resolves cross-stage conflicts, and stays in the flow: liveness watching and harvest belong to the same work (`OPERATIONS §5.10` SD-14), not a fire-and-forget dispatch.
 
@@ -75,3 +75,4 @@ Embed every generated figure in `REPORT.md` with `![<caption>](figures/<plot>.pn
 - Update the existing experiment row in `<artifact-root>/experiments/_RUNLOG.md` from pending to done with result and next step. Do not append a second row. Mark the attempt with `(← <parent_slug>)` when applicable. Append only when an eval-only entry has no existing row. Use failed status for interruption or failure.
 - Update the existing `run.json` to `status: "done"`, current `ended_at`, and `best: {name,value,step}` using the same metric as the report and RUNLOG. On failure, write `status: "failed"` and `ended_at` but omit `best`.
 - Emit `run.json best` and parent delta for worklog consumption. Lab emits only; worklog receives and creates cards. Do not recompute the result or push proactively.
+- After `REPORT.md`, `STORY.md`, `_RUNLOG.md`, and `run.json` are durable, invoke the mandatory `follow-up note cycle` with `/autopilot-note --from <experiment-path>` for done and failed terminal states with durable artifacts; do not gate it on a user suggestion.

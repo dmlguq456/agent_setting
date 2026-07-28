@@ -227,7 +227,7 @@
         "use_when": "Use when existing artifacts must be collected, digested, triaged, or routed into a durable note workflow.",
         "not_for": "Not for storing one scoped memory item or for performing the primary research, code, or document work."
       },
-      "argument_shape": "[--scope today|yesterday|since <date>|all] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]",
+      "argument_shape": "[--scope today|yesterday|since <date>|all] [--from <artifact-path>] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--triage-only] [--source <list>]",
       "requires": {
         "capabilities": [],
         "units": [

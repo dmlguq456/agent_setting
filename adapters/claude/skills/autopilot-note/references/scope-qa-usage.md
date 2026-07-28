@@ -25,7 +25,7 @@ Sources 1–6 are active through Phase 2. Enable source 7 only in Phase 3 or wit
 | `<target>/digests/YYYY-MM-DD.md` | — | Daily digest; prepend the new entry and preserve history |
 | `<artifact-root>/notes/{date}/` | — | This skill's routing log: T1 result table, T2 source scan, and T3 reviewer evidence |
 
-> 🗄️ **Required DB ingestion:** worklog-board now reads L2 from the libSQL database at `.cache/worklog.db`; Markdown under `_layer2/*.md` is the source and mirror. After writing notes or catalog Markdown, finish Stage D by running **`npm run migrate:fs-to-db`** from the worklog-board directory. The idempotent upsert is safe to rerun. Verify with `npx tsx scripts/verify-migration.ts`, which checks count parity and extras round trips. For another NAS location supplied through `--target`, confirm that worklog-board `LAYER2_DIR` points to that `_layer2` directory before migration.
+> 🗄️ **Required DB ingestion:** Stage G owns the deterministic `publish cycle`; see `skills/autopilot-note/references/process.md`.
 >
 > 📝 **Write rich note bodies for direct reading.** Users should not need to inspect the source-file tree. Include `# Title`, a one- or two-line summary, `## 결과` with required metrics for experiments or benchmarks, `## 핵심 결정·해결` for root causes and design decisions, `## 변경 코드` for major files and scale, `## 남은 자리` with 🔴/🟡 markers, and `**원본**: <source path or Notion URL>`. Use `_layer2/notes/note-20260528-onnxse.md` as the quality reference. Cross-link related notes and backbones with `[[slug]]`. Treat backbone/technology catalog bodies as wiki anchors covering definition, genealogy, handled work, major note links, and tasks that use them; populate them on emergence and update them as notes accumulate.
 
@@ -83,6 +83,9 @@ Reviewer axes:
 
 # Note only autopilot-lab experiment artifacts
 /autopilot-note --source experiment --scope yesterday
+
+# follow-up note cycle for a lab experiment
+/autopilot-note --from <artifact-root>/experiments/2026-07-28_<slug>
 
 # Override the target with another NAS location
 /autopilot-note --target ~/nas_alt/notes/

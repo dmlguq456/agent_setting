@@ -108,8 +108,13 @@ Precedence, highest first:
    the execution primary.
 4. Formal report prose assembly routes through `autopilot-draft` or the owning
    capability's draft handoff as a secondary step.
-5. Final artifact routing and note registration is `autopilot-note`, always
-   secondary and last.
+5. Final artifact routing and note registration is `autopilot-note`, always secondary and last, as the `follow-up note cycle` after the primary durable completion gate succeeds (or reaches a durable terminal failure artifact for lab). The concrete handoff is `autopilot-note --from <artifact-path>`; it never substitutes for or broadens the primary capability.
+
+   | Primary capability | `follow-up note cycle` policy |
+   |---|---|
+   | `autopilot-lab` | Always run; cannot be skipped, including completed setup and eval terminal states. |
+   | `autopilot-code`, `autopilot-draft`, `autopilot-research`, `analyze-project` | Run by default; skip only when the user explicitly requests omission. |
+   | `autopilot-spec`, `autopilot-refine` | Optional, as before. |
 6. A secondary capability must never substitute for the primary execution
    capability, and the primary never absorbs a secondary's artifact ownership.
 

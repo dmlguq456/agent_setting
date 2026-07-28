@@ -11,7 +11,7 @@ This is the portable capability contract for `autopilot-note`. It defines runtim
 | Group | `entry` |
 | Supported modes | `none` |
 | Portable meaning | Route and note artifacts, producing digests and triage proposals. |
-| Argument shape | `[--scope today\|yesterday\|since <date>\|all] [--target <notes-root>] [--dry-run] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial] [--digest-only] [--triage-only] [--source <list>]` |
+| Argument shape | `[--scope today\|yesterday\|since <date>\|all] [--from <artifact-path>] [--target <notes-root>] [--dry-run] [--intensity direct\|quick\|standard\|strong\|thorough\|adversarial] [--digest-only] [--triage-only] [--source <list>]` |
 | Execution topology | `map-reduce`; registry `capabilities/topologies.json` |
 | Entry load phase | `post-approval`; owner contract `capabilities/autopilot-note.md` |
 
@@ -33,6 +33,8 @@ the fallback. Append daily digests to
 cron uses `quick` intensity and its derived rigor; use `standard+` for weekly
 bulk consolidation, Notion migration, or pre-handoff cleanup. Source 6 is the
 gated Phase 3 Notion mirror.
+
+Publication is part of this capability contract: Stages A–F culminate in the deterministic Stage G `publish cycle`. Skipped or failed publication is surfaced without invalidating Markdown already written; mechanics live in the process contract.
 
 Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
 
@@ -65,7 +67,8 @@ Adapters must preserve the portable invariants relevant to this capability:
 
 `autopilot-note` registers and routes finished artifacts. Under
 `WORKFLOW §0.2` it is always a secondary, final step and never substitutes for
-the execution capability that produces the results it routes.
+the execution capability that produces the results it routes. The concrete
+handoff is the `follow-up note cycle` with `autopilot-note --from <artifact-path>`.
 
 ## Adapter Realization
 
