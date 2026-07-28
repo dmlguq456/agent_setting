@@ -9,6 +9,7 @@ typed harvest, and emits one bounded JSON receipt for the session supervisor.
 from __future__ import annotations
 
 import argparse
+import base64
 from contextlib import contextmanager
 from dataclasses import dataclass
 import fcntl
@@ -29,7 +30,10 @@ sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import (  # noqa: E402
     observed_attempt_liveness,
 )
-from codex_dispatch_terminal import terminal_envelope_observed  # noqa: E402
+from codex_dispatch_terminal import (  # noqa: E402
+    inspect_terminal_attempt,
+    terminal_envelope_observed,
+)
 OPEN_STATES = frozenset({"open", "running"})
 SCHEMA_VERSION = 1
 STATE_SCHEMA_VERSION = 1
@@ -1404,6 +1408,105 @@ def main(argv: list[str] | None = None) -> int:
         }
     print(json.dumps(receipt, separators=(",", ":"), sort_keys=True))
     return {"ready": 0, "no-children": 2, "timeout": 3}.get(str(receipt["state"]), 69)
+
+
+def _row_worktree(row: ChildRow) -> str:
+    fields = str(getattr(row, "raw", "")).split("\t")
+    return fields[3] if len(fields) == 6 else ""
+
+
+def close_finished_child(row: ChildRow, *, jobs: str | Path) -> str:
+    """Close one finished-but-open child from its own terminal evidence.
+
+    A route-bound node may only be closed through the completion-marker path
+    (OPERATIONS §5.10, SD-70); `dispatch-harvest --mark-done` refuses it with
+    `route-completion-required`. The supervised-parent park hook in turn admits
+    only that harvest command (`classify_supervised_shell_command`), so a
+    supervised owner cannot execute the one command that would work: the model
+    has no legal exit and the batch deadlocks until the owner is killed. A
+    supervisor is not park-guarded and already owns the join outside the model
+    loop, so it performs this closure itself.
+
+    Completion is never invented — without a valid terminal envelope naming an
+    in-root artifact the child stays open and the caller keeps its existing
+    failure. Returns ``""`` on success, else a short skip reason.
+    """
+
+    metadata = getattr(row, "metadata", {}) or {}
+    route_file = metadata.get("route_file")
+    route_node = metadata.get("route_node")
+    if not route_file or not route_node:
+        return "not-route-bound"
+    terminal = inspect_terminal_attempt(
+        metadata.get("log_file"),
+        worktree=_row_worktree(row),
+        artifact_root_metadata=metadata.get("artifact_root"),
+    )
+    if terminal.get("state") != "valid":
+        return "terminal-%s" % (terminal.get("state") or "absent")
+    if terminal.get("artifact_state") != "readable":
+        return "evidence-%s" % (terminal.get("artifact_state") or "absent")
+    # The inspector never returns a raw path — it hands back a bounded
+    # url-safe base64 form so no control byte can reach a command line.
+    encoded = str(terminal.get("artifact_path_b64") or "")
+    try:
+        artifact = base64.urlsafe_b64decode(
+            encoded + "=" * (-len(encoded) % 4)
+        ).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return "evidence-undecodable"
+    if not artifact or not Path(artifact).is_absolute():
+        return "evidence-absent"
+    command = [
+        sys.executable,
+        str(ROOT / "utilities" / "capability-route.py"),
+        "complete",
+        "--route", str(route_file),
+        "--node", str(route_node),
+        "--evidence", artifact,
+        "--jobs", str(jobs),
+        "--attempt-id", row.attempt_id,
+    ]
+    for flag, key in (
+        ("--dispatch-depth", "dispatch_depth"),
+        ("--transport", "transport"),
+        ("--execution-surface", "execution_surface"),
+        ("--registered-worker", "registered_worker"),
+        ("--fallback-hop", "fallback_hop"),
+    ):
+        value = metadata.get(key)
+        if value:
+            command += [flag, str(value)]
+    return run_route_completion(command)
+
+
+def run_route_completion(command: list[str]) -> str:
+    """Named seam for the completion invocation — tests replace only this."""
+
+    try:
+        result = subprocess.run(
+            command, text=True, capture_output=True, timeout=60.0, check=False
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return "completion-%s" % type(exc).__name__
+    return "" if result.returncode == 0 else "completion-rejected"
+
+
+def reconcile_finished_children(
+    rows: dict[str, ChildRow], unresolved: set[str], *, jobs: str | Path
+) -> dict[str, str]:
+    """Attempt evidence-backed closure for each unresolved child.
+
+    Returns ``{attempt_id: reason}`` where an empty reason means closed.
+    """
+
+    outcomes: dict[str, str] = {}
+    for attempt in sorted(unresolved):
+        row = rows.get(attempt)
+        if row is None:
+            continue
+        outcomes[attempt] = close_finished_child(row, jobs=jobs)
+    return outcomes
 
 
 if __name__ == "__main__":

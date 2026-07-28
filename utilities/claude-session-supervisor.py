@@ -16,6 +16,7 @@ import uuid
 from dispatch_completion_join import (
     JoinContractError,
     current_children,
+    reconcile_finished_children,
     remove_supervisor_state,
     write_supervisor_state,
 )
@@ -159,6 +160,28 @@ def completion_prompt(receipt: dict[str, Any]) -> str:
         "dispatch-wait or inspect raw child logs. Emit the exact final three-line "
         "handoff only when no owned registered child remains open."
     )
+
+
+def runtime_reconcile(args: argparse.Namespace, rows: dict[str, Any],
+                      unresolved: set[str]) -> set[str]:
+    """Close every unresolved child that its own evidence already proves done."""
+
+    closed: set[str] = set()
+    for attempt, reason in reconcile_finished_children(
+        rows, unresolved, jobs=args.jobs
+    ).items():
+        emit(
+            {
+                "type": "dispatch.supervisor.reconciled",
+                "parent_attempt_id": args.parent_attempt_id,
+                "attempt_id": attempt,
+                "outcome": "closed" if not reason else "skipped",
+                **({} if not reason else {"reason": reason}),
+            }
+        )
+        if not reason:
+            closed.add(attempt)
+    return closed
 
 
 def remediation_prompt(attempts: set[str]) -> str:
@@ -345,6 +368,17 @@ def main(argv: list[str] | None = None) -> int:
                 if row.status in {"open", "running"}
             }
             if unresolved:
+                # Evidence-backed closure first: a route-bound child that finished
+                # without writing its own marker leaves the model with no legal
+                # remediation (see runtime_close_child), so asking it again only
+                # burns a continuation before the same deadlock.
+                closed = runtime_reconcile(args, current, unresolved)
+                if closed:
+                    unresolved -= closed
+                    if not unresolved:
+                        rows = current_children(Path(args.jobs), args.parent_attempt_id)
+                        current = {row.attempt_id: row for row in rows}
+                        continue
                 signature = tuple(sorted(unresolved))
                 if signature in remediated or continuations >= args.max_continuations:
                     raise SupervisorError("owned-children-remain-open-after-resume")
