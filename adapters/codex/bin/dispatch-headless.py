@@ -226,6 +226,7 @@ def parser() -> argparse.ArgumentParser:
         "--parent-harness",
         default=(
             os.environ.get("AGENT_DISPATCH_CURRENT_HARNESS")
+            or os.environ.get("AGENT_DISPATCH_CALLER_HARNESS")
             or os.environ.get("AGENT_DISPATCH_OWNER_HARNESS")
             or (
                 "claude"
@@ -265,6 +266,11 @@ def parser() -> argparse.ArgumentParser:
         help="standard+ owner completion bridge; auto prefers App Server session resume",
     )
     p.add_argument(
+        "--allow-unmanaged-parent-poll",
+        action="store_true",
+        help="operator-only low-level recovery override; dispatch-owner forbids it",
+    )
+    p.add_argument(
         "--inherit-model-settings",
         action="store_true",
         help="do not override model/reasoning; inherit the active Codex config for this dispatch",
@@ -299,10 +305,22 @@ def _bind_runtime_parent(args: argparse.Namespace) -> None:
     """
     force_current = os.environ.get("CODEX_DISPATCH_PARENT_CURRENT_FORCE") == "1"
     current_thread = os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID")
+    claude_session = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    caller_harness = (
+        os.environ.get("AGENT_DISPATCH_CALLER_HARNESS")
+        or ("codex" if current_thread and not claude_session else None)
+        or ("claude" if claude_session and not current_thread else None)
+    )
     if args.dispatch_depth == 1:
-        if current_thread:
+        if current_thread and caller_harness == "codex":
             args.parent_session_id = current_thread
-        if current_thread or force_current:
+            args.parent_harness = "codex"
+            args.parent_slug = None
+        elif claude_session and caller_harness == "claude":
+            args.parent_session_id = claude_session
+            args.parent_harness = "claude"
+            args.parent_slug = None
+        elif force_current:
             args.parent_slug = None
     elif force_current and current_thread:
         args.parent_session_id = current_thread
@@ -356,6 +374,33 @@ def resolve_parent_completion_delivery(args: argparse.Namespace) -> str:
 
 def bind_parent_completion_delivery(args: argparse.Namespace) -> None:
     args.parent_completion_delivery = resolve_parent_completion_delivery(args)
+
+
+def validate_interactive_parent_launch(args: argparse.Namespace) -> None:
+    """Never let an ordinary Codex parent enter a model-owned wait loop."""
+
+    direct_registered = (
+        getattr(args, "action", "") in {"register", "start"}
+        and args.dispatch_depth == 1
+        and args.launch_lifecycle == DETACHED
+        and args.execution_surface == "registered-headless"
+        and bool(args.registered_worker)
+        and bool(args.parent_session_id)
+        and os.environ.get("AGENT_DISPATCH_CHILD") != "1"
+    )
+    if not (
+        direct_registered
+        and args.parent_harness == "codex"
+        and args.parent_completion_delivery == "poll-fallback"
+    ):
+        return
+    if getattr(args, "allow_unmanaged_parent_poll", False):
+        args.parent_completion_reason = "operator-authorized-unmanaged-poll"
+        return
+    raise DispatchContractError(
+        "managed-entry-required",
+        "unmanaged interactive Codex parents cannot register or start a detached owner; restart through preflight.sh managed-entry",
+    )
 
 
 def launch_parent_completion_sidecar(
@@ -1736,6 +1781,17 @@ def main(argv: list[str]) -> int:
         if args.model_role:
             fields["model_role"] = args.model_role
         return fail(e.reason, 64, **fields)
+    try:
+        validate_interactive_parent_launch(args)
+    except DispatchContractError as exc:
+        return fail(
+            exc.reason,
+            69,
+            detail=exc.detail,
+            parent_completion_delivery=args.parent_completion_delivery,
+            parent_completion_reason=args.parent_completion_reason,
+            child_spawned="0",
+        )
     if args.start and shutil.which("codex") is None:
         return fail("codex-command-unavailable", 69, worktree=args.worktree)
     profile_home: Path | None = None

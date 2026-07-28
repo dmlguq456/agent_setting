@@ -833,8 +833,22 @@ if CODEX_DISPATCH_SANDBOX=workspace-write CODEX_DISPATCH_SANDBOX_FORCE=danger-fu
 else
   bad "codex dispatch wrapper should preserve a forced nested sandbox invariant"
 fi
+if CODEX_THREAD_ID=codex-unmanaged-parent \
+  "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-unmanaged-parent --capability autopilot-code --mode dev --qa standard --prompt-text "do work" --model gpt-test --reasoning low --dispatch-depth 1 --jobs "$TMP/codex-unmanaged-parent.log" --log-dir "$TMP/unmanaged-parent-logs" >/tmp/codex_unmanaged_parent.out 2>/tmp/codex_unmanaged_parent.err; then
+  bad "codex dispatch wrapper should reject an unmanaged interactive parent"
+else
+  rc=$?
+  if [ "$rc" -eq 69 ] \
+    && grep -q '^reason=managed-entry-required$' /tmp/codex_unmanaged_parent.out \
+    && grep -q '^child_spawned=0$' /tmp/codex_unmanaged_parent.out \
+    && [ ! -e "$TMP/codex-unmanaged-parent.log" ]; then
+    ok "codex dispatch wrapper rejects unmanaged interactive parents before registry mutation"
+  else
+    bad "codex dispatch wrapper should fail unmanaged interactive parents before registry mutation"
+  fi
+fi
 if CODEX_THREAD_ID=codex-current-thread CODEX_DISPATCH_PARENT_CURRENT_FORCE=1 \
-  "$CODEX" dispatch --register --worktree "$TMP/repo" --slug codex-current-parent --capability autopilot-code --mode dev --qa standard --prompt-text "do work" --model gpt-test --reasoning low --dispatch-depth 1 --parent invented-parent --parent-session-id invented-session --jobs "$TMP/codex-current-parent.log" --log-dir "$TMP/current-parent-logs" >/tmp/codex_current_parent.out 2>/tmp/codex_current_parent.err \
+  "$CODEX" dispatch --register --allow-unmanaged-parent-poll --worktree "$TMP/repo" --slug codex-current-parent --capability autopilot-code --mode dev --qa standard --prompt-text "do work" --model gpt-test --reasoning low --dispatch-depth 1 --parent invented-parent --parent-session-id invented-session --jobs "$TMP/codex-current-parent.log" --log-dir "$TMP/current-parent-logs" >/tmp/codex_current_parent.out 2>/tmp/codex_current_parent.err \
   && grep -q '^parent_session_id=codex-current-thread$' /tmp/codex_current_parent.out \
   && codex_current_parent_prompt=$(sed -n 's/^prompt_file=//p' /tmp/codex_current_parent.out) \
   && [ -f "$codex_current_parent_prompt" ] \
@@ -1112,7 +1126,7 @@ if AGENT_DISPATCH_JOBS="$TMP/claude-env-jobs.log" \
 else
   bad "claude dispatch wrapper should use the selected shared registry"
 fi
-if CODEX_THREAD_ID=codex-parent python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --register --worktree "$TMP/repo" --slug claude-owned --capability autopilot-code --capability-mode audit --qa standard --intensity thorough --dispatch-depth 1 --worker-type owner --unit _kernel/owner --assigned-contract autopilot-code --worker-role verifier --owner autopilot-code --model-role "fast reviewer" --prompt-text "verify" --jobs "$TMP/claude-owned.log" --log-dir "$TMP/claude-owned-logs" >/tmp/claude_owned.out 2>/tmp/claude_owned.err \
+if CODEX_THREAD_ID=codex-parent python3 "$ROOT/adapters/claude/bin/dispatch-headless.py" --register --allow-unmanaged-parent-poll --worktree "$TMP/repo" --slug claude-owned --capability autopilot-code --capability-mode audit --qa standard --intensity thorough --dispatch-depth 1 --worker-type owner --unit _kernel/owner --assigned-contract autopilot-code --worker-role verifier --owner autopilot-code --model-role "fast reviewer" --prompt-text "verify" --jobs "$TMP/claude-owned.log" --log-dir "$TMP/claude-owned-logs" >/tmp/claude_owned.out 2>/tmp/claude_owned.err \
   && grep -q '^intensity=thorough$' /tmp/claude_owned.out \
   && grep -q '^dispatch_depth=1$' /tmp/claude_owned.out \
   && grep -q '^parent_session_id=codex-parent$' /tmp/claude_owned.out \

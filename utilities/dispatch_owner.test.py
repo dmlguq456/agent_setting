@@ -144,6 +144,33 @@ class DispatchOwnerTests(unittest.TestCase):
         self.assert_model_map(result, "codex")
         self.assertNotIn("interactive-inheritance", result.stdout)
 
+    def test_caller_runtime_is_distinct_from_selected_owner_adapter(self):
+        module = self._load_selector_module()
+        self.assertEqual(
+            module._caller_harness({"CODEX_THREAD_ID": "thread-codex"}),
+            "codex",
+        )
+        self.assertEqual(
+            module._caller_harness(
+                {
+                    "AGENT_DISPATCH_CALLER_HARNESS": "claude",
+                    "CODEX_THREAD_ID": "stale-codex-value",
+                }
+            ),
+            "claude",
+        )
+
+    def test_ambiguous_caller_runtime_fails_closed(self):
+        module = self._load_selector_module()
+        with self.assertRaises(module.OwnerError) as raised:
+            module._caller_harness(
+                {
+                    "CODEX_THREAD_ID": "thread-codex",
+                    "CLAUDE_CODE_SESSION_ID": "session-claude",
+                }
+            )
+        self.assertEqual(str(raised.exception), "caller-harness-ambiguous")
+
     def test_explicit_adapter_beats_config(self):
         result = self.run_owner("claude", ("--adapter", "codex"))
         self.assert_model_map(result, "codex")
@@ -201,8 +228,13 @@ class DispatchOwnerTests(unittest.TestCase):
         self.assertEqual(calls, [])
         self.assertEqual(self._snapshot_side_effects(), before)
 
-    def test_forbidden_concrete_or_inherited_model_selection_fails_before_materialization(self):
-        for option in (("--model", "not-a-portable-profile"), ("--inherit-model-settings",)):
+    def test_forbidden_concrete_or_runtime_policy_selection_fails_before_materialization(self):
+        for option in (
+            ("--model", "not-a-portable-profile"),
+            ("--inherit-model-settings",),
+            ("--completion-delivery", "poll"),
+            ("--allow-unmanaged-parent-poll",),
+        ):
             with self.subTest(option=option):
                 before = self._snapshot_side_effects()
                 rc, stdout, calls = self.run_owner_in_process(
