@@ -127,6 +127,8 @@ Stage G always follows Stage F when Stage D or E wrote at least one note, catalo
 
 Resolve `<worklog-board-app>` only from `WORKLOG_BOARD_APP`. If it is unset, report missing configuration, mark the publish cycle `failed`, and stop Stage G without guessing a personal path. With `--target`, compare the board app's effective `LAYER2_DIR` to `<target>/_layer2`; run no publish command unless they match. Missing or mismatched configuration is a reported non-fatal publish failure.
 
+Load the board's own environment before the publish commands: from `<worklog-board-app>`, source `.env.local` and then `ops/cron/.agent.env` when each exists. Those files carry the remote database URL and token. Without them the board tooling silently falls back to its local file database, so the commands report success while the served board never changes. Record which credential sources were loaded in T2.
+
 From `<worklog-board-app>`, run `npm run migrate:fs-to-db`, then only after success `npm run reindex:search`. Both are idempotent and safe to rerun. `npx tsx scripts/verify-migration.ts` is optional verification. Command or configuration failure is non-fatal to durable Markdown but never silent.
 
 Stage G finalizes a T1 `publish cycle` row with `published`, `skipped`, or `failed`, adds the one-line result to the prepared user report, then emits that report.
