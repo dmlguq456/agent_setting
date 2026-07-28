@@ -64,8 +64,11 @@ per batch. New interactive Codex sessions opt in through
 `utilities/codex-managed-entry.py`: single ingress keeps the TUI sole approval/
 subscription owner and sends one bounded receipt. Parent runtime decides—Codex
 gateway or Claude async-rewake/`--resume`—regardless of child. Managed completion never uses Stop continuation or a PreToolUse park; rejected steer defers once to
-idle, with crash state `sent-ambiguous`. Unmanaged new Codex sessions use finite
-`poll-fallback`; legacy Stop permits exact migration harvest only.
+idle, with crash state `sent-ambiguous`. A new unmanaged interactive Codex
+parent is rejected with `managed-entry-required` before registry mutation or
+spawn. Finite `poll-fallback` is a low-level operator-only recovery override;
+the portable owner selector and model routes cannot select it. Legacy Stop
+permits exact migration harvest only.
 Arbitrary detached shell output still does not auto-resume. For non-dispatch
 long-running work, obey `preflight.sh
 loop-info runtime-watch` and its explicit automatic-follow-up-impossible fallback
@@ -112,12 +115,17 @@ Launch registered jobs only through `preflight.sh dispatch
 `_kernel/owner` with no worker mode. `worker_role` and legacy `mode` are
 read-only metadata, not bootstrap identity. A direct interactive launch selects
 completion by the parent runtime: a live `managed-entry` Codex parent uses the
-gateway, a Claude parent uses Claude resume, and an unmanaged Codex parent uses
-explicit `poll-fallback`. This parent-runtime selection does not force Stop/PreToolUse trust,
-create new parent Stop state, or park the model/tool loop. Keep the parent conversational.
-If an operator deliberately selects the finite polling fallback, use
-`preflight.sh dispatch-wait --attempt-id <id> --max 300..600`; otherwise monitor
-with `preflight.sh liveness [jobs.log]` and harvest with `preflight.sh harvest`.
+gateway and a Claude parent uses Claude resume. A new unmanaged interactive
+Codex parent fails with `managed-entry-required` before registry mutation or
+spawn; `dispatch-owner` also forbids completion-policy and unmanaged-poll
+overrides. This parent-runtime selection does not force Stop/PreToolUse trust,
+create new parent Stop state, or park the model/tool loop. Keep the parent
+conversational. A human operator may use the low-level
+`--allow-unmanaged-parent-poll` recovery override and then wait finitely with
+`preflight.sh dispatch-wait --attempt-id <id> --max 300..600`; model routes must
+not select it. Existing open or legacy attempts may use that finite recovery;
+otherwise use external supervision and `preflight.sh harvest`, never an
+in-model `sleep`/liveness loop.
 Legacy stamped Stop state is recovery-only and permits one exact terminal
 `--status all --attempt-id` harvest, never raw output or a broad selector.
 Conductors use `dispatch-chain` for ordinary checked dispatch-depth-2 nodes. A sealed

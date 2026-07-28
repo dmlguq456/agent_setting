@@ -59,6 +59,36 @@ class PreflightDispatchOwnerTest(unittest.TestCase):
         self.assertIn("adapter=claude", result.stdout)
         self.assertIn("selection_source=configured-normal", result.stdout)
 
+    def test_unmanaged_codex_parent_fails_before_either_owner_registration(self):
+        for adapter in ("codex", "claude"):
+            with self.subTest(adapter=adapter):
+                jobs = self.home / f"jobs-{adapter}.log"
+                jobs.touch()
+                log_dir = self.home / f"logs-{adapter}"
+                args = [
+                    str(PREFLIGHT), "dispatch-owner", "--adapter", adapter, "--start",
+                    "--worktree", str(ROOT), "--slug", f"unmanaged-{adapter}-owner-test",
+                    "--capability", "autopilot-code", "--capability-mode", "debug",
+                    "--qa", "standard", "--intensity", "standard",
+                    "--dispatch-depth", "1", "--worker-type", "owner",
+                    "--assigned-contract", "autopilot-code", "--owner", "autopilot-code",
+                    "--model-profile", "deep", "--jobs", str(jobs), "--log-dir", str(log_dir),
+                ]
+                env = {
+                    **self.env,
+                    "CODEX_THREAD_ID": "thread-unmanaged-test",
+                }
+                result = subprocess.run(
+                    args, text=True, capture_output=True, env=env, timeout=20
+                )
+                output = result.stdout + result.stderr
+                self.assertEqual(result.returncode, 69, output)
+                self.assertIn(f"adapter={adapter}", output)
+                self.assertIn("managed-entry-required", output)
+                self.assertIn("parent_completion_delivery=poll-fallback", output)
+                self.assertIn("child_spawned=0", output)
+                self.assertEqual(jobs.read_text(encoding="utf-8"), "")
+
     def test_low_level_dispatch_arm_still_reaches_codex_wrapper_directly(self):
         result = subprocess.run(
             [str(PREFLIGHT), "dispatch"],

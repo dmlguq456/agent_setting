@@ -275,6 +275,41 @@ class ClaudeChildParentRuntimeDelivery(unittest.TestCase):
             args.parent_completion_delivery, WH.MANAGED_PARENT_DELIVERY
         )
         self.assertIs(args.managed_gateway_binding, binding)
+        WH.validate_interactive_parent_launch(args)
+
+    def test_unmanaged_codex_parent_is_identified_then_blocked(self):
+        args = self.parent_args(
+            parent_harness="claude",
+            parent_session_id="synthetic",
+            parent_slug="synthetic-owner",
+        )
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CODEX_THREAD_ID": "thread-real",
+                "AGENT_DISPATCH_CALLER_HARNESS": "codex",
+                "AGENT_DISPATCH_CHILD": "0",
+            },
+            clear=True,
+        ):
+            WH._bind_runtime_parent(args)
+            WH.bind_parent_completion_delivery(args)
+            with self.assertRaises(WH.DispatchContractError) as raised:
+                WH.validate_interactive_parent_launch(args)
+        self.assertEqual(args.parent_harness, "codex")
+        self.assertEqual(args.parent_session_id, "thread-real")
+        self.assertEqual(args.parent_completion_delivery, "poll-fallback")
+        self.assertEqual(raised.exception.reason, "managed-entry-required")
+
+    def test_low_level_operator_can_explicitly_select_finite_poll_recovery(self):
+        args = self.parent_args(
+            allow_unmanaged_parent_poll=True,
+            parent_completion_delivery="poll-fallback",
+        )
+        WH.validate_interactive_parent_launch(args)
+        self.assertEqual(
+            args.parent_completion_reason, "operator-authorized-unmanaged-poll"
+        )
 
     def test_claude_parent_keeps_claude_runtime_wake_adapter(self):
         args = self.parent_args(
@@ -295,7 +330,7 @@ class ClaudeChildParentRuntimeDelivery(unittest.TestCase):
         )
         probe.assert_not_called()
 
-    def test_managed_codex_identity_overrides_synthetic_direct_parent(self):
+    def test_codex_caller_identity_overrides_synthetic_direct_parent(self):
         args = self.parent_args(
             parent_harness="claude",
             parent_session_id="synthetic",
@@ -305,7 +340,7 @@ class ClaudeChildParentRuntimeDelivery(unittest.TestCase):
             os.environ,
             {
                 "CODEX_THREAD_ID": "thread-real",
-                "AGENT_CODEX_MANAGED_PARENT_RUNTIME": "codex",
+                "AGENT_DISPATCH_CALLER_HARNESS": "codex",
             },
             clear=True,
         ):
@@ -313,6 +348,28 @@ class ClaudeChildParentRuntimeDelivery(unittest.TestCase):
         self.assertEqual(args.parent_session_id, "thread-real")
         self.assertEqual(args.parent_harness, "codex")
         self.assertIsNone(args.parent_slug)
+
+    def test_claude_caller_identity_overrides_synthetic_codex_parent(self):
+        args = self.parent_args(
+            parent_harness="codex",
+            parent_session_id="synthetic-codex-thread",
+            parent_slug="synthetic-codex-owner",
+        )
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CLAUDE_CODE_SESSION_ID": "claude-session-real",
+                "AGENT_DISPATCH_CALLER_HARNESS": "claude",
+            },
+            clear=True,
+        ):
+            WH._bind_runtime_parent(args)
+            WH.bind_parent_completion_delivery(args)
+            WH.validate_interactive_parent_launch(args)
+        self.assertEqual(args.parent_harness, "claude")
+        self.assertEqual(args.parent_session_id, "claude-session-real")
+        self.assertIsNone(args.parent_slug)
+        self.assertEqual(args.parent_completion_delivery, "claude-parent-runtime")
 
     def test_depth_two_child_never_uses_root_gateway(self):
         args = self.parent_args(

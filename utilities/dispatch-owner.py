@@ -23,7 +23,8 @@ _defaults_spec.loader.exec_module(_defaults)
 
 _FORBIDDEN = {
     "--worker-mode", "--model", "--reasoning", "--effort", "--variant",
-    "--inherit-model-settings",
+    "--inherit-model-settings", "--completion-delivery",
+    "--allow-unmanaged-parent-poll",
 }
 _MODEL_ENV = re.compile(
     r"^[A-Za-z0-9]+_DISPATCH_(MODEL|MODEL_ROLE|MODEL_PROFILE|REASONING|EFFORT|VARIANT)$"
@@ -37,6 +38,28 @@ _REQUIRED = {
 
 class OwnerError(ValueError):
     pass
+
+
+def _caller_harness(env):
+    """Keep the interactive caller distinct from the selected child adapter."""
+
+    explicit = env.get("AGENT_DISPATCH_CALLER_HARNESS") or env.get(
+        "AGENT_DISPATCH_CURRENT_HARNESS"
+    )
+    if explicit:
+        if explicit not in _defaults.KNOWN_HARNESSES:
+            raise OwnerError("caller-harness-invalid")
+        return explicit
+    detected = set()
+    if env.get("CODEX_THREAD_ID") or env.get("CODEX_SESSION_ID"):
+        detected.add("codex")
+    if env.get("CLAUDE_CODE_SESSION_ID"):
+        detected.add("claude")
+    if env.get("OPENCODE_SESSION_ID"):
+        detected.add("opencode")
+    if len(detected) > 1:
+        raise OwnerError("caller-harness-ambiguous")
+    return next(iter(detected), None)
 
 
 def _load_defaults():
@@ -218,6 +241,9 @@ def main(argv):
         child_env = {
             key: value for key, value in os.environ.items() if not _MODEL_ENV.fullmatch(key)
         }
+        caller_harness = _caller_harness(child_env)
+        if caller_harness:
+            child_env["AGENT_DISPATCH_CALLER_HARNESS"] = caller_harness
         child_env["AGENT_DISPATCH_OWNER_HARNESS"] = selected
         child = subprocess.run([str(wrapper), *forwarded], env=child_env)
         return child.returncode

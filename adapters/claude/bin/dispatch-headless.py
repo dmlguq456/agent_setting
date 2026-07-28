@@ -216,6 +216,7 @@ def parser() -> argparse.ArgumentParser:
         "--parent-harness",
         default=(
             os.environ.get("AGENT_DISPATCH_CURRENT_HARNESS")
+            or os.environ.get("AGENT_DISPATCH_CALLER_HARNESS")
             or os.environ.get("AGENT_DISPATCH_OWNER_HARNESS")
             or ("codex" if os.environ.get("CODEX_THREAD_ID") else "claude")
         ),
@@ -239,6 +240,11 @@ def parser() -> argparse.ArgumentParser:
         choices=("auto", "supervised", "poll"),
         default=os.environ.get("CLAUDE_DISPATCH_COMPLETION_DELIVERY", "auto"),
         help="standard+ owner completion bridge; auto prefers same-session resume",
+    )
+    p.add_argument(
+        "--allow-unmanaged-parent-poll",
+        action="store_true",
+        help="operator-only low-level recovery override; dispatch-owner forbids it",
     )
     p.add_argument(
         "--inherit-model-settings",
@@ -583,19 +589,26 @@ _STANDARD_PLUS_INTENSITY = {"standard", "strong", "thorough", "adversarial"}
 
 
 def _bind_runtime_parent(args: argparse.Namespace) -> None:
-    """Bind a cross-harness direct child to the actual managed Codex thread."""
+    """Bind a cross-harness direct child to the actual Codex caller runtime."""
 
     current_thread = os.environ.get("CODEX_THREAD_ID") or os.environ.get(
         "CODEX_SESSION_ID"
     )
-    if (
-        args.dispatch_depth == 1
-        and current_thread
-        and os.environ.get("AGENT_CODEX_MANAGED_PARENT_RUNTIME") == "codex"
-    ):
-        args.parent_session_id = current_thread
-        args.parent_slug = None
-        args.parent_harness = "codex"
+    claude_session = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    caller_harness = (
+        os.environ.get("AGENT_DISPATCH_CALLER_HARNESS")
+        or ("codex" if current_thread and not claude_session else None)
+        or ("claude" if claude_session and not current_thread else None)
+    )
+    if args.dispatch_depth == 1:
+        if current_thread and caller_harness == "codex":
+            args.parent_session_id = current_thread
+            args.parent_slug = None
+            args.parent_harness = "codex"
+        elif claude_session and caller_harness == "claude":
+            args.parent_session_id = claude_session
+            args.parent_slug = None
+            args.parent_harness = "claude"
 
 
 def resolve_parent_completion_delivery(args: argparse.Namespace) -> str:
@@ -642,6 +655,33 @@ def resolve_parent_completion_delivery(args: argparse.Namespace) -> str:
 
 def bind_parent_completion_delivery(args: argparse.Namespace) -> None:
     args.parent_completion_delivery = resolve_parent_completion_delivery(args)
+
+
+def validate_interactive_parent_launch(args: argparse.Namespace) -> None:
+    """Never let a Codex caller wait in-model for a cross-harness owner."""
+
+    direct_registered = (
+        getattr(args, "action", "") in {"register", "start"}
+        and args.dispatch_depth == 1
+        and args.launch_lifecycle == DETACHED
+        and args.execution_surface == "registered-headless"
+        and bool(args.registered_worker)
+        and bool(args.parent_session_id)
+        and os.environ.get("AGENT_DISPATCH_CHILD") != "1"
+    )
+    if not (
+        direct_registered
+        and args.parent_harness == "codex"
+        and args.parent_completion_delivery == "poll-fallback"
+    ):
+        return
+    if getattr(args, "allow_unmanaged_parent_poll", False):
+        args.parent_completion_reason = "operator-authorized-unmanaged-poll"
+        return
+    raise DispatchContractError(
+        "managed-entry-required",
+        "unmanaged interactive Codex parents cannot register or start a detached owner; restart through preflight.sh managed-entry",
+    )
 
 
 def launch_parent_completion_sidecar(
@@ -1450,6 +1490,17 @@ def main(argv: list[str]) -> int:
         if args.model_role:
             fields["model_role"] = args.model_role
         return fail(e.reason, 64, **fields)
+    try:
+        validate_interactive_parent_launch(args)
+    except DispatchContractError as exc:
+        return fail(
+            exc.reason,
+            69,
+            detail=exc.detail,
+            parent_completion_delivery=args.parent_completion_delivery,
+            parent_completion_reason=args.parent_completion_reason,
+            child_spawned="0",
+        )
     if args.start and shutil.which("claude") is None:
         return fail("claude-command-unavailable", 69, worktree=args.worktree)
 

@@ -834,9 +834,11 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'headless --check <worktree>' adapters/codex/README.md \
     || ! grep -Fq 'headless [--check] [--require-hook-trust]' adapters/codex/AGENTS.md \
     || ! grep -Fq 'Use `dispatch --dry-run|--register|--start`' adapters/codex/ADAPTATION.md \
-    || ! grep -Fq 'checked managed Codex parent records `codex-managed-gateway`' adapters/codex/README.md \
-    || ! grep -Fq 'parent runtime, not the child' adapters/codex/ADAPTATION.md \
+    || ! grep -Fq 'checked managed Codex records `codex-managed-gateway`' adapters/codex/README.md \
+    || ! grep -Fq 'actual parent runtime, not the child' adapters/codex/ADAPTATION.md \
     || ! grep -Fq '`codex-managed-gateway`' adapters/codex/ADAPTATION.md \
+    || ! grep -Fq 'fails with `managed-entry-required` before registry mutation or spawn' adapters/codex/README.md \
+    || ! grep -Fq '`dispatch-owner` and model routes cannot select it' adapters/codex/README.md \
     || ! grep -Fq 'Registry writes and harvest rewrites are serialized with a `.lock` file' adapters/codex/README.md \
     || ! grep -Fq 'Registry writes and harvest rewrites are serialized with a `.lock` file' adapters/codex/ADAPTATION.md \
     || ! grep -Fq 'minimal typed worker prompt' adapters/codex/README.md \
@@ -1208,7 +1210,8 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'Arbitrary detached shell output' adapters/codex/AGENTS.md \
     || ! grep -Fq '`utilities/codex-managed-entry.py`' adapters/codex/AGENTS.md \
     || ! grep -Fq 'Managed completion never uses Stop continuation' adapters/codex/AGENTS.md \
-    || ! grep -Fq 'Unmanaged new Codex sessions use finite' adapters/codex/AGENTS.md; then
+    || ! grep -Fq 'rejected with `managed-entry-required` before registry mutation or' adapters/codex/AGENTS.md \
+    || ! grep -Fq 'portable owner selector and model routes cannot select it' adapters/codex/AGENTS.md; then
     fail_msg "Codex docs must document loop-info support/fallback contracts"
   fi
 
