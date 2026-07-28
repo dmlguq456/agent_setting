@@ -36,6 +36,7 @@ from dispatch_contract import (  # noqa: E402
 )
 from dispatch_lifecycle import select_launch_lifecycle  # noqa: E402
 from replica_batch_contract import DIGEST, build_manifest  # noqa: E402
+from dispatch_degradation import record_degradation  # noqa: E402
 
 NODE_SPEC = importlib.util.spec_from_file_location(
     "dispatch_node", ROOT / "utilities" / "dispatch-node.py"
@@ -733,6 +734,29 @@ def batch_receipt(
     return receipt, success
 
 
+def _record_failed_legs(route, results, agent_home):
+    """Record failed receipt legs once, after receipt assembly, without changing it."""
+    paths = []
+    for leg in results:
+        if leg.get("check") != "failed" and leg.get("launch_state") != "failed":
+            continue
+        path = record_degradation(
+            route_id=route.get("route_id"), route_node=leg.get("node"),
+            route_hash=route.get("route_hash"), dispatch_depth=2,
+            fallback_hop=leg.get("hop"), execution_surface="registered-headless",
+            writer="dispatch-batch.py", kind="leg-failure",
+            parallel_group=leg.get("parallel_group"),
+            parallel_leg_index=leg.get("parallel_leg_index"),
+            parallel_leg_count=leg.get("parallel_leg_count") or len(results),
+            attempt_id=leg.get("attempt_id"), exit_code=leg.get("exit_code"),
+            launch_state=leg.get("launch_state"), harness=leg.get("adapter") or leg.get("harness"),
+            reason=leg.get("reason") or "leg-failure",
+        )
+        if path:
+            paths.append(path)
+    return paths[-1] if paths else None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--route", type=Path, required=True)
@@ -951,6 +975,7 @@ def main(argv: list[str] | None = None) -> int:
             results=results,
             admitted=0,
         )
+        receipt["degradation_ledger"] = _record_failed_legs(route, results, agent_home) or "-"
         print(json.dumps(receipt, separators=(",", ":"), sort_keys=True))
         return 70
 
@@ -1142,6 +1167,7 @@ def main(argv: list[str] | None = None) -> int:
         admitted=len(tokens),
         interrupted_signal=interrupted_signal,
     )
+    receipt["degradation_ledger"] = _record_failed_legs(route, results, agent_home) or "-"
     print(json.dumps(receipt, separators=(",", ":"), sort_keys=True))
     if interrupted_signal:
         return 128 + interrupted_signal

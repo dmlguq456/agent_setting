@@ -51,6 +51,7 @@ from dispatch_mode_contract import (  # noqa: E402
     validate_route_mode_axes,
 )
 from worker_bootstrap import assigned_contract, worker_type_for_kind  # noqa: E402
+from dispatch_degradation import record_degradation  # noqa: E402
 
 ORDER = ["same-harness-headless", "cross-harness-headless", "native-subagent", "inline"]
 
@@ -967,6 +968,17 @@ def main() -> int:
                     print(f"child_proof={proof}")
                     print("attempt_trace=" + "|".join(attempts))
                     print("prior_attempt_ids=" + ",".join(x for values in prior_failures.values() for x in values))
+                    ledger = record_degradation(
+                        route_id=route.get("route_id"), route_node=node.get("id"),
+                        route_hash=route.get("route_hash"), dispatch_depth=node.get("dispatch_depth", 2),
+                        fallback_hop="native-subagent", execution_surface=surface,
+                        writer="stage-dispatch-fallback.py", reason="native-subagent-degraded",
+                        detail=proof, attempt_trace="|".join(attempts),
+                        fallback_ordinal=ordinal, fleet_visibility="degraded",
+                        registered_worker=0, route_file=str(args.route),
+                        completion_gate=node.get("completion_gate"),
+                    )
+                    print("degradation_ledger=" + (str(ledger) if ledger else "-"))
                     return 78
                 attempts.append(f"{ordinal}:native-subagent:skipped-child-proof-missing")
         else:
@@ -990,8 +1002,26 @@ def main() -> int:
                 print(f"last_direct_failure_exit={last['exit']}")
                 print(f"last_direct_failure_reason={last['reason']}")
                 print(f"last_direct_failure_detail={last['detail']}")
+            ledger = record_degradation(
+                route_id=route.get("route_id"), route_node=node.get("id"),
+                route_hash=route.get("route_hash"), dispatch_depth=node.get("dispatch_depth", 2),
+                fallback_hop="inline", execution_surface="inline",
+                writer="stage-dispatch-fallback.py", reason=hop.get("reason_enum") or "inline-degraded",
+                attempt_trace="|".join(attempts), fallback_ordinal=ordinal,
+                fleet_visibility="none", registered_worker=0, route_file=str(args.route),
+                completion_gate=node.get("completion_gate"), parent=args.parent,
+            )
+            print("degradation_ledger=" + (str(ledger) if ledger else "-"))
             return 79
-    return fail("fallback-chain-exhausted", 79, attempt_trace="|".join(attempts))
+    ledger = record_degradation(
+        route_id=route.get("route_id"), route_node=node.get("id"),
+        route_hash=route.get("route_hash"), dispatch_depth=node.get("dispatch_depth", 2),
+        writer="stage-dispatch-fallback.py", kind="chain-exhausted",
+        reason="fallback-chain-exhausted", attempt_trace="|".join(attempts),
+        route_file=str(args.route), completion_gate=node.get("completion_gate"), parent=args.parent,
+    )
+    return fail("fallback-chain-exhausted", 79, attempt_trace="|".join(attempts),
+                degradation_ledger=str(ledger) if ledger else "-")
 
 
 if __name__ == "__main__":

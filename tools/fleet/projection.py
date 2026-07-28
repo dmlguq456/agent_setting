@@ -125,7 +125,7 @@ def _active_node(node, state, job=None):
     )
 
 
-def _record_view(record, route_id, jobs, node_evidence=None, now=None):
+def _record_view(record, route_id, jobs, node_evidence=None, now=None, degradations=None):
     """Use route.py's pure state resolver so projection and legacy route views agree.
 
     Resolve this record's gate marks (2026-07-24) and pass them through, so a
@@ -136,13 +136,15 @@ def _record_view(record, route_id, jobs, node_evidence=None, now=None):
     marks = route.resolve_gate_marks({route_id: record}).get(route_id)
     return route._record_view(record, route_id, list(jobs), node_evidence or {},
                               time.time() if now is None else now,
-                              gate_marks_for_route=marks)
+                              gate_marks_for_route=marks,
+                              degradations_for_route=(degradations or {}).get(route_id, ()))
 
 
-def _record_nodes(record, route_id, jobs, node_evidence=None, now=None):
+def _record_nodes(record, route_id, jobs, node_evidence=None, now=None, degradations=None):
     if not isinstance(record, dict):
         return (), None
-    view = _record_view(record, route_id, jobs, node_evidence=node_evidence, now=now)
+    view = _record_view(record, route_id, jobs, node_evidence=node_evidence, now=now,
+                        degradations=degradations)
     all_nodes = []
     for node in view.get("nodes", []):
         all_nodes.append(dict(node))
@@ -157,6 +159,7 @@ def _record_nodes(record, route_id, jobs, node_evidence=None, now=None):
             parallel_group=node.get("parallel_group") or node.get("replica_group"),
             replica_group=node.get("replica_group"),
             model_profile=node.get("model_profile"), perspective=node.get("perspective"),
+            degradation=node.get("degradation"),
         ))
     return tuple(projections), view.get("progress")
 
@@ -228,9 +231,10 @@ def _evidence_owner_candidates(entity, node_evidence, route_records):
 
 
 def _projection_from_record(entity, record, route_id, jobs, node_evidence=None, now=None,
-                            route_node=None, owner=False):
+                            route_node=None, owner=False, degradations=None):
     from . import route
-    view = _record_view(record, route_id, jobs, node_evidence=node_evidence, now=now)
+    view = _record_view(record, route_id, jobs, node_evidence=node_evidence, now=now,
+                        degradations=degradations)
     nodes = tuple(view.get("nodes") or ())
     projections = tuple(ActiveNodeProjection(
         id=node.get("id"), depends_on=tuple(node.get("depends_on") or ()),
@@ -240,6 +244,7 @@ def _projection_from_record(entity, record, route_id, jobs, node_evidence=None, 
         parallel_group=node.get("parallel_group") or node.get("replica_group"),
         replica_group=node.get("replica_group"),
         model_profile=node.get("model_profile"), perspective=node.get("perspective"),
+        degradation=node.get("degradation"),
     ) for node in nodes)
     selected = next((node for node in projections if node.id == route_node), None)
     contract = _field(entity, "assigned_contract")
@@ -292,13 +297,26 @@ def exact_artifact_candidates(entity, artifact_root=None):
 
 
 def _artifact_stage(path):
-    names = {os.path.basename(item) for item in glob.glob(os.path.join(path, "*"))}
+    names = set()
+    for item in glob.glob(os.path.join(path, "*")):
+        name = os.path.basename(item)
+        if os.path.isdir(item) and name in {"dev_logs", "test_logs", "shards", "_internal"} and not _has_entries(item):
+            continue
+        names.add(name)
     for label, markers in (("report", ("report", "verification")),
                            ("test", ("test",)), ("exec", ("execute",)),
                            ("plan", ("plan",))):
         if any(any(marker in name.lower() for marker in markers) for name in names):
             return label
     return None
+
+
+def _has_entries(path):
+    try:
+        with os.scandir(path) as entries:
+            return any(True for _ in entries)
+    except OSError:
+        return False
 
 
 def _grounding_home():
@@ -693,7 +711,7 @@ def _owner_children(entity, jobs):
     return children
 
 
-def _candidate_projection(entity, candidate, jobs, route_records, node_evidence, now):
+def _candidate_projection(entity, candidate, jobs, route_records, node_evidence, now, degradations=None):
     """Adopt one registered leaf candidate without reopening it at render time."""
     rid = _field(candidate, "route_id")
     record, failure = _route_record(candidate, route_records=route_records)
@@ -709,13 +727,13 @@ def _candidate_projection(entity, candidate, jobs, route_records, node_evidence,
     return _projection_from_record(
         entity, record, rid, same_jobs,
         node_evidence=(node_evidence or {}).get(rid, {}),
-        now=now, route_node=route_node,
+        now=now, route_node=route_node, degradations=degradations,
     )
 
 
 def resolve_work_projection(entity, jobs=(), route_records=None, node_evidence=None,
                             artifact_root=None, now=None, spec_markers=None,
-                            cap_grounding=None, _seen=None):
+                            cap_grounding=None, _seen=None, degradations=None):
     """Resolve one entity using the approved evidence precedence."""
     seen = set() if _seen is None else _seen
     ident = (id(entity), _field(entity, "slug"), _field(entity, "session_id"))
@@ -734,7 +752,7 @@ def resolve_work_projection(entity, jobs=(), route_records=None, node_evidence=N
                                   ambiguity=MULTIPLE_LEAF_CANDIDATES)
         if len(leaf_candidates) == 1 and not _explicit(entity):
             return _candidate_projection(entity, leaf_candidates[0], jobs, route_records,
-                                         node_evidence, now)
+                                         node_evidence, now, degradations)
     elif not _explicit(entity):
         cwd = _realpath(_field(entity, "cwd"))
         harness = _field(entity, "harness")
@@ -747,7 +765,7 @@ def resolve_work_projection(entity, jobs=(), route_records=None, node_evidence=N
                                   ambiguity=MULTIPLE_CHILD_CWD_CANDIDATES)
         if len(cwd_candidates) == 1:
             return _candidate_projection(entity, cwd_candidates[0], jobs, route_records,
-                                         node_evidence, now)
+                                         node_evidence, now, degradations)
 
     record, failure = _route_record(entity, route_records=route_records)
     explicit = _explicit(entity)
@@ -764,13 +782,14 @@ def resolve_work_projection(entity, jobs=(), route_records=None, node_evidence=N
                 entity, record, _field(entity, "route_id"), same_jobs,
                 node_evidence=(node_evidence or {}).get(_field(entity, "route_id"), {}),
                 now=now, route_node=expected_node,
+                degradations=degradations,
                 owner=bool(_owner_children(entity, jobs)))
             # A direct owner route is valid only when every linked child agrees
             # with it.  Never silently privilege the owner's tuple over a child.
             child_projections = [resolve_work_projection(
                 child, jobs=jobs, route_records=route_records,
                 node_evidence=node_evidence, artifact_root=artifact_root,
-                now=now, spec_markers=spec_markers, _seen=seen)
+                now=now, spec_markers=spec_markers, _seen=seen, degradations=degradations)
                 for child in _owner_children(entity, jobs)]
             child_keys = {(p.route_id, p.route_hash) for p in child_projections
                           if p.source == "route-exact" and p.route_id}
@@ -794,12 +813,13 @@ def resolve_work_projection(entity, jobs=(), route_records=None, node_evidence=N
     child_projections = [resolve_work_projection(child, jobs=jobs, route_records=route_records,
                                                   node_evidence=node_evidence,
                                                   artifact_root=artifact_root, now=now,
-                                                  spec_markers=spec_markers, _seen=seen)
+                                                  spec_markers=spec_markers, _seen=seen,
+                                                  degradations=degradations)
                          for child in children]
     for rid, record, evidence in _evidence_owner_candidates(entity, node_evidence, route_records or {}):
         child_projections.append(_projection_from_record(
             entity, record, rid, [j for j in jobs if _field(j, "route_id") == rid],
-            node_evidence=evidence, now=now, owner=True))
+            node_evidence=evidence, now=now, owner=True, degradations=degradations))
     exact = [p for p in child_projections if p.source == "route-exact"]
     route_keys = {(p.route_id, p.route_hash) for p in exact}
     if len(route_keys) > 1:
@@ -857,7 +877,7 @@ def resolve_projection(*args, **kwargs):
 def attach_projections(sessions: Iterable[Session], jobs: Iterable[DispatchJob],
                       route_records=None, node_evidence=None, artifact_root=None, now=None,
                       spec_markers=None, spec_marker_home=None,
-                      capability_groundings=None):
+                      capability_groundings=None, degradations=None):
     """Attach work to every row and context only to interactive session rows."""
     sessions, jobs = list(sessions), list(jobs)
     route_records = _load_evidence_records(node_evidence, route_records)
@@ -885,7 +905,8 @@ def attach_projections(sessions: Iterable[Session], jobs: Iterable[DispatchJob],
             entity, jobs=jobs, route_records=route_records,
             node_evidence=node_evidence, artifact_root=artifact_root, now=now,
             spec_markers=spec_markers,
-            cap_grounding=(entity.cap_grounding if isinstance(entity, Session) else None))
+            cap_grounding=(entity.cap_grounding if isinstance(entity, Session) else None),
+            degradations=degradations)
         entity.stage = entity.work_projection.stage_label if isinstance(entity, DispatchJob) else getattr(entity, "stage", None)
     return sessions, jobs
 

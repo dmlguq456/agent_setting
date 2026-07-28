@@ -158,8 +158,9 @@ def main(argv=None):
             # into the projection or a node whose live job already went terminal silently
             # regresses to "pending" (see projection.py's resolve_work_projection).
             node_evidence = getattr(_dispatch.collect, "last_route_nodes", None)
+            degradations = getattr(_dispatch.collect, "last_degradations", None)
             return attach_projections(sessions, jobs, artifact_root=os.environ.get("AGENT_ARTIFACT_ROOT"),
-                                      node_evidence=node_evidence)
+                                      node_evidence=node_evidence, degradations=degradations)
         except Exception:
             return sessions, jobs
 
