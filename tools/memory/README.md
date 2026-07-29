@@ -48,7 +48,7 @@ python3 <agent-home>/tools/memory/mem.py <command>
 | `export [--target dump\|profile] [--apply]` | Export `dump.jsonl` or an on-demand human-readable profile cache. Profile export is dry-run unless `--apply` is supplied. |
 | `import <dump.jsonl>` | Recreate the DB exactly from a dump: delete existing records, replay the mirror, and rebuild FTS in the same connection. |
 | `project [--cwd]` | Build the compatibility projection. Session context uses `inject`, not this command. |
-| `migrate [--apply]` | Idempotently migrate legacy auto-memory, post-it, and Markdown source files. Dry-run by default. |
+| `migrate [--apply] [--cleanup-runtime-memory --cleanup-archive PATH]` | Idempotently migrate legacy auto-memory, post-it, and Markdown source files. Native runtime cleanup is separately opted in, verifies every authored topic against the DB, rejects unexpected files/symlinks, and content-verifies a new recovery archive before deletion. Dry-run by default. |
 | `lifecycle [--apply]` | Apply working expiry and expose durable duplicate/capacity candidates. Pending delivery records remain protected. |
 | `stats` | Print a grouped store snapshot. |
 | `log [--limit 20] [--action] [--tier] [--actor] [--json]` | Read the bounded write-event timeline (D-38), complementing the `stats` snapshot. |

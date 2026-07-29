@@ -12,7 +12,7 @@ Design boundary:
     storage, retrieval, scope, lifecycle, telemetry, and recovery contracts.
   - No external Python dependencies; rg accelerates session retrieval when present.
 """
-import argparse, datetime, hashlib, json, os, re, sqlite3, subprocess, sys
+import argparse, datetime, hashlib, json, os, re, shutil, sqlite3, subprocess, sys, tarfile
 from collections import namedtuple
 from pathlib import Path
 
@@ -2111,7 +2111,120 @@ def profile(aspect, list_mode=False):
 
 
 # ---------- migrate ----------
-def migrate(apply=False):
+def _runtime_memory_cleanup_plan():
+    """Return verified native runtime-memory directories and their file manifest.
+
+    Cleanup is deliberately narrower than migration discovery: only
+    ``PROJECTS/<encoded-project>/memory`` is eligible. Every authored topic must
+    already have one byte-equivalent (after the normal secret sanitizer) DB row
+    under its deterministic auto-memory source key. Generated indexes and
+    projections are archive-only compatibility artifacts.
+    """
+    candidates = []
+    manifest = {}
+    con = get_con()
+    try:
+        for memory_dir in sorted(PROJECTS.glob("*/memory")):
+            if memory_dir.is_symlink() or not memory_dir.is_dir():
+                raise RuntimeError(f"unsafe runtime-memory path: {memory_dir}")
+            project_ns = memory_dir.parent.name
+            files = []
+            for path in sorted(memory_dir.rglob("*")):
+                rel = path.relative_to(memory_dir)
+                if path.is_symlink():
+                    raise RuntimeError(f"symlink is not eligible for cleanup: {path}")
+                if path.is_dir():
+                    if rel.parts[0] != "_projection":
+                        raise RuntimeError(f"unexpected runtime-memory directory: {path}")
+                    continue
+                if not path.is_file() or path.suffix != ".md":
+                    raise RuntimeError(f"unexpected runtime-memory file: {path}")
+                if len(rel.parts) > 1 and rel.parts[0] != "_projection":
+                    raise RuntimeError(f"unexpected nested runtime-memory file: {path}")
+
+                data = path.read_bytes()
+                files.append({
+                    "path": rel.as_posix(),
+                    "size": len(data),
+                    "sha256": hashlib.sha256(data).hexdigest(),
+                })
+                if len(rel.parts) == 1 and path.name != "MEMORY.md":
+                    _meta, body = parse_record(data.decode("utf-8"))
+                    expected, _flags = sanitize(body)
+                    source = f"auto-memory:{project_ns}/{path.name}"
+                    rows = con.execute(
+                        "SELECT id, body FROM records WHERE source=? ORDER BY id", (source,)
+                    ).fetchall()
+                    if len(rows) != 1:
+                        raise RuntimeError(
+                            f"expected exactly one migrated row for {source}; found {len(rows)}"
+                        )
+                    if rows[0][1] != expected:
+                        raise RuntimeError(f"migrated body mismatch for {source}")
+            candidates.append(memory_dir)
+            manifest[project_ns] = files
+    finally:
+        con.close()
+    return candidates, manifest
+
+
+def _archive_runtime_memory(candidates, manifest, archive_path):
+    """Create and content-verify a recovery archive before native cleanup."""
+    archive_path = Path(archive_path).expanduser().resolve()
+    projects_root = PROJECTS.expanduser().resolve()
+    if archive_path == projects_root or projects_root in archive_path.parents:
+        raise RuntimeError("cleanup archive must be outside MEM_PROJECTS")
+    if archive_path.exists():
+        raise RuntimeError(f"cleanup archive already exists: {archive_path}")
+    archive_path.parent.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(archive_path, "x:gz") as tf:
+        for memory_dir in candidates:
+            arcname = Path("runtime-project-memory") / memory_dir.parent.name / "memory"
+            tf.add(memory_dir, arcname=arcname.as_posix(), recursive=True)
+
+    expected = {}
+    for project_ns, files in manifest.items():
+        for entry in files:
+            name = (Path("runtime-project-memory") / project_ns / "memory"
+                    / entry["path"]).as_posix()
+            expected[name] = (entry["size"], entry["sha256"])
+    observed = {}
+    with tarfile.open(archive_path, "r:gz") as tf:
+        for member in tf.getmembers():
+            if not member.isfile():
+                continue
+            stream = tf.extractfile(member)
+            if stream is None:
+                raise RuntimeError(f"archive member is unreadable: {member.name}")
+            data = stream.read()
+            observed[member.name] = (len(data), hashlib.sha256(data).hexdigest())
+    if observed != expected:
+        raise RuntimeError("cleanup archive verification failed")
+    return archive_path
+
+
+def cleanup_runtime_memory(apply=False, archive=None):
+    """Archive and retire verified Claude runtime project-memory directories."""
+    candidates, manifest = _runtime_memory_cleanup_plan()
+    topic_count = sum(
+        1 for files in manifest.values() for entry in files
+        if "/" not in entry["path"] and entry["path"] != "MEMORY.md"
+    )
+    print(f"  runtime cleanup: {len(candidates)} dir(s), {topic_count} verified topic(s)")
+    if not apply:
+        print("  runtime cleanup dry-run; use --apply with --cleanup-archive PATH")
+        return 0
+    if not archive:
+        raise RuntimeError("--cleanup-runtime-memory --apply requires --cleanup-archive PATH")
+    archive_path = _archive_runtime_memory(candidates, manifest, archive)
+    for memory_dir in candidates:
+        shutil.rmtree(memory_dir)
+    print(f"  runtime cleanup archive: {archive_path}")
+    print(f"  runtime cleanup removed: {len(candidates)} dir(s)")
+    return len(candidates)
+
+
+def migrate(apply=False, cleanup_native=False, cleanup_archive=None):
     print(f"# migrate  ({'APPLY' if apply else 'dry-run'})")
     created, skipped = 0, 0
 
@@ -2269,6 +2382,8 @@ def migrate(apply=False):
         sys.stderr.write(f"[migrate] Markdown source failed; continuing: {e}\n")
 
     print(f"  → {'created' if apply else 'would create'} {created}; skipped existing {skipped}")
+    if cleanup_native:
+        cleanup_runtime_memory(apply=apply, archive=cleanup_archive)
     return created
 
 
@@ -3682,6 +3797,12 @@ def main():
 
     mg = sub.add_parser("migrate", help="Migrate post-its, auto-memory, and Markdown files")
     mg.add_argument("--apply", action="store_true")
+    mg.add_argument(
+        "--cleanup-runtime-memory", action="store_true",
+        help="Archive and remove verified PROJECTS/*/memory directories after migration")
+    mg.add_argument(
+        "--cleanup-archive",
+        help="New .tar.gz recovery archive path required for applied runtime cleanup")
 
     lc = sub.add_parser("lifecycle", help="Inspect working expiry/graduation and durable duplicates")
     lc.add_argument("--apply", action="store_true")
@@ -3799,7 +3920,12 @@ def main():
     elif args.cmd == "project":
         project(args.cwd)
     elif args.cmd == "migrate":
-        migrate(apply=args.apply)
+        try:
+            migrate(apply=args.apply, cleanup_native=args.cleanup_runtime_memory,
+                    cleanup_archive=args.cleanup_archive)
+        except (OSError, RuntimeError, UnicodeError) as e:
+            sys.stderr.write(f"[migrate] cleanup aborted: {e}\n")
+            sys.exit(1)
     elif args.cmd == "lifecycle":
         lifecycle(apply=args.apply)
     elif args.cmd == "delete":
