@@ -495,7 +495,8 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
         f"{heartbeat}"
         "Assignment:\n"
         f"{task.rstrip()}\n\n"
-        "End with the kernel's exact three-line handoff and nothing after it.\n",
+        "End with the kernel's exact three-line handoff as the entire final message — "
+        "no summary sentence before it, nothing after it.\n",
         source,
     )
 

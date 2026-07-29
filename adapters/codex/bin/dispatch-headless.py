@@ -789,12 +789,15 @@ def dispatch_prompt(
             "parallel work while a registered child remains open. This fallback is not runtime "
             "completion parity (OPERATIONS.md §5.10).\n\n"
         )
+    # Both ends stated: "nothing after it" alone reads as permission to put a
+    # summary sentence before the block (2026-07-28 envelope losses).
     ending = (
         "End a child-registration turn only with `runtime_wait: registered-children`. "
         "When the full route is complete, end with the kernel's exact three-line handoff "
-        "and nothing after it.\n"
+        "as the entire final message — no summary sentence before it, nothing after it.\n"
         if supervised and owner_standard_plus
-        else "End with the kernel's exact three-line handoff and nothing after it.\n"
+        else "End with the kernel's exact three-line handoff as the entire final message — "
+        "no summary sentence before it, nothing after it.\n"
     )
     return (
         f"{sync_wait_clause}"

@@ -19,8 +19,15 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# The handoff is the trailing three lines of the final message. Anchoring at the
+# end rather than across the whole message keeps every guarantee the strict form
+# had — only the last block counts, so an earlier decoy never wins, and nothing
+# outside the captured groups reaches a result — while surviving the one failure
+# a prompt cannot prevent: a worker that prepends a summary sentence to an
+# otherwise exact handoff. Two 2026-07-28 pipelines died that way, each with a
+# correct artifact already on disk (plans/2026-07-29_handoff-tail-anchor).
 _HANDOFF_RE = re.compile(
-    r"\Aartifact: (?P<artifact>[^\n]+)\n"
+    r"(?:\A|\n)artifact: (?P<artifact>[^\n]+)\n"
     r"verdict: (?P<verdict>PASS|FAIL|BLOCKED)\n"
     r"blocker: (?P<blocker>[^\n]+)\Z"
 )
@@ -180,7 +187,9 @@ def _read_terminal(path: str | Path | None) -> dict[str, object]:
             "contract-violation",
             reason="missing-final-agent-message",
         )
-    match = _HANDOFF_RE.fullmatch(final_message.strip())
+    # search, not fullmatch: the pattern itself anchors the block to the end of
+    # the message, so anything before it is ignored rather than fatal.
+    match = _HANDOFF_RE.search(final_message.strip())
     if match is None:
         return _result(
             3,

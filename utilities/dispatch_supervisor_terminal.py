@@ -14,8 +14,11 @@ from dispatch_contract import reconcile_attempt_terminal
 
 CLASSIFIER_SOURCE = "supervisor-terminal-v1"
 _MAX_TAIL_BYTES = 1024 * 1024
+# Trailing-block anchor, kept in step with codex_dispatch_terminal._HANDOFF_RE —
+# the two must accept the same envelopes, or one surface reads a child as
+# finished while the other calls it malformed.
 _HANDOFF_RE = re.compile(
-    r"\Aartifact: [^\n]+\n"
+    r"(?:\A|\n)artifact: [^\n]+\n"
     r"verdict: (?P<verdict>PASS|FAIL|BLOCKED)\n"
     r"blocker: (?P<blocker>[^\n]+)\Z"
 )
@@ -90,7 +93,9 @@ def _api_status(value: object) -> str:
 
 
 def _handoff_terminal(text: object, *, event: str, process_exit: int) -> SupervisorTerminal:
-    match = _HANDOFF_RE.fullmatch(text.strip()) if isinstance(text, str) else None
+    # search, not fullmatch — the pattern anchors the block to the end of the
+    # message, so a prepended sentence is ignored rather than fatal.
+    match = _HANDOFF_RE.search(text.strip()) if isinstance(text, str) else None
     if match is None:
         return SupervisorTerminal(
             "dead-contract",

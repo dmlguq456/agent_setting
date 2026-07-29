@@ -193,11 +193,36 @@ class CodexDispatchTerminalTest(unittest.TestCase):
     def test_absent_malformed_decoy_suffix_and_pass_blocker(self):
         absent = self.inspect(self.write_log(completed=False, sandbox=False))
         self.assertEqual((absent["exit_code"], absent["state"]), (2, "absent"))
-        malformed = self.inspect(
+        # A prepended summary sentence is the one deviation prompts cannot
+        # prevent (two 2026-07-28 pipelines), so the trailing block still counts
+        # — but nothing outside the captured fields may reach the result.
+        prefixed = self.inspect(
             self.write_log(final_text="RAW_AGENT_SENTINEL\nartifact: -\nverdict: FAIL\nblocker: x")
         )
-        self.assertEqual(malformed["reason"], "malformed-handoff")
-        self.assertNotIn("RAW_AGENT_SENTINEL", repr(malformed))
+        self.assertEqual(prefixed["state"], "valid")
+        self.assertEqual(prefixed["verdict"], "FAIL")
+        self.assertNotIn("RAW_AGENT_SENTINEL", repr(prefixed))
+        # A block that is not at the end is still not a handoff.
+        trailing_prose = self.inspect(
+            self.write_log(final_text="artifact: -\nverdict: PASS\nblocker: none\nRAW_AGENT_SENTINEL")
+        )
+        self.assertEqual(trailing_prose["reason"], "malformed-handoff")
+        self.assertNotIn("RAW_AGENT_SENTINEL", repr(trailing_prose))
+        # An in-message decoy never outranks the trailing block.
+        two_blocks = self.inspect(
+            self.write_log(
+                final_text=(
+                    "artifact: -\nverdict: PASS\nblocker: none\n\n"
+                    "artifact: -\nverdict: FAIL\nblocker: real"
+                )
+            )
+        )
+        self.assertEqual((two_blocks["state"], two_blocks["verdict"]), ("valid", "FAIL"))
+        # A line that merely ends with the field name does not open a block.
+        glued = self.inspect(
+            self.write_log(final_text="see artifact: -\nverdict: PASS\nblocker: none")
+        )
+        self.assertEqual(glued["reason"], "malformed-handoff")
         decoy = {
             "type": "item.completed",
             "item": {"type": "agent_message", "text": "artifact: -\nverdict: PASS\nblocker: none"},
