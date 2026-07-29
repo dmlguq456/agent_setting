@@ -18,12 +18,16 @@ no-progress, capacity, orphan) are already covered by dispatch_lifecycle.test.py
 dispatch_registry.test.py, stage_dispatch_*.test.py and the fleet suite; this file
 does not duplicate them — it fills the untested boundary column.
 """
+import hashlib
 import importlib.util
+import json
 import math
+import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -223,6 +227,315 @@ class FallbackRuntimeWiringTest(unittest.TestCase):
             self.assertEqual(captured.get("timeout"), expected)
             self.assertNotEqual(captured.get("timeout"), 10.0, "sentinel 0 still collapses to the 10s wall")
             self.assertTrue(math.isfinite(captured["timeout"]))
+
+
+R = _load("dispatch_registry", "dispatch-registry.py")
+J = _load("dispatch_completion_join", "dispatch_completion_join.py")
+
+
+def _dead_pid():
+    pid = 4190000
+    while Path(f"/proc/{pid}").exists():
+        pid += 1
+    return pid
+
+
+_META_AXES = {
+    "attempt_schema_version": "2",
+    "dispatch_depth": "2",
+    "transport": "headless",
+    "execution_surface": "registered-headless",
+    "registered_worker": "1",
+    "fallback_hop": "cross-harness-headless",
+    "harness": "codex",
+    "route_id": "rt-cell",
+    "route_node": "plan-alternative",
+    "route_hash": "sha256:cellhash",
+    "registry_digest": "sha256:cellreg",
+    "completion_gate": "code-plan",
+    "attempt_id": "att-cell0001",
+}
+
+
+class _TerminalCellFixture:
+    """One {verdict} x {artifact} x {marker} x {process} cell on disk."""
+
+    def __init__(self, td, *, verdict="PASS", artifact_kind="dir",
+                 process="dead", marker=False):
+        base = Path(td)
+        self.home = base / "home"
+        self.worktree = base / "wt"
+        self.root = base / "root"
+        for path in (self.home, self.worktree, self.root):
+            path.mkdir(parents=True, exist_ok=True)
+        self.jobs = base / "jobs.log"
+        log = base / "child.codex.jsonl"
+
+        if artifact_kind == "dir":
+            artifact = f"{self.root}/"
+        elif artifact_kind == "file":
+            artifact_path = self.root / "plan.alternative.md"
+            artifact_path.write_text("plan body\n", encoding="utf-8")
+            artifact = str(artifact_path)
+        else:  # "none"
+            artifact = "-"
+        self.artifact = artifact
+        events = [
+            {"type": "item.completed",
+             "item": {"id": "i1", "type": "agent_message",
+                      "text": f"artifact: {artifact}\nverdict: {verdict}\nblocker: none"}},
+            {"type": "turn.completed", "usage": {}},
+        ]
+        log.write_text("\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8")
+
+        if process == "live":
+            pid = os.getpid()
+            pid_start = R.process_start_ticks(pid)
+        else:
+            pid = _dead_pid()
+            pid_start = "7486194400"
+        meta = dict(_META_AXES)
+        meta.update({
+            "artifact_root": str(self.root),
+            "route_file": str(base / "route.json"),
+            "log_file": str(log),
+            "pid": str(pid),
+            "pid_start": str(pid_start),
+            "pgid": str(pid),
+        })
+        self.meta = meta
+        if marker:
+            self._write_marker()
+        pipe = ",".join(f"{k}={v}" for k, v in meta.items())
+        self.raw = (f"2026-07-29T00:00:00.000000Z\topen\t{self.worktree}\t"
+                    f"{self.worktree}\tcell-slug\t{pipe}")
+        self.jobs.write_text(self.raw + "\n", encoding="utf-8")
+
+    def _write_marker(self):
+        directory = self.home / ".dispatch" / "completion" / "rt-cell"
+        directory.mkdir(parents=True, exist_ok=True)
+        evidence_path = self.root / "plan.alternative.md"
+        if not evidence_path.is_file():
+            evidence_path.write_text("plan body\n", encoding="utf-8")
+        sha = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+        marker = {
+            "schema_version": 2,
+            "route_id": "rt-cell",
+            "route_hash": "sha256:cellhash",
+            "registry_digest": "sha256:cellreg",
+            "node_id": "plan-alternative",
+            "attempt_id": "att-cell0001",
+            "completion_gate": "code-plan",
+            "dispatch_depth": 2,
+            "transport": "headless",
+            "execution_surface": "registered-headless",
+            "registered_worker": True,
+            "fallback_hop": "cross-harness-headless",
+            "sequence": 1,
+            "evidence": {"path": str(evidence_path), "sha256": sha},
+        }
+        history = directory / "plan-alternative.1.json"
+        history.write_text(json.dumps(marker), encoding="utf-8")
+        linkage = {
+            "schema_version": 2,
+            "route_id": "rt-cell",
+            "node_id": "plan-alternative",
+            "attempt_id": "att-cell0001",
+            "dispatch_depth": 2,
+            "transport": "headless",
+            "execution_surface": "registered-headless",
+            "registered_worker": True,
+            "fallback_hop": "cross-harness-headless",
+            "completion_marker": str(directory / "plan-alternative.json"),
+            "completion_marker_history": str(history),
+            "evidence_sha256": sha,
+        }
+        (directory / "plan-alternative.att-cell0001.attempt.json").write_text(
+            json.dumps(linkage), encoding="utf-8"
+        )
+
+    def classify(self):
+        rows = R.read_rows(self.jobs)
+        assert rows and rows[0]["attempt_contract_status"] == "current", rows
+        args = type("Args", (), {
+            "agent_home": self.home, "now": time.time(),
+            "jobs": self.jobs, "integration_ref": None,
+        })()
+        with mock.patch.dict(os.environ, {"AGENT_ARTIFACT_ROOT": str(self.root)}):
+            return R.classify(rows[0], args, {}, rows)
+
+    def child_row(self):
+        rows = R.read_rows(self.jobs)
+        return J.ChildRow(
+            order=0, status="open", slug="cell-slug",
+            attempt_id="att-cell0001", raw=self.raw, metadata=rows[0]["meta"],
+        )
+
+
+class TerminalHandoffMarkerBoundaryTest(unittest.TestCase):
+    """Reconciler cells for the 2026-07-29 guard-parity incident: a route-bound
+    PASS handoff must never classify `completed-*` without its completion
+    marker (SD-70). Pre-fix, `classify` closed the incident row as
+    `completed-terminal-handoff` from the envelope alone, hiding a worker that
+    produced no in-scope artifact — the artifact-blind `inspect_terminal_log`
+    disagreed with the artifact-checking `inspect_terminal_attempt` used by the
+    supervisor on the same envelope.
+    """
+
+    def test_pass_dir_artifact_dead_process_is_dead_invalid_envelope(self):
+        # The exact incident cell: PASS + directory artifact + no marker +
+        # quiescent process. Completed classification would hide the failure.
+        with tempfile.TemporaryDirectory() as td:
+            cell = _TerminalCellFixture(td, artifact_kind="dir", process="dead")
+            category, reason, note = cell.classify()
+        self.assertEqual(note, "dead-invalid-envelope")
+        self.assertEqual(category, "terminal-handoff")
+        self.assertIn("marker-missing", reason)
+
+    def test_pass_file_artifact_dead_process_is_dead_missing_marker(self):
+        # A readable in-root artifact without the SD-70 marker is still not
+        # completion evidence — but the note distinguishes the envelope layer.
+        with tempfile.TemporaryDirectory() as td:
+            cell = _TerminalCellFixture(td, artifact_kind="file", process="dead")
+            category, reason, note = cell.classify()
+        self.assertEqual(note, "dead-missing-marker")
+        self.assertEqual(category, "terminal-handoff")
+
+    def test_pass_no_marker_never_proposes_completed(self):
+        # Regression guard across the artifact x process product: no marker-less
+        # PASS cell may propose a `completed-*` note.
+        for artifact_kind in ("dir", "file", "none"):
+            for process in ("dead", "live"):
+                with tempfile.TemporaryDirectory() as td:
+                    cell = _TerminalCellFixture(
+                        td, artifact_kind=artifact_kind, process=process
+                    )
+                    _, _, note = cell.classify()
+                self.assertFalse(
+                    str(note or "").startswith("completed"),
+                    msg=f"{artifact_kind}/{process} -> {note}",
+                )
+
+    def test_pass_live_process_stays_active(self):
+        # A still-draining worker that already printed its envelope must not be
+        # closed dead by the reconciler (SD-79: quiescence gates the close).
+        with tempfile.TemporaryDirectory() as td:
+            cell = _TerminalCellFixture(td, artifact_kind="file", process="live")
+            category, _, note = cell.classify()
+        self.assertEqual(category, "active")
+        self.assertIsNone(note)
+
+    def test_pass_marker_linked_closes_completed_marker(self):
+        # With the SD-70 marker + linkage present the row still closes as
+        # completed — the fix must not regress legal marker-backed completion.
+        with tempfile.TemporaryDirectory() as td:
+            cell = _TerminalCellFixture(
+                td, artifact_kind="file", process="dead", marker=True
+            )
+            category, reason, note = cell.classify()
+        self.assertEqual(note, "completed-marker")
+        self.assertEqual((category, reason),
+                         ("marker-backed-stale", "completed-marker-linkage"))
+
+    def test_fail_and_blocked_keep_typed_failure_notes(self):
+        for verdict, expected in (("FAIL", "dead-worker-fail"),
+                                  ("BLOCKED", "dead-worker-blocked")):
+            with tempfile.TemporaryDirectory() as td:
+                cell = _TerminalCellFixture(td, verdict=verdict, process="dead")
+                category, _, note = cell.classify()
+            self.assertEqual((category, note), ("terminal-handoff", expected),
+                             msg=verdict)
+
+    def test_completed_fallback_formula_not_reintroduced(self):
+        # Source guard in this file's convention: the pre-fix one-liner that
+        # turned any PASS envelope into completed-terminal-handoff must not
+        # come back.
+        src = Path(__file__).with_name("dispatch-registry.py").read_text(encoding="utf-8")
+        self.assertNotIn('or "completed-terminal-handoff"', src)
+
+
+class InvalidEnvelopeChildDegradeTest(unittest.TestCase):
+    """Supervisor-side cells: `close_finished_child` on a child whose envelope
+    can never legally complete (artifact not a readable in-root file). Pre-fix
+    it returned only a skip reason, the owner got an impossible remediation
+    prompt, and the second resume raised owned-children-remain-open-after-resume
+    — killing the whole pipeline (incident owner att-7eb9d956, exit 70).
+    """
+
+    def test_quiescent_invalid_artifact_closes_typed_dead(self):
+        with tempfile.TemporaryDirectory() as td:
+            cell = _TerminalCellFixture(td, artifact_kind="dir", process="dead")
+            row = cell.child_row()
+            observed = J.observed_attempt_liveness(row.status, row.metadata,
+                                                   terminal_envelope=True)
+            self.assertEqual(observed.state, "reconcile-needed",
+                             msg="fixture must present a quiescent exact process")
+            with mock.patch.dict(os.environ, {"AGENT_ARTIFACT_ROOT": str(cell.root)}):
+                outcome = J.close_finished_child(row, jobs=cell.jobs)
+            self.assertEqual(outcome, "")
+            closed = cell.jobs.read_text(encoding="utf-8")
+        self.assertIn("\tdone\t", closed)
+        self.assertIn("note=dead-invalid-envelope", closed)
+        self.assertIn("reconcile_reason=terminal-invalid:artifact-missing", closed)
+
+    def test_quiescent_pass_without_artifact_closes_typed_dead(self):
+        with tempfile.TemporaryDirectory() as td:
+            cell = _TerminalCellFixture(td, artifact_kind="none", process="dead")
+            with mock.patch.dict(os.environ, {"AGENT_ARTIFACT_ROOT": str(cell.root)}):
+                outcome = J.close_finished_child(cell.child_row(), jobs=cell.jobs)
+            self.assertEqual(outcome, "")
+            closed = cell.jobs.read_text(encoding="utf-8")
+        self.assertIn("note=dead-invalid-envelope", closed)
+
+    def test_live_process_keeps_skip_and_row_open(self):
+        # Never race a still-draining worker: with the exact process live the
+        # skip reason is preserved and the row stays open.
+        with tempfile.TemporaryDirectory() as td:
+            cell = _TerminalCellFixture(td, artifact_kind="dir", process="live")
+            with mock.patch.dict(os.environ, {"AGENT_ARTIFACT_ROOT": str(cell.root)}):
+                outcome = J.close_finished_child(cell.child_row(), jobs=cell.jobs)
+            self.assertEqual(outcome, "terminal-invalid:artifact-missing")
+            self.assertIn("\topen\t", cell.jobs.read_text(encoding="utf-8"))
+
+    def test_unverifiable_process_keeps_row_open(self):
+        # Missing process identity is no quiescence proof (SD-79 fail-closed):
+        # the degrade close must not fire.
+        with tempfile.TemporaryDirectory() as td:
+            cell = _TerminalCellFixture(td, artifact_kind="dir", process="dead")
+            metadata = {k: v for k, v in cell.child_row().metadata.items()
+                        if k not in {"pid", "pid_start", "pgid"}}
+            row = J.ChildRow(order=0, status="open", slug="cell-slug",
+                             attempt_id="att-cell0001", raw=cell.raw,
+                             metadata=metadata)
+            with mock.patch.dict(os.environ, {"AGENT_ARTIFACT_ROOT": str(cell.root)}):
+                outcome = J.close_finished_child(row, jobs=cell.jobs)
+            self.assertEqual(outcome, "terminal-invalid:artifact-missing")
+            self.assertIn("\topen\t", cell.jobs.read_text(encoding="utf-8"))
+
+    def test_valid_readable_artifact_still_routes_completion(self):
+        # The legal path is untouched: a readable in-root artifact goes through
+        # run_route_completion, not the degrade close.
+        with tempfile.TemporaryDirectory() as td:
+            cell = _TerminalCellFixture(td, artifact_kind="file", process="dead")
+            with mock.patch.dict(os.environ, {"AGENT_ARTIFACT_ROOT": str(cell.root)}), \
+                 mock.patch.object(J, "run_route_completion", return_value="") as sealed:
+                outcome = J.close_finished_child(cell.child_row(), jobs=cell.jobs)
+            self.assertEqual(outcome, "")
+            sealed.assert_called_once()
+            self.assertIn("\topen\t", cell.jobs.read_text(encoding="utf-8"))
+
+    def test_reconcile_finished_children_reports_degrade_as_closed(self):
+        # The supervisor consumes this exact seam: a degraded child must come
+        # back with an empty reason so `unresolved` shrinks instead of raising
+        # owned-children-remain-open-after-resume.
+        with tempfile.TemporaryDirectory() as td:
+            cell = _TerminalCellFixture(td, artifact_kind="dir", process="dead")
+            row = cell.child_row()
+            with mock.patch.dict(os.environ, {"AGENT_ARTIFACT_ROOT": str(cell.root)}):
+                outcomes = J.reconcile_finished_children(
+                    {row.attempt_id: row}, {row.attempt_id}, jobs=cell.jobs
+                )
+        self.assertEqual(outcomes, {"att-cell0001": ""})
 
 
 if __name__ == "__main__":

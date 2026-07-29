@@ -30,7 +30,10 @@ from dispatch_contract import (DispatchContractError, annotate_attempt_row_if,
                                reconcile_local_registry, resolve_agent_home,
                                signal_exact_process_group,
                                validate_attempt_metadata)  # noqa: E402
-from codex_dispatch_terminal import inspect_terminal_log  # noqa: E402
+from codex_dispatch_terminal import (  # noqa: E402
+    inspect_terminal_attempt,
+    inspect_terminal_log,
+)
 _cleanup_spec = importlib.util.spec_from_file_location("worktree_cleanup", ROOT / "utilities/worktree-cleanup.py")
 cleanup = importlib.util.module_from_spec(_cleanup_spec)
 sys.modules[_cleanup_spec.name] = cleanup
@@ -404,12 +407,31 @@ def classify(row, args, newest_orders, rows=None):
         and meta.get("route_node")
         and terminal
     ):
-        terminal_note = terminal.get("failure_note") or "completed-terminal-handoff"
-        return (
-            "terminal-handoff",
-            f"{terminal['terminal_event']}:{terminal['verdict']}",
-            terminal_note,
-        )
+        reason = f"{terminal['terminal_event']}:{terminal['verdict']}"
+        if terminal.get("failure_note"):
+            return "terminal-handoff", reason, terminal["failure_note"]
+        # SD-70: a route-bound PASS completes only through its completion
+        # marker. The envelope alone never proves completion, so a marker-less
+        # PASS row is either a still-draining worker or a typed worker death —
+        # never `completed-*`.
+        if _marker_backed_repair(row, args.agent_home):
+            return "marker-backed-stale", "completed-marker-linkage", "completed-marker"
+        exact = classify_attempt_evidence(proc_inputs(row, args.agent_home), args.now)
+        if exact and exact["state"] == "working":
+            return "active", exact["rule"], None
+        if exact and exact["state"] in {"done", "dead"}:
+            attempt_view = inspect_terminal_attempt(
+                meta.get("log_file"),
+                worktree=row.get("worktree"),
+                artifact_root_metadata=meta.get("artifact_root"),
+            )
+            note = (
+                "dead-missing-marker"
+                if attempt_view.get("artifact_state") == "readable"
+                else "dead-invalid-envelope"
+            )
+            return "terminal-handoff", f"{reason}:marker-missing", note
+        return "terminal-draining", f"{reason}:marker-missing-quiescence-unverifiable", None
     exact = classify_attempt_evidence(proc_inputs(row, args.agent_home), args.now)
     if exact and exact["state"] == "working": return "active", exact["rule"], None
     if exact and exact["state"] == "done": return "terminal-heartbeat", exact["rule"], "completed-terminal-heartbeat"

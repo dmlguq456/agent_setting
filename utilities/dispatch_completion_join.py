@@ -28,6 +28,8 @@ from typing import Callable
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import (  # noqa: E402
+    DispatchContractError,
+    close_attempt_row,
     observed_attempt_liveness,
 )
 from codex_dispatch_terminal import (  # noqa: E402
@@ -1449,9 +1451,21 @@ def close_finished_child(row: ChildRow, *, jobs: str | Path) -> str:
         # never raw agent text.
         skip = "terminal-%s" % (terminal.get("state") or "absent")
         detail = terminal.get("reason")
-        return f"{skip}:{detail}" if detail else skip
+        reason = f"{skip}:{detail}" if detail else skip
+        if (
+            str(terminal.get("state")) == "invalid"
+            and str(detail or "").startswith("artifact-")
+            and _close_invalid_envelope_child(row, jobs=jobs, reason=reason)
+        ):
+            return ""
+        return reason
     if terminal.get("artifact_state") != "readable":
-        return "evidence-%s" % (terminal.get("artifact_state") or "absent")
+        reason = "evidence-%s" % (terminal.get("artifact_state") or "absent")
+        if str(terminal.get("verdict")) == "PASS" and _close_invalid_envelope_child(
+            row, jobs=jobs, reason=reason
+        ):
+            return ""
+        return reason
     # The inspector never returns a raw path — it hands back a bounded
     # url-safe base64 form so no control byte can reach a command line.
     encoded = str(terminal.get("artifact_path_b64") or "")
@@ -1484,6 +1498,39 @@ def close_finished_child(row: ChildRow, *, jobs: str | Path) -> str:
         if value:
             command += [flag, str(value)]
     return run_route_completion(command)
+
+
+def _close_invalid_envelope_child(
+    row: ChildRow, *, jobs: str | Path, reason: str
+) -> bool:
+    """Close a quiescent child whose terminal envelope can never legally complete.
+
+    The worker reached its semantic terminal — an envelope exists — but named
+    no readable in-root artifact file, so the completion-marker path (SD-70)
+    can never run for this attempt and a remediation continuation cannot
+    change the outcome. Recording a typed death keeps the route node
+    incomplete for re-dispatch instead of deadlocking the supervised owner
+    into `owned-children-remain-open-after-resume`. A live or unverifiable
+    process keeps the row open — this never races a still-draining worker.
+    """
+
+    observed = observed_attempt_liveness(
+        row.status, row.metadata, terminal_envelope=True
+    )
+    if observed.state != "reconcile-needed" or observed.process_state != "quiescent":
+        return False
+    try:
+        return close_attempt_row(
+            Path(jobs),
+            row.attempt_id,
+            "dead-invalid-envelope",
+            evidence={
+                "classifier_source": "completion-join-invalid-envelope-v1",
+                "reconcile_reason": reason,
+            },
+        )
+    except DispatchContractError:
+        return False
 
 
 def run_route_completion(command: list[str]) -> str:
