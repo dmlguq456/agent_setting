@@ -28,9 +28,11 @@ touches the named domain.
 
 ## Routing and Execution
 
-Route by `core/WORKFLOW.md §0.2`, apply its §0.3 gate, and present the
-five-field card in §0.4 before material work unless scope and route are already
-approved. Load full capability detail only in the acting owner or worker; spec
+Route by `core/WORKFLOW.md §0.2`: when a request matches one manifest
+`entry-router` trigger and no exclusion, that entry is the primary route
+and `direct` sets intensity, not routing. Apply §0.3 and present the
+five-field card in §0.4 before material work unless scope and route are
+already approved. Load full capability detail only in the acting owner or worker; spec
 work also requires the spec-read gate.
 
 For `autopilot-code`, `direct` is inline, `quick` is one registered dispatch-depth-1

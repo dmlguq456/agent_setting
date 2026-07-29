@@ -65,9 +65,11 @@ partial. OpenCode native UI/config owns model and context fields.
 
 ## Dispatch
 
-Route by `core/WORKFLOW.md §0.2`, apply its §0.3 gate, and present the
-five-field card in §0.4 before material work unless scope and route are already
-approved. Load full capability detail only in the acting owner or worker.
+Route by `core/WORKFLOW.md §0.2`: when a request matches one manifest
+`entry-router` trigger and no exclusion, that entry is the primary route
+and `direct` sets intensity, not routing. Apply §0.3 and present the
+five-field card in §0.4 before material work unless scope and route are
+already approved. Load full capability detail only in the acting owner or worker.
 
 Check `preflight.sh headless [--check] <worktree>`. Launch only registered jobs
 through `preflight.sh dispatch --dry-run|--register|--start` with the complete

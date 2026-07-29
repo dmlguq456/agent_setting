@@ -21,6 +21,8 @@ need() { # need <file> <pattern> <label>
 need core/WORKFLOW.md   '### 0.2. Semantic Primary Routing'                 'WORKFLOW §0.2 semantic primary routing 존재'
 need core/WORKFLOW.md   '### 0.3. Pre-Execution Gate for Long-Running Work' 'WORKFLOW §0.3 pre-execution gate 존재'
 need core/WORKFLOW.md   'never absorbs a secondary'                         'WORKFLOW §0.2 상호 대체 금지 절'
+need core/WORKFLOW.md   'uses that entry as the primary route'              'matching entry-router primary preference 존재'
+need core/WORKFLOW.md   'intensity inside the selected entry route'         'direct entry 우회 금지 절'
 need core/OPERATIONS.md 'Main-session role contract'                        'OPERATIONS §5.10 main-session role contract 존재'
 need core/OPERATIONS.md 'Inline exceptions'                                 'OPERATIONS §5.10 inline exceptions 존재'
 need core/OPERATIONS.md 'Delegation surfaces are distinct'                  'OPERATIONS §5.10 delegation surfaces 존재'
@@ -33,6 +35,8 @@ need capabilities/autopilot-refine.md '## Routing Boundary'      'autopilot-refi
 need capabilities/autopilot-refine.md 'autopilot-lab'            'autopilot-refine → lab primary 위임 절'
 need capabilities/autopilot-spec.md   'never substitutes'        'autopilot-spec spec-sync 비대체 절'
 need capabilities/autopilot-note.md   '## Routing Boundary'      'autopilot-note Routing Boundary 존재'
+need capabilities/analyze-project.md  'explicit analysis request defaults to persistent output' 'analyze-project 초기 분석 기본값 존재'
+need capabilities/analyze-project.md  'Artifact absence alone is not a trigger' '산출물 부재 단독 트리거 금지'
 
 # 3. generated Codex projection 이 topology 를 실어 나르는가 (파리티 갭 회귀)
 need adapters/codex/skills/autopilot-lab/SKILL.md 'capabilities/autopilot-lab.md' 'Codex lab projection 에 owner pointer 존재'
@@ -51,7 +55,8 @@ need skills/autopilot-lab/references/eval-procedure.md 'pre-execution gate' 'lab
 
 # 6. 행동 드릴 fixture 존재 (Cases A–E)
 for c in r_route_lab_eval_primary r_route_refine_doc_only r_route_spec_policy_lab_exec \
-         g_subagent_scope_headless g_eval_stage_dispatch_or_reason; do
+         r_route_analyze_project_initial g_subagent_scope_headless \
+         g_eval_stage_dispatch_or_reason; do
   d="loops/drill/cases_growing/$c"
   if [ -f "$d/prompt.md" ] && [ -f "$d/fixture.sh" ] && [ -f "$d/assert.sh" ] && [ -f "$d/config" ]; then
     ok "drill fixture $c 완비"

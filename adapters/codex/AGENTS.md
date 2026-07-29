@@ -95,9 +95,11 @@ tool to claim Codex parity.
 
 ## Dispatch
 
-Route by `core/WORKFLOW.md §0.2`, apply its §0.3 gate, and present the
-five-field card in §0.4 before material work unless scope and route are already
-approved. Load full capability detail only in the acting owner or worker.
+Route by `core/WORKFLOW.md §0.2`: when a request matches one manifest
+`entry-router` trigger and no exclusion, that entry is the primary route
+and `direct` sets intensity, not routing. Apply §0.3 and present the
+five-field card in §0.4 before material work unless scope and route are
+already approved. Load full capability detail only in the acting owner or worker.
 
 An ordinary dispatch-depth-1 owner launches through `preflight.sh dispatch-owner
 --dry-run|--register|--start`, a separate low-level surface from `preflight.sh
