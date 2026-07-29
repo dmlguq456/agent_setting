@@ -23,12 +23,14 @@ simple factual or explanatory answer that requests no new durable artifact, or
 an explicit conversational/no-files constraint.
 `direct` is an intensity inside the selected entry route, not a bypass around entry routing.
 
-Before material work or read-only context recovery proceeds, make the memory
-opportunity explicit: record `recall` with one focused query when prior context
-could materially improve the judgment, or record `skip` with a short contextual
-reason. Use `mem recall-gate` (or the adapter wrapper), which records no raw
-prompt. This gate makes a previously silent omission observable; it does not
-classify the prompt, prescribe topic categories, or restore automatic recall.
+Before material work or read-only context recovery proceeds, confirm that the
+current main-session prompt received its bounded capsule candidate probe. The
+probe searches mechanically but does not decide relevance; inspect a candidate's
+full record before applying it and ignore unrelated candidates. If the prompt
+hook is unavailable or failed, record `recall` with one focused query or `skip`
+with a short contextual reason through `mem recall-gate`. Neither path stores the
+raw prompt, classifies it, or prescribes topic categories. Registered route-bound
+workers do not run this main-session lifecycle and remain exempt from its receipt.
 
 ### 0.1. Read-Only Orientation Before Capability Routing
 

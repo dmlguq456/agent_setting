@@ -109,8 +109,8 @@ fallback.
 
 ## Memory and Context
 
-Intake: record `recall` or `skip` via `preflight.sh recall-gate <cwd> ...`.
-Recall by targeted query; retrieve pending obligations before use.
+Main prompts receive capsule headline/IDs; read relevant records fully.
+Fallback: `preflight.sh recall-gate <cwd> ...`. Workers skip it.
 
 OpenCode token self-regulation remains explicitly deferred: Phase 2 automatic accounting and the isolated experiment CLI are not projected; it does not copy
 Codex token-budget hooks or mutate runtime config. Ordinary lifecycle context

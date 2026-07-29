@@ -17,6 +17,8 @@ const designPattern = /(designs?\/|\/design\/|spec\/design|preview\.html$|slides
 // spec-backed cwd. Mirrors Claude's PreToolUse[Skill] spec-skill-gate scope.
 const specGovernedCapabilities = new Set(["autopilot-code", "autopilot-spec"])
 const seenLifecycle = new Set()
+const promptBySession = new Map()
+const turnBySession = new Map()
 
 function baseDir(ctx) {
   return ctx.worktree || ctx.directory || process.cwd()
@@ -153,10 +155,31 @@ function collectPreflight(command, args) {
   return [result.stdout, result.stderr].filter(Boolean).join("\n").trim()
 }
 
+function collectCandidates(args) {
+  const result = spawnSync(preflight, ["candidates", ...args], {
+    cwd: root,
+    env: { ...process.env, AGENT_HOME: root },
+    encoding: "utf8",
+    timeout: 3000,
+    killSignal: "SIGKILL",
+  })
+  if (result.error || result.status !== 0) return ""
+  return (result.stdout || "").trim()
+}
+
 function appendContext(output, text) {
   if (!text) return
   if (!Array.isArray(output.system)) output.system = []
   output.system.push(text)
+}
+
+function promptText(output) {
+  if (typeof output?.message?.content === "string") return output.message.content
+  if (!Array.isArray(output?.parts)) return ""
+  return output.parts
+    .filter((part) => part && part.type === "text" && typeof part.text === "string")
+    .map((part) => part.text)
+    .join("\n")
 }
 
 export const AgentHarnessGuards = async (ctx) => {
@@ -179,6 +202,21 @@ export const AgentHarnessGuards = async (ctx) => {
       // when the OpenCode SQLite session mtime is inconclusive.
       touchHeartbeat(dispatchSlug())
     }
+    if (event && event.type === "session.deleted") {
+      const sid = (event.properties && event.properties.sessionID) || ""
+      if (sid) {
+        promptBySession.delete(sid)
+        turnBySession.delete(sid)
+      }
+    }
+  },
+  "chat.message": async (input, output) => {
+    if (isWorkerSession()) return
+    const sid = input.sessionID || output?.message?.sessionID || "opencode-plugin"
+    const prompt = promptText(output)
+    const turn = input.messageID || output?.message?.id || ""
+    if (prompt) promptBySession.set(sid, prompt)
+    if (turn) turnBySession.set(sid, turn)
   },
   "experimental.chat.system.transform": async (input, output) => {
     const sid = input.sessionID || "opencode-plugin"
@@ -191,6 +229,12 @@ export const AgentHarnessGuards = async (ctx) => {
     if (!seenLifecycle.has(sid)) {
       seenLifecycle.add(sid)
       appendContext(output, collectPreflight("memory", [cwd]))
+    }
+    const prompt = promptBySession.get(sid) || ""
+    const turn = turnBySession.get(sid) || ""
+    if (prompt) {
+      appendContext(output, collectCandidates([prompt, cwd, sid, turn]))
+      promptBySession.delete(sid)
     }
     appendContext(output, collectPreflight("prompt-signal", [cwd, sid]))
     appendContext(output, collectPreflight("briefing", [cwd]))
@@ -217,7 +261,9 @@ export const AgentHarnessGuards = async (ctx) => {
   "tool.execute.before": async (input, output) => {
     const files = targetFiles(ctx, input.tool || {}, output.args || {})
     for (const file of files) {
-      runPreflight("write", [file, input.sessionID || "opencode-plugin"])
+      const sid = input.sessionID || "opencode-plugin"
+      const turn = turnBySession.get(sid) || ""
+      runPreflight("write", [file, sid, turn])
     }
     // Bash/shell blind spot (A2/A3): targetFiles() yields [] for the bash
     // tool, so a recognized-but-unclassified mutation path would otherwise
@@ -229,8 +275,11 @@ export const AgentHarnessGuards = async (ctx) => {
     if (toolName === "bash" && typeof command === "string" && command) {
       const cwd = baseDir(ctx)
       const sid = input.sessionID || "opencode-plugin"
+      const turn = turnBySession.get(sid) || ""
       runPreflight("worktree-path", ["--tool", "Bash", "--command", command, "--cwd", cwd, "--session", sid])
-      runPreflight("material-route", ["check", "--tool", "Bash", "--command", command, "--cwd", cwd, "--session", sid])
+      const materialArgs = ["check", "--tool", "Bash", "--command", command, "--cwd", cwd, "--session", sid]
+      if (turn) materialArgs.push("--turn", turn)
+      runPreflight("material-route", materialArgs)
     }
   },
   "tool.execute.after": async (input, output) => {

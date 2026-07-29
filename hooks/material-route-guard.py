@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Require a current-session autopilot-code route for material source work.
+"""Require route and recall-opportunity proof for main-session material work.
 
 The default mode consumes Claude hook JSON.  A small CLI is also exposed for
 deterministic conformance tests and adapters that can supply the same fields:
@@ -9,8 +9,10 @@ deterministic conformance tests and adapters that can supply the same fields:
       [--command <shell>] --cwd <dir> --session <id>
   material-route-guard.py clear --session <id>
 
-Only a verified capability-route record is authority.  Skill invocation and
-the capability-grounding/spec marker families are intentionally not read.
+Only a verified capability-route record is routing authority. Main interactive
+material work also requires a bounded prompt-probe or explicit recall-gate
+receipt; registered route-bound workers remain exempt from main memory lifecycle.
+Skill invocation and capability-grounding/spec markers are intentionally not read.
 """
 
 from __future__ import annotations
@@ -97,6 +99,8 @@ DENIAL = (
     "material 작업인데 route 미선언 (silent no-route). hotfix라도 "
     "autopilot-code(최소 --intensity direct)로 진입하라."
 )
+RECALL_RECEIPT_SCHEMA = 1
+RECALL_RECEIPT_MAX_AGE_SECONDS = 24 * 60 * 60
 
 
 class RouteError(RuntimeError):
@@ -134,6 +138,72 @@ def session_key(session_id: str) -> str:
     if not session_id or len(session_id.encode("utf-8", "replace")) > 1024:
         raise RouteError("session-id-missing")
     return hashlib.sha256(b"material-route-session-v1\0" + session_id.encode()).hexdigest()
+
+
+def recall_session_key(session_id: str) -> str:
+    if not session_id or len(session_id.encode("utf-8", "replace")) > 1024:
+        raise RouteError("recall-session-id-missing")
+    return hashlib.sha256(
+        b"memory-recall-opportunity-v1\0" + session_id.encode("utf-8", "replace")
+    ).hexdigest()
+
+
+def recall_turn_digest(turn_id: str) -> str:
+    if not turn_id:
+        return ""
+    return hashlib.sha256(
+        b"memory-recall-turn-v1\0" + turn_id.encode("utf-8", "replace")
+    ).hexdigest()
+
+
+def transcript_turn_id(path_value: object) -> str:
+    """Derive the current Claude turn from the bounded tail of its transcript."""
+    if not isinstance(path_value, str) or not path_value:
+        return ""
+    path = Path(path_value)
+    try:
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode) or path.is_symlink():
+            return ""
+        with path.open("rb") as handle:
+            start = max(0, info.st_size - 1024 * 1024)
+            handle.seek(start)
+            if start:
+                handle.readline()
+            lines = handle.read().splitlines()
+    except OSError:
+        return ""
+    for raw in reversed(lines):
+        try:
+            row = json.loads(raw)
+        except (UnicodeDecodeError, ValueError, TypeError, json.JSONDecodeError):
+            continue
+        if (not isinstance(row, dict) or row.get("type") != "user"
+                or row.get("isSidechain") is True):
+            continue
+        uid = row.get("uuid")
+        if isinstance(uid, str) and uid:
+            return f"transcript-user:{uid}"
+        material = json.dumps(
+            [row.get("timestamp"), row.get("message")],
+            sort_keys=True, ensure_ascii=False, separators=(",", ":"),
+        )
+        return "transcript-user-hash:" + hashlib.sha256(material.encode()).hexdigest()
+    return ""
+
+
+def recall_receipt_dir() -> Path:
+    explicit = os.environ.get("MEM_RECALL_RECEIPTS")
+    if explicit:
+        return Path(explicit)
+    state = Path(os.environ.get(
+        "XDG_STATE_HOME", Path.home() / ".local" / "state"
+    ))
+    return state / "agent-memory" / "recall-opportunities"
+
+
+def recall_receipt_path(session_id: str) -> Path:
+    return recall_receipt_dir() / f"{recall_session_key(session_id)}.json"
 
 
 def state_dir(agent_home: Path) -> Path:
@@ -341,6 +411,12 @@ def clear_route(session_id: str, agent_home: Path) -> None:
             path.unlink(missing_ok=True)
     except (OSError, RouteError):
         pass
+    try:
+        receipt = recall_receipt_path(session_id)
+        if not receipt.is_symlink():
+            receipt.unlink(missing_ok=True)
+    except (OSError, RouteError):
+        pass
     gc_markers(agent_home)
 
 
@@ -387,11 +463,55 @@ def worker_route(root: Path, agent_home: Path) -> dict[str, Any] | None:
     )
 
 
-def require_route(session_id: str, root: Path, agent_home: Path) -> None:
+def require_route(session_id: str, root: Path, agent_home: Path) -> bool:
     worker = worker_route(root, agent_home)
     if worker is not None:
-        return
+        return True
     session_route(session_id, root, agent_home)
+    return False
+
+
+def require_recall_opportunity(session_id: str, turn_id: str, root: Path) -> None:
+    path = recall_receipt_path(session_id)
+    try:
+        if path.is_symlink() or path.stat().st_size > 8192:
+            raise RouteError("recall-opportunity-unsafe")
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+    except RouteError:
+        raise
+    except (OSError, ValueError, TypeError) as exc:
+        raise RouteError("recall-opportunity-missing") from exc
+    if not isinstance(receipt, dict) or receipt.get("schema_version") != RECALL_RECEIPT_SCHEMA:
+        raise RouteError("recall-opportunity-invalid")
+    if receipt.get("session_digest") != recall_session_key(session_id):
+        raise RouteError("recall-opportunity-foreign")
+    if Path(str(receipt.get("cwd", ""))).resolve(strict=False) != root.resolve():
+        raise RouteError("recall-opportunity-cwd-mismatch")
+    created_at_ns = receipt.get("created_at_ns")
+    if not isinstance(created_at_ns, int) or isinstance(created_at_ns, bool):
+        raise RouteError("recall-opportunity-time-invalid")
+    age_ns = time.time_ns() - created_at_ns
+    if age_ns < -300 * 1_000_000_000 or age_ns > RECALL_RECEIPT_MAX_AGE_SECONDS * 1_000_000_000:
+        raise RouteError("recall-opportunity-stale")
+    source = receipt.get("source")
+    if source not in {"candidate-probe", "explicit-recall", "explicit-skip"}:
+        raise RouteError("recall-opportunity-source-invalid")
+    actual_turn = receipt.get("turn_digest")
+    expected_turn = recall_turn_digest(turn_id)
+    # Native prompt probes bind to the exact turn. An explicit manual gate may
+    # omit a runtime-specific turn id and remains a same-session recovery path.
+    if expected_turn and actual_turn and actual_turn != expected_turn:
+        raise RouteError("recall-opportunity-turn-mismatch")
+    if expected_turn and not actual_turn and source == "candidate-probe":
+        raise RouteError("recall-opportunity-turn-missing")
+    result_ids = receipt.get("result_ids")
+    if (not isinstance(result_ids, list) or len(result_ids) > 3
+            or not all(isinstance(item, str) for item in result_ids)):
+        raise RouteError("recall-opportunity-results-invalid")
+    result_count = receipt.get("result_count")
+    if (not isinstance(result_count, int) or isinstance(result_count, bool)
+            or result_count != len(result_ids)):
+        raise RouteError("recall-opportunity-result-count-invalid")
 
 
 def _shell_segments(command: str) -> Iterable[list[str]]:
@@ -753,6 +873,7 @@ def check_action(
     *,
     file_path: str = "",
     command: str = "",
+    turn_id: str = "",
 ) -> None:
     if tool in EDIT_TOOLS:
         if not file_path:
@@ -761,7 +882,10 @@ def check_action(
         repo = git_root(target)
         if not is_material_source(target, repo):
             return
-        require_route(session_id, project_root(cwd, target), agent_home)
+        root = project_root(cwd, target)
+        is_worker = require_route(session_id, root, agent_home)
+        if not is_worker:
+            require_recall_opportunity(session_id, turn_id, root)
         return
     if tool not in {"Bash", "bash", "Shell", "shell"} or not command:
         return
@@ -769,17 +893,25 @@ def check_action(
         repo = git_root(command_cwd)
         if repo is None or not commit_has_material(repo, all_tracked, path_mode, paths):
             continue
-        require_route(session_id, repo, agent_home)
+        is_worker = require_route(session_id, repo, agent_home)
+        if not is_worker:
+            require_recall_opportunity(session_id, turn_id, repo)
 
 
 def deny_json(reason: str) -> None:
+    recovery = ""
+    if reason.startswith("recall-opportunity"):
+        recovery = (
+            " 현재 turn의 memory candidate probe가 없거나 오래됐습니다. "
+            "prompt hook을 다시 거치거나 mem recall-gate로 recall/skip을 명시하세요."
+        )
     print(
         json.dumps(
             {
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",
                     "permissionDecision": "deny",
-                    "permissionDecisionReason": f"{DENIAL} [reason={reason}]",
+                    "permissionDecisionReason": f"{DENIAL}{recovery} [reason={reason}]",
                 }
             },
             ensure_ascii=False,
@@ -794,6 +926,11 @@ def hook_main(payload: dict[str, Any], agent_home: Path) -> int:
     tool_input = payload.get("tool_input") if isinstance(payload.get("tool_input"), dict) else {}
     cwd = Path(str(payload.get("cwd") or os.getcwd())).resolve(strict=False)
     session_id = str(payload.get("session_id") or "")
+    turn_id = str(payload.get("turn_id") or payload.get("turnID") or "")
+    if not turn_id:
+        turn_id = transcript_turn_id(
+            payload.get("transcript_path") or payload.get("transcriptPath")
+        )
     if event == "SessionEnd":
         if session_id:
             clear_route(session_id, agent_home)
@@ -825,6 +962,7 @@ def hook_main(payload: dict[str, Any], agent_home: Path) -> int:
                 or ""
             ),
             command=str(tool_input.get("command") or ""),
+            turn_id=turn_id,
         )
     except RouteError as exc:
         deny_json(str(exc))
@@ -847,6 +985,7 @@ def cli(argv: list[str]) -> int:
     check.add_argument("--command", default="")
     check.add_argument("--cwd", required=True)
     check.add_argument("--session", required=True)
+    check.add_argument("--turn", default="")
     clear = sub.add_parser("clear")
     clear.add_argument("--session", required=True)
     args = parser.parse_args(argv)
@@ -862,6 +1001,7 @@ def cli(argv: list[str]) -> int:
                 agent_home,
                 file_path=args.file,
                 command=args.command,
+                turn_id=args.turn,
             )
         else:
             clear_route(args.session, agent_home)

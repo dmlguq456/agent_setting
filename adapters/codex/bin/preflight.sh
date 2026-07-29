@@ -40,7 +40,7 @@ is_worker_session() {
 
 usage() {
   cat <<'EOF'
-usage: preflight.sh write <file> [session-id]
+usage: preflight.sh write <file> [session-id] [turn-id]
        preflight.sh read <file> [session-id]
        preflight.sh route <capability> [cwd] [session-id] [mode] [intensity]
        preflight.sh capability <name> [cwd] [session-id]
@@ -50,6 +50,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh turn-nudge [cwd] [session-id]
        preflight.sh token-budget [cwd] [session-id] [kv|json|hook]
        preflight.sh memory [cwd]
+       preflight.sh candidates <prompt> <cwd> <session-id> [turn-id]
        preflight.sh recall <query> [cwd] [session-id]
        preflight.sh recall-gate <cwd> (--decision recall|skip --reason <reason> [--query <query>] | --outcome applied|miss --gate-id <id>) [options]
        preflight.sh briefing [cwd]
@@ -240,6 +241,7 @@ case "$cmd" in
     [ "$#" -ge 2 ] || { echo "codex preflight: write requires a file path" >&2; exit 64; }
     file=$2
     sid=${3:-codex}
+    turn=${4:-}
     "$ROOT/hooks/git-state-guard.sh" --file "$file"
     "$ROOT/hooks/core-first-guard.sh" --file "$file" --session "$sid"
     "$ROOT/hooks/artifact-guard.sh" --file "$file" --session "$sid"
@@ -265,7 +267,11 @@ case "$cmd" in
       */.agent_reports/spec/ui_flow.md|*/.claude_reports/spec/ui_flow.md)
         "$ROOT/hooks/spec-skill-gate.sh" --skill autopilot-spec --cwd "$(dirname "$file")" --session "$sid" ;;
     esac
-    "$0" material-route check --tool Write --file "$file" --cwd "$(dirname "$file")" --session "$sid"
+    if [ -n "$turn" ]; then
+      "$0" material-route check --tool Write --file "$file" --cwd "$(dirname "$file")" --session "$sid" --turn "$turn"
+    else
+      "$0" material-route check --tool Write --file "$file" --cwd "$(dirname "$file")" --session "$sid"
+    fi
     ;;
   read)
     [ "$#" -ge 2 ] || { echo "codex preflight: read requires a file path" >&2; exit 64; }
@@ -428,6 +434,16 @@ case "$cmd" in
   memory)
     cwd=${2:-$PWD}
     (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/tools/memory/mem.py" inject)
+    ;;
+  candidates)
+    [ "$#" -ge 4 ] || { echo "codex preflight: candidates requires prompt, cwd, and session-id" >&2; exit 64; }
+    prompt=$2
+    cwd=$3
+    sid=$4
+    turn=${5:-}
+    set -- --prompt "$prompt" --cwd "$cwd" --session-id "$sid" --runtime codex --format text
+    [ -z "$turn" ] || set -- "$@" --turn-id "$turn"
+    AGENT_HOME="$AGENT_ROOT" bash "$ROOT/hooks/mem-recall-inject.sh" "$@"
     ;;
   recall)
     [ "$#" -ge 2 ] || { echo "codex preflight: recall requires a query" >&2; exit 64; }

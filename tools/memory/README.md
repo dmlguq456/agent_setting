@@ -41,6 +41,7 @@ python3 <agent-home>/tools/memory/mem.py <command>
 |---|---|
 | `add <tier> <type> "<body>" [--headline] [--alias] [--entity] [--topic] [--artifact-ref] …` | Add a record and bounded retrieval capsule after mechanical validation. Repeat capsule-list options as needed. |
 | `note "<body>" [--type] [--requires-consume]` | Shorthand for a working record. Use `--requires-consume` for delivery-bearing threads. |
+| `candidates "<prompt>" --session-id <id> [--turn-id <id>] [--hook]` | Main-prompt mechanical capsule lookup. Exposes at most three active current-project/global headline-and-ID candidates within 1,200 UTF-8 bytes, never bodies, and publishes a same-turn opportunity receipt on a successful probe. |
 | `recall-gate --decision recall\|skip --reason … [--query …]` | Record the work-start opportunity decision without raw prompts; recall executes immediately. Applied outcomes require `--gate-id` and at least one `--record-id`; miss has no record ID. |
 | `recall "<query>" [--topic] [--include-superseded] …` | Search active capsules first, then body/CJK/LIKE compatibility paths. Historical rows require explicit inclusion. |
 | `topics [topic] [--include-superseded]` | List normalized topics or visible records for one exact topic. |
@@ -95,12 +96,20 @@ and confidence thresholds never substitute for that judgment.
 - `show`, explicit recall/full, and SessionStart injection do not consume a
   handoff. Explicit recall/show update `last_accessed` unless `--no-touch` is
   supplied. Source upsert/body dedup never lowers pending to ordinary.
-- Prompt-submit hooks do not classify every prompt. At work intake an agent
-  explicitly records `recall` or `skip` with `mem recall-gate`.
+- Prompt-submit hooks mechanically query only the capsule index on every
+  eligible main prompt. They expose bounded candidates but never classify
+  relevance or adopt a record. The agent ignores unrelated candidates and
+  reads a relevant record in full before applying it.
+- A successful candidate probe publishes a same-turn receipt, including a
+  legitimate zero-hit result. Search errors publish no receipt. Main-session
+  material mutation requires that opportunity; `mem recall-gate` is the
+  explicit `recall`/`skip` recovery when the hook is unavailable. Registered
+  route-bound workers are exempt from main-session memory lifecycle.
 - FTS/BM25 ranking, CJK/identifier tokenization, scope fences, and limits
-  organize results after an agent has chosen a query.
-- Retrieval telemetry stores no raw prompt and distinguishes `explicit-recall`,
-  `show`, `session-inject`, and `consume`.
+  organize candidates and explicit results; they do not decide relevance.
+- Retrieval telemetry stores no raw prompt and distinguishes `candidate-probe`,
+  `candidate-probe-error`, `explicit-recall`, `show`, `session-inject`, and
+  `consume`.
 - Telemetry defaults to
   `$XDG_STATE_HOME/agent-memory/recall-events.jsonl` (fallback:
   `~/.local/state/agent-memory/`) outside the memory Git mirror.
@@ -139,8 +148,14 @@ and confidence thresholds never substitute for that judgment.
 - `MEM_DISTILL_MODEL` selects the portable model role; concrete defaults belong
   to adapter realization documents.
 - `MEM_WRITE_EVENTS`, `MEM_ACTOR`, and `MEM_SID` override telemetry metadata.
-- The retired `mem-recall-inject.sh` remains only as a silent compatibility
-  no-op for stale installed projections.
+- `mem-recall-inject.sh` is the fail-open prompt bridge for `mem candidates`.
+  It exposes only active current-project/global capsule headlines and IDs (at
+  most three, at most 1,200 UTF-8 bytes), never record bodies. A successful
+  probe writes a same-turn receipt under `MEM_RECALL_RECEIPTS`; raw prompts are
+  not written to telemetry or receipts. The model must inspect a relevant
+  record in full before applying it. Registered worker sessions stay silent.
+- `MEM_RECALL_EVENTS` and `MEM_RECALL_RECEIPTS` override the bounded telemetry
+  and same-turn receipt locations for tests or private runtime projection.
 
 ## Operational contract
 

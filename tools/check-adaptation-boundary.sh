@@ -1025,9 +1025,10 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'hookSpecificOutput.additionalContext' adapters/codex/ADAPTATION.md; then
     fail_msg "Codex lifecycle hooks must prove silent defaults plus opt-in/non-default additionalContext paths in portable guards"
   fi
-  if grep -Fq 'def text_from_value' adapters/codex/hooks/userprompt-lifecycle.py \
-    || grep -Fq 'def prompt_text' adapters/codex/hooks/userprompt-lifecycle.py; then
-    fail_msg "Codex UserPromptSubmit bridge must not extract prompt text for semantic recall classification"
+  if ! grep -Fq 'def candidate_context' adapters/codex/hooks/userprompt-lifecycle.py \
+    || ! grep -Fq 'RECALL_HOOK' adapters/codex/hooks/userprompt-lifecycle.py \
+    || grep -Fq 'def auto_recall' adapters/codex/hooks/userprompt-lifecycle.py; then
+    fail_msg "Codex UserPromptSubmit must expose bounded candidates without a semantic recall classifier"
   fi
   if [ ! -f tools/fleet/token_budget.py ] \
     || [ ! -f tools/fleet/token_accounting.py ] \
@@ -2725,8 +2726,10 @@ check_opencode_native_plugin_projection() {
     fail_msg "$plugin must use OpenCode tool.execute.after hook for design checks"
   fi
   if ! grep -Fq '"experimental.chat.system.transform"' "$plugin" \
-    || grep -Fq '"chat.message"' "$plugin"; then
-    fail_msg "$plugin must use the OpenCode system transform without capturing prompt text for semantic recall"
+    || ! grep -Fq '"chat.message"' "$plugin" \
+    || ! grep -Fq 'collectCandidates([' "$plugin" \
+    || ! grep -Fq 'promptBySession.delete' "$plugin"; then
+    fail_msg "$plugin must capture one prompt transiently, expose bounded candidates, then discard it"
   fi
   if ! grep -Fq 'adapters", "opencode", "bin", "preflight.sh' "$plugin"; then
     fail_msg "$plugin must bridge to the OpenCode preflight wrapper"
@@ -3842,17 +3845,23 @@ check_language_neutrality_contract() {
 
   if grep -Fq 'def auto_recall' tools/memory/mem.py \
     || grep -Fq '"--auto"' tools/memory/mem.py \
-    || grep -Fq 'mem-recall-inject.sh' adapters/claude/settings.json \
     || grep -Fq 'run_preflight("recall"' adapters/codex/hooks/userprompt-lifecycle.py \
-    || grep -Fq 'collectPreflight("recall"' adapters/opencode/plugins/agent-harness-guards.js; then
-    fail_msg "active runtimes must leave semantic memory recall to the agent"
+    || grep -Fq 'collectPreflight("recall"' adapters/opencode/plugins/agent-harness-guards.js \
+    || ! grep -Fq 'mem-recall-inject.sh' adapters/claude/settings.json \
+    || ! grep -Fq 'def candidate_context' adapters/codex/hooks/userprompt-lifecycle.py \
+    || ! grep -Fq 'collectCandidates([' adapters/opencode/plugins/agent-harness-guards.js; then
+    fail_msg "active runtimes must expose mechanical capsule candidates while leaving semantic adoption to the agent"
   fi
 
   if ! grep -Fq 'The agent decides contextually what is worth storing, retrieving, promoting, merging, or pruning.' core/MEMORY.md \
     || ! grep -Fq 'Memory follows D-40: the acting agent decides storing, retrieval, promotion, merge, and pruning.' core/DESIGN_PRINCIPLES.md \
     || ! grep -Fq 'tools/memory/recall.sh' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'tools/memory/recall.sh' adapters/opencode/bin/preflight.sh; then
-    fail_msg "memory semantics must be agent-owned while adapters retain explicit retrieval helpers"
+    || ! grep -Fq 'tools/memory/recall.sh' adapters/opencode/bin/preflight.sh \
+    || ! grep -Fq 'CANDIDATE_MAX_RESULTS = 3' tools/memory/mem.py \
+    || ! grep -Fq 'CANDIDATE_MAX_UTF8_BYTES = 1200' tools/memory/mem.py \
+    || ! grep -Fq 'records_capsule_fts' tools/memory/mem.py \
+    || ! grep -Fq 'recall-opportunity-missing' hooks/material-route-guard.py; then
+    fail_msg "memory semantics must remain agent-owned while capsule candidates and same-turn opportunity are enforced mechanically"
   fi
 
   promotion_body="$(sed -n '/^def promote_candidates()/,/^# ---------- projection ----------/p' tools/memory/mem.py)"

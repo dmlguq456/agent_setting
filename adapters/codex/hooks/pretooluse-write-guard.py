@@ -263,6 +263,7 @@ def main() -> int:
         session_id = first_string(nested_mapping(payload, "session"), "id")
 
     session_id = session_id or "codex-hook"
+    turn_id = nested_string(payload, "turn_id", "turnID", "message_id", "messageID")
     env = os.environ.copy()
     env.setdefault("AGENT_HOME", str(ROOT))
     if is_shell_tool(name):
@@ -277,10 +278,15 @@ def main() -> int:
         if result.returncode != 0:
             detail = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
             return hook_block(detail or "worktree-path preflight failed")
+        material_args = [
+            str(PREFLIGHT), "material-route", "check", "--tool", "Bash",
+            "--command", command, "--cwd", str(cwd(payload)),
+            "--session", session_id,
+        ]
+        if turn_id:
+            material_args += ["--turn", turn_id]
         result = subprocess.run(
-            [str(PREFLIGHT), "material-route", "check", "--tool", "Bash",
-             "--command", command, "--cwd", str(cwd(payload)),
-             "--session", session_id],
+            material_args,
             cwd=str(ROOT), env=env, text=True, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, check=False,
         )
@@ -293,8 +299,11 @@ def main() -> int:
         return hook_block(f"agent harness preflight could not determine target file for Codex tool {name}")
 
     for file in files:
+        write_args = [str(PREFLIGHT), "write", file, session_id]
+        if turn_id:
+            write_args.append(turn_id)
         result = subprocess.run(
-            [str(PREFLIGHT), "write", file, session_id],
+            write_args,
             cwd=str(ROOT),
             env=env,
             text=True,

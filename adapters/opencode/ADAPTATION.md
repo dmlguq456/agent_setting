@@ -163,8 +163,10 @@ OpenCode exposes JS/TS plugin hooks that can enforce part of the harness guard
 contract. This adapter materializes a concrete OpenCode plugin at
 `adapters/opencode/plugins/agent-harness-guards.js`. It uses `chat.message` plus
 `experimental.chat.system.transform` to inject prompt-time workflow, memory,
-recall, and briefing context through `adapters/opencode/bin/preflight.sh`
-without copying Claude hook JSON. It uses `tool.execute.before` to detect
+bounded capsule candidates, and briefing context through
+`adapters/opencode/bin/preflight.sh` without copying Claude hook JSON. The
+prompt is retained only from `chat.message` until that transform and is then
+discarded. It uses `tool.execute.before` to detect
 write/edit/patch targets and calls `adapters/opencode/bin/preflight.sh write
 <file> <session-id>`, which runs the portable artifact-order, git-state,
 core-first adapter edit, and memory-write guards. It also uses `tool.execute.after` to route saved design
@@ -211,7 +213,7 @@ injections are auto-applied. The table records the current state.
 | `PostToolUse[Read]` spec-read marker | plugin `tool.execute.after` on `read` → `preflight read` | full — auto enforced |
 | `PostToolUse` design post-write | plugin `tool.execute.after` → `preflight design` | full — auto enforced |
 | `SessionStart`-equivalent memory inject | plugin `experimental.chat.system.transform` (first turn) → `memory` | full — auto injected |
-| `UserPromptSubmit` routing-contract signal / briefing | plugin `experimental.chat.system.transform` → `prompt-signal` / `briefing` | full — auto injected |
+| `UserPromptSubmit` capsule candidates / routing-contract signal / briefing | plugin `chat.message` → transient prompt, then `experimental.chat.system.transform` → `candidates` / `prompt-signal` / `briefing` | full — candidate output is active current-project/global capsule-only, maximum three / 1,200 UTF-8 bytes; prompt is discarded after the transform |
 | `SessionEnd` + `UserPromptSubmit` auto-distillation | plugin `event` (`session.idle`) → detached `preflight session-end` → no-tools `opencode run` worker | full — auto applied by default (opt out `OPENCODE_DISTILL_ENABLE=0`) |
 | `PreToolUse` material-route guard (deny) | plugin `tool.execute.before` → `preflight write` (structured), plugin `tool.execute.before` on `bash` → `preflight material-route check --tool Bash` (verbatim command), `preflight route` binds after a checked compile | structured: full for a resolvable target — a recognized mutation tool whose target does not resolve (`normalizeFile()` returns `""`, `targetFiles()` yields `[]`) still reaches no guard (see Codex's stricter `pretooluse-write-guard.py:291-293`); bash: full for documented commands. Automatic final-session clear is **not** claimed — `session.idle` is per-turn and `session.deleted` means deletion, not exit. |
 | `PreToolUse[Bash]` worktree-path guard (deny) | plugin `tool.execute.before` on `bash` → `preflight worktree-path`, `preflight worktree-path` explicit fallback | portable `git worktree add` path check only — the built-in-worktree-tool deny is Claude-native and has **no** OpenCode counterpart (`core/HOOKS.md:45`) |
@@ -310,7 +312,7 @@ Harness-specific status signals need OpenCode-native realization:
 | spec read gate | OpenCode plugin enforces this automatically: `command.execute.before` runs `adapters/opencode/bin/preflight.sh capability <name> [cwd] [session-id]` (throws to abort `autopilot-code`/`autopilot-spec` when ungrounded) and `tool.execute.after` on a `read` of `prd.md` runs `adapters/opencode/bin/preflight.sh read <prd.md> [session-id]`. Run both manually when plugins are unavailable |
 | routing-contract signal | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh prompt-signal [cwd] [session-id]`; no statusline assumption |
 | memory inject | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh memory [cwd]` once per session; run it manually when plugins are unavailable |
-| memory recall | The agent decides contextually when memory may help, then runs `adapters/opencode/bin/preflight.sh recall <query> [cwd] [session-id]`. The plugin does not capture prompts for recall classification |
+| memory candidate exposure / recall | The plugin transiently captures the current user prompt, runs `preflight.sh candidates <prompt> <cwd> <session-id> [turn-id]`, then deletes it. It injects only bounded active capsule headlines/IDs and publishes the same-turn receipt; it does not inspect bodies or classify relevance. The model reads relevant records in full. Explicit `recall` provides deeper search and `recall-gate` recovers an unavailable probe |
 | oncall briefing | OpenCode plugin system transform runs `adapters/opencode/bin/preflight.sh briefing [cwd]`; run it manually when plugins are unavailable |
 | loop guidance | Run `adapters/opencode/bin/preflight.sh loop-info <oncall|note|study|drill|runtime-watch>` before following loop guides; OpenCode reports manual contracts, missing implementations, and drill auto-run restrictions without executing loop scripts. The `note` loop is an external scheduler/worklog-board contract; use the related `autopilot-note` Skill/command projection only for on-demand note routing |
 | memory distill | The plugin `event` hook auto-distills on `session.idle` via detached `preflight session-end` → no-tools `opencode run` worker (verified); enabled by default, opt out `OPENCODE_DISTILL_ENABLE=0`, set `OPENCODE_DISTILL_MODEL` for quality. Manual: `preflight.sh distill-delta <sid>` extracts the delta, `preflight.sh distill-propose <sid>` runs a proposal |

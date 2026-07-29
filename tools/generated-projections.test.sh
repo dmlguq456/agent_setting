@@ -108,7 +108,7 @@ resolved=$("$ROOT/utilities/artifact-root.sh" "$ORIENTATION_FIXTURE")
 
 grep -Fq '### 0.1. Read-Only Orientation Before Capability Routing' "$ROOT/core/WORKFLOW.md"
 grep -Fq 'Read-only orientation invokes no capability and writes no artifact' "$ROOT/core/WORKFLOW.md"
-recall_line=$(grep -n -m1 'Choose one targeted memory query' "$ROOT/core/WORKFLOW.md" | cut -d: -f1)
+recall_line=$(grep -n -m1 'current main-session prompt received its bounded capsule candidate probe' "$ROOT/core/WORKFLOW.md" | cut -d: -f1)
 artifact_line=$(grep -n -m1 'Use the adapter status surface' "$ROOT/core/WORKFLOW.md" | cut -d: -f1)
 [ "$recall_line" -lt "$artifact_line" ] || {
   echo "not ok - targeted recall must precede artifact discovery" >&2

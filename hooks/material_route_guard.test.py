@@ -11,6 +11,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 
@@ -78,8 +79,39 @@ class MaterialRouteGuardTest(unittest.TestCase):
         result = subprocess.run(command, text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.route_id = json.loads(self.route.read_text())["route_id"]
+        self.receipts = self.base / "recall-opportunities"
 
-    def guard(self, *args: str, session: str = "session-a", env: dict[str, str] | None = None):
+    def opportunity(
+        self, session: str = "session-a", *, turn: str = "", cwd: Path | None = None,
+        source: str = "candidate-probe", created_at_ns: int | None = None,
+    ) -> Path:
+        self.receipts.mkdir(parents=True, exist_ok=True)
+        path = self.receipts / f"{MATERIAL_GUARD.recall_session_key(session)}.json"
+        value = {
+            "schema_version": 1,
+            "session_digest": MATERIAL_GUARD.recall_session_key(session),
+            "turn_digest": MATERIAL_GUARD.recall_turn_digest(turn),
+            "project": "test-project",
+            "cwd": str((cwd or self.repo).resolve()),
+            "source": source,
+            "result_count": 0,
+            "result_ids": [],
+            "created_at_ns": created_at_ns if created_at_ns is not None else time.time_ns(),
+        }
+        path.write_text(json.dumps(value), encoding="utf-8")
+        return path
+
+    def guard(
+        self, *args: str, session: str = "session-a",
+        env: dict[str, str] | None = None, opportunity: bool = True,
+    ):
+        turn = ""
+        if "--turn" in args:
+            index = args.index("--turn")
+            if index + 1 < len(args):
+                turn = args[index + 1]
+        if opportunity:
+            self.opportunity(session, turn=turn)
         clean = {key: value for key, value in os.environ.items()
                  if key not in {"AGENT_ROUTE_FILE", "AGENT_ROUTE_ID", "AGENT_ROUTE_NODE"}}
         return subprocess.run(
@@ -89,7 +121,7 @@ class MaterialRouteGuardTest(unittest.TestCase):
             ],
             text=True,
             capture_output=True,
-            env={**clean, **(env or {})},
+            env={**clean, "MEM_RECALL_RECEIPTS": str(self.receipts), **(env or {})},
         )
 
     def bind(self, session: str = "session-a") -> subprocess.CompletedProcess[str]:
@@ -113,6 +145,68 @@ class MaterialRouteGuardTest(unittest.TestCase):
         self.assertEqual(self.bind().returncode, 0)
         allowed = self.guard("--tool", "Edit", "--file", str(self.repo / "app.py"))
         self.assertEqual(allowed.returncode, 0, allowed.stderr)
+
+    def test_bound_route_requires_current_turn_recall_opportunity(self) -> None:
+        self.assertEqual(self.bind().returncode, 0)
+        missing = self.guard(
+            "--tool", "Edit", "--file", str(self.repo / "app.py"),
+            "--turn", "turn-a", opportunity=False,
+        )
+        self.assertEqual(missing.returncode, 2)
+        self.assertIn("recall-opportunity-missing", missing.stderr)
+
+        self.opportunity(turn="turn-a")
+        allowed = self.guard(
+            "--tool", "Edit", "--file", str(self.repo / "app.py"),
+            "--turn", "turn-a", opportunity=False,
+        )
+        self.assertEqual(allowed.returncode, 0, allowed.stderr)
+        foreign_turn = self.guard(
+            "--tool", "Edit", "--file", str(self.repo / "app.py"),
+            "--turn", "turn-b", opportunity=False,
+        )
+        self.assertEqual(foreign_turn.returncode, 2)
+        self.assertIn("recall-opportunity-turn-mismatch", foreign_turn.stderr)
+
+        self.opportunity(
+            turn="turn-a",
+            created_at_ns=time.time_ns() - 2 * 24 * 60 * 60 * 1_000_000_000,
+        )
+        stale = self.guard(
+            "--tool", "Edit", "--file", str(self.repo / "app.py"),
+            "--turn", "turn-a", opportunity=False,
+        )
+        self.assertEqual(stale.returncode, 2)
+        self.assertIn("recall-opportunity-stale", stale.stderr)
+
+        self.opportunity(source="explicit-skip")
+        recovered = self.guard(
+            "--tool", "Edit", "--file", str(self.repo / "app.py"),
+            "--turn", "turn-c", opportunity=False,
+        )
+        self.assertEqual(recovered.returncode, 0, recovered.stderr)
+
+    def test_claude_transcript_turn_anchor_tracks_latest_user_uuid(self) -> None:
+        transcript = self.base / "transcript.jsonl"
+        transcript.write_text(
+            "\n".join([
+                json.dumps({"type": "user", "uuid": "user-one", "message": {"role": "user", "content": "one"}}),
+                json.dumps({"type": "assistant", "uuid": "assistant-one", "message": {"role": "assistant", "content": "reply"}}),
+            ]) + "\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(
+            MATERIAL_GUARD.transcript_turn_id(str(transcript)),
+            "transcript-user:user-one",
+        )
+        with transcript.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps({
+                "type": "user", "uuid": "user-two", "message": {"role": "user", "content": "two"},
+            }) + "\n")
+        self.assertEqual(
+            MATERIAL_GUARD.transcript_turn_id(str(transcript)),
+            "transcript-user:user-two",
+        )
 
     def test_docs_config_scratch_and_foreign_session_behavior(self) -> None:
         config_script = self.repo / "config" / "bootstrap.sh"
@@ -458,10 +552,12 @@ class MaterialRouteGuardTest(unittest.TestCase):
                     bound = runner(command, target, session)
                     self.assertEqual(bound.returncode, 0, bound.stderr)
                     self.assertTrue(fixture_guard.marker_path(canonical, session).is_file(), session)
+                    self.opportunity(session, cwd=target)
                     allowed = subprocess.run(
                         [sys.executable, str(fixture_guard_path), "--agent-home", str(canonical), "check", "--tool", "Edit",
                          "--file", str(target / "app.py"), "--cwd", str(target), "--session", session,
                          ], text=True, capture_output=True,
+                        env={**os.environ, "MEM_RECALL_RECEIPTS": str(self.receipts)},
                     )
                     self.assertEqual(allowed.returncode, 0, allowed.stderr)
 
@@ -475,10 +571,12 @@ class MaterialRouteGuardTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(fixture_guard.marker_path(canonical, "preceding-cd-codex").is_file())
         for session in ("preceding-cd-portable", "preceding-cd-codex"):
+            self.opportunity(session, cwd=linked)
             allowed = subprocess.run(
                 [sys.executable, str(fixture_guard_path), "--agent-home", str(canonical), "check", "--tool", "Edit",
                  "--file", str(linked / "app.py"), "--cwd", str(linked), "--session", session,
-                 ], text=True, capture_output=True,
+                ], text=True, capture_output=True,
+                env={**os.environ, "MEM_RECALL_RECEIPTS": str(self.receipts)},
             )
             self.assertEqual(allowed.returncode, 0, allowed.stderr)
 

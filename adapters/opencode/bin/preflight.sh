@@ -62,13 +62,14 @@ sys.exit(0 if _has_opencode_skills(data) else 1)' ; then
 
 usage() {
   cat <<'EOF'
-usage: preflight.sh write <file> [session-id]
+usage: preflight.sh write <file> [session-id] [turn-id]
        preflight.sh read <file> [session-id]
        preflight.sh material-route <bind|check|clear> [options]
        preflight.sh worktree-path --tool <tool> [--command <cmd>] [--cwd <dir>] [--session <id>]
        preflight.sh capability <name> [cwd] [session-id]
        preflight.sh skill <name> [cwd] [session-id]
        preflight.sh memory [cwd]
+       preflight.sh candidates <prompt> <cwd> <session-id> [turn-id]
        preflight.sh recall <query> [cwd] [session-id]
        preflight.sh recall-gate <cwd> (--decision recall|skip --reason <reason> [--query <query>] | --outcome applied|miss --gate-id <id>) [options]
        preflight.sh briefing [cwd]
@@ -226,11 +227,16 @@ case "$cmd" in
     [ "$#" -ge 2 ] || { echo "opencode preflight: write requires a file path" >&2; exit 64; }
     file=$2
     sid=${3:-opencode}
+    turn=${4:-}
     "$ROOT/hooks/git-state-guard.sh" --file "$file"
     "$ROOT/hooks/core-first-guard.sh" --file "$file" --session "$sid"
     "$ROOT/hooks/artifact-guard.sh" --file "$file" --session "$sid"
     "$ROOT/hooks/builtin-memory-guard.sh" --file "$file"
-    "$0" material-route check --tool Write --file "$file" --cwd "$(dirname "$file")" --session "$sid"
+    if [ -n "$turn" ]; then
+      "$0" material-route check --tool Write --file "$file" --cwd "$(dirname "$file")" --session "$sid" --turn "$turn"
+    else
+      "$0" material-route check --tool Write --file "$file" --cwd "$(dirname "$file")" --session "$sid"
+    fi
     ;;
   material-route)
     [ "$#" -ge 2 ] || { echo "opencode preflight: material-route requires an action" >&2; exit 64; }
@@ -296,6 +302,16 @@ EOF
   memory)
     cwd=${2:-$PWD}
     (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/tools/memory/mem.py" inject)
+    ;;
+  candidates)
+    [ "$#" -ge 4 ] || { echo "opencode preflight: candidates requires prompt, cwd, and session-id" >&2; exit 64; }
+    prompt=$2
+    cwd=$3
+    sid=$4
+    turn=${5:-}
+    set -- --prompt "$prompt" --cwd "$cwd" --session-id "$sid" --runtime opencode --format text
+    [ -z "$turn" ] || set -- "$@" --turn-id "$turn"
+    AGENT_HOME="$AGENT_ROOT" bash "$ROOT/hooks/mem-recall-inject.sh" "$@"
     ;;
   recall)
     [ "$#" -ge 2 ] || { echo "opencode preflight: recall requires a query" >&2; exit 64; }

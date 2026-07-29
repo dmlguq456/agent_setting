@@ -157,10 +157,12 @@ depth, tests, safety, and validation on fallback.
 
 ## Memory and Context
 
-Memory semantics belong to the acting agent. At work intake, record `recall` or
-`skip` with `preflight.sh recall-gate <cwd> ...`. For recall, use a targeted
-query and retrieve full pending obligations before applying or consuming them.
-Workers do not run main memory lifecycle.
+Memory semantics belong to the acting agent. Each eligible main prompt receives
+bounded capsule headline-and-ID candidates. Ignore unrelated candidates and
+read a relevant record in full before use. If the prompt hook is unavailable,
+record `recall` or `skip` with `preflight.sh recall-gate <cwd> ...`. Retrieve
+full pending obligations before applying or consuming them. Workers do not run
+the main prompt probe or other main memory lifecycle.
 
 `preflight.sh token-budget` exposes exact-session telemetry. The normal, unknown, repeated-band, and validated-native states inject zero bytes; a verified
 tight/critical transition may emit one directive of at most 240 UTF-8 bytes.

@@ -302,6 +302,15 @@
         "hooks": [
           {
             "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/mem-recall-inject.sh\"",
+            "timeout": 3
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "bash \"$HOME/.claude/hooks/mem-turn-nudge.sh\"",
             "timeout": 10
           }

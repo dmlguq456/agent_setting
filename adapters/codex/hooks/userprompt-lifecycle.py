@@ -16,6 +16,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
 PREFLIGHT = ROOT / "adapters" / "codex" / "bin" / "preflight.sh"
+RECALL_HOOK = ROOT / "hooks" / "mem-recall-inject.sh"
 TOOLS = ROOT / "tools"
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
@@ -70,6 +71,37 @@ def session_id(payload: dict[str, Any]) -> str:
     if not sid and isinstance(session, dict):
         sid = first_string(session, "id")
     return sid or "codex-hook"
+
+
+def turn_id(payload: dict[str, Any]) -> str:
+    return nested_string(payload, "turn_id", "turnID", "message_id", "messageID")
+
+
+def candidate_context(payload: dict[str, Any], current_cwd: str, sid: str) -> str:
+    """Run the bounded D-55 capsule probe; every failure is zero context."""
+    prompt = nested_string(payload, "prompt")
+    if not prompt:
+        return ""
+    command = [
+        str(RECALL_HOOK), "--prompt", prompt, "--cwd", current_cwd,
+        "--session-id", sid, "--runtime", "codex", "--format", "text",
+    ]
+    current_turn = turn_id(payload)
+    if current_turn:
+        command += ["--turn-id", current_turn]
+    env = os.environ.copy()
+    # The installed hook owns this bridge. Do not let a stale/invalid inherited
+    # AGENT_HOME redirect the prompt probe to another tree's memory launcher.
+    env["AGENT_HOME"] = str(ROOT)
+    try:
+        result = subprocess.run(
+            command, cwd=str(ROOT), env=env, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            timeout=2, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return result.stdout if result.returncode == 0 else ""
 
 
 def run_preflight_result(*args: str, timeout_seconds: float | None = None,
@@ -247,6 +279,7 @@ def main() -> int:
     sid = session_id(payload)
 
     parts = []
+    parts.append(candidate_context(payload, current_cwd, sid))
     parts.append(run_preflight("briefing", current_cwd))
     # Phase 1 token self-regulation is transition-only. Normal, unknown,
     # native-owned, and repeated bands return an empty string (zero injection).

@@ -81,6 +81,16 @@ runtime path, and any Claude-specific preview/screenshot/console wiring.
 
 ## Memory Distiller Realization
 
+Claude `UserPromptSubmit` first runs the portable `mem-recall-inject.sh` bridge.
+It emits `hookSpecificOutput.additionalContext` only for bounded active
+current-project/global capsule headline-and-ID candidates (maximum three and
+1,200 UTF-8 bytes), never record bodies. The bridge is fail-open but publishes
+a same-turn recall-opportunity receipt on a successful probe, including a valid
+zero-hit probe. Main-session material mutation requires that receipt; the
+explicit `recall-gate` path recovers a missing or failed hook. Registered
+workers stay silent. Candidate relevance and full-record adoption remain model
+judgments.
+
 Claude Code realizes the portable memory distillation hooks through
 `adapters/claude/settings.json` hook registration and concrete hook scripts under
 `adapters/claude/hooks/`.

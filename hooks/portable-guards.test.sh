@@ -33,6 +33,15 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 export AGENT_HOME="$TMP/agent_home"
 export AGENT_MODEL_GOVERNOR_ROOT="$TMP/repo/.agent_reports/.runtime/model-worker-governor"
+export MEM_RECALL_RECEIPTS="$TMP/recall-opportunities"
+
+recall_opportunity() {
+  fixture_cwd=$1
+  fixture_sid=$2
+  (cd "$fixture_cwd" && MEM_STORE="$TMP/recall-fixture-store" \
+    python3 "$ROOT/tools/memory/mem.py" recall-gate --decision skip \
+      --reason fixture-recovery --session-id "$fixture_sid" >/dev/null)
+}
 unset AGENT_DISPATCH_PARENT_SESSION_ID AGENT_DISPATCH_OWNER_HARNESS CODEX_THREAD_ID
 # D-42 hermeticity: a live main or worker session must not leak session identity
 # or worker markers into fixtures — every case sets its own markers inline.
@@ -594,11 +603,14 @@ if MEM_STORE="$TMP/codex_launcher_store" "$ROOT/adapters/codex/tools/memory/mem.
 else
   bad "codex memory launcher should fall back from invalid AGENT_HOME"
 fi
-if "$RECALL" --prompt "일반 질문" --cwd "$TMP/flowproj" --format text >/tmp/recall.out 2>/tmp/recall.err \
-  && [ ! -s /tmp/recall.out ]; then
-  ok "retired recall hook is a silent compatibility no-op"
+if MEM_PY="$ROOT/tools/memory/mem.py" MEM_STORE="$TMP/empty-recall-store" \
+  "$RECALL" --prompt "일반 질문" --cwd "$TMP/flowproj" --session-id portable-zero-hit \
+    --turn-id turn-zero --format text >/tmp/recall.out 2>/tmp/recall.err \
+  && [ ! -s /tmp/recall.out ] \
+  && find "$MEM_RECALL_RECEIPTS" -type f -name '*.json' -print -quit | grep -q .; then
+  ok "candidate bridge keeps a valid zero-hit prompt silent and publishes opportunity"
 else
-  bad "retired recall hook should remain a silent compatibility no-op"
+  bad "candidate bridge should keep zero-hit output silent while publishing opportunity"
 fi
 if "$CODEX" recall "전에 결정한 내용 뭐였지" "$TMP/flowproj" >/tmp/recall.out 2>/tmp/recall.err; then
   ok "codex recall wrapper exits cleanly"
@@ -1877,10 +1889,11 @@ from pathlib import Path
 
 root = Path(sys.argv[1])
 agents = sorted(root.glob("*.toml"))
-# 재홈 2026-07-22: runtime team agents retired — the kernel helper memory-scout is the
-# only projected Codex custom agent TOML.
-if [a.name for a in agents] != ["memory-scout.toml"]:
-    raise SystemExit(f"expected exactly memory-scout.toml, got {[a.name for a in agents]}")
+# The current native catalog carries the three general worker profiles plus the
+# kernel memory scout. Keep this list exact so stale or accidental agents fail.
+expected = ["deep.toml", "general-purpose.toml", "light.toml", "memory-scout.toml"]
+if [a.name for a in agents] != expected:
+    raise SystemExit(f"expected {expected}, got {[a.name for a in agents]}")
 for agent in agents:
     body = agent.read_text(encoding="utf-8")
     for key in ("name", "description"):
@@ -2089,6 +2102,7 @@ fi
 codex_route="$TMP/repo/.agent_reports/route.json"
 codex_compile="$ROOT/adapters/codex/bin/preflight.sh route --capability autopilot-code --capability-mode dev --intensity direct --cwd $TMP/repo --artifact-root $TMP/repo/.agent_reports --predicate atomic-outcome --predicate known-scope --predicate no-shared-contract --predicate no-resource-run --predicate no-artifact-handoff --predicate no-independent-verifier --predicate focused-verification --tracking untracked --spec-read not-applicable --drift-verdict no-project-spec --workflow-mode untracked --artifact-guard preflight-passed --inline-reason atomic-direct --output $codex_route"
 mkdir -p "$TMP/repo/.agent_reports"
+recall_opportunity "$TMP/repo" codex-bind
 if eval "$codex_compile" >"$TMP/codex_compile.out" 2>"$TMP/codex_compile.err" \
   && printf '%s\n' "{\"tool_name\":\"functions.exec_command\",\"input\":{\"command\":\"$codex_compile\"},\"session_id\":\"codex-bind\",\"cwd\":\"$TMP/repo\"}" \
   | AGENT_HOME="$ROOT" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-read-marker.py" >"$TMP/codex_bind.out" 2>"$TMP/codex_bind.err" \
@@ -2333,6 +2347,17 @@ if (cd "$TMP/flowproj" && MEM_STORE="$TMP/codex_hook_mem" python3 "$ROOT/tools/m
   ok "codex native prompt hook does not classify nested message content for recall"
 else
   bad "codex native prompt hook should leave semantic recall to the agent"
+fi
+if (cd "$TMP/flowproj" && MEM_STORE="$TMP/codex_hook_mem" python3 "$ROOT/tools/memory/mem.py" add durable decision \
+  "This durable record keeps direct-body-marker outside prompt context" \
+  --headline "Deterministic recall capsule" --alias "deterministic recall" >/tmp/codex_direct_prompt_seed.out 2>/tmp/codex_direct_prompt_seed.err) \
+  && printf '{"prompt":"deterministic recall","session_id":"directpromptsid","turn_id":"directturnid","cwd":"%s"}\n' "$TMP/flowproj" \
+  | MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" MEM_RECALL_RECEIPTS="$MEM_RECALL_RECEIPTS" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_direct_prompt_hook.out 2>/tmp/codex_direct_prompt_hook.err \
+  && grep -q 'Deterministic recall capsule' /tmp/codex_direct_prompt_hook.out \
+  && ! grep -q 'direct-body-marker' /tmp/codex_direct_prompt_hook.out; then
+  ok "codex native prompt hook exposes bounded capsule candidates without record bodies"
+else
+  bad "codex native prompt hook should expose capsule candidates and keep bodies private"
 fi
 mkdir -p "$TMP/repo/.agent_reports/spec" "$TMP/codex_marker_home"
 printf 'prd\n' > "$TMP/repo/.agent_reports/spec/prd.md"
@@ -3036,6 +3061,7 @@ fi
 mkdir -p "$TMP/repo/.agent_reports"
 opencode_route="$TMP/repo/.agent_reports/opencode-route.json"
 opencode_route_args="--capability autopilot-code --capability-mode dev --intensity direct --cwd $TMP/repo --artifact-root $TMP/repo/.agent_reports --predicate atomic-outcome --predicate known-scope --predicate no-shared-contract --predicate no-resource-run --predicate no-artifact-handoff --predicate no-independent-verifier --predicate focused-verification --tracking untracked --spec-read not-applicable --drift-verdict no-project-spec --workflow-mode untracked --artifact-guard preflight-passed --inline-reason atomic-direct"
+recall_opportunity "$TMP/repo" opencode-bind
 if OPENCODE_SESSION_ID=opencode-bind "$OPENCODE" route $opencode_route_args --output "$opencode_route" >/tmp/opencode_route.out 2>/tmp/opencode_route.err \
   && [ -f "$opencode_route" ] \
   && "$OPENCODE" material-route check --tool Write --file "$opencode_source" --cwd "$TMP/repo" --session opencode-bind >/tmp/opencode_bind_allow.out 2>/tmp/opencode_bind_allow.err; then
@@ -3728,7 +3754,8 @@ fi
 if node --input-type=module >/tmp/opencode_plugin_lifecycle.out 2>/tmp/opencode_plugin_lifecycle.err <<EOF
 import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
 const plugin = await AgentHarnessGuards({ directory: "$TMP/flowproj", worktree: "$TMP/flowproj" })
-if (plugin["chat.message"]) process.exit(1)
+if (!plugin["chat.message"]) process.exit(1)
+await plugin["chat.message"]({ sessionID: "oplifecyclesid", messageID: "opturn" }, { parts: [{ type: "text", text: "ordinary lifecycle prompt" }] })
 const output = { system: [] }
 await plugin["experimental.chat.system.transform"]({ sessionID: "oplifecyclesid", model: {} }, output)
 if (!output.system.join("\\n").includes("routing_contract=core/WORKFLOW.md")) process.exit(1)

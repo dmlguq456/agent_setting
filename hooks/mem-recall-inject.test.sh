@@ -1,45 +1,55 @@
 #!/usr/bin/env bash
-# Compatibility regression for the retired automatic recall hook.
-set -u
+set -euo pipefail
 
-HOOK="$(cd "$(dirname "$0")" && pwd)/mem-recall-inject.sh"
-[ -x "$HOOK" ] || { echo "FAIL: compatibility shim is not executable: $HOOK"; exit 1; }
-
-PASS=0
-FAIL=0
-ok()  { PASS=$((PASS + 1)); printf '  ok  %s\n' "$1"; }
-bad() { FAIL=$((FAIL + 1)); printf '  BAD %s\n' "$1"; }
-
-TMP="$(mktemp -d)"
+ROOT=$(git rev-parse --show-toplevel)
+HOOK="$ROOT/hooks/mem-recall-inject.sh"
+MEM="$ROOT/tools/memory/mem.py"
+TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+export MEM_STORE="$TMP/store"
+export MEM_RECALL_EVENTS="$TMP/events.jsonl"
+export MEM_RECALL_RECEIPTS="$TMP/receipts"
+export MEM_PY="$MEM"
+mkdir -p "$MEM_STORE" "$TMP/project"
+(cd "$TMP/project" && python3 "$MEM" add durable decision \
+  'This durable record keeps private-body-marker out of prompt context' --headline 'Prompt candidate headline' \
+  --alias 'prompt candidate' >/dev/null)
 
-echo "== retired automatic recall hook =="
-printf '{"hook_event_name":"UserPromptSubmit","prompt":"remember this","cwd":"%s"}\n' "$TMP" \
-  | "$HOOK" >"$TMP/stdin.out" 2>"$TMP/stdin.err"
-rc=$?
-[ "$rc" = 0 ] && [ ! -s "$TMP/stdin.out" ] && [ ! -s "$TMP/stdin.err" ] \
-  && ok "stdin hook payload is a silent no-op" \
-  || bad "stdin compatibility path emitted output or failed"
+printf '{"hook_event_name":"UserPromptSubmit","prompt":"prompt candidate","cwd":"%s","session_id":"hook-session","turn_id":"turn-1"}\n' "$TMP/project" \
+  | "$HOOK" > "$TMP/hook.out"
+python3 - "$TMP/hook.out" <<'PY'
+import json, sys
+value=json.load(open(sys.argv[1], encoding="utf-8"))
+context=value["hookSpecificOutput"]["additionalContext"]
+assert "Prompt candidate headline" in context
+assert "private-body-marker" not in context
+PY
 
-"$HOOK" --prompt "remember this" --cwd "$TMP" --format text >"$TMP/cli.out" 2>"$TMP/cli.err"
-rc=$?
-[ "$rc" = 0 ] && [ ! -s "$TMP/cli.out" ] && [ ! -s "$TMP/cli.err" ] \
-  && ok "legacy CLI arguments are a silent no-op" \
-  || bad "legacy CLI compatibility path emitted output or failed"
+"$HOOK" --prompt 'prompt candidate' --cwd "$TMP/project" --session-id cli-session \
+  --turn-id cli-turn --runtime test --format text > "$TMP/cli.out"
+grep -q 'Prompt candidate headline' "$TMP/cli.out"
+! grep -q 'private-body-marker' "$TMP/cli.out"
 
-printf 'not json' | "$HOOK" >"$TMP/malformed.out" 2>"$TMP/malformed.err"
-rc=$?
-[ "$rc" = 0 ] && [ ! -s "$TMP/malformed.out" ] && [ ! -s "$TMP/malformed.err" ] \
-  && ok "malformed input fails open" \
-  || bad "malformed input did not fail open"
+printf '%s\n' \
+  '{"type":"user","uuid":"claude-user-turn","message":{"role":"user","content":"prompt candidate"}}' \
+  '{"type":"assistant","uuid":"claude-assistant-turn","message":{"role":"assistant","content":"reply"}}' \
+  > "$TMP/transcript.jsonl"
+printf '{"hook_event_name":"UserPromptSubmit","prompt":"prompt candidate","cwd":"%s","session_id":"claude-session","transcript_path":"%s"}\n' \
+  "$TMP/project" "$TMP/transcript.jsonl" | "$HOOK" > "$TMP/transcript-hook.out"
+python3 - "$MEM_RECALL_RECEIPTS" <<'PY'
+import hashlib, json, pathlib, sys
+key=hashlib.sha256(b"memory-recall-opportunity-v1\0claude-session").hexdigest()
+value=json.loads((pathlib.Path(sys.argv[1]) / f"{key}.json").read_text())
+expected=hashlib.sha256(b"memory-recall-turn-v1\0transcript-user:claude-user-turn").hexdigest()
+assert value["turn_digest"] == expected
+PY
 
-"$HOOK" --help >"$TMP/help.out" 2>"$TMP/help.err"
-rc=$?
-[ "$rc" = 0 ] && grep -qi 'deprecated' "$TMP/help.out" \
-  && grep -qi 'agent-initiated' "$TMP/help.out" \
-  && ok "help points to agent-initiated retrieval" \
-  || bad "help does not explain the retired contract"
+printf 'not json' | "$HOOK" > "$TMP/malformed.out" 2> "$TMP/malformed.err"
+[ ! -s "$TMP/malformed.out" ] && [ ! -s "$TMP/malformed.err" ]
 
-echo
-echo "RESULT: PASS=$PASS FAIL=$FAIL"
-[ "$FAIL" = 0 ]
+printf '{"hook_event_name":"UserPromptSubmit","prompt":"prompt candidate","cwd":"%s"}\n' "$TMP/project" \
+  | AGENT_SESSION_ROLE=worker "$HOOK" > "$TMP/worker.out"
+[ ! -s "$TMP/worker.out" ]
+
+"$HOOK" --help | grep -q 'capsule candidates'
+echo 'memory recall prompt bridge: PASS'
