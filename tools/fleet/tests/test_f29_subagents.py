@@ -1064,5 +1064,139 @@ class NoRegressionTest(unittest.TestCase):
         self.assertIn("liveness", plain)
 
 
+class ClaudeSubagentBudgetTest(unittest.TestCase):
+    """`subagents/agent-*.meta.json` toolUseId join — actual model/effort enrichment
+    (사용자 2026-07-29). Same fixture discipline as ClaudeSidechainTest: throwaway
+    tmp transcripts, real ~/.claude never touched."""
+
+    def setUp(self):
+        claude._SUBAGENT_CACHE.clear()
+        claude._SUBAGENT_BUDGET_CACHE.clear()
+
+    def _fixture(self, tmp, meta=None, turns=None):
+        path = os.path.join(tmp, "sess.jsonl")
+        _write_transcript(path, [_tool_use_line("t1", "general-purpose", name="Agent")])
+        sub_dir = os.path.join(tmp, "sess", "subagents")
+        os.makedirs(sub_dir)
+        if meta is not None:
+            with open(os.path.join(sub_dir, "agent-abc.meta.json"), "w", encoding="utf-8") as f:
+                json.dump(meta, f)
+        if turns is not None:
+            with open(os.path.join(sub_dir, "agent-abc.jsonl"), "w", encoding="utf-8") as f:
+                for t in turns:
+                    f.write(json.dumps(t) + "\n")
+        return path
+
+    def test_meta_join_fills_actual_model_and_effort(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._fixture(
+                tmp,
+                meta={"agentType": "general-purpose", "toolUseId": "t1",
+                      "spawnDepth": 1, "model": "sonnet"},
+                turns=[{"type": "assistant", "effort": "xhigh",
+                        "message": {"model": "claude-sonnet-5"}}])
+            subs = claude._tail_subagents(path)
+            self.assertEqual(len(subs), 1)
+            self.assertEqual(subs[0].model, "claude-sonnet-5")
+            self.assertEqual(subs[0].effort, "xhigh")
+
+    def test_missing_subagents_dir_leaves_honest_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "sess.jsonl")
+            _write_transcript(path, [_tool_use_line("t1", "explore", name="Agent")])
+            subs = claude._tail_subagents(path)
+            self.assertEqual(len(subs), 1)
+            self.assertIsNone(subs[0].model)
+            self.assertIsNone(subs[0].effort)
+
+    def test_transcript_without_assistant_falls_back_to_meta_alias(self):
+        """A just-launched sub-agent has a meta file but no assistant turn yet — the
+        requested alias is honest evidence (it IS what was requested); effort stays
+        None (nothing observed, prd.md:292 no-guessing)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._fixture(
+                tmp,
+                meta={"agentType": "general-purpose", "toolUseId": "t1",
+                      "spawnDepth": 1, "model": "sonnet"},
+                turns=[{"type": "user", "message": {"content": "hi"}}])
+            subs = claude._tail_subagents(path)
+            self.assertEqual(subs[0].model, "sonnet")
+            self.assertIsNone(subs[0].effort)
+
+    def test_foreign_tool_use_id_is_ignored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._fixture(
+                tmp,
+                meta={"agentType": "general-purpose", "toolUseId": "other-tid",
+                      "spawnDepth": 1, "model": "sonnet"},
+                turns=[{"type": "assistant", "effort": "xhigh",
+                        "message": {"model": "claude-sonnet-5"}}])
+            subs = claude._tail_subagents(path)
+            self.assertIsNone(subs[0].model)
+            self.assertIsNone(subs[0].effort)
+
+    def test_malformed_meta_is_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._fixture(tmp)
+            sub_dir = os.path.join(tmp, "sess", "subagents")
+            with open(os.path.join(sub_dir, "agent-abc.meta.json"), "w", encoding="utf-8") as f:
+                f.write("{not json")
+            subs = claude._tail_subagents(path)
+            self.assertEqual(len(subs), 1)
+            self.assertIsNone(subs[0].model)
+
+
+class SubagentStripBudgetTest(unittest.TestCase):
+    """Strip rendering of the model/effort parenthetical and the blinking green dot
+    (사용자 2026-07-29: 흰 점 → 점멸 녹색 점 + 모델명)."""
+
+    def _strip_text(self, subs):
+        return "".join(t for t, _k in render._subagent_strip(subs)[0])
+
+    def _strip_keys(self, subs):
+        return render._subagent_strip(subs)[0]
+
+    def test_budget_parenthetical_shows_model_and_short_effort(self):
+        text = self._strip_text([SubAgent(agent_type="general-purpose", active=True,
+                                          model="claude-sonnet-5", effort="xhigh")])
+        self.assertIn("(Sonnet 5·xh)", text)
+
+    def test_no_budget_renders_no_parenthetical(self):
+        text = self._strip_text([SubAgent(agent_type="explore", active=True)])
+        self.assertNotIn("(", text)
+
+    def test_active_dot_blinks_green_with_the_shared_phase(self):
+        subs = [SubAgent(agent_type="explore", active=True)]
+        old = render._BLINK_ON
+        try:
+            render._BLINK_ON = True
+            keys_on = dict((t, k) for t, k in self._strip_keys(subs))
+            render._BLINK_ON = False
+            keys_off = dict((t, k) for t, k in self._strip_keys(subs))
+        finally:
+            render._BLINK_ON = old
+        self.assertEqual(keys_on["●"], "g_work")
+        self.assertEqual(keys_off["●"], "g_work_off")
+
+    def test_completed_entry_stays_dim_check(self):
+        segs = self._strip_keys([SubAgent(agent_type="explore", active=False,
+                                          model="claude-opus-4-8", effort="max")])
+        joined = "".join(t for t, _k in segs)
+        self.assertIn("✓", joined)
+        self.assertNotIn("●", joined)
+        # the completed entry's model/effort keys are the dim variants
+        keys = dict((t, k) for t, k in segs)
+        self.assertEqual(keys["Opus 4.8"], "famd_opus")
+        self.assertEqual(keys["mx"], "effd_max")
+
+    def test_model_id_normalizes_to_display_form(self):
+        self.assertEqual(render._short_model_id("claude-sonnet-5"), "Sonnet 5")
+        self.assertEqual(render._short_model_id("claude-haiku-4-5-20251001"), "Haiku 4.5")
+        self.assertEqual(render._short_model_id("claude-opus-4-8"), "Opus 4.8")
+        # non-wire-id values pass through untouched for _clean_model to handle
+        self.assertEqual(render._short_model_id("sonnet"), "sonnet")
+        self.assertIsNone(render._short_model_id(None))
+
+
 if __name__ == "__main__":
     unittest.main()

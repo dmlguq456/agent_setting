@@ -16,9 +16,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 OUT = ROOT / "adapters" / "opencode" / "agents"
+MODELS_CONF = ROOT / "adapters" / "opencode" / "config" / "models.conf"
 sys.path.insert(0, str(ROOT / "tools"))
+sys.path.insert(0, str(ROOT / "utilities"))
 
 import harness_manifest
+from model_profile import load_config, resolve_profile
 
 
 KERNEL_AGENTS = {
@@ -47,6 +50,78 @@ Output at most 15 lines:
 
 # Backward-compatible alias for callers that patched/consumed the old constant name.
 EXTRA_AGENTS = KERNEL_AGENTS
+
+
+# Native subagent type catalog (CFG_NATIVE_AGENT_CATALOG in this adapter's
+# models.conf, name:portable-profile) — cross-harness parity with the Claude
+# catalog. Portable profiles resolve through utilities/model_profile.py; the
+# OpenCode variant axis stays runtime-default, so only the model is pinned.
+# Instructions are adapter-owned output, not a non-OpenCode Agent copy.
+CATALOG_AGENTS = {
+    "general-purpose": {
+        "description": (
+            "General-purpose delegated agent for research, code search, and "
+            "multi-step tasks on the balanced-deep budget."
+        ),
+        "instructions": """You are a delegated general-purpose agent.
+Complete the assigned task fully — don't gold-plate, but don't leave it half-done.
+Search broadly when the target is unknown; read directly when the path is known.
+Never create files unless necessary; prefer editing existing files.
+Do not re-delegate the whole assignment to another agent.
+Finish with a concise report of what was done and the key findings.
+""",
+    },
+    "light": {
+        "description": (
+            "Breadth fan-out agent on the portable light budget — parallel "
+            "sweeps, audits, comparisons, routine searches."
+        ),
+        "instructions": """You are one leg of a breadth fan-out on a light execution budget.
+Stay inside the assigned slice; do not widen scope to neighboring questions.
+Return compact, deduplicated findings — the caller merges many legs.
+Do not spawn further agents; escalate by reporting, not delegating.
+""",
+    },
+    "deep": {
+        "description": (
+            "Deep investigation agent on the portable deep budget — root cause, "
+            "architecture, subtle correctness."
+        ),
+        "instructions": """You are the deep leg of an investigation on the deep execution budget.
+Ground every claim in files you actually read; quote paths and lines.
+Distinguish verified facts from inference and state residual uncertainty.
+Prefer one airtight answer over broad partial coverage.
+""",
+    },
+}
+
+
+def parse_native_catalog() -> list[tuple[str, str]]:
+    raw = load_config(MODELS_CONF).get("CFG_NATIVE_AGENT_CATALOG", "")
+    entries = []
+    for token in raw.split():
+        if token.count(":") != 1:
+            print(f"malformed CFG_NATIVE_AGENT_CATALOG entry: {token!r}", file=sys.stderr)
+            raise SystemExit(1)
+        name, profile = token.split(":", 1)
+        entries.append((name, profile))
+    return entries
+
+
+def render_catalog_agent(name: str, profile: str) -> str:
+    spec = CATALOG_AGENTS.get(name)
+    if spec is None:
+        print(f"catalog names an agent with no OpenCode spec: {name}", file=sys.stderr)
+        raise SystemExit(1)
+    resolved = resolve_profile("opencode", MODELS_CONF, profile)
+    description = compact(spec["description"])
+    return f"""---
+description: "{description}"
+mode: subagent
+model: {resolved["model"]}
+---
+
+{spec["instructions"]}"""
 
 
 def compact(text: str) -> str:
@@ -82,6 +157,8 @@ def main() -> int:
             print(f"unknown kernel agent (no OpenCode projection defined): {name}", file=sys.stderr)
             return 1
         expected[OUT / name / f"{name}.md"] = render_kernel_agent(name, spec)
+    for name, profile in parse_native_catalog():
+        expected[OUT / name / f"{name}.md"] = render_catalog_agent(name, profile)
 
     stale: list[str] = []
     for path, body in expected.items():

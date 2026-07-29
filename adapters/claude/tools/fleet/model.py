@@ -331,6 +331,12 @@ class SubAgent:
     active: bool = True                 # False = completed (dim, hidden unless `a` toggled)
     started_at: Optional[float] = None  # epoch sec, when available
     source: Optional[str] = None        # opencode-db | claude-sidechain | codex-state-db
+    # Execution-budget observation (사용자 2026-07-29): which tier this sub-agent
+    # actually runs on. None = source exposes no model/effort (honest gap,
+    # prd.md:292 "no guessing") — currently only claude-sidechain fills these,
+    # via the subagents/*.meta.json toolUseId join.
+    model: Optional[str] = None         # resolved model id (or requested alias fallback)
+    effort: Optional[str] = None        # reasoning effort level observed in the transcript
 
     def to_dict(self):
         return asdict(self)

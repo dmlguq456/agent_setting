@@ -393,6 +393,24 @@ def _clean_model(name):
     return _ROLE_MODEL_NAME.get(name.lower(), name)
 
 
+_MODEL_ID_RE = re.compile(r"^claude-(opus|sonnet|haiku|fable)-(\d+)(?:-(\d+))?(?:-\d{8})?$")
+
+
+def _short_model_id(name):
+    """Versioned wire id → display form: 'claude-sonnet-5' → 'Sonnet 5',
+    'claude-haiku-4-5-20251001' → 'Haiku 4.5'. Sub-agent transcripts carry the
+    raw API model id (unlike the statusline display_name sessions get), so the
+    strip needs this one extra normalization; anything unrecognized passes
+    through for `_clean_model` to handle."""
+    if not name:
+        return name
+    m = _MODEL_ID_RE.match(name)
+    if not m:
+        return name
+    fam, major, minor = m.group(1).capitalize(), m.group(2), m.group(3)
+    return "%s %s" % (fam, major + ("." + minor if minor else ""))
+
+
 # mid-height bar (━ filled / ─ empty): the glyphs sit at the cell's vertical centre, so gauges on
 # adjacent rows keep an above/below gap and never merge into a solid vertical wall (no blank line
 # needed). Filled carries the level color; the empty track is dim — the fill reads by color too.
@@ -2255,17 +2273,23 @@ def _subagent_elapsed_min(sa):
 
 
 def _subagent_strip(subs, depth=0):
-    """One horizontal strip per OWNER ROW (session or dispatch job): `⚡<type> <glyph>
-    <elapsed> · <type> <glyph> <elapsed> …` — replaces the old one-row-per-subagent
-    `├⚡`/`└⚡` stack (adopted from the discarded two-plane demo's `_agents_strip`,
-    prd.md:290-295). ⚡ sits flush against the first label (the double-width glyph plus a
-    space read as a hole — 사용자 2026-07-16), and the elapsed tail is set off by a double
+    """One horizontal strip per OWNER ROW (session or dispatch job): `⚡<type> (<Model>·<ef>)
+    <glyph> <elapsed> · …` — replaces the old one-row-per-subagent `├⚡`/`└⚡` stack
+    (adopted from the discarded two-plane demo's `_agents_strip`, prd.md:290-295).
+    ⚡ sits flush against the first label (the double-width glyph plus a space read
+    as a hole — 사용자 2026-07-16), and the elapsed tail is set off by a double
     space and always dim, floating it apart from the identity the way the clock column
-    separates from session rows. Active entries render normal weight (●); completed
+    separates from session rows. Active entries render normal weight with a BLINKING
+    green ● (shared `_BLINK_ON`, same g_work/g_work_off pair as session working dots —
+    사용자 2026-07-29: the flat white dot read as neither working nor done); completed
     entries fully dim (✓) — the caller only passes completed entries at all when
-    `_SHOW_ALL` (F-18b dim-row convention). `depth` = the owning dispatch row's depth
-    (0 for a session row): each level pushes the strip 2 more cells inward so it stays
-    visibly inside its own owner (사용자 2026-07-16 "서브 세션에 서브 에이전트도")."""
+    `_SHOW_ALL` (F-18b dim-row convention). The model/effort parenthetical shows the
+    sub-agent's ACTUAL execution budget when the collector observed one (F-3 honest
+    gap: absent budget renders nothing) — model keeps its family color, effort uses
+    the `_EFF_SHORT` 2-char form with the heat-ramp color keyed by the full value
+    (same F-9(c) idiom as `_harness_model_cell`). `depth` = the owning dispatch row's
+    depth (0 for a session row): each level pushes the strip 2 more cells inward so it
+    stays visibly inside its own owner (사용자 2026-07-16 "서브 세션에 서브 에이전트도")."""
     segs = [(_SUBAGENT_IND + "  " * max(0, depth), None), (_ICON_SUBAGENT, "dim")]
     for i, sa in enumerate(subs):
         if i:
@@ -2273,8 +2297,23 @@ def _subagent_strip(subs, depth=0):
         label = sa.agent_type or "agent"
         elapsed = _subagent_elapsed_min(sa)
         tail = fmt_min(elapsed) if elapsed is not None else "—"
-        glyph = "●" if sa.active else "✓"
-        segs.append(("%s %s" % (label, glyph), None if sa.active else "dim"))
+        segs.append((label, None if sa.active else "dim"))
+        model = getattr(sa, "model", None)
+        name = _clean_model(_short_model_id(model)) if model else None
+        if name:
+            eff_full = getattr(sa, "effort", None) or ""
+            segs.append((" (", "dim"))
+            segs.append((name, _model_key(model, dim=not sa.active)))
+            if eff_full:
+                segs.append(("·", "dim"))
+                segs.append((_EFF_SHORT.get(eff_full, eff_full),
+                             _eff_key(eff_full, not sa.active) or "dim"))
+            segs.append((")", "dim"))
+        if sa.active:
+            segs.append((" ", None))
+            segs.append(("●", "g_work" if _BLINK_ON else "g_work_off"))
+        else:
+            segs.append((" ✓", "dim"))
         segs.append(("  " + tail, "dim"))
     return [segs]
 

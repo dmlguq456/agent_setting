@@ -1747,7 +1747,9 @@ PY
   for agent in adapters/codex/agents/*.toml; do
     [ -f "$agent" ] || continue
     profile=$(basename "$agent" .toml)
-    case " memory-scout " in
+    # memory-scout kernel helper + the generated native subagent type catalog
+    # (general-purpose/light/deep, CFG_NATIVE_AGENT_CATALOG).
+    case " memory-scout general-purpose light deep " in
       *" $profile "*) ;;
       *) fail_msg "$agent is not an approved Codex native agent projection" ;;
     esac
@@ -2565,8 +2567,9 @@ check_opencode_native_agent_projection() {
 
   # codex-adapter-parity audit P-18 (2026-07-04), retired-team rework 2026-07-22 (재홈,
   # CONVENTIONS §2.3): runtime team agents are retired on all harnesses — the OpenCode
-  # native agent domain is the kernel helper memory-scout only, plus must-not-exist
-  # negatives so retired team projections cannot reappear.
+  # native agent domain is the kernel helper memory-scout plus the generated native
+  # subagent type catalog (general-purpose/light/deep, CFG_NATIVE_AGENT_CATALOG),
+  # plus must-not-exist negatives so retired team projections cannot reappear.
   for retired in plan-team dev-team qa-team research-team material-team design-team editorial-team external-adversary; do
     if [ -e "adapters/opencode/agents/$retired" ]; then
       fail_msg "adapters/opencode/agents/$retired is a retired team projection and must not exist"
@@ -2594,7 +2597,7 @@ check_opencode_native_agent_projection() {
   for dir in adapters/opencode/agents/*; do
     [ -d "$dir" ] || continue
     profile=$(basename "$dir")
-    case " memory-scout " in
+    case " memory-scout general-purpose light deep " in
       *" $profile "*) ;;
       *) fail_msg "$dir is not an approved OpenCode native agent projection" ;;
     esac

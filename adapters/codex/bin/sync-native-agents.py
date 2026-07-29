@@ -74,6 +74,65 @@ Output at most 15 lines:
 EXTRA_AGENTS = KERNEL_AGENTS
 
 
+# Native subagent type catalog (CFG_NATIVE_AGENT_CATALOG in this adapter's
+# models.conf, name:portable-profile) — cross-harness parity with the Claude
+# catalog (adapters/claude/bin/sync-native-agents.py). Portable profiles resolve
+# through utilities/model_profile.py; the sandbox stays workspace-write (these
+# are general delegated workers, not the read-only memory-scout shape).
+# Instructions are adapter-owned output, not a Claude Agent copy.
+CATALOG_SANDBOX = "workspace-write"
+
+CATALOG_AGENTS = {
+    "general-purpose": {
+        "description": (
+            "General-purpose delegated agent for research, code search, and "
+            "multi-step tasks on the balanced-deep budget."
+        ),
+        "instructions": """You are a delegated general-purpose agent.
+Complete the assigned task fully — don't gold-plate, but don't leave it half-done.
+Search broadly when the target is unknown; read directly when the path is known.
+Never create files unless necessary; prefer editing existing files.
+Do not re-delegate the whole assignment to another agent.
+Finish with a concise report of what was done and the key findings.
+""",
+    },
+    "light": {
+        "description": (
+            "Breadth fan-out agent on the portable light budget — parallel "
+            "sweeps, audits, comparisons, routine searches."
+        ),
+        "instructions": """You are one leg of a breadth fan-out on a light execution budget.
+Stay inside the assigned slice; do not widen scope to neighboring questions.
+Return compact, deduplicated findings — the caller merges many legs.
+Do not spawn further agents; escalate by reporting, not delegating.
+""",
+    },
+    "deep": {
+        "description": (
+            "Deep investigation agent on the portable deep budget — root cause, "
+            "architecture, subtle correctness."
+        ),
+        "instructions": """You are the deep leg of an investigation on the deep execution budget.
+Ground every claim in files you actually read; quote paths and lines.
+Distinguish verified facts from inference and state residual uncertainty.
+Prefer one airtight answer over broad partial coverage.
+""",
+    },
+}
+
+
+def parse_native_catalog() -> list[tuple[str, str]]:
+    raw = _CFG.get("CFG_NATIVE_AGENT_CATALOG", "")
+    entries = []
+    for token in raw.split():
+        if token.count(":") != 1:
+            print(f"malformed CFG_NATIVE_AGENT_CATALOG entry: {token!r}", file=sys.stderr)
+            raise SystemExit(1)
+        name, profile = token.split(":", 1)
+        entries.append((name, profile))
+    return entries
+
+
 def toml_string(text: str) -> str:
     return text.replace("\\", "\\\\").replace('"', '\\"')
 
@@ -100,6 +159,24 @@ developer_instructions = """
 '''
 
 
+def render_catalog_agent(name: str, profile: str) -> str:
+    spec = CATALOG_AGENTS.get(name)
+    if spec is None:
+        print(f"catalog names an agent with no Codex spec: {name}", file=sys.stderr)
+        raise SystemExit(1)
+    sys.path.insert(0, str(ROOT / "utilities"))
+    from model_profile import resolve_profile
+    resolved = resolve_profile("codex", MODELS_CONF, profile)
+    return f'''name = "{toml_string(name)}"
+description = "{toml_string(spec["description"])}"
+model = "{toml_string(resolved["model"])}"
+model_reasoning_effort = "{toml_string(resolved["budget"])}"
+sandbox_mode = "{toml_string(CATALOG_SANDBOX)}"
+developer_instructions = """
+{toml_multiline(spec["instructions"])}"""
+'''
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true", help="verify generated projections")
@@ -113,6 +190,8 @@ def main() -> int:
             print(f"unknown kernel agent (no Codex projection defined): {name}", file=sys.stderr)
             return 1
         expected[OUT / f"{name}.toml"] = render_kernel_agent(name, spec)
+    for name, profile in parse_native_catalog():
+        expected[OUT / f"{name}.toml"] = render_catalog_agent(name, profile)
 
     stale: list[str] = []
     for path, body in expected.items():

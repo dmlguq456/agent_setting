@@ -247,9 +247,86 @@ def _tail_subagents(path, chunk=8192, max_scan=None):
         elif tid in resolved:
             sa.active = False
         out.append(sa)
+    _join_subagent_budget(path, calls)
     out.sort(key=lambda sa: sa.started_at or 0, reverse=True)
     _SUBAGENT_CACHE[path] = (st.st_mtime, st.st_size, out)
     return out
+
+
+_SUBAGENT_BUDGET_CACHE = {}   # subagent jsonl path -> (mtime, size, (model, effort))
+
+
+def _subagent_budget(jsonl_path, chunk=65536):
+    """Last assistant (model, effort) from one sub-agent transcript tail.
+
+    The per-turn `effort` field and `message.model` sit on every assistant
+    record, so the newest one in the tail window is the current budget. Any
+    read/parse failure returns (None, None) — honest gap, never a guess."""
+    try:
+        st = os.stat(jsonl_path)
+    except OSError:
+        return (None, None)
+    cached = _SUBAGENT_BUDGET_CACHE.get(jsonl_path)
+    if cached and cached[0] == st.st_mtime and cached[1] == st.st_size:
+        return cached[2]
+    detail = (None, None)
+    try:
+        with open(jsonl_path, "rb") as f:
+            f.seek(max(0, st.st_size - chunk))
+            lines = f.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return (None, None)
+    for ln in reversed(lines):
+        if '"assistant"' not in ln:
+            continue
+        try:
+            d = json.loads(ln)
+        except Exception:
+            continue
+        if not isinstance(d, dict) or d.get("type") != "assistant":
+            continue
+        msg = d.get("message")
+        if isinstance(msg, dict) and msg.get("model"):
+            eff = d.get("effort")
+            detail = (msg.get("model"), eff if isinstance(eff, str) else None)
+            break
+    _SUBAGENT_BUDGET_CACHE[jsonl_path] = (st.st_mtime, st.st_size, detail)
+    return detail
+
+
+def _join_subagent_budget(path, calls):
+    """Join `<session>/subagents/agent-*.meta.json` onto the tool_use pairing.
+
+    meta.json carries the exact `toolUseId` of the spawning Agent/Task call, so
+    the join is by identity, never inference. The sibling `.jsonl` supplies the
+    resolved model and observed effort; the meta `model` alias is only a
+    fallback when the transcript has no assistant turn yet. A missing
+    subagents/ dir (older runtimes, no spawns) leaves every field None."""
+    if not path.endswith(".jsonl"):
+        return
+    sub_dir = os.path.join(path[:-len(".jsonl")], "subagents")
+    try:
+        names = os.listdir(sub_dir)
+    except OSError:
+        return
+    for name in names:
+        if not name.endswith(".meta.json"):
+            continue
+        mpath = os.path.join(sub_dir, name)
+        try:
+            with open(mpath, encoding="utf-8") as fh:
+                meta = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        if not isinstance(meta, dict):
+            continue
+        sa = calls.get(meta.get("toolUseId"))
+        if sa is None:
+            continue
+        model, effort = _subagent_budget(mpath[:-len(".meta.json")] + ".jsonl")
+        raw_alias = meta.get("model")
+        sa.model = model or (raw_alias if isinstance(raw_alias, str) else None)
+        sa.effort = effort
 
 
 def _apply_statusline(sess, d):

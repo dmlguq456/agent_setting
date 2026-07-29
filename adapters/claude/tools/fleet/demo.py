@@ -121,7 +121,8 @@ def collect(harness_filter=None):
           model="Opus 4.8", effort="high", is_child=True, elapsed_min=8, liveness="working",
           branch="v10-execute",
           subagents=[SubAgent(agent_type="explore", active=True, started_at=time.time() - 120,
-                              source="claude-sidechain")]),
+                              source="claude-sidechain",
+                              model="claude-sonnet-5", effort="medium")]),
     ]
     jobs = [
         # nested under the demo-app claude parent (demo-claude-1)
