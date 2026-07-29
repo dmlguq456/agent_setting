@@ -75,6 +75,8 @@ jobs:
             tools/install/installer.py
           python3 tools/generate.py --check
           ./tools/release/plan.test.sh
+          python3 tools/install/codex_launcher.test.py
+          python3 utilities/codex_launcher.test.py
           ./tools/install/release-lifecycle.test.sh
           ./tools/install/profile-activation.test.sh
           ./tools/install/runtime-activation.test.sh
