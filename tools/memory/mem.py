@@ -43,11 +43,12 @@ TIERS = ("working", "durable")
 SCOPES = ("project", "global")
 WORKING_TTL_DAYS = 21
 # v2 strength/access, v3 cwd remap, v4 injection, v5 delivery,
-# v6 legacy cwd_origin re-normalization (2026-07-22 memory audit W3).
-SCHEMA_VERSION = 6
+# v6 legacy cwd_origin re-normalization, v7 retrieval capsules and temporal state.
+SCHEMA_VERSION = 7
 FM_ORDER = ["id", "tier", "scope", "type", "cwd_origin", "created", "updated",
             "expires", "source", "tags", "links", "strength", "last_accessed", "injection_flag",
-            "delivery_state"]
+            "delivery_state", "headline", "aliases", "entities", "topics", "artifact_refs",
+            "status", "canonical_id", "superseded_by", "capsule_version"]
 INJECT_DEFAULT_MAX_CHARS = 2000
 INJECT_DEFAULT_MAX_BULLETS = 15
 INJECT_DEFAULT_MAX_WORKING = 8
@@ -55,11 +56,14 @@ INJECT_DEFAULT_MAX_DURABLE = 4
 INJECT_DEFAULT_CLEANUP_LINES = 2
 INJECT_DEFAULT_SNIPPET_CHARS = 100
 
-# Canonical 16-column order for deterministic export/import round trips.
+# Canonical column order for deterministic export/import round trips.
 RECORD_COLS = ("id", "tier", "scope", "type", "cwd_origin", "created", "updated",
                "expires", "source", "tags", "links", "body", "strength", "last_accessed",
-               "injection_flag", "delivery_state")
+               "injection_flag", "delivery_state", "headline", "aliases", "entities", "topics",
+               "artifact_refs", "status", "canonical_id", "superseded_by", "capsule_version")
 DELIVERY_STATES = ("ordinary", "pending", "consumed")
+RECORD_STATUSES = ("active", "superseded")
+CAPSULE_LIST_FIELDS = ("aliases", "entities", "topics", "artifact_refs")
 RECALL_EVENTS = Path(os.environ.get(
     "MEM_RECALL_EVENTS",
     Path(os.environ.get("XDG_STATE_HOME", HOME / ".local" / "state"))
@@ -111,6 +115,7 @@ SECRET_PAT = re.compile(
 # Module-level FTS and CJK-shadow availability caches, initialized by get_con().
 _FTS_OK = None     # FTS5 unicode61 availability.
 _CJK_OK = None     # CJK bigram shadow index availability (audit W4).
+_CAPSULE_OK = None # FTS5 retrieval-capsule availability (v7).
 
 
 # ---------- pure helpers ----------
@@ -613,6 +618,97 @@ def _cjk_query_expr(q):
     return " OR ".join(terms)
 
 
+def _normalize_capsule_list(value, *, limit=24, item_chars=160):
+    """Return a bounded, order-preserving list of non-empty strings."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        try:
+            decoded = json.loads(value)
+            value = decoded if isinstance(decoded, list) else [value]
+        except (json.JSONDecodeError, TypeError):
+            value = [value]
+    if not isinstance(value, (list, tuple)):
+        return []
+    out, seen = [], set()
+    for raw in value:
+        if not isinstance(raw, str):
+            continue
+        item = re.sub(r"[\x00-\x1f\x7f]", " ", raw).strip()[:item_chars]
+        key = item.casefold()
+        if item and key not in seen:
+            seen.add(key)
+            out.append(item)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _default_headline(body):
+    return re.sub(r"[\x00-\x1f\x7f]", " ", _first_line(body or "")).strip()[:240]
+
+
+def _normalize_headline(value, body):
+    text = re.sub(r"[\x00-\x1f\x7f]", " ", value or "").strip()[:240]
+    return text or _default_headline(body)
+
+
+def _ensure_capsule_tables(con):
+    """Create derived v7 retrieval structures and report whether a backfill is needed."""
+    global _CAPSULE_OK
+    con.execute("""CREATE TABLE IF NOT EXISTS record_topics(
+        record_id TEXT NOT NULL,
+        topic TEXT NOT NULL,
+        PRIMARY KEY(record_id, topic),
+        FOREIGN KEY(record_id) REFERENCES records(id) ON DELETE CASCADE
+    )""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_record_topics_topic ON record_topics(topic, record_id)")
+    if not _FTS_OK:
+        _CAPSULE_OK = False
+        return False
+    existed = con.execute(
+        "SELECT 1 FROM sqlite_master WHERE name='records_capsule_fts'").fetchone()
+    con.execute("CREATE VIRTUAL TABLE IF NOT EXISTS records_capsule_fts USING fts5("
+                "id UNINDEXED, headline, aliases, entities, topics, artifact_refs, canonical_id, "
+                "tokenize='unicode61')")
+    _CAPSULE_OK = True
+    return not bool(existed)
+
+
+def _sync_capsule_row(con, rid):
+    """Rebuild one record's derived capsule FTS and normalized topic rows."""
+    row = con.execute(
+        "SELECT headline, aliases, entities, topics, artifact_refs, canonical_id "
+        "FROM records WHERE id=?", (rid,)).fetchone()
+    con.execute("DELETE FROM record_topics WHERE record_id=?", (rid,))
+    if _CAPSULE_OK:
+        con.execute("DELETE FROM records_capsule_fts WHERE id=?", (rid,))
+    if row is None:
+        return
+    headline, aliases, entities, topics, artifact_refs, canonical_id = row
+    decoded = []
+    for raw in (aliases, entities, topics, artifact_refs):
+        decoded.append(_normalize_capsule_list(raw))
+    aliases_v, entities_v, topics_v, artifact_refs_v = decoded
+    for topic in topics_v:
+        con.execute("INSERT OR IGNORE INTO record_topics(record_id, topic) VALUES(?,?)",
+                    (rid, topic.casefold()))
+    if _CAPSULE_OK:
+        con.execute(
+            "INSERT INTO records_capsule_fts(id,headline,aliases,entities,topics,artifact_refs,canonical_id) "
+            "VALUES(?,?,?,?,?,?,?)",
+            (rid, headline or "", " ".join(aliases_v), " ".join(entities_v),
+             " ".join(topics_v), " ".join(artifact_refs_v), canonical_id or rid))
+
+
+def _rebuild_capsules(con):
+    con.execute("DELETE FROM record_topics")
+    if _CAPSULE_OK:
+        con.execute("DELETE FROM records_capsule_fts")
+    for (rid,) in con.execute("SELECT id FROM records").fetchall():
+        _sync_capsule_row(con, rid)
+
+
 def _ensure_schema(con):
     global _FTS_OK, _CJK_OK
     con.execute("""CREATE TABLE IF NOT EXISTS records(
@@ -662,6 +758,11 @@ def _ensure_schema(con):
                 con.commit()   # Persist even when no migration follows.
     else:
         _CJK_OK = False
+    capsule_created = _ensure_capsule_tables(con)
+    cols = {row[1] for row in con.execute("PRAGMA table_info(records)")}
+    if capsule_created and {"headline", "topics", "canonical_id"}.issubset(cols):
+        _rebuild_capsules(con)
+        con.commit()
 
 
 def _migrate_v2(con):
@@ -827,6 +928,33 @@ def _migrate_v6_apply(con, plan):
     sys.stderr.write(f"[migrate v6] applied: remapped {total} records\n")
 
 
+def _migrate_v7(con):
+    """Add retrieval capsules, topic index metadata, and non-destructive temporal state."""
+    cols = {row[1] for row in con.execute("PRAGMA table_info(records)")}
+    additions = (
+        ("headline", "TEXT"),
+        ("aliases", "TEXT NOT NULL DEFAULT '[]'"),
+        ("entities", "TEXT NOT NULL DEFAULT '[]'"),
+        ("topics", "TEXT NOT NULL DEFAULT '[]'"),
+        ("artifact_refs", "TEXT NOT NULL DEFAULT '[]'"),
+        ("status", "TEXT NOT NULL DEFAULT 'active'"),
+        ("canonical_id", "TEXT"),
+        ("superseded_by", "TEXT"),
+        ("capsule_version", "INTEGER NOT NULL DEFAULT 1"),
+    )
+    for name, declaration in additions:
+        if name not in cols:
+            con.execute(f"ALTER TABLE records ADD COLUMN {name} {declaration}")
+    con.execute("UPDATE records SET status='active' WHERE status IS NULL OR status NOT IN ('active','superseded')")
+    con.execute("UPDATE records SET canonical_id=id WHERE canonical_id IS NULL OR canonical_id='' ")
+    con.execute("UPDATE records SET capsule_version=1 WHERE capsule_version IS NULL")
+    for rid, body, headline in con.execute("SELECT id, body, headline FROM records").fetchall():
+        if not headline:
+            con.execute("UPDATE records SET headline=? WHERE id=?", (_default_headline(body), rid))
+    _ensure_capsule_tables(con)
+    _rebuild_capsules(con)
+
+
 def _run_migrations(con):
     """Run schema migrations based on ``PRAGMA user_version``.
 
@@ -869,6 +997,8 @@ def _run_migrations(con):
             _migrate_v5(con)
         if cur2 < 6:
             _migrate_v6_apply(con, v6_plan)
+        if cur2 < 7:
+            _migrate_v7(con)
         con.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         con.execute("COMMIT")
     except Exception:
@@ -909,23 +1039,30 @@ def _row_to_meta(row):
     """Decode a SQLite row into ``(metadata, body)``, including tags and links."""
     d = dict(zip(RECORD_COLS, row))
     body = d.pop("body")
-    # Tags and links are always lists.
-    for k in ("tags", "links"):
+    # Repeated metadata fields are always lists.
+    for k in ("tags", "links", *CAPSULE_LIST_FIELDS):
         v = d.get(k)
         if v is None:
             d[k] = []
         else:
             try:
-                d[k] = json.loads(v)
+                decoded = json.loads(v)
+                d[k] = decoded if isinstance(decoded, list) else []
             except (json.JSONDecodeError, TypeError):
                 d[k] = []
+    d["status"] = d.get("status") if d.get("status") in RECORD_STATUSES else "active"
+    d["canonical_id"] = d.get("canonical_id") or d.get("id")
+    d["capsule_version"] = d.get("capsule_version") or 1
     return d, body
 
 
 def _meta_to_params(meta, body):
-    """Encode metadata and body as the canonical 16-column INSERT tuple."""
+    """Encode metadata and body as the canonical INSERT tuple."""
     tags = meta.get("tags") or []
     links = meta.get("links") or []
+    capsule_lists = {
+        key: _normalize_capsule_list(meta.get(key)) for key in CAPSULE_LIST_FIELDS
+    }
     delivery_state = meta.get("delivery_state")
     if delivery_state not in DELIVERY_STATES:
         delivery_state = "pending" if _pending_backfill(meta.get("type"), body) else "ordinary"
@@ -950,6 +1087,15 @@ def _meta_to_params(meta, body):
         meta.get("last_accessed"),       # None → SQL NULL (back-filled by migration/import)
         injection_flag or 0,
         delivery_state,
+        _normalize_headline(meta.get("headline"), body),
+        json.dumps(capsule_lists["aliases"], ensure_ascii=False),
+        json.dumps(capsule_lists["entities"], ensure_ascii=False),
+        json.dumps(capsule_lists["topics"], ensure_ascii=False),
+        json.dumps(capsule_lists["artifact_refs"], ensure_ascii=False),
+        meta.get("status") if meta.get("status") in RECORD_STATUSES else "active",
+        meta.get("canonical_id") or meta["id"],
+        meta.get("superseded_by"),
+        int(meta.get("capsule_version") or 1),
     )
 
 
@@ -995,7 +1141,7 @@ def find_by_source(tier, scope, rtype, source, cwd_origin, con):
     """source-keyed lookup. Project records are namespaced by cwd_origin."""
     if not source:
         return None
-    where = "tier=? AND scope=? AND type=? AND source=?"
+    where = "tier=? AND scope=? AND type=? AND source=? AND status='active'"
     params = [tier, scope, rtype, source]
     if scope == "project":
         where += " AND cwd_origin=?"
@@ -1010,7 +1156,7 @@ def find_dup(tier, scope, body, cwd_origin, con=None):
     """Check duplicates while reusing an optional write transaction."""
     nb = norm_body(body)
     h = hashlib.sha256(nb.encode()).hexdigest()[:16]
-    where = "tier=? AND scope=?"
+    where = "tier=? AND scope=? AND status='active'"
     params = [tier, scope]
     if scope == "project":
         where += " AND cwd_origin=?"
@@ -1024,7 +1170,8 @@ def find_dup(tier, scope, body, cwd_origin, con=None):
 def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=None,
                  source=None, quiet=False, requires_consume=False, journal_action=None,
                  journal_insert_only=False, journal_actor=None,
-                 journal_cwd=_WRITE_EVENT_CWD_UNSET):
+                 journal_cwd=_WRITE_EVENT_CWD_UNSET, headline=None, aliases=None,
+                 entities=None, topics=None, artifact_refs=None):
     """DB write primitive: one write, one connection, one transaction."""
     assert tier in TIERS and scope in SCOPES
     ok, why = quality_ok(body)
@@ -1039,6 +1186,26 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
     # Keep deduplication, INSERT, and FTS mirrors in one transaction.
     con = get_con()
     try:
+        def refresh_capsule(rid, *, body_replaced=False):
+            current = con.execute(
+                "SELECT headline,aliases,entities,topics,artifact_refs FROM records WHERE id=?",
+                (rid,)).fetchone()
+            if current is None:
+                return
+            values = []
+            supplied = (aliases, entities, topics, artifact_refs)
+            for raw, old in zip(supplied, current[1:]):
+                normalized = _normalize_capsule_list(raw if raw is not None else old)
+                values.append(json.dumps(normalized, ensure_ascii=False))
+            if headline is not None or body_replaced:
+                next_headline = _normalize_headline(headline, body)
+            else:
+                next_headline = _normalize_headline(current[0], body)
+            con.execute(
+                "UPDATE records SET headline=?,aliases=?,entities=?,topics=?,artifact_refs=?,"
+                "capsule_version=1 WHERE id=?", (next_headline, *values, rid))
+            _sync_capsule_row(con, rid)
+
         # A matching source key updates in place and preserves the record ID.
         requested_delivery = "pending" if (rtype == "handoff" or requires_consume) else "ordinary"
         existing = find_by_source(tier, scope, rtype, source, cwd_origin, con)
@@ -1068,6 +1235,7 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
                 con.execute("DELETE FROM records_cjk WHERE id=?", (existing,))
                 con.execute("INSERT INTO records_cjk(id, body) VALUES(?,?)",
                             (existing, _cjk_shadow_text(body)))
+            refresh_capsule(existing, body_replaced=True)
             con.commit()
             if not quiet:
                 print(f"[upsert] {tier}/{scope} source={source} → {existing}")
@@ -1095,6 +1263,8 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
                     " delivery_state=CASE WHEN delivery_state='pending' OR ?='pending' "
                     "THEN 'pending' ELSE delivery_state END WHERE id=?",
                     (today(), requested_delivery, dup))
+            if any(value is not None for value in (headline, aliases, entities, topics, artifact_refs)):
+                refresh_capsule(dup)
             con.commit()
             if not quiet:
                 print(f"[reinforce] existing record recurred; incremented strength: {dup}")
@@ -1116,6 +1286,10 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
             # Persist flags produced by sanitize().
             "injection_flag": 1 if "injection-pattern" in flags else 0,
             "delivery_state": requested_delivery,
+            "headline": _normalize_headline(headline, body),
+            "aliases": aliases or [], "entities": entities or [], "topics": topics or [],
+            "artifact_refs": artifact_refs or [], "status": "active",
+            "canonical_id": sid, "superseded_by": None, "capsule_version": 1,
         }
         if tier == "working" and requested_delivery != "pending":
             meta["expires"] = (datetime.date.today() +
@@ -1133,6 +1307,7 @@ def write_record(tier, scope, rtype, body, cwd_origin=None, tags=None, links=Non
             con.execute("DELETE FROM records_cjk WHERE id=?", (sid,))
             con.execute("INSERT INTO records_cjk(id, body) VALUES(?,?)",
                         (sid, _cjk_shadow_text(body)))
+        _sync_capsule_row(con, sid)
         con.commit()
         if not quiet:
             fl = f"  ({'·'.join(flags)})" if flags else ""
@@ -1155,6 +1330,8 @@ def index_build(rebuild=False):
         if rebuild:
             con.execute("DROP TABLE IF EXISTS records_fts")
             con.execute("DROP TABLE IF EXISTS records_cjk")
+            con.execute("DROP TABLE IF EXISTS records_capsule_fts")
+            con.execute("DROP TABLE IF EXISTS record_topics")
             try:
                 con.execute("DROP TABLE IF EXISTS records_trig")  # retired trigram shadow
             except Exception:
@@ -1176,11 +1353,12 @@ def index_build(rebuild=False):
                 n += 1
         else:
             n = con.execute("SELECT COUNT(*) FROM records").fetchone()[0]
+        _rebuild_capsules(con)
         con.commit()
     finally:
         con.close()
     print(f"[index] {n} records  (FTS5={'on' if _FTS_OK else 'off, LIKE fallback'}"
-          f"{', cjk-bigram' if _CJK_OK else ''})")
+          f"{', cjk-bigram' if _CJK_OK else ''}{', capsule' if _CAPSULE_OK else ''})")
     return n
 
 
@@ -1235,10 +1413,12 @@ def _has_cjk(s):
     return bool(re.search(r"[　-鿿가-힯]", s))
 
 
-def _visibility_clause(alias="r", all_projects=False):
+def _visibility_clause(alias="r", all_projects=False, include_superseded=False):
     """Shared read fence: flagged rows never surface; default is current project + global."""
     prefix = f"{alias}." if alias else ""
     clean = f"({prefix}injection_flag=0 OR {prefix}injection_flag IS NULL)"
+    if not include_superseded:
+        clean += f" AND {prefix}status='active'"
     if all_projects:
         return clean, []
     return f"{clean} AND ({prefix}scope='global' OR {prefix}cwd_origin=?)", [project_key(Path.cwd())]
@@ -1322,11 +1502,13 @@ def _append_write_event(action, rid, tier=None, scope=None, rtype=None, actor=No
 
 
 def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20,
-           full=False, touch=True, json_output=False):
+           full=False, touch=True, json_output=False, topic=None,
+           include_superseded=False, gate_id=None):
     limit = max(1, min(int(limit), 100))
     if not json_output:
         print(f"# recall: \"{query}\"  [tier={tier or '*'} scope={scope or '*'} "
-              f"cwd={'current' if cwd else 'all'}]")
+              f"cwd={'current' if cwd else 'all'} topic={topic or '*'} "
+              f"status={'all' if include_superseded else 'active'}]")
     hits = []
     if not DB.exists():
         if not json_output:
@@ -1351,6 +1533,12 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20,
                 conds.append("r.scope=?"); p.append(scope)
             if encc:
                 conds.append("(r.scope='global' OR r.cwd_origin=?)"); p.append(encc)
+            if not include_superseded:
+                conds.append("r.status='active'")
+            if topic:
+                conds.append("EXISTS (SELECT 1 FROM record_topics rt "
+                             "WHERE rt.record_id=r.id AND rt.topic=?)")
+                p.append(topic.casefold())
             # Exclude injection-flagged records across every retrieval path.
             conds.append("(r.injection_flag=0 OR r.injection_flag IS NULL)")
             return (" AND ".join(conds) if conds else "1"), p
@@ -1369,8 +1557,30 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20,
         tagged = []  # (bucket, score, -strength, row_9tuple)
         seen_ids: set = set()
 
+        # Bucket 0: compact retrieval capsule (headline/aliases/entities/topics/
+        # artifact pointers/canonical id). Body search remains a compatibility
+        # fallback and is intentionally ranked after capsule evidence.
+        has_capsule = con.execute(
+            "SELECT name FROM sqlite_master WHERE name='records_capsule_fts'").fetchone()
+        if has_capsule:
+            tokens = _tokenize_query(query)
+            capsule_expr = " OR ".join(tokens) if tokens else _fts_literal(query)
+            try:
+                where_c, params_c = build_where(("records_capsule_fts MATCH ?", [capsule_expr]))
+                sql_c = (f"SELECT r.id,r.tier,r.scope,r.type,r.cwd_origin,"
+                         f"COALESCE(NULLIF(r.headline,''),substr(r.body,1,160)),"
+                         f"r.strength,bm25(records_capsule_fts) AS score,r.delivery_state "
+                         f"FROM records_capsule_fts c JOIN records r ON r.id=c.id "
+                         f"WHERE {where_c} ORDER BY bm25(records_capsule_fts) LIMIT ?")
+                for row in con.execute(sql_c, params_c + [limit * 3]).fetchall():
+                    if row[0] not in seen_ids:
+                        seen_ids.add(row[0])
+                        tagged.append((0, row[7], -(row[6] or 1), row))
+            except sqlite3.OperationalError:
+                pass
+
         if has_fts:
-            # Bucket 0: unicode61 tokenized OR MATCH with literal fallback.
+            # Bucket 1: unicode61 body MATCH with literal fallback.
             tokens = _tokenize_query(query)
             match_expr = " OR ".join(tokens) if tokens else _fts_literal(query)
             try:
@@ -1385,9 +1595,9 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20,
                     rid8 = row[0]
                     if rid8 not in seen_ids:
                         seen_ids.add(rid8)
-                        tagged.append((0, row[7], -(row[6] or 1), row))
+                        tagged.append((1, row[7], -(row[6] or 1), row))
 
-                # Bucket 1: CJK bigram shadow — ranked substring matching (W4).
+                # Bucket 2: CJK bigram shadow — ranked substring matching (W4).
                 # The query is re-expressed as bigram phrases; snippets come
                 # from the original body, never the shadow transform.
                 if _has_cjk(query) and _CJK_OK:
@@ -1406,7 +1616,7 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20,
                             for tr in cjk_rows:
                                 if tr[0] not in seen_ids:
                                     seen_ids.add(tr[0])
-                                    tagged.append((1, tr[7], -(tr[6] or 1), tr))
+                                    tagged.append((2, tr[7], -(tr[6] or 1), tr))
                         except sqlite3.OperationalError:
                             pass
                 elif _has_cjk(query) and not _CJK_OK:
@@ -1420,7 +1630,7 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20,
                     for lr in like_rows:
                         if lr[0] not in seen_ids:
                             seen_ids.add(lr[0])
-                            tagged.append((2, lr[7], -(lr[6] or 1), lr))
+                            tagged.append((3, lr[7], -(lr[6] or 1), lr))
             except sqlite3.OperationalError:
                 # Fall back to LIKE when FTS MATCH fails.
                 where_l, params_l = build_where()
@@ -1432,7 +1642,7 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20,
                 for er in err_rows:
                     if er[0] not in seen_ids:
                         seen_ids.add(er[0])
-                        tagged.append((2, er[7], -(er[6] or 1), er))
+                        tagged.append((3, er[7], -(er[6] or 1), er))
         else:
             # No FTS: use LIKE.
             where_l, params_l = build_where()
@@ -1444,7 +1654,7 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20,
             for nr in nofts_rows:
                 if nr[0] not in seen_ids:
                     seen_ids.add(nr[0])
-                    tagged.append((2, nr[7], -(nr[6] or 1), nr))
+                    tagged.append((3, nr[7], -(nr[6] or 1), nr))
     finally:
         con.close()
 
@@ -1458,7 +1668,8 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20,
         try:
             ids = [row[0] for row in rows_final[:limit]]
             ph = ",".join("?" for _ in ids)
-            fence, fence_params = _visibility_clause("", all_projects=not bool(cwd))
+            fence, fence_params = _visibility_clause(
+                "", all_projects=not bool(cwd), include_superseded=include_superseded)
             full_bodies = dict(con_body.execute(
                 f"SELECT id, body FROM records WHERE id IN ({ph}) AND {fence}",
                 [*ids, *fence_params]).fetchall())
@@ -1485,6 +1696,9 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20,
         "accessed_ids": hit_ids if touch else [],
         "full": bool(full),
         "sessions": bool(sessions),
+        "topic": topic or "",
+        "include_superseded": bool(include_superseded),
+        "gate_id": gate_id or "",
     })
 
     if json_output:
@@ -1505,6 +1719,108 @@ def recall(query, tier=None, scope=None, cwd=None, sessions=False, limit=20,
         print(f"\n# raw session transcript: \"{query}\"  (unrefined)")
         _recall_sessions(query, cwd)
     return hits
+
+
+def recall_gate(decision=None, reason="", query=None, *, outcome=None, gate_id=None,
+                record_ids=None, full=False, limit=20, topic=None):
+    """Record a work-start recall opportunity without storing raw prompts."""
+    runtime = os.environ.get("MEM_RECALL_RUNTIME", "unknown")
+    sid = os.environ.get("MEM_SID") or os.environ.get("CODEX_THREAD_ID") or ""
+    project = project_key(Path.cwd())
+    if outcome:
+        if not gate_id:
+            raise ValueError("--outcome requires --gate-id")
+        if not re.fullmatch(r"rg-[0-9a-f]{16}", gate_id):
+            raise ValueError("invalid --gate-id")
+        if outcome == "applied" and not record_ids:
+            raise ValueError("applied outcome requires --record-id")
+        if outcome == "miss" and record_ids:
+            raise ValueError("miss outcome cannot include --record-id")
+        opportunity = None
+        try:
+            if RECALL_EVENTS.exists():
+                for raw in reversed(RECALL_EVENTS.read_text(
+                        encoding="utf-8", errors="replace").splitlines()[-500:]):
+                    try:
+                        candidate = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    if (candidate.get("event") == "recall-opportunity"
+                            and candidate.get("gate_id") == gate_id):
+                        opportunity = candidate
+                        break
+        except OSError:
+            opportunity = None
+        if opportunity is None:
+            raise ValueError("unknown --gate-id")
+        if opportunity.get("sid", "") != sid or opportunity.get("project") != project:
+            raise ValueError("--gate-id belongs to another session or project")
+        _append_recall_event({
+            "at": datetime.datetime.now().isoformat(timespec="seconds"),
+            "event": "recall-outcome", "runtime": runtime, "gate_id": gate_id,
+            "sid": sid, "project": project, "outcome": outcome,
+            "record_ids": list(dict.fromkeys(record_ids or []))[:20],
+        })
+        print(f"[recall-gate] {gate_id} outcome={outcome}")
+        return []
+    if decision not in ("recall", "skip"):
+        raise ValueError("decision must be recall or skip")
+    if not reason.strip():
+        raise ValueError("--reason is required")
+    if decision == "recall" and not (query or "").strip():
+        raise ValueError("recall decision requires --query")
+    seed = "\0".join((sid, project, datetime.datetime.now().isoformat(), reason))
+    gate_id = "rg-" + hashlib.sha256(seed.encode()).hexdigest()[:16]
+    _append_recall_event({
+        "at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "event": "recall-opportunity", "runtime": runtime, "gate_id": gate_id,
+        "sid": sid, "project": project, "decision": decision,
+        "reason": re.sub(r"[\x00-\x1f\x7f]", " ", reason).strip()[:120],
+        "query_sha256": hashlib.sha256((query or "").encode()).hexdigest() if query else "",
+    })
+    print(f"[recall-gate] {gate_id} decision={decision}")
+    if decision == "skip":
+        return []
+    hits = recall(query, cwd=True, full=full, limit=limit, topic=topic, gate_id=gate_id)
+    if not hits:
+        _append_recall_event({
+            "at": datetime.datetime.now().isoformat(timespec="seconds"),
+            "event": "recall-outcome", "runtime": runtime, "gate_id": gate_id,
+            "sid": sid, "project": project, "outcome": "miss", "record_ids": [],
+        })
+    return hits
+
+
+def topics(query=None, limit=30, include_superseded=False):
+    """List normalized active topics or records for one exact topic."""
+    con = get_con()
+    try:
+        pkey = project_key(Path.cwd())
+        status = "1" if include_superseded else "r.status='active'"
+        visible = "(r.scope='global' OR r.cwd_origin=?)"
+        if query:
+            rows = con.execute(
+                "SELECT r.id,r.tier,r.scope,r.type,r.headline,r.status FROM record_topics t "
+                f"JOIN records r ON r.id=t.record_id WHERE t.topic=? AND {status} AND {visible} "
+                "ORDER BY r.updated DESC LIMIT ?", (query.casefold(), pkey, limit)).fetchall()
+            print(f"# topic: {query}")
+            for rid, tier, scope, rtype, headline, record_status in rows:
+                print(f"  [{tier}/{scope}/{rtype}/{record_status}] {rid}: {headline or ''}")
+            if not rows:
+                print("(no topic matches)")
+            return rows
+        rows = con.execute(
+            "SELECT t.topic,COUNT(*) FROM record_topics t JOIN records r ON r.id=t.record_id "
+            f"WHERE {status} AND {visible} GROUP BY t.topic ORDER BY COUNT(*) DESC,t.topic LIMIT ?",
+            (pkey, limit)).fetchall()
+    finally:
+        con.close()
+    print("# topics")
+    for topic_name, count in rows:
+        print(f"  {topic_name}: {count}")
+    if not rows:
+        print("(no topics)")
+    return rows
 
 
 def _recall_sessions(query, cwd):
@@ -1862,7 +2178,7 @@ def export_dump(target_path=None):
         for row in rows:
             rec = {}
             for k, v in zip(RECORD_COLS, row):
-                if k in ("tags", "links"):
+                if k in ("tags", "links", *CAPSULE_LIST_FIELDS):
                     rec[k] = json.loads(v) if v else []
                 else:
                     rec[k] = v  # Preserve None as JSON null.
@@ -1888,6 +2204,9 @@ def import_dump(path):
                 con.execute("DELETE FROM records_cjk")
             except Exception:
                 pass
+        if con.execute("SELECT name FROM sqlite_master WHERE name='records_capsule_fts'").fetchone():
+            con.execute("DELETE FROM records_capsule_fts")
+        con.execute("DELETE FROM record_topics")
 
         with path.open(encoding="utf-8") as f:
             for line in f:
@@ -1898,8 +2217,8 @@ def import_dump(path):
                 # Extract body.
                 body = rec.get("body", "")
                 meta = {k: rec.get(k) for k in RECORD_COLS if k != "body"}
-                # Normalize null tags and links to lists.
-                for k in ("tags", "links"):
+                # Normalize repeated metadata and backfill v7 capsule defaults.
+                for k in ("tags", "links", *CAPSULE_LIST_FIELDS):
                     if meta[k] is None:
                         meta[k] = []
                 # Backfill defaults for older dumps.
@@ -1910,6 +2229,10 @@ def import_dump(path):
                 # Recompute absent injection flags from body while trusting explicit flags.
                 if meta.get("injection_flag") is None:
                     meta["injection_flag"] = 1 if INJECTION_PAT.search(body or "") else 0
+                meta["headline"] = meta.get("headline") or _default_headline(body)
+                meta["status"] = meta.get("status") if meta.get("status") in RECORD_STATUSES else "active"
+                meta["canonical_id"] = meta.get("canonical_id") or meta.get("id")
+                meta["capsule_version"] = meta.get("capsule_version") or 1
                 con.execute(
                     f"INSERT OR REPLACE INTO records VALUES({','.join(['?']*len(RECORD_COLS))})",
                     _meta_to_params(meta, body)
@@ -1923,6 +2246,7 @@ def import_dump(path):
                                     (rid, _cjk_shadow_text(body)))
                     except Exception:
                         pass
+                _sync_capsule_row(con, rid)
                 n += 1
         con.commit()
     finally:
@@ -2233,9 +2557,11 @@ def cleanup_runtime_memory(apply=False, archive=None):
     return len(candidates)
 
 
-def migrate(apply=False, cleanup_native=False, cleanup_archive=None):
-    print(f"# migrate  ({'APPLY' if apply else 'dry-run'})")
+def migrate(apply=False, cleanup_native=False, cleanup_archive=None, all_projects=False):
+    print(f"# migrate  ({'APPLY' if apply else 'dry-run'}; "
+          f"{'all projects' if all_projects else 'current project'})")
     created, skipped = 0, 0
+    current_key = project_key(Path.cwd(), seed=False)
 
     # Idempotency key: source values already present in the DB.
     if DB.exists():
@@ -2258,6 +2584,10 @@ def migrate(apply=False, cleanup_native=False, cleanup_archive=None):
         for mp in PROJECTS.glob("*/memory/*.md"):
             if mp.name == "MEMORY.md":
                 continue
+            project_ns = mp.parent.parent.name
+            cwd_origin = _canonical_cwd_key(project_ns, key_cache)
+            if not all_projects and cwd_origin != current_key:
+                continue
             src = f"auto-memory:{mp.parent.parent.name}/{mp.name}"
             if src in existing_src:
                 skipped += 1
@@ -2266,12 +2596,16 @@ def migrate(apply=False, cleanup_native=False, cleanup_archive=None):
                 meta, body = parse_record(mp.read_text(encoding="utf-8"))
                 rtype = meta.get("type", "project")
                 scope = "global" if rtype == "user" else "project"
-                cwd_origin = _canonical_cwd_key(mp.parent.parent.name, key_cache)
+                if scope == "global" and not all_projects:
+                    continue
                 if apply:
                     write_record("durable", scope, rtype, body, cwd_origin=cwd_origin,
                                  source=src, quiet=True, journal_action="add",
                                  journal_insert_only=True, journal_actor="sync",
-                                 journal_cwd=_event_cwd(mp.parent.parent.name))
+                                 journal_cwd=_event_cwd(mp.parent.parent.name),
+                                 headline=meta.get("headline"), aliases=meta.get("aliases"),
+                                 entities=meta.get("entities"), topics=meta.get("topics"),
+                                 artifact_refs=meta.get("artifact_refs"))
                 created += 1
             except Exception as e:
                 sys.stderr.write(f"[migrate] skip {mp}: {e}\n")
@@ -2286,13 +2620,13 @@ def migrate(apply=False, cleanup_native=False, cleanup_archive=None):
     try:
         postits = set()
         reg = STORE / ".postit-roots"
-        if reg.exists():
+        if all_projects and reg.exists():
             for line in reg.read_text(encoding="utf-8").splitlines():
                 p = Path(line.strip())
                 if p.name == "post-it.md" and p.exists():
                     postits.add(p)
         cwd_pi = artifact_root(Path.cwd()) / "post-it.md"
-        if cwd_pi.exists():
+        if all_projects and cwd_pi.exists():
             postits.add(cwd_pi)
         postits = sorted(postits)
         print(f"  found {len(postits)} post-it file(s) from registry and cwd")
@@ -2303,6 +2637,8 @@ def migrate(apply=False, cleanup_native=False, cleanup_archive=None):
                 # stay idempotent; cwd_origin is canonical (audit W3 fix).
                 src_ns = enc_cwd(root_dir)
                 cwd_origin = project_key(root_dir, seed=False)
+                if not all_projects and cwd_origin != current_key:
+                    continue
                 cur = "note"
                 for line in pi.read_text(encoding="utf-8", errors="ignore").splitlines():
                     m = re.match(r"##\s+(.*)", line)
@@ -2330,7 +2666,7 @@ def migrate(apply=False, cleanup_native=False, cleanup_archive=None):
 
     # 3) user_profile/*.md → durable/global/profile
     try:
-        if USER_PROFILE.exists():
+        if all_projects and USER_PROFILE.exists():
             for up in sorted(USER_PROFILE.glob("*.md")):
                 if up.name == "README.md":
                     continue
@@ -2354,7 +2690,8 @@ def migrate(apply=False, cleanup_native=False, cleanup_archive=None):
 
     # 4) Legacy Markdown sources under STORE.
     try:
-        for meta, body in iter_md_files(STORE, exclude={"MEMORY.md", "README.md"}):
+        sources = iter_md_files(STORE, exclude={"MEMORY.md", "README.md"}) if all_projects else []
+        for meta, body in sources:
             p = meta.get("_path", Path(""))
             # The iterator excludes non-Markdown files and projection directories.
             rel = str(p.relative_to(STORE)) if p and STORE in p.parents else str(p)
@@ -2375,7 +2712,10 @@ def migrate(apply=False, cleanup_native=False, cleanup_archive=None):
                                      cwd_origin=rid_cwd, source=src, quiet=True,
                                      journal_action="add", journal_insert_only=True,
                                      journal_actor="sync",
-                                     journal_cwd=_event_cwd(meta.get("cwd_origin")))
+                                     journal_cwd=_event_cwd(meta.get("cwd_origin")),
+                                     headline=meta.get("headline"), aliases=meta.get("aliases"),
+                                     entities=meta.get("entities"), topics=meta.get("topics"),
+                                     artifact_refs=meta.get("artifact_refs"))
                 else:
                     # Markdown without frontmatter becomes a durable project note.
                     if apply:
@@ -2392,6 +2732,8 @@ def migrate(apply=False, cleanup_native=False, cleanup_archive=None):
 
     print(f"  → {'created' if apply else 'would create'} {created}; skipped existing {skipped}")
     if cleanup_native:
+        if not all_projects:
+            raise RuntimeError("runtime-memory cleanup requires --all-projects")
         cleanup_runtime_memory(apply=apply, archive=cleanup_archive)
     return created
 
@@ -2411,21 +2753,23 @@ def near_dup_groups(con, where=None, params=()):
     return [ids for ids in seen.values() if len(ids) > 1]
 
 
-def _visible_record(con, rid, all_projects=False):
-    fence, params = _visibility_clause("", all_projects=all_projects)
+def _visible_record(con, rid, all_projects=False, include_superseded=False):
+    fence, params = _visibility_clause(
+        "", all_projects=all_projects, include_superseded=include_superseded)
     return con.execute(
         f"SELECT {', '.join(RECORD_COLS)} FROM records WHERE id=? AND {fence}",
         [rid, *params]).fetchone()
 
 
-def show_record(rid, all_projects=False):
+def show_record(rid, all_projects=False, include_superseded=False, gate_id=None):
     """Print one visible record in full. Reading never consumes a pending delivery."""
     if not DB.exists():
         print(f"[show] visible record not found: {rid}")
         return False
     con = get_con()
     try:
-        row = _visible_record(con, rid, all_projects=all_projects)
+        row = _visible_record(con, rid, all_projects=all_projects,
+                              include_superseded=include_superseded)
         if row is None:
             print(f"[show] visible record not found: {rid}")
             return False
@@ -2437,7 +2781,9 @@ def show_record(rid, all_projects=False):
         con.close()
     print(f"# {meta['id']}")
     for key in ("tier", "scope", "type", "cwd_origin", "created", "updated", "expires",
-                "source", "tags", "links", "strength", "last_accessed", "delivery_state"):
+                "source", "tags", "links", "strength", "last_accessed", "delivery_state",
+                "headline", "aliases", "entities", "topics", "artifact_refs", "status",
+                "canonical_id", "superseded_by", "capsule_version"):
         value = meta.get(key)
         if value not in (None, "", []):
             print(f"{key}: {json.dumps(value, ensure_ascii=False) if isinstance(value, list) else value}")
@@ -2446,6 +2792,7 @@ def show_record(rid, all_projects=False):
         "at": datetime.datetime.now().isoformat(timespec="seconds"),
         "event": "show", "runtime": os.environ.get("MEM_RECALL_RUNTIME", "unknown"),
         "accessed_ids": [rid], "all_projects": bool(all_projects),
+        "include_superseded": bool(include_superseded), "gate_id": gate_id or "",
     })
     return True
 
@@ -2487,6 +2834,97 @@ def consume(rid):
         })
         _append_write_event("consume", rid, tier=meta.get("tier"), scope=meta.get("scope"),
                              rtype=meta.get("type"))
+        return True
+    finally:
+        con.close()
+
+
+def supersede(rid, by_rid):
+    """Mark one visible active record as superseded by another active record."""
+    if rid == by_rid:
+        print("[supersede] refused self-reference")
+        return False
+    con = get_con()
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        old = _visible_record(con, rid, include_superseded=True)
+        new = _visible_record(con, by_rid, include_superseded=True)
+        if old is None or new is None:
+            print("[supersede] visible record not found")
+            return False
+        old_meta, _ = _row_to_meta(old)
+        new_meta, _ = _row_to_meta(new)
+        for meta in (old_meta, new_meta):
+            if meta.get("type") == "profile" or meta.get("delivery_state") == "pending":
+                print("[supersede] refused profile or pending-delivery record")
+                return False
+        if old_meta.get("status") != "active" or new_meta.get("status") != "active":
+            print("[supersede] both records must be active")
+            return False
+        same_namespace = old_meta.get("scope") == new_meta.get("scope") and (
+            old_meta.get("scope") == "global"
+            or old_meta.get("cwd_origin") == new_meta.get("cwd_origin"))
+        if not same_namespace:
+            print("[supersede] refused cross-scope or cross-project relation")
+            return False
+        # Active records should be their own canonical root. Reject malformed
+        # chains instead of creating a temporal cycle.
+        target = new_meta.get("canonical_id") or by_rid
+        if target != by_rid:
+            print("[supersede] refused malformed active canonical target")
+            return False
+        if target == rid or con.execute(
+                "SELECT 1 FROM records WHERE id=? AND superseded_by=?", (by_rid, rid)).fetchone():
+            print("[supersede] refused cycle")
+            return False
+        con.execute(
+            "UPDATE records SET status='superseded',canonical_id=?,superseded_by=?,updated=? WHERE id=?",
+            (target, target, today(), rid))
+        _sync_capsule_row(con, rid)
+        con.commit()
+        print(f"[supersede] {rid} → {target}")
+        _append_write_event("supersede", rid, tier=old_meta.get("tier"),
+                            scope=old_meta.get("scope"), rtype=old_meta.get("type"),
+                            snippet=f"superseded_by={target}")
+        return True
+    finally:
+        con.close()
+
+
+def activate(rid):
+    """Guarded reversal: reactivate only after its current successor is inactive."""
+    con = get_con()
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        row = _visible_record(con, rid, include_superseded=True)
+        if row is None:
+            print(f"[activate] visible record not found: {rid}")
+            return False
+        meta, _ = _row_to_meta(row)
+        if meta.get("status") != "superseded":
+            print(f"[activate] refused non-superseded record: {rid}")
+            return False
+        if meta.get("type") == "profile" or meta.get("delivery_state") == "pending":
+            print("[activate] refused profile or pending-delivery record")
+            return False
+        successor = meta.get("superseded_by")
+        if successor and con.execute(
+                "SELECT 1 FROM records WHERE id=? AND status='active'", (successor,)).fetchone():
+            print(f"[activate] refused while successor remains active: {successor}")
+            return False
+        if con.execute(
+                "SELECT 1 FROM records WHERE id!=? AND status='active' AND canonical_id=?",
+                (rid, rid)).fetchone():
+            print("[activate] refused canonical ambiguity")
+            return False
+        con.execute(
+            "UPDATE records SET status='active',canonical_id=id,superseded_by=NULL,updated=? WHERE id=?",
+            (today(), rid))
+        _sync_capsule_row(con, rid)
+        con.commit()
+        print(f"[activate] {rid}")
+        _append_write_event("activate", rid, tier=meta.get("tier"), scope=meta.get("scope"),
+                            rtype=meta.get("type"))
         return True
     finally:
         con.close()
@@ -2544,7 +2982,7 @@ def lifecycle(apply=False):
 
 # ---------- delete ----------
 def _delete_rows(con, rid):
-    """3-table DELETE (records + records_fts + records_cjk) on an OPEN connection.
+    """Delete a record and every derived retrieval row on an OPEN connection.
     The caller owns the connection and transaction so merge and prune can commit
     atomically. Preserve FTS/shadow availability guards and fail-open shadow cleanup.
     """
@@ -2556,6 +2994,9 @@ def _delete_rows(con, rid):
             con.execute("DELETE FROM records_cjk WHERE id=?", (rid,))
         except Exception as e:
             sys.stderr.write(f"[delete] cjk mirror deletion failed; continuing: {rid}: {e}\n")
+    if _CAPSULE_OK:
+        con.execute("DELETE FROM records_capsule_fts WHERE id=?", (rid,))
+    con.execute("DELETE FROM record_topics WHERE record_id=?", (rid,))
 
 
 def delete_record(rid, quiet=False, force=False):
@@ -2596,7 +3037,7 @@ GRAVEYARD = STORE / "deleted-records.jsonl"
 
 
 def _graveyard_append(con, rid, action="prune", canonical=None):
-    """Append a full 16-column record to graveyard before deletion.
+    """Append a full record to graveyard before deletion.
 
     Return true only after write, flush, and fsync. Never raise; callers abort
     destructive operations on failure.
@@ -2607,7 +3048,7 @@ def _graveyard_append(con, rid, action="prune", canonical=None):
         return False
     rec = {}
     for k, v in zip(RECORD_COLS, row):
-        if k in ("tags", "links"):
+        if k in ("tags", "links", *CAPSULE_LIST_FIELDS):
             rec[k] = json.loads(v) if v else []
         else:
             rec[k] = v   # Preserve None as JSON null.
@@ -2659,7 +3100,7 @@ def restore(rid):
             return False
         body = found.get("body", "")
         meta = {k: found.get(k) for k in RECORD_COLS if k != "body"}
-        for key in ("tags", "links"):
+        for key in ("tags", "links", *CAPSULE_LIST_FIELDS):
             meta[key] = meta.get(key) or []
         if meta.get("delivery_state") not in DELIVERY_STATES:
             meta["delivery_state"] = (
@@ -2674,6 +3115,7 @@ def restore(rid):
             con.execute("DELETE FROM records_cjk WHERE id=?", (rid,))
             con.execute("INSERT INTO records_cjk(id, body) VALUES(?,?)",
                         (rid, _cjk_shadow_text(body)))
+        _sync_capsule_row(con, rid)
         con.commit()
         print(f"[restore] {rid} ({meta['delivery_state']})")
         _append_write_event("restore", rid, tier=meta.get("tier"), scope=meta.get("scope"),
@@ -2687,10 +3129,12 @@ def restore(rid):
 def _in_current_project(con, rid, pkey=None):
     """Require mutation targets to belong to the current project."""
     row = con.execute(
-        "SELECT tier, scope, type, cwd_origin FROM records WHERE id=?", (rid,)).fetchone()
+        "SELECT tier, scope, type, cwd_origin, status FROM records WHERE id=?", (rid,)).fetchone()
     if row is None:
         return False, "nonexistent"
-    _tier, scope, rtype, cwd_origin = row
+    _tier, scope, rtype, cwd_origin, status = row
+    if status != "active":
+        return False, "superseded"
     if rtype == "profile":
         return False, "profile-protected"
     if scope == "global":
@@ -2872,19 +3316,19 @@ def curate_snapshot():
     try:
         pkey = project_key(Path.cwd())
         pending = list(db_iter_records(
-            con, f"delivery_state='pending' AND scope='project' AND cwd_origin=? AND {clean}",
+            con, f"status='active' AND delivery_state='pending' AND scope='project' AND cwd_origin=? AND {clean}",
             (pkey,)))
         dur = list(db_iter_records(
-            con, f"tier='durable' AND scope='project' AND cwd_origin=? "
+            con, f"status='active' AND tier='durable' AND scope='project' AND cwd_origin=? "
                  f"AND delivery_state!='pending' AND {clean}", (pkey,)))
         work = list(db_iter_records(
-            con, f"tier='working' AND cwd_origin=? AND delivery_state!='pending' "
+            con, f"status='active' AND tier='working' AND cwd_origin=? AND delivery_state!='pending' "
                  f"AND (expires IS NULL OR expires>=?) AND {clean}",
             (pkey, today())))
         # Orphan: project-scoped bare encoded origin that no longer resolves.
         orphan = []
         for meta, body in db_iter_records(
-                con, f"scope='project' AND cwd_origin IS NOT NULL AND cwd_origin!=? "
+                con, f"status='active' AND scope='project' AND cwd_origin IS NOT NULL AND cwd_origin!=? "
                      f"AND delivery_state!='pending' AND {clean}",
                 (pkey,)):
             c = meta.get("cwd_origin") or ""
@@ -3003,7 +3447,7 @@ def promote_candidates():
     try:
         pkey = project_key(Path.cwd())
         rows = list(db_iter_records(
-            con, f"tier='durable' AND (cwd_origin=? OR scope='global') AND {clean}",
+            con, f"status='active' AND tier='durable' AND (cwd_origin=? OR scope='global') AND {clean}",
             (pkey,)))
     finally:
         con.close()
@@ -3032,7 +3476,7 @@ def project(cwd=None):
         old.unlink()
     idx, n = ["# MEMORY.md — generated store projection; do not edit directly", ""], 0
     for meta, body in db_iter_records(
-            None, "(scope='global' OR cwd_origin=?)", (pkey,)):
+            None, "status='active' AND (scope='global' OR cwd_origin=?)", (pkey,)):
         (proj / f"{meta['id']}.md").write_text(
             serialize_record(meta, body), encoding="utf-8")
         idx.append(f"- [{meta['id']}](_projection/{meta['id']}.md) "
@@ -3241,11 +3685,14 @@ def doctor():
         rec_n = con.execute("SELECT COUNT(*) FROM records").fetchone()[0]
         if _FTS_OK:
             fts_n = con.execute("SELECT COUNT(*) FROM records_fts").fetchone()[0]
-            if fts_n == rec_n:
-                _doctor_check(results, "fts-parity", "OK", f"records={rec_n} fts={fts_n}")
+            capsule_n = (con.execute("SELECT COUNT(*) FROM records_capsule_fts").fetchone()[0]
+                         if _CAPSULE_OK else -1)
+            if fts_n == rec_n and capsule_n == rec_n:
+                _doctor_check(results, "fts-parity", "OK",
+                              f"records={rec_n} body_fts={fts_n} capsule_fts={capsule_n}")
             else:
                 _doctor_check(results, "fts-parity", "FAIL",
-                              f"records={rec_n} fts={fts_n} (drift)")
+                              f"records={rec_n} body_fts={fts_n} capsule_fts={capsule_n} (drift)")
         else:
             _doctor_check(results, "fts-parity", "WARN", "FTS5 unavailable; check skipped")
 
@@ -3259,16 +3706,29 @@ def doctor():
         bad_delivery = con.execute(
             f"SELECT COUNT(*) FROM records WHERE delivery_state NOT IN "
             f"({','.join('?' for _ in DELIVERY_STATES)})", DELIVERY_STATES).fetchone()[0]
+        bad_status = con.execute(
+            f"SELECT COUNT(*) FROM records WHERE status NOT IN "
+            f"({','.join('?' for _ in RECORD_STATUSES)})", RECORD_STATUSES).fetchone()[0]
+        bad_canonical = con.execute(
+            "SELECT COUNT(*) FROM records WHERE canonical_id IS NULL OR canonical_id='' OR "
+            "(status='active' AND canonical_id!=id) OR "
+            "(status='superseded' AND (superseded_by IS NULL OR superseded_by=''))").fetchone()[0]
+        orphan_topics = con.execute(
+            "SELECT COUNT(*) FROM record_topics t LEFT JOIN records r ON r.id=t.record_id "
+            "WHERE r.id IS NULL").fetchone()[0]
         missing_expires = con.execute(
             "SELECT COUNT(*) FROM records WHERE tier='working' "
             "AND delivery_state!='pending' AND expires IS NULL").fetchone()[0]
-        invariant_bad = bad_tier + bad_scope + bad_delivery + missing_expires
+        invariant_bad = (bad_tier + bad_scope + bad_delivery + bad_status
+                         + bad_canonical + orphan_topics + missing_expires)
         if invariant_bad == 0:
             _doctor_check(results, "schema-invariants", "OK", "ok")
         else:
             _doctor_check(results, "schema-invariants", "FAIL",
                           f"bad_tier={bad_tier} bad_scope={bad_scope} "
-                          f"bad_delivery={bad_delivery} missing_expires={missing_expires}")
+                          f"bad_delivery={bad_delivery} bad_status={bad_status} "
+                          f"bad_canonical={bad_canonical} orphan_topics={orphan_topics} "
+                          f"missing_expires={missing_expires}")
 
         # Working-tier bloat by project.
         bloated = con.execute(
@@ -3453,7 +3913,7 @@ def inject_cleanup_candidates(con, encc, max_groups=5, soft_ceiling=80):
     lines = []
 
     # 1. Project-scoped durable near-duplicate groups in one pass.
-    dup_where = "tier='durable' AND scope='project' AND cwd_origin=?"
+    dup_where = "status='active' AND tier='durable' AND scope='project' AND cwd_origin=?"
     dup_params = (encc,)
     seen = {}
     excerpts = {}  # ID to first-line excerpt; no re-query.
@@ -3471,7 +3931,7 @@ def inject_cleanup_candidates(con, encc, max_groups=5, soft_ceiling=80):
     # 2. Project-scoped durable capacity excess.
     count_row = con.execute(
         "SELECT COUNT(*) FROM records "
-        "WHERE tier='durable' AND scope='project' AND cwd_origin=?",
+        "WHERE status='active' AND tier='durable' AND scope='project' AND cwd_origin=?",
         (encc,)
     ).fetchone()
     dur_count = count_row[0] if count_row else 0
@@ -3483,7 +3943,7 @@ def inject_cleanup_candidates(con, encc, max_groups=5, soft_ceiling=80):
     deadline = (datetime.date.today() + datetime.timedelta(days=3)).isoformat()
     soon_row = con.execute(
         "SELECT COUNT(*) FROM records "
-        "WHERE tier='working' AND cwd_origin=? "
+        "WHERE status='active' AND tier='working' AND cwd_origin=? "
         "AND expires IS NOT NULL AND expires > ? AND expires <= ?",
         (encc, today_str, deadline)
     ).fetchone()
@@ -3570,16 +4030,16 @@ def inject(max_working=None, max_durable=None, hook=False):
         # Select rowid explicitly and apply the same newest-wins profile dedup.
         cols = ", ".join(RECORD_COLS)
         prof_raw = con.execute(
-            f"SELECT rowid, {cols} FROM records WHERE type='profile'"
+            f"SELECT rowid, {cols} FROM records WHERE type='profile' AND status='active'"
         ).fetchall()
         # Exclude injection-flagged records; trusted profile reads remain separate.
         work = list(db_iter_records(
-            con, "tier='working' AND cwd_origin=? "
+            con, "status='active' AND tier='working' AND cwd_origin=? "
                  "AND (expires IS NULL OR expires >= ? OR delivery_state='pending')"
                  " AND (injection_flag=0 OR injection_flag IS NULL)",
             (encc, today())))
         dur  = list(db_iter_records(
-            con, "tier='durable' AND scope='project' AND cwd_origin=? "
+            con, "status='active' AND tier='durable' AND scope='project' AND cwd_origin=? "
                  "AND (expires IS NULL OR expires >= ? OR delivery_state='pending')"
                  " AND (injection_flag=0 OR injection_flag IS NULL)",
             (encc, today())))
@@ -3588,7 +4048,7 @@ def inject(max_working=None, max_durable=None, hook=False):
         # Count cwd-scoped injection-flagged working and durable records.
         flagged_cnt = con.execute(
             "SELECT COUNT(*) FROM records "
-            "WHERE (tier='working' OR (tier='durable' AND scope='project'))"
+            "WHERE status='active' AND (tier='working' OR (tier='durable' AND scope='project'))"
             " AND cwd_origin=? AND injection_flag=1",
             (encc,)
         ).fetchone()[0]
@@ -3769,6 +4229,11 @@ def main():
     a.add_argument("--links", default="")
     a.add_argument("--cwd-origin")
     a.add_argument("--source", default=None)
+    a.add_argument("--headline")
+    a.add_argument("--alias", action="append", default=None)
+    a.add_argument("--entity", action="append", default=None)
+    a.add_argument("--topic", action="append", default=None)
+    a.add_argument("--artifact-ref", action="append", default=None)
     a.add_argument("--requires-consume", action="store_true",
                    help="Record a handoff or thread as pending delivery")
 
@@ -3787,13 +4252,42 @@ def main():
     r.add_argument("--limit", type=_recall_limit, default=20)
     r.add_argument("--json", dest="json_output", action="store_true")
     r.add_argument("--no-touch", action="store_true", help="Do not update last_accessed")
+    r.add_argument("--topic", help="Require an exact normalized topic")
+    r.add_argument("--include-superseded", action="store_true",
+                   help="Include historical superseded records")
+
+    rg = sub.add_parser("recall-gate", help="Record the work-start recall/skip decision")
+    gate_mode = rg.add_mutually_exclusive_group(required=True)
+    gate_mode.add_argument("--decision", choices=("recall", "skip"))
+    gate_mode.add_argument("--outcome", choices=("applied", "miss"))
+    rg.add_argument("--reason", default="")
+    rg.add_argument("--query")
+    rg.add_argument("--gate-id")
+    rg.add_argument("--record-id", action="append", default=[])
+    rg.add_argument("--full", action="store_true")
+    rg.add_argument("--limit", type=_recall_limit, default=20)
+    rg.add_argument("--topic")
+
+    tp = sub.add_parser("topics", help="List active topic index entries")
+    tp.add_argument("query", nargs="?")
+    tp.add_argument("--limit", type=_recall_limit, default=30)
+    tp.add_argument("--include-superseded", action="store_true")
 
     sh = sub.add_parser("show", help="Print visible record metadata and full body")
     sh.add_argument("id")
     sh.add_argument("--all", action="store_true", help="Remove only the project fence; flagged records stay excluded")
+    sh.add_argument("--include-superseded", action="store_true")
+    sh.add_argument("--gate-id")
 
     cs = sub.add_parser("consume", help="Mark a pending handoff or thread as applied")
     cs.add_argument("id")
+
+    ss = sub.add_parser("supersede", help="Mark an active record as historical")
+    ss.add_argument("id")
+    ss.add_argument("--by", required=True, dest="by_id")
+
+    ac = sub.add_parser("activate", help="Guardedly reactivate a superseded record")
+    ac.add_argument("id")
 
     rs = sub.add_parser("restore", help="Restore the latest graveyard entry for one record")
     rs.add_argument("id")
@@ -3806,6 +4300,8 @@ def main():
 
     mg = sub.add_parser("migrate", help="Migrate post-its, auto-memory, and Markdown files")
     mg.add_argument("--apply", action="store_true")
+    mg.add_argument("--all-projects", action="store_true",
+                    help="Explicit recovery/import scan across every project and global source")
     mg.add_argument(
         "--cleanup-runtime-memory", action="store_true",
         help="Archive and remove verified PROJECTS/*/memory directories after migration")
@@ -3909,6 +4405,8 @@ def main():
             source=args.source,
             requires_consume=args.requires_consume,
             journal_action="add",
+            headline=args.headline, aliases=args.alias, entities=args.entity,
+            topics=args.topic, artifact_refs=args.artifact_ref,
         )
     elif args.cmd == "note":
         write_record("working", "project", args.type, args.body,
@@ -3917,11 +4415,28 @@ def main():
         recall(args.query, tier=args.tier, scope=args.scope,
                cwd=not args.all, sessions=args.sessions, limit=args.limit,
                full=args.full, touch=not args.no_touch,
-               json_output=args.json_output)
+               json_output=args.json_output, topic=args.topic,
+               include_superseded=args.include_superseded)
+    elif args.cmd == "recall-gate":
+        try:
+            recall_gate(args.decision, args.reason, args.query, outcome=args.outcome,
+                        gate_id=args.gate_id, record_ids=args.record_id,
+                        full=args.full, limit=args.limit, topic=args.topic)
+        except ValueError as exc:
+            sys.stderr.write(f"[recall-gate] {exc}\n")
+            sys.exit(2)
+    elif args.cmd == "topics":
+        topics(args.query, limit=args.limit, include_superseded=args.include_superseded)
     elif args.cmd == "show":
-        sys.exit(0 if show_record(args.id, all_projects=args.all) else 1)
+        sys.exit(0 if show_record(args.id, all_projects=args.all,
+                                  include_superseded=args.include_superseded,
+                                  gate_id=args.gate_id) else 1)
     elif args.cmd == "consume":
         sys.exit(0 if consume(args.id) else 1)
+    elif args.cmd == "supersede":
+        sys.exit(0 if supersede(args.id, args.by_id) else 1)
+    elif args.cmd == "activate":
+        sys.exit(0 if activate(args.id) else 1)
     elif args.cmd == "restore":
         sys.exit(0 if restore(args.id) else 1)
     elif args.cmd == "index":
@@ -3931,7 +4446,7 @@ def main():
     elif args.cmd == "migrate":
         try:
             migrate(apply=args.apply, cleanup_native=args.cleanup_runtime_memory,
-                    cleanup_archive=args.cleanup_archive)
+                    cleanup_archive=args.cleanup_archive, all_projects=args.all_projects)
         except (OSError, RuntimeError, UnicodeError) as e:
             sys.stderr.write(f"[migrate] cleanup aborted: {e}\n")
             sys.exit(1)

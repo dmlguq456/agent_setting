@@ -154,15 +154,14 @@ Constraints:
   consume outside this worker; retrieval or artifact completion is not consumption.
 
 Semantic boundary:
-- Decide contextually whether this delta contains anything worth storing.
-- Do not replace that judgment with fixed categories, keywords, scores, or
-  thresholds.
+- Store only a canonical decision, user correction, unresolved obligation, or
+  artifact pointer. Never copy content already preserved in an artifact.
 - Choose the tier from its lifecycle: working is finite-lived; durable persists.
-  Type is a descriptive label, not a semantic gate.
+- artifact-pointer requires artifact_refs and records only why/when to retrieve it.
 - Emit nothing when you judge that no addition is useful.
 
 Allowed action:
-- {"action":"add","tier":"working|durable","type":"<descriptive type>","body":"<summary>"}
+- {"action":"add","tier":"working|durable","type":"decision|user-correction|unresolved-obligation|artifact-pointer","body":"<minimal canonical content>","headline":"<retrieval headline>","aliases":[],"entities":[],"topics":[],"artifact_refs":[]}
 
 Transcript delta:
 <<<DELTA

@@ -38,7 +38,7 @@ Detailed lifecycle and edge-case contracts live in
 | Need | Command |
 |---|---|
 | lifecycle/workflow | `preflight.sh prompt-signal`, `preflight.sh briefing`, `preflight.sh worklog` |
-| memory | `preflight.sh memory`, `preflight.sh recall`, `preflight.sh distill-delta`, `preflight.sh distill-propose` |
+| memory | `preflight.sh memory`, `preflight.sh recall-gate`, `preflight.sh recall`, `preflight.sh distill-delta`, `preflight.sh distill-propose` |
 | readiness/loops | `preflight.sh status`, `preflight.sh doctor`, `preflight.sh loop-info <oncall|note|study|drill|runtime-watch>` |
 | QA | `preflight.sh qa-policy <level> [code|research|doc|general]` |
 | runtime | `preflight.sh permissions`, `preflight.sh mcp [--check]` |
@@ -98,9 +98,8 @@ main/orchestrator chooses portable roles and concrete model settings per job.
 
 ## Memory and Context
 
-Memory semantics belong to the acting agent. Use a targeted `preflight.sh recall
-"<query>" [cwd]`; retrieve a full pending obligation before applying and
-consuming it.
+Intake: record `recall` or `skip` via `preflight.sh recall-gate <cwd> ...`.
+Recall by targeted query; retrieve pending obligations before use.
 
 OpenCode token self-regulation remains explicitly deferred: Phase 2 automatic accounting and the isolated experiment CLI are not projected; it does not copy
 Codex token-budget hooks or mutate runtime config. Ordinary lifecycle context

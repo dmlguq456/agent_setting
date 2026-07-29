@@ -16,12 +16,13 @@ pending protection, lifecycle execution, bounded telemetry, and recovery.
 
 | Layer | Location | Git | Purpose |
 |---|---|---|---|
-| Source of truth | `<agent-home>/memory/memory.db` (SQLite WAL) | ignored binary | `records`, FTS5 `unicode61`, and the CJK bigram shadow index |
+| Source of truth | `<agent-home>/memory/memory.db` (SQLite WAL) | ignored binary | `records`, body/CJK FTS, retrieval-capsule FTS, and normalized topic index |
 | Git mirror | `<agent-home>/memory/dump.jsonl` (one ID-sorted record per line) | tracked in the memory repository | deterministic text export and exact `mem import` recovery source |
 | Harness projection | `<agent-home>/projects/<cwd>/memory/` | ignored | compatibility surface for stray auto-memory writes absorbed by `mem sync`; `mem project` can rebuild the projection |
 
 A record combines `tier` (`working|durable`), `scope` (`project|global`),
-`type`, and `delivery_state` (`ordinary|pending|consumed`). Working records have
+`type`, `delivery_state` (`ordinary|pending|consumed`), a retrieval capsule, and
+temporal `status` (`active|superseded`). Working records have
 a finite lifecycle; durable records persist until an agent chooses another
 action. New `handoff` records and threads created with `--requires-consume`
 start pending and remain protected from destructive operations until explicit
@@ -38,23 +39,25 @@ python3 <agent-home>/tools/memory/mem.py <command>
 
 | Command | Behavior |
 |---|---|
-| `add <tier> <type> "<body>" [--scope] [--tags] [--links] [--source] [--requires-consume]` | Add a record after mechanical validation, deduplication, and injection-safety checks. `handoff` or `--requires-consume` starts pending. |
+| `add <tier> <type> "<body>" [--headline] [--alias] [--entity] [--topic] [--artifact-ref] …` | Add a record and bounded retrieval capsule after mechanical validation. Repeat capsule-list options as needed. |
 | `note "<body>" [--type] [--requires-consume]` | Shorthand for a working record. Use `--requires-consume` for delivery-bearing threads. |
-| `recall "<query>" [--tier] [--scope] [--all] [--sessions] [--full] [--limit 1..100] [--no-touch]` | Explicit retrieval with FTS5/BM25, ranked CJK bigram substring matching, LIKE last-resort fallback, and optional raw-session search. Default limit is 20; `--full` replaces snippets with complete bodies. |
-| `show <id> [--all]` | Show one visible record with metadata and full body. The default fence is current project plus global; flagged or invisible IDs return a generic not-found result. |
+| `recall-gate --decision recall\|skip --reason … [--query …]` | Record the work-start opportunity decision without raw prompts; recall executes immediately. Applied outcomes require `--gate-id` and at least one `--record-id`; miss has no record ID. |
+| `recall "<query>" [--topic] [--include-superseded] …` | Search active capsules first, then body/CJK/LIKE compatibility paths. Historical rows require explicit inclusion. |
+| `topics [topic] [--include-superseded]` | List normalized topics or visible records for one exact topic. |
+| `show <id> [--all] [--include-superseded]` | Show one visible record with capsule, temporal metadata, and full body. |
 | `consume <id>` | Move a pending handoff/thread to consumed. Retrieval and injection never consume records implicitly. |
 | `restore <id>` | Restore one record from the graveyard while preserving action/canonical metadata. |
 | `index [--rebuild]` | Rebuild the FTS5 tables embedded in `memory.db`. |
 | `export [--target dump\|profile] [--apply]` | Export `dump.jsonl` or an on-demand human-readable profile cache. Profile export is dry-run unless `--apply` is supplied. |
 | `import <dump.jsonl>` | Recreate the DB exactly from a dump: delete existing records, replay the mirror, and rebuild FTS in the same connection. |
 | `project [--cwd]` | Build the compatibility projection. Session context uses `inject`, not this command. |
-| `migrate [--apply] [--cleanup-runtime-memory --cleanup-archive PATH]` | Idempotently migrate legacy auto-memory, post-it, and Markdown source files. Native runtime cleanup is separately opted in, verifies every authored topic against the DB, rejects unexpected files/symlinks, and content-verifies a new recovery archive before deletion. Dry-run by default. |
+| `migrate [--apply] [--all-projects]` | Scan only the current logical project by default. `--all-projects` is the explicit cross-project/global recovery path and is required for runtime-memory cleanup. |
 | `lifecycle [--apply]` | Apply working expiry and expose durable duplicate/capacity candidates. Pending delivery records remain protected. |
 | `stats` | Print a grouped store snapshot. |
 | `log [--limit 20] [--action] [--tier] [--actor] [--json]` | Read the bounded write-event timeline (D-38), complementing the `stats` snapshot. |
 | `doctor` | Run nine read-only checks covering integrity, FTS/schema invariants, working growth, stale pending, durable capacity, graveyard/dump consistency, and worker health. Exit 0 is clean, 1 is WARN, and 2 is FAIL. |
 | `inject [--hook]` | Build bounded SessionStart context from working, durable, and profile records. Defaults to 2,000 characters and 15 bullets; `--hook` emits `additionalContext` JSON. |
-| `sync` | Absorb stray projection writes, rebuild FTS5, re-export `dump.jsonl`, and append one PLAIN auto-sync commit at SessionEnd (git failures print a one-line stderr warning; sync stays non-fatal). |
+| `sync` | Absorb only current-project stray projection writes, rebuild indexes, export, and append the bounded mirror commit. |
 | `maintenance [--squash-days 14] [--apply]` | Operator-run compaction for the plain-commit dump history: squash first-parent auto-sync commits older than N days into one root, then `git gc`. Dry-run by default; never pushes (a mirror needs an explicit force-push afterwards). |
 | `distill <sid> [--advance]` | Print normalized transcript text after the shared session marker and optionally advance that marker. |
 | `curate-snapshot` | Print a read-only current-project snapshot, mechanical signals, and destructive `IDS:` membership. Pending records appear under `PROTECTED PENDING` but never in destructive IDs. |
@@ -66,11 +69,16 @@ python3 <agent-home>/tools/memory/mem.py <command>
 | `delete <id> [--force]` | User-initiated single-record deletion. Pending records require prior consumption or explicit `--force`. |
 | `graduate <id> [--to durable]` | Move a whitelisted working record to durable. |
 | `reattribute <id>` | Reassign a true orphan to the current project without deleting it. Reverse gates reject live, global, profile, or self targets. |
+| `supersede <old> --by <new>` | Preserve the older row as historical and route its canonical id to the newer active record. Cross-scope/project, pending, profile, and cycle cases fail closed. |
+| `activate <id>` | Guardedly reactivate a historical row only when its successor is no longer active and no canonical ambiguity exists. |
 | `register-postit <path>` | Deprecated legacy-migration-only registry command. Current post-its write DB working records directly. |
 
 ## Curator safety invariant (D-18/D-35/D-40)
 
-The distiller model never invokes mutation commands directly. A no-tools worker
+The distiller model never invokes mutation commands directly. Automatic adds
+must declare one of `decision`, `user-correction`, `unresolved-obligation`, or
+`artifact-pointer`; the latter requires `artifact_refs` and must not duplicate
+artifact prose. A no-tools worker
 emits action JSON, and `tools/memory/apply-distill-actions.py` parses the shape,
 checks snapshot membership, and calls `mem.py` with argv-only values. Each
 command also enforces its own project whitelist. Pending records are protected
@@ -87,8 +95,8 @@ and confidence thresholds never substitute for that judgment.
 - `show`, explicit recall/full, and SessionStart injection do not consume a
   handoff. Explicit recall/show update `last_accessed` unless `--no-touch` is
   supplied. Source upsert/body dedup never lowers pending to ordinary.
-- Prompt-submit hooks do not classify every prompt. An agent chooses when prior
-  context may help and then invokes `recall.sh` or `mem recall`.
+- Prompt-submit hooks do not classify every prompt. At work intake an agent
+  explicitly records `recall` or `skip` with `mem recall-gate`.
 - FTS/BM25 ranking, CJK/identifier tokenization, scope fences, and limits
   organize results after an agent has chosen a query.
 - Retrieval telemetry stores no raw prompt and distinguishes `explicit-recall`,
@@ -136,8 +144,8 @@ and confidence thresholds never substitute for that judgment.
 
 ## Operational contract
 
-- Schema v6 stores 16 record columns, including `delivery_state`, plus embedded
-  FTS5 and CJK bigram-shadow tables (v6 re-normalized legacy `cwd_origin` keys).
+- Schema v7 adds bounded retrieval capsules, normalized topics, and non-destructive
+  temporal supersession to the v6 record contract.
 - `dump.jsonl` is ID-sorted with `sort_keys=True`, one record per line, and
   explicit JSON `null` values. `mem import dump.jsonl` performs exact recovery.
 - SessionStart injection may remain adapter opt-in when start events repeat on

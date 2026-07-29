@@ -16,12 +16,12 @@ printf '%s\n' '# Index' > "$MEM_PROJECTS/-tmp-project/memory/MEMORY.md"
 printf '%s\n' '# Projection' \
   > "$MEM_PROJECTS/-tmp-project/memory/_projection/project.md"
 
-python3 "$MEM" migrate --apply >/dev/null
-python3 "$MEM" migrate --cleanup-runtime-memory >/dev/null
+python3 "$MEM" migrate --apply --all-projects >/dev/null
+python3 "$MEM" migrate --all-projects --cleanup-runtime-memory >/dev/null
 
 printf '%s\n' 'A changed source body that must fail the exact DB parity gate.' \
   > "$MEM_PROJECTS/-tmp-project/memory/topic.md"
-if python3 "$MEM" migrate --apply --cleanup-runtime-memory \
+if python3 "$MEM" migrate --apply --all-projects --cleanup-runtime-memory \
     --cleanup-archive "$TMP/mismatch.tar.gz" >/dev/null 2>&1; then
   echo 'FAIL: body mismatch was accepted' >&2
   exit 1
@@ -35,7 +35,7 @@ mkdir -p "$TMP/external-project/memory"
 printf '%s\n' 'An external topic reached only through an unsafe project symlink.' \
   > "$TMP/external-project/memory/external.md"
 ln -s "$TMP/external-project" "$MEM_PROJECTS/-linked-project"
-if python3 "$MEM" migrate --apply --cleanup-runtime-memory \
+if python3 "$MEM" migrate --apply --all-projects --cleanup-runtime-memory \
     --cleanup-archive "$TMP/symlink.tar.gz" >/dev/null 2>&1; then
   echo 'FAIL: symlinked project parent was accepted' >&2
   exit 1
@@ -44,7 +44,7 @@ test -f "$TMP/external-project/memory/external.md"
 test ! -e "$TMP/symlink.tar.gz"
 rm "$MEM_PROJECTS/-linked-project"
 
-python3 "$MEM" migrate --apply --cleanup-runtime-memory \
+python3 "$MEM" migrate --apply --all-projects --cleanup-runtime-memory \
   --cleanup-archive "$TMP/recovery.tar.gz" >/dev/null
 test -f "$TMP/recovery.tar.gz"
 test ! -e "$MEM_PROJECTS/-tmp-project/memory"

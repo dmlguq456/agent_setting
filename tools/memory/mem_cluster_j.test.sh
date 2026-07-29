@@ -102,11 +102,14 @@ created = sys.argv[12] if len(sys.argv) > 12 and sys.argv[12] else datetime.date
 con = sqlite3.connect(db); con.execute("PRAGMA busy_timeout=5000")
 today = datetime.date.today().isoformat()
 con.execute("INSERT OR REPLACE INTO records(id,tier,scope,type,cwd_origin,created,updated,"
-            "expires,source,tags,links,body,strength,last_accessed,injection_flag,delivery_state) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)",
+            "expires,source,tags,links,body,strength,last_accessed,injection_flag,delivery_state,"
+            "headline,status,canonical_id,capsule_version) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?)",
             (rid, tier, scope, rtype, cwd, created, today, exp, None, "[]", "[]",
-             body, int(strg), la or today, delivery))
+             body, int(strg), la or today, delivery, body, "active", rid, 1))
 try: con.execute("INSERT INTO records_fts(id, body) VALUES(?,?)", (rid, body))
+except Exception: pass
+try: con.execute("INSERT INTO records_capsule_fts(id,headline,aliases,entities,topics,artifact_refs,canonical_id) VALUES(?,?,?,?,?,?,?)", (rid, body, "", "", "", "", rid))
 except Exception: pass
 con.commit(); con.close()
 PY
@@ -120,6 +123,10 @@ con.execute("DELETE FROM records WHERE id=?", (rid,))
 try: con.execute("DELETE FROM records_fts WHERE id=?", (rid,))
 except Exception: pass
 try: con.execute("DELETE FROM records_trig WHERE id=?", (rid,))
+except Exception: pass
+try: con.execute("DELETE FROM records_capsule_fts WHERE id=?", (rid,))
+except Exception: pass
+try: con.execute("DELETE FROM record_topics WHERE record_id=?", (rid,))
 except Exception: pass
 con.commit(); con.close()
 PY
@@ -135,6 +142,10 @@ for rid in ids:
     try: con.execute("DELETE FROM records_fts WHERE id=?", (rid,))
     except Exception: pass
     try: con.execute("DELETE FROM records_trig WHERE id=?", (rid,))
+    except Exception: pass
+    try: con.execute("DELETE FROM records_capsule_fts WHERE id=?", (rid,))
+    except Exception: pass
+    try: con.execute("DELETE FROM record_topics WHERE record_id=?", (rid,))
     except Exception: pass
 con.commit(); con.close()
 PY
@@ -300,6 +311,10 @@ try: con.execute('DELETE FROM records_fts')
 except Exception: pass
 try: con.execute('DELETE FROM records_trig')
 except Exception: pass
+try: con.execute('DELETE FROM records_capsule_fts')
+except Exception: pass
+try: con.execute('DELETE FROM record_topics')
+except Exception: pass
 con.commit(); con.close()
 "
 MEM_DISTILL=1 python3 "$MEM" add working thread "clean doctor fixture body" >/dev/null
@@ -455,7 +470,7 @@ AUTO_JOURNAL="$AUTO_STORE/write-events.jsonl"
   cd "$AUTO_WRONG"
   run_checked env MEM_STORE="$AUTO_STORE" MEM_PROJECTS="$AUTO_PROJECTS" MEM_PROFILE="$AUTO_PROFILE" \
     MEM_WRITE_EVENTS="$AUTO_JOURNAL" MEM_CWD="/wrong/repo" MEM_DISTILL=1 MEM_ACTOR=curator \
-    python3 "$MEM" migrate --apply >/dev/null
+    python3 "$MEM" migrate --apply --all-projects >/dev/null
 )
 if [ "$?" = 0 ] && python3 - "$AUTO_JOURNAL" "$AUTO_ROOT" <<'PY'
 import json, sys
@@ -536,7 +551,7 @@ if (
   cd "$AUTO_WRONG"
   run_checked env MEM_STORE="$AUTO_STORE" MEM_PROJECTS="$AUTO_PROJECTS" MEM_PROFILE="$AUTO_PROFILE" \
     MEM_WRITE_EVENTS="$AUTO_JOURNAL" MEM_CWD="/wrong/repo" MEM_DISTILL=1 MEM_ACTOR=curator \
-    python3 "$MEM" migrate --apply >/dev/null
+    python3 "$MEM" migrate --apply --all-projects >/dev/null
 ); then
   AUTO_REPEAT_OK=1
 else
@@ -586,7 +601,7 @@ printf '%s\n' '---' 'type: lesson' '---' \
 SYNC_BEFORE="$ABSORB_TMP/sync-before"; SYNC_AFTER="$ABSORB_TMP/sync-after"
 runtime_snapshot "$SYNC_BEFORE"
 if (
-  cd "$SYNC_WRONG"
+  cd "$SYNC_ROOT"
   run_checked env MEM_STORE="$SYNC_STORE" MEM_PROJECTS="$SYNC_PROJECTS" MEM_PROFILE="$SYNC_PROFILE" \
     MEM_WRITE_EVENTS="$SYNC_JOURNAL" MEM_DUMP_COMMIT=0 MEM_DUMP_PUSH=0 \
     MEM_CWD="/wrong/repo" MEM_DISTILL=1 MEM_ACTOR=curator \
@@ -638,7 +653,7 @@ if (
   cd "$POST_WRONG"
   run_checked env MEM_STORE="$POST_STORE" MEM_PROJECTS="$POST_PROJECTS" MEM_PROFILE="$POST_PROFILE" \
     MEM_WRITE_EVENTS="$POST_JOURNAL" MEM_CWD="/wrong/repo" MEM_DISTILL=1 MEM_ACTOR=curator \
-    python3 "$MEM" migrate --apply >/dev/null
+    python3 "$MEM" migrate --apply --all-projects >/dev/null
 ); then
   POST_OK=1
 fi
@@ -713,7 +728,7 @@ if (
   cd "$NB_WRONG"
   run_checked env MEM_STORE="$NB_STORE" MEM_PROJECTS="$NB_PROJECTS" MEM_PROFILE="$NB_PROFILE" \
     MEM_WRITE_EVENTS="$NB_JOURNAL" MEM_CWD="/wrong/repo" MEM_DISTILL=1 MEM_ACTOR=curator \
-    python3 "$MEM" migrate --apply >/dev/null
+    python3 "$MEM" migrate --apply --all-projects >/dev/null
 ); then
   NB_MIGRATE_OK=1
 else
@@ -755,7 +770,7 @@ if (
   cd "$OM_WRONG"
   run_checked env MEM_STORE="$OM_STORE" MEM_PROJECTS="$OM_PROJECTS" MEM_PROFILE="$OM_PROFILE" \
     MEM_WRITE_EVENTS="$OM_JOURNAL" MEM_CWD="/wrong/repo" MEM_DISTILL=1 MEM_ACTOR=curator \
-    python3 "$MEM" migrate --apply >/dev/null
+    python3 "$MEM" migrate --apply --all-projects >/dev/null
 ); then
   OM_OK=1
 fi

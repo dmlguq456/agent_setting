@@ -51,6 +51,7 @@ usage: preflight.sh write <file> [session-id]
        preflight.sh token-budget [cwd] [session-id] [kv|json|hook]
        preflight.sh memory [cwd]
        preflight.sh recall <query> [cwd] [session-id]
+       preflight.sh recall-gate <cwd> (--decision recall|skip --reason <reason> [--query <query>] | --outcome applied|miss --gate-id <id>) [options]
        preflight.sh briefing [cwd]
        preflight.sh status [cwd] [session-id]
        preflight.sh permissions
@@ -430,6 +431,13 @@ case "$cmd" in
     cwd=${3:-$PWD}
     (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" MEM_RECALL_RUNTIME=codex \
       "$ROOT/tools/memory/recall.sh" "$query")
+    ;;
+  recall-gate)
+    [ "$#" -ge 3 ] || { echo "codex preflight: recall-gate requires cwd and gate arguments" >&2; exit 64; }
+    cwd=$2
+    shift 2
+    (cd "$cwd" && AGENT_HOME="$AGENT_ROOT" MEM_RECALL_RUNTIME=codex \
+      python3 "$ROOT/tools/memory/mem.py" recall-gate "$@")
     ;;
   briefing)
     cwd=${2:-$PWD}

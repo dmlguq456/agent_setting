@@ -2652,7 +2652,7 @@ printf '%s\n' "$@" > "$CODEX_STUB_ARGV"
 while [ "$#" -gt 0 ]; do
   if [ "$1" = "--output-last-message" ]; then
     shift
-    printf '{"action":"add","tier":"working","type":"context","body":"stub codex distill memory record"}\n' > "$1"
+    printf '{"action":"add","tier":"working","type":"decision","body":"stub codex distill memory record","headline":"Stub distill decision","aliases":[],"entities":[],"topics":[],"artifact_refs":[]}\n' > "$1"
   fi
   shift || break
 done

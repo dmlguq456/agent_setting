@@ -10,6 +10,14 @@ import os
 import subprocess
 import sys
 
+AUTOMATIC_TYPES = {
+    "decision", "user-correction", "unresolved-obligation", "artifact-pointer",
+}
+CAPSULE_LISTS = {
+    "aliases": "--alias", "entities": "--entity", "topics": "--topic",
+    "artifact_refs": "--artifact-ref",
+}
+
 
 def _load_snapshot_ids(path):
     if not path:
@@ -74,7 +82,7 @@ def apply_actions(out_path, mem_path, mode="increment", snapshot_ids_path=""):
         # Reject id-mutations outside curate mode so only the snapshot-grounded deep
         # curator can ever delete/merge/graduate. Closes the P-25 whitelist bypass
         # for every adapter at the shared applier (deterministic, §0.5).
-        if action in ("reinforce", "prune", "graduate", "reattribute", "merge") and mode != "curate":
+        if action in ("reinforce", "prune", "graduate", "reattribute", "merge", "supersede") and mode != "curate":
             sys.stderr.write(f"[distill-parse] skip {action}: id-mutation not allowed in {mode} mode (add-only)\n")
             continue
 
@@ -85,8 +93,8 @@ def apply_actions(out_path, mem_path, mode="increment", snapshot_ids_path=""):
             if tier not in ("working", "durable"):
                 sys.stderr.write(f"[distill-parse] skip bad tier: {tier!r}\n")
                 continue
-            if not isinstance(rtype, str) or not rtype:
-                sys.stderr.write("[distill-parse] skip missing/empty type\n")
+            if rtype not in AUTOMATIC_TYPES:
+                sys.stderr.write(f"[distill-parse] skip unsupported automatic type: {rtype!r}\n")
                 continue
             if not isinstance(body, str) or not body:
                 sys.stderr.write("[distill-parse] skip missing/empty body\n")
@@ -94,7 +102,31 @@ def apply_actions(out_path, mem_path, mode="increment", snapshot_ids_path=""):
             if len(body) > 2000:
                 sys.stderr.write(f"[distill-parse] skip body too long ({len(body)})\n")
                 continue
-            subprocess.run(["python3", mem_path, "add", tier, rtype, body], env=mem_env)
+            headline = rec.get("headline")
+            if not isinstance(headline, str) or not headline.strip() or len(headline) > 240:
+                sys.stderr.write("[distill-parse] skip missing/invalid headline\n")
+                continue
+            capsule = {}
+            capsule_ok = True
+            for field in CAPSULE_LISTS:
+                value = rec.get(field, [])
+                if (not isinstance(value, list) or len(value) > 24
+                        or not all(isinstance(item, str) and item.strip() and len(item) <= 160
+                                   for item in value)):
+                    sys.stderr.write(f"[distill-parse] skip invalid {field}\n")
+                    capsule_ok = False
+                    break
+                capsule[field] = value
+            if not capsule_ok:
+                continue
+            if rtype == "artifact-pointer" and not capsule["artifact_refs"]:
+                sys.stderr.write("[distill-parse] skip artifact-pointer without artifact_refs\n")
+                continue
+            argv = ["python3", mem_path, "add", tier, rtype, body, "--headline", headline]
+            for field, option in CAPSULE_LISTS.items():
+                for value in capsule[field]:
+                    argv.extend([option, value])
+            subprocess.run(argv, env=mem_env)
 
         elif action in ("reinforce", "prune", "graduate", "reattribute"):
             rid = rec.get("id")
@@ -123,6 +155,17 @@ def apply_actions(out_path, mem_path, mode="increment", snapshot_ids_path=""):
                 sys.stderr.write("[distill-parse] skip merge: id outside destructive allowlist\n")
                 continue
             subprocess.run(["python3", mem_path, "merge", "--canonical", canonical, *ids], env=mem_env)
+
+        elif action == "supersede":
+            rid = rec.get("id")
+            by_rid = rec.get("by")
+            if not all(isinstance(value, str) and value for value in (rid, by_rid)):
+                sys.stderr.write("[distill-parse] skip supersede: missing id/by\n")
+                continue
+            if not member(rid) or not member(by_rid):
+                sys.stderr.write("[distill-parse] skip supersede: id outside destructive allowlist\n")
+                continue
+            subprocess.run(["python3", mem_path, "supersede", rid, "--by", by_rid], env=mem_env)
 
         else:
             sys.stderr.write(f"[distill-parse] skip unknown action: {action!r}\n")
