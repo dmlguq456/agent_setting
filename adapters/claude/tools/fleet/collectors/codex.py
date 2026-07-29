@@ -56,6 +56,9 @@ class _CodexTick:
     default_home: str
     proc_paths: dict
     subagents_by_home: dict
+    # pids whose rollout was handed to a managed peer — they must not re-claim any
+    # rollout via the same-cwd fallback (F-24: one sid, one row).
+    no_fallback_pids: frozenset = frozenset()
 
 
 def _home():
@@ -542,6 +545,40 @@ def _fallback_rollout(sess, home):
     return path
 
 
+def _transfer_managed_rollouts(sessions, paths):
+    """Hand each managed app-server's rollout to the TUI client of the SAME state dir.
+
+    Managed (client-server) Codex splits one session across two `codex` processes: the
+    `app-server` holds the rollout fd but is marked a companion and hidden, while the
+    visible row is the `--remote` TUI client, which holds no transcript fd at all. Without
+    this transfer the visible row loses session_id/title/context entirely.
+
+    The join key is the managed-sessions state dir carried in both argv lines — exact path
+    equality, never a heuristic. Fail closed (F-26): a dir without exactly one owning
+    app-server and exactly one TUI client is left alone and degrades to the honest gap.
+    Returns the set of pids that gave their rollout away (F-24: they must not re-claim it).
+    """
+    servers, clients = {}, {}
+    for sess in sessions:
+        managed_dir = getattr(sess, "managed_dir", None)
+        if getattr(sess, "harness", None) != "codex" or not managed_dir:
+            continue
+        bucket = servers if getattr(sess, "app_server", False) else clients
+        bucket.setdefault(managed_dir, []).append(sess)
+    donated = set()
+    for managed_dir, owners in servers.items():
+        owning = [s for s in owners if paths.get(s.pid)]
+        peers = clients.get(managed_dir, [])
+        if len(owning) != 1 or len(peers) != 1:
+            continue
+        server, client = owning[0], peers[0]
+        if paths.get(client.pid):
+            continue                       # client already owns a rollout — nothing to fix
+        paths[client.pid] = paths.pop(server.pid)
+        donated.add(server.pid)
+    return donated
+
+
 def prepare_tick(sessions):
     """Reserve proc-owned rollouts before any same-cwd fallback attribution.
 
@@ -565,10 +602,14 @@ def prepare_tick(sessions):
         sid = _sid(path)
         if sid:
             claimed.add(sid)
+    # Managed Codex: move each app-server's rollout onto its own TUI client row. The sid
+    # stays in `claimed`, so no other row can pick it up through the fallback either.
+    donated = _transfer_managed_rollouts(sessions, paths)
     _PROC_PATHS.clear()
     _PROC_PATHS.update(paths)
     _FALLBACK_CLAIMS.update(ts=time.time(), sids=claimed)
-    tick = _CodexTick(default_home=home, proc_paths=dict(paths), subagents_by_home={})
+    tick = _CodexTick(default_home=home, proc_paths=dict(paths), subagents_by_home={},
+                      no_fallback_pids=frozenset(donated))
     homes = {home} if eligible else set()
     homes.update(
         rollout_home for rollout_home in (_rollout_home(path) for path in paths.values())
@@ -801,7 +842,9 @@ def enrich(sess, tick=None):
             or _fallback_rollout(sess, home)
         )
     else:
-        path = tick.proc_paths.get(sess.pid) or _fallback_rollout(sess, home)
+        path = tick.proc_paths.get(sess.pid)
+        if not path and sess.pid not in tick.no_fallback_pids:
+            path = _fallback_rollout(sess, home)
     if not path:
         return                                       # no matching rollout → telemetry stays '—'
     # app-server is the session process in this client-server Codex version. Treating it as a
