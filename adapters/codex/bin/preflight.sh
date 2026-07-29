@@ -306,6 +306,10 @@ case "$cmd" in
     shift
     exec python3 "$ROOT/hooks/material-route-guard.py" --agent-home "$ROOT" "$@"
     ;;
+  worktree-path)
+    shift
+    exec "$ROOT/hooks/worktree-path-guard.sh" "$@"
+    ;;
   worker-route)
     shift
     exec python3 "$ROOT/utilities/worker-route-guard.py" validate "$@"

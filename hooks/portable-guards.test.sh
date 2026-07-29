@@ -174,6 +174,19 @@ if "$CODEX" write "$TMP/repo/f" testsid >/tmp/codex.out 2>/tmp/codex.err; then
 else
   bad "codex preflight should pass clean write"
 fi
+# A3 fallback verb: `preflight worktree-path` reproduces the same CLI outcomes
+# already asserted against $WTG directly.
+if "$CODEX" worktree-path --tool Bash --command 'git worktree add .claude/worktrees/foo -b foo' --cwd "$TMP/repo" --session wtgsid >/tmp/codex_wtp.out 2>/tmp/codex_wtp.err; then
+  bad "codex preflight worktree-path should deny non -wt/ worktree add"
+else
+  [ "$?" -eq 2 ] && ok "codex preflight worktree-path fallback denies non -wt/ worktree add" \
+    || bad "codex preflight worktree-path wrong exit on non -wt/ worktree add"
+fi
+if "$CODEX" worktree-path --tool Bash --command 'git worktree add /home/x/repo-wt/slug -b slug main' --cwd "$TMP/repo" --session wtgsid >/tmp/codex_wtp.out 2>/tmp/codex_wtp.err; then
+  ok "codex preflight worktree-path fallback passes canonical <repo>-wt/ add"
+else
+  bad "codex preflight worktree-path fallback should pass canonical <repo>-wt/ add"
+fi
 mkdir -p "$TMP/runtime/projects/abc/memory"
 if "$MEM" --file "$TMP/runtime/projects/abc/memory/MEMORY.md" >/tmp/mem.out 2>/tmp/mem.err; then
   bad "builtin memory guard should fail memory file write"
@@ -2027,6 +2040,22 @@ else
   bad "codex native hook projection should block obvious shell write targets"
 fi
 
+# A3: the Codex shell PreToolUse bridge runs worktree-path before material-route.
+if printf '{"tool_name":"Bash","tool_input":{"command":"git worktree add /tmp/somewhere-else/slug"},"session_id":"codex-worktree-deny","cwd":"%s"}\n' "$TMP/repo" \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_worktree_deny.out 2>/tmp/codex_worktree_deny.err \
+  && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); assert d["decision"]=="block"' /tmp/codex_worktree_deny.out; then
+  ok "codex native hook projection denies git worktree add outside <repo>-wt/"
+else
+  bad "codex native hook projection should deny git worktree add outside <repo>-wt/"
+fi
+if printf '{"tool_name":"Bash","tool_input":{"command":"git worktree add %s-wt/slug -b slug HEAD"},"session_id":"codex-worktree-pass","cwd":"%s"}\n' "$TMP/repo" "$TMP/repo" \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_worktree_pass.out 2>/tmp/codex_worktree_pass.err \
+  && [ ! -s /tmp/codex_worktree_pass.out ]; then
+  ok "codex native hook projection passes canonical <repo>-wt/ worktree add"
+else
+  bad "codex native hook projection should pass canonical <repo>-wt/ worktree add [out=$(cat /tmp/codex_worktree_pass.out)]"
+fi
+
 # Material-route Codex projection fixtures: denial must be native JSON, while a
 # successful local compile/bind remains silent and is scoped to session + cwd.
 codex_source="$TMP/repo/source.py"
@@ -2979,6 +3008,79 @@ else
   bad "opencode agent-home wrapper should ignore invalid AGENT_HOME"
 fi
 
+echo "== opencode material-route + worktree-path wrapper =="
+opencode_source="$TMP/repo/opencode_source.py"
+printf 'print(1)\n' > "$opencode_source"
+git -C "$TMP/repo" add "$opencode_source"
+if "$OPENCODE" material-route check --tool Write --file "$opencode_source" --cwd "$TMP/repo" --session opencode-no-route >/tmp/opencode_mr.out 2>/tmp/opencode_mr.err; then
+  bad "opencode material-route check should block a route-less material Write"
+else
+  [ "$?" -eq 2 ] && ok "opencode material-route check blocks a route-less material Write" \
+    || bad "opencode material-route check wrong exit for route-less material Write"
+fi
+if "$OPENCODE" worktree-path --tool Bash --command 'git worktree add .claude/worktrees/foo -b foo' --cwd "$TMP/repo" --session opencode-wtg >/tmp/opencode_wtp.out 2>/tmp/opencode_wtp.err; then
+  bad "opencode worktree-path should deny non -wt/ worktree add"
+else
+  [ "$?" -eq 2 ] && ok "opencode worktree-path denies non -wt/ worktree add" \
+    || bad "opencode worktree-path wrong exit on non -wt/ worktree add"
+fi
+if "$OPENCODE" worktree-path --tool Bash --command 'git worktree add /home/x/repo-wt/slug -b slug main' --cwd "$TMP/repo" --session opencode-wtg >/tmp/opencode_wtp.out 2>/tmp/opencode_wtp.err; then
+  ok "opencode worktree-path passes canonical <repo>-wt/ add"
+else
+  bad "opencode worktree-path should pass canonical <repo>-wt/ add"
+fi
+
+# route wrapper: compile-then-bind (D1). Successful same-sid/cwd bind allows a
+# subsequent material Write; every negative creates no marker while
+# preserving the compiler's own stdout/stderr/exit status.
+mkdir -p "$TMP/repo/.agent_reports"
+opencode_route="$TMP/repo/.agent_reports/opencode-route.json"
+opencode_route_args="--capability autopilot-code --capability-mode dev --intensity direct --cwd $TMP/repo --artifact-root $TMP/repo/.agent_reports --predicate atomic-outcome --predicate known-scope --predicate no-shared-contract --predicate no-resource-run --predicate no-artifact-handoff --predicate no-independent-verifier --predicate focused-verification --tracking untracked --spec-read not-applicable --drift-verdict no-project-spec --workflow-mode untracked --artifact-guard preflight-passed --inline-reason atomic-direct"
+if OPENCODE_SESSION_ID=opencode-bind "$OPENCODE" route $opencode_route_args --output "$opencode_route" >/tmp/opencode_route.out 2>/tmp/opencode_route.err \
+  && [ -f "$opencode_route" ] \
+  && "$OPENCODE" material-route check --tool Write --file "$opencode_source" --cwd "$TMP/repo" --session opencode-bind >/tmp/opencode_bind_allow.out 2>/tmp/opencode_bind_allow.err; then
+  ok "opencode route wrapper binds on successful compile and allows same-sid/cwd Write"
+else
+  bad "opencode route wrapper should bind on successful compile and allow same-sid/cwd Write [route=$(test -f "$opencode_route" && echo yes || echo no)]"
+fi
+if "$OPENCODE" material-route check --tool Write --file "$opencode_source" --cwd "$TMP/repo" --session opencode-foreign >/tmp/opencode_foreign.out 2>/tmp/opencode_foreign.err; then
+  bad "foreign session should not reuse the opencode material route marker"
+else
+  [ "$?" -eq 2 ] && ok "foreign session cannot reuse opencode material route marker" \
+    || bad "foreign session denial wrong exit"
+fi
+opencode_route_nooutput="$TMP/repo/.agent_reports/opencode-route-nooutput.json"
+rm -f "$opencode_route_nooutput"
+if OPENCODE_SESSION_ID=opencode-neg-nooutput "$OPENCODE" route $opencode_route_args >/tmp/opencode_neg_nooutput.out 2>/tmp/opencode_neg_nooutput.err \
+  && [ ! -f "$opencode_route_nooutput" ] \
+  && "$OPENCODE" material-route check --tool Write --file "$opencode_source" --cwd "$TMP/repo" --session opencode-neg-nooutput >/tmp/opencode_neg_nooutput_check.out 2>/tmp/opencode_neg_nooutput_check.err; then
+  bad "opencode route wrapper without --output should stay unbound"
+else
+  [ ! -f "$opencode_route_nooutput" ] && ok "opencode route wrapper: no --output compiles unbound, creates no marker" \
+    || bad "opencode route wrapper: no --output should create no marker"
+fi
+opencode_route_multi_a="$TMP/repo/.agent_reports/opencode-route-multi-a.json"
+opencode_route_multi_b="$TMP/repo/.agent_reports/opencode-route-multi-b.json"
+if OPENCODE_SESSION_ID=opencode-neg-multi "$OPENCODE" route $opencode_route_args --output "$opencode_route_multi_a" --output "$opencode_route_multi_b" >/tmp/opencode_neg_multi.out 2>/tmp/opencode_neg_multi.err; then
+  :
+fi
+if "$OPENCODE" material-route check --tool Write --file "$opencode_source" --cwd "$TMP/repo" --session opencode-neg-multi >/tmp/opencode_neg_multi_check.out 2>/tmp/opencode_neg_multi_check.err; then
+  bad "opencode route wrapper with more than one --output should stay unbound"
+else
+  [ "$?" -eq 2 ] && ok "opencode route wrapper: more than one --output creates no marker" \
+    || bad "opencode route wrapper: more than one --output wrong denial exit"
+fi
+opencode_route_nosid="$TMP/repo/.agent_reports/opencode-route-nosid.json"
+rm -f "$opencode_route_nosid"
+if env -u OPENCODE_SESSION_ID "$OPENCODE" route $opencode_route_args --output "$opencode_route_nosid" >/tmp/opencode_neg_nosid.out 2>/tmp/opencode_neg_nosid.err \
+  && [ -f "$opencode_route_nosid" ] \
+  && "$OPENCODE" material-route check --tool Write --file "$opencode_source" --cwd "$TMP/repo" --session opencode-neg-nosid >/tmp/opencode_neg_nosid_check.out 2>/tmp/opencode_neg_nosid_check.err; then
+  bad "opencode route wrapper without OPENCODE_SESSION_ID should stay unbound"
+else
+  [ -f "$opencode_route_nosid" ] && ok "opencode route wrapper: missing sid compiles unbound, creates no marker" \
+    || bad "opencode route wrapper: missing sid should still compile the route file"
+fi
+
 echo "== opencode spec read gate =="
 if "$OPENCODE" read "$TMP/specproj/.agent_reports/spec/prd.md" opencodesid >/tmp/opencode.out 2>/tmp/opencode.err \
   && "$OPENCODE" capability autopilot-code "$TMP/specproj" opencodesid >/tmp/opencode.out 2>/tmp/opencode.err; then
@@ -3698,6 +3800,107 @@ else
   bad "opencode native plugin design after hook should bridge to preflight"
 fi
 
+# A1/A2/A3 plugin bridge: transitive material-write denial, bash git-commit
+# denial, bash worktree-add denial/pass, neutral/non-add pass, raw command
+# preserved verbatim, and shell.env's OPENCODE_SESSION_ID assignment.
+opencode_plugin_source="$TMP/repo/opencode_plugin_source.py"
+printf 'print(1)\n' > "$opencode_plugin_source"
+git -C "$TMP/repo" add "$opencode_plugin_source"
+if node --input-type=module >/tmp/opencode_plugin_write_route.out 2>/tmp/opencode_plugin_write_route.err <<EOF
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
+try {
+  await plugin["tool.execute.before"]({ tool: "write", sessionID: "opencode-plugin-no-route" }, { args: { filePath: "$opencode_plugin_source" } })
+  process.exit(1)
+} catch (error) {
+  if (!String(error.message || error).toLowerCase().includes("route")) process.exit(1)
+}
+EOF
+then
+  ok "opencode plugin tool.execute.before denies a route-less material write end-to-end"
+else
+  bad "opencode plugin tool.execute.before should deny a route-less material write end-to-end"
+fi
+if node --input-type=module >/tmp/opencode_plugin_bash_commit.out 2>/tmp/opencode_plugin_bash_commit.err <<EOF
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
+try {
+  await plugin["tool.execute.before"]({ tool: "bash", sessionID: "opencode-plugin-bash-commit" }, { args: { command: "git commit -am 'opencode_plugin_source'" } })
+  process.exit(1)
+} catch {}
+EOF
+then
+  ok "opencode plugin bash git commit of material content is denied"
+else
+  bad "opencode plugin bash git commit of material content should be denied"
+fi
+if node --input-type=module >/tmp/opencode_plugin_bash_wt_deny.out 2>/tmp/opencode_plugin_bash_wt_deny.err <<EOF
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
+try {
+  await plugin["tool.execute.before"]({ tool: "bash", sessionID: "opencode-plugin-bash-wt" }, { args: { command: "git worktree add .claude/worktrees/foo -b foo" } })
+  process.exit(1)
+} catch {}
+EOF
+then
+  ok "opencode plugin bash git worktree add outside -wt/ is denied"
+else
+  bad "opencode plugin bash git worktree add outside -wt/ should be denied"
+fi
+if node --input-type=module >/tmp/opencode_plugin_bash_wt_pass.out 2>/tmp/opencode_plugin_bash_wt_pass.err <<EOF
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
+await plugin["tool.execute.before"]({ tool: "bash", sessionID: "opencode-plugin-bash-wt-pass" }, { args: { command: "git worktree add /home/x/repo-wt/slug -b slug main" } })
+EOF
+then
+  ok "opencode plugin passes canonical <repo>-wt/ worktree add"
+else
+  bad "opencode plugin should pass canonical <repo>-wt/ worktree add"
+fi
+if node --input-type=module >/tmp/opencode_plugin_bash_neutral.out 2>/tmp/opencode_plugin_bash_neutral.err <<EOF
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
+await plugin["tool.execute.before"]({ tool: "bash", sessionID: "opencode-plugin-bash-neutral" }, { args: { command: "git worktree remove /home/x/repo-wt/slug" } })
+await plugin["tool.execute.before"]({ tool: "bash", sessionID: "opencode-plugin-bash-neutral" }, { args: { command: "ls -la && git status" } })
+EOF
+then
+  ok "opencode plugin leaves non-add worktree subcommands and neutral commands alone"
+else
+  bad "opencode plugin should leave non-add worktree subcommands and neutral commands alone"
+fi
+if node --input-type=module >/tmp/opencode_plugin_bash_verbatim.out 2>/tmp/opencode_plugin_bash_verbatim.err <<EOF
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
+// Irregular internal spacing would break a token-rejoining classifier but not
+// a verbatim single-argv passthrough; both the neutral command and the
+// worktree add must still resolve exactly as their single-space equivalents.
+await plugin["tool.execute.before"]({ tool: "bash", sessionID: "opencode-plugin-verbatim" }, { args: { command: "git status  &&  echo 'a   b'" } })
+try {
+  await plugin["tool.execute.before"]({ tool: "bash", sessionID: "opencode-plugin-verbatim" }, { args: { command: "git  worktree  add   .claude/worktrees/foo  -b  foo" } })
+  process.exit(1)
+} catch {}
+EOF
+then
+  ok "opencode plugin passes the raw bash command through verbatim as one argv element"
+else
+  bad "opencode plugin should pass the raw bash command through verbatim as one argv element"
+fi
+if node --input-type=module >/tmp/opencode_plugin_shell_env.out 2>/tmp/opencode_plugin_shell_env.err <<EOF
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
+const withSid = { env: {} }
+await plugin["shell.env"]({ cwd: "$TMP/repo", sessionID: "opencode-shell-env-sid" }, withSid)
+const withoutSid = {}
+await plugin["shell.env"]({ cwd: "$TMP/repo" }, withoutSid)
+if (withSid.env.OPENCODE_SESSION_ID !== "opencode-shell-env-sid") process.exit(1)
+if (withoutSid.env) process.exit(1)
+EOF
+then
+  ok "opencode plugin shell.env sets OPENCODE_SESSION_ID only for a nonempty sessionID"
+else
+  bad "opencode plugin shell.env should set OPENCODE_SESSION_ID only for a nonempty sessionID"
+fi
+
 echo "== opencode capability mapping =="
 if "$OPENCODE" capability-info autopilot-code >/tmp/opencode_cap.out 2>/tmp/opencode_cap.err \
   && grep -q '^capability=autopilot-code$' /tmp/opencode_cap.out \
@@ -4114,6 +4317,102 @@ if [ -n "$se_stamp" ] \
   ok "opencode session-end debounces repeated triggers"
 else
   bad "opencode session-end should debounce repeated triggers"
+fi
+
+# session-end selects curate: preflight.sh session-end passes "curate" as the
+# distill-worker's third positional argument (:756); distill-propose stays
+# increment. Both are asserted against the source, not a live model call.
+if grep -q 'distill-worker.sh" "\$sid" "\$cwd" curate' adapters/opencode/bin/preflight.sh; then
+  ok "opencode preflight session-end selects curate mode"
+else
+  bad "opencode preflight session-end should select curate mode"
+fi
+if awk '/distill-propose\)/{flag=1} flag{print} flag && /;;/{exit}' adapters/opencode/bin/preflight.sh \
+  | grep -q 'distill-worker.sh" "\$sid" "\$cwd"$'; then
+  ok "opencode preflight distill-propose stays default increment"
+else
+  bad "opencode preflight distill-propose should stay default increment"
+fi
+
+# A4: OpenCode distill-worker mode/lock/advance, using a stub OPENCODE_BIN so
+# no live model call is made. The stub reads/captures the fed prompt from
+# stdin so mode selection (increment vs curate) is verifiable without a model.
+OC_STUB="$TMP/oc-stub"
+mkdir -p "$OC_STUB"
+cat > "$OC_STUB/opencode" <<'STUBEOF'
+#!/bin/sh
+cat > "$OPENCODE_STUB_CAPTURE" 2>/dev/null || true
+STUBEOF
+chmod +x "$OC_STUB/opencode"
+OC_STUB_FAIL="$TMP/oc-stub-fail"
+mkdir -p "$OC_STUB_FAIL"
+cat > "$OC_STUB_FAIL/opencode" <<'STUBEOF'
+#!/bin/sh
+exit 1
+STUBEOF
+chmod +x "$OC_STUB_FAIL/opencode"
+
+OC_CAPTURE_CURATE="$TMP/opencode-curate-capture.txt"
+OC_STORE_CURATE="$TMP/oc-store-curate"
+if OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" OPENCODE_DISTILL_ENABLE=1 OPENCODE_BIN="$OC_STUB/opencode" \
+   OPENCODE_STUB_CAPTURE="$OC_CAPTURE_CURATE" MEM_STORE="$OC_STORE_CURATE" \
+   "$OPENCODE_DISTILL" oc-curate-sid "$TMP/flowproj" curate >/tmp/opencode_curate.out 2>/tmp/opencode_curate.err \
+   && grep -q 'no-tools session memory curator' "$OC_CAPTURE_CURATE"; then
+  ok "opencode distill worker curate mode builds the curator prompt"
+else
+  bad "opencode distill worker curate mode should build the curator prompt"
+fi
+OC_CAPTURE_INCREMENT="$TMP/opencode-increment-capture.txt"
+OC_STORE_INCREMENT="$TMP/oc-store-increment"
+if OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" OPENCODE_DISTILL_ENABLE=1 OPENCODE_BIN="$OC_STUB/opencode" \
+   OPENCODE_STUB_CAPTURE="$OC_CAPTURE_INCREMENT" MEM_STORE="$OC_STORE_INCREMENT" \
+   "$OPENCODE_DISTILL" oc-increment-sid "$TMP/flowproj" >/tmp/opencode_increment_mode.out 2>/tmp/opencode_increment_mode.err \
+   && grep -q 'You are a memory distillation worker' "$OC_CAPTURE_INCREMENT" \
+   && ! grep -q 'no-tools session memory curator' "$OC_CAPTURE_INCREMENT"; then
+  ok "opencode distill worker defaults to increment mode and builds the increment prompt"
+else
+  bad "opencode distill worker should default to increment mode"
+fi
+OC_STORE_LOCK="$TMP/oc-store-lock"
+mkdir -p "$OC_STORE_LOCK/.opencode-distill-lock-oc-locksid"
+if OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" OPENCODE_DISTILL_ENABLE=1 OPENCODE_BIN="$OC_STUB/opencode" MEM_STORE="$OC_STORE_LOCK" \
+   "$OPENCODE_DISTILL" oc-locksid "$TMP/flowproj" increment >/tmp/opencode_lock.out 2>/tmp/opencode_lock.err \
+   && grep -q 'another distill in progress' /tmp/opencode_lock.err; then
+  ok "opencode distill worker skips when the same-sid lock is already held"
+else
+  bad "opencode distill worker should skip when the same-sid lock is already held"
+fi
+rmdir "$OC_STORE_LOCK/.opencode-distill-lock-oc-locksid" 2>/dev/null || true
+
+OC_STORE_ADV="$TMP/oc-store-adv"
+if OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" OPENCODE_DISTILL_ENABLE=1 OPENCODE_DISTILL_APPLY=1 OPENCODE_BIN="$OC_STUB/opencode" MEM_STORE="$OC_STORE_ADV" \
+   "$OPENCODE_DISTILL" oc-adv-sid "$TMP/flowproj" increment >/tmp/opencode_adv.out 2>/tmp/opencode_adv.err \
+   && AGENT_HOME="$ROOT" MEM_STORE="$OC_STORE_ADV" OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" \
+      python3 "$ROOT/tools/memory/mem.py" distill oc-adv-sid --source opencode >/tmp/opencode_adv_check.out 2>/tmp/opencode_adv_check.err \
+   && [ ! -s /tmp/opencode_adv_check.out ]; then
+  ok "opencode distill worker advances the marker after a successful exec in apply mode"
+else
+  bad "opencode distill worker should advance the marker after a successful exec in apply mode"
+fi
+OC_STORE_NOADV="$TMP/oc-store-noadv"
+OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" OPENCODE_DISTILL_ENABLE=1 OPENCODE_DISTILL_APPLY=1 OPENCODE_BIN="$OC_STUB_FAIL/opencode" OPENCODE_DISTILL_TIMEOUT=5 MEM_STORE="$OC_STORE_NOADV" \
+  "$OPENCODE_DISTILL" oc-noadv-sid "$TMP/flowproj" increment >/tmp/opencode_noadv.out 2>/tmp/opencode_noadv.err
+if AGENT_HOME="$ROOT" MEM_STORE="$OC_STORE_NOADV" OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" \
+   python3 "$ROOT/tools/memory/mem.py" distill oc-noadv-sid --source opencode >/tmp/opencode_noadv_check.out 2>/tmp/opencode_noadv_check.err \
+   && [ -s /tmp/opencode_noadv_check.out ]; then
+  ok "opencode distill worker does not advance the marker on a failed exec"
+else
+  bad "opencode distill worker should not advance the marker on a failed exec"
+fi
+OC_STORE_PREVIEW="$TMP/oc-store-preview"
+OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" OPENCODE_DISTILL_ENABLE=1 OPENCODE_BIN="$OC_STUB/opencode" MEM_STORE="$OC_STORE_PREVIEW" \
+  "$OPENCODE_DISTILL" oc-preview-sid "$TMP/flowproj" increment >/tmp/opencode_preview.out 2>/tmp/opencode_preview.err
+if AGENT_HOME="$ROOT" MEM_STORE="$OC_STORE_PREVIEW" OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" \
+   python3 "$ROOT/tools/memory/mem.py" distill oc-preview-sid --source opencode >/tmp/opencode_preview_check.out 2>/tmp/opencode_preview_check.err \
+   && [ -s /tmp/opencode_preview_check.out ]; then
+  ok "opencode distill worker does not advance the marker on a preview-only (non-apply) run"
+else
+  bad "opencode distill worker should not advance the marker on a preview-only run"
 fi
 
 echo "== SD-11b stage-dispatch gate (deny 상향 + opt-out + intensity 불명) =="

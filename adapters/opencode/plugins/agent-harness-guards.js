@@ -205,10 +205,32 @@ export const AgentHarnessGuards = async (ctx) => {
       runPreflight("capability", [name, baseDir(ctx), input.sessionID || "opencode-plugin"])
     }
   },
+  "shell.env": async (input, output) => {
+    // Sessionless compiles/binds are a real runtime state (undocumented
+    // sessionID, only typed optional upstream), not a theoretical one — never
+    // throw here, and set nothing when input.sessionID is absent.
+    const sid = input && input.sessionID
+    if (!sid || !output) return
+    if (!output.env) output.env = {}
+    output.env.OPENCODE_SESSION_ID = sid
+  },
   "tool.execute.before": async (input, output) => {
     const files = targetFiles(ctx, input.tool || {}, output.args || {})
     for (const file of files) {
       runPreflight("write", [file, input.sessionID || "opencode-plugin"])
+    }
+    // Bash/shell blind spot (A2/A3): targetFiles() yields [] for the bash
+    // tool, so a recognized-but-unclassified mutation path would otherwise
+    // reach no guard. Pass every documented bash command, verbatim as one
+    // argv element, to exactly the two guards Claude wires on its Bash
+    // matchers — no JS command classifier, no `shell` alias.
+    const toolName = typeof input.tool === "string" ? input.tool : input.tool?.name || ""
+    const command = output.args && output.args.command
+    if (toolName === "bash" && typeof command === "string" && command) {
+      const cwd = baseDir(ctx)
+      const sid = input.sessionID || "opencode-plugin"
+      runPreflight("worktree-path", ["--tool", "Bash", "--command", command, "--cwd", cwd, "--session", sid])
+      runPreflight("material-route", ["check", "--tool", "Bash", "--command", command, "--cwd", cwd, "--session", sid])
     }
   },
   "tool.execute.after": async (input, output) => {

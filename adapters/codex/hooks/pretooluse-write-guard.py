@@ -266,9 +266,20 @@ def main() -> int:
     env = os.environ.copy()
     env.setdefault("AGENT_HOME", str(ROOT))
     if is_shell_tool(name):
+        command = shell_command(payload, args)
+        result = subprocess.run(
+            [str(PREFLIGHT), "worktree-path", "--tool", "Bash",
+             "--command", command, "--cwd", str(cwd(payload)),
+             "--session", session_id],
+            cwd=str(ROOT), env=env, text=True, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=False,
+        )
+        if result.returncode != 0:
+            detail = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
+            return hook_block(detail or "worktree-path preflight failed")
         result = subprocess.run(
             [str(PREFLIGHT), "material-route", "check", "--tool", "Bash",
-             "--command", shell_command(payload, args), "--cwd", str(cwd(payload)),
+             "--command", command, "--cwd", str(cwd(payload)),
              "--session", session_id],
             cwd=str(ROOT), env=env, text=True, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, check=False,
