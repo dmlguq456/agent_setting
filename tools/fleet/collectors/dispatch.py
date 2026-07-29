@@ -762,13 +762,43 @@ def _jobs_path(override=None):
     return os.path.join(home, ".dispatch", "jobs.log")
 
 
+def _opencode_config_home():
+    """OpenCode global config home (INSTALL_LAYOUT.md target layout)."""
+    return os.path.expanduser("~/.config/opencode")
+
+
+def _installed_registry_paths():
+    """Installed per-runtime-home dispatch registries that exist as files.
+
+    An activated harness install roots its agent home at `<runtime-home>/.harness/`
+    (INSTALL_LAYOUT.md activation record), so that install's SD-49 canonical registry
+    is `<runtime-home>/.harness/dispatch/jobs.log`, NOT the maintainer checkout's
+    `<agent-home>/.dispatch/jobs.log`. A managed Codex parent therefore registers its
+    dispatch children under ~/.codex/.harness/; without reading these, fleet reports
+    jobs=0 and — because the worker session row is hidden as a dispatch child
+    (collectors/__init__.py:_mark_dispatch_child_sessions) — the whole dispatch
+    disappears from the screen (user 2026-07-29: "분사 세션이 fleet에 안 보여").
+    Read-only and existence-gated: a runtime that was never activated adds nothing.
+    """
+    out = []
+    for home in (_codex_home(), _proj_home(), _opencode_config_home()):
+        if not home:
+            continue
+        path = os.path.join(home, ".harness", "dispatch", "jobs.log")
+        if os.path.isfile(path):
+            out.append(path)
+    return out
+
+
 def _candidate_jobs_paths(override=None):
     """Dispatch registries to read, in precedence order.
 
     Explicit override/env means the caller intentionally selected one registry. The default
     path follows the neutral <agent-home> resolution, then adds legacy ~/.claude only when
-    it is a distinct existing file. This keeps old long-running drill/Claude jobs visible
-    during migration without duplicating rows for normal projected installs.
+    it is a distinct existing file, then every installed per-runtime-home registry that
+    exists. This keeps old long-running drill/Claude jobs visible during migration and
+    surfaces installed-harness dispatch, without duplicating rows for normal projected
+    installs.
     """
     if override:
         return [override]
@@ -779,6 +809,7 @@ def _candidate_jobs_paths(override=None):
     legacy = os.path.expanduser("~/.claude/.dispatch/jobs.log")
     if legacy and not _same_path(legacy, paths[0]) and os.path.exists(legacy):
         paths.append(legacy)
+    paths.extend(_installed_registry_paths())
     result = []
     seen = set()
     for path in paths:

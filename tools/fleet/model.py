@@ -247,6 +247,8 @@ class Session:
     cwd: str = ""
     orphan: bool = False               # /proc/<pid>/cwd had ' (deleted)' (worktree gone)
     app_server: bool = False           # codex app-server companion (procscan-detected — see collectors/procscan.py)
+    managed_dir: Optional[str] = None  # managed-codex session state dir parsed from argv (join key
+                                       # between a `--remote` TUI client and its `app-server` peer)
     is_child: bool = False             # worker/headless child marker — shown as a dispatch row under its parent, not as a top-level session
     detached: bool = False             # running in a tmux session with no client attached (backgrounded) — distinct from idle
     elapsed_min: int = 0               # ps etime
