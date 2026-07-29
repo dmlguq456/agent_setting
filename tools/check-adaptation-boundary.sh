@@ -3865,9 +3865,9 @@ check_language_neutrality_contract() {
     adapters/claude/hooks/mem-distill-dispatch.sh \
     adapters/codex/bin/distill-worker.sh \
     adapters/opencode/bin/distill-worker.sh; do
-    if ! grep -Fq 'fixed categories, keywords, scores, or' "$distiller" \
-      || ! grep -Fq 'Type is a descriptive label, not a semantic gate.' "$distiller"; then
-      fail_msg "$distiller must leave semantic store/curation choices to the distiller agent"
+    if ! grep -Fq 'decision|user-correction|unresolved-obligation|artifact-pointer' "$distiller" \
+      || ! grep -Fq 'artifact_refs' "$distiller"; then
+      fail_msg "$distiller must enforce purpose-limited, pointer-first automatic memory ingress"
     fi
   done
 }

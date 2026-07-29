@@ -84,9 +84,9 @@ python3 "$MEM" stats >/dev/null 2>&1
 rc1=$?
 [ "$rc1" = "0" ] && ok "①: mem stats exit 0 (first run)" || bad "①: mem stats failed (rc=$rc1)"
 
-# Assert user_version == 6 (v5 delivery_state + v6 legacy cwd remap)
+# Assert user_version == 7 (v7 retrieval capsule + temporal state)
 uv=$(python3 -c "import sqlite3; con=sqlite3.connect('$STORE_1/memory.db'); print(con.execute('PRAGMA user_version').fetchone()[0])")
-[ "$uv" = "6" ] && ok "①: PRAGMA user_version == 6 after migration" || bad "①: user_version=$uv (expected 6)"
+[ "$uv" = "7" ] && ok "①: PRAGMA user_version == 7 after migration" || bad "①: user_version=$uv (expected 7)"
 
 # Export dump run-1
 DUMP_1A="$(mktemp)"
@@ -133,10 +133,10 @@ print(','.join(cols))
   && ok "①: fresh-DB column order == migrated-DB column order (pins positional INSERT risk)" \
   || bad "①: column order mismatch — fresh='$fresh_cols' migrated='$migrated_cols'"
 
-# Verify tail columns are ...,strength,last_accessed,injection_flag,delivery_state
-tail_ok=$(echo "$fresh_cols" | python3 -c "import sys; s=sys.stdin.read().strip(); cols=s.split(','); ok = cols[-4:]==['strength','last_accessed','injection_flag','delivery_state']; print('ok' if ok else f'bad:{cols[-4:]}')")
+# Verify the v7 positional INSERT tail exactly.
+tail_ok=$(echo "$fresh_cols" | python3 -c "import sys; s=sys.stdin.read().strip(); cols=s.split(','); expected=['strength','last_accessed','injection_flag','delivery_state','headline','aliases','entities','topics','artifact_refs','status','canonical_id','superseded_by','capsule_version']; ok = cols[-13:]==expected; print('ok' if ok else f'bad:{cols[-13:]}')")
 [ "$tail_ok" = "ok" ] \
-  && ok "①: column tail ends in ...,strength,last_accessed,injection_flag,delivery_state" \
+  && ok "①: column tail matches v7 retrieval/temporal schema" \
   || bad "①: column tail wrong — $tail_ok"
 
 rm -rf "$FRESH_STORE" "$FRESH_PROJ" "$STORE_1" "$PROJ_1"

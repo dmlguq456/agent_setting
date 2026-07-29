@@ -156,22 +156,24 @@ $snapshot
 $artifacts
 === END ARTIFACTS ===
 
-Decide contextually whether any memory action is useful. Storing, reinforcing,
-merging, pruning, graduating, and reattributing are semantic judgments for you,
-not decisions made by fixed categories, keywords, scores, or thresholds.
+Decide contextually whether any memory action is useful. The storage purpose is
+limited to canonical decisions, user corrections, unresolved obligations, and
+artifact pointers. Never copy content already preserved in an artifact.
 Snapshot signals and artifact state are evidence, not automatic commands.
 
 Output contract: stdout contains JSON objects only, one per line. Allowed shapes:
-  {"action":"add","tier":"working|durable","type":"<descriptive type>","body":"<summary>"}
+  {"action":"add","tier":"working|durable","type":"decision|user-correction|unresolved-obligation|artifact-pointer","body":"<minimal canonical content>","headline":"<retrieval headline>","aliases":[],"entities":[],"topics":[],"artifact_refs":[]}
   {"action":"reinforce","id":"<snapshot id>"}
   {"action":"merge","ids":["<id>","<id>"],"canonical":"<id>"}
   {"action":"prune","id":"<snapshot id>"}
   {"action":"graduate","id":"<snapshot id>","to":"durable"}
   {"action":"reattribute","id":"<orphan id>"}
+  {"action":"supersede","id":"<older snapshot id>","by":"<newer snapshot id>"}
 
 Mechanical boundaries:
 - Choose the tier from its lifecycle: working is finite-lived; durable persists.
-  Type is a descriptive label, not a semantic gate.
+- artifact-pointer requires artifact_refs and its body records only why/when to
+  retrieve the artifact, never a duplicate summary.
 - Do not add an existing snapshot record again.
 - PROTECTED PENDING records are excluded from destructive IDS and remain
   untouched until explicit consumption.
@@ -195,16 +197,17 @@ shell, file, or network operations.
 $delta
 === END ===
 
-Decide contextually whether this delta contains anything worth storing. Do not
-replace that semantic judgment with fixed categories, keywords, scores, or
-thresholds. This worker is add-only.
+Decide contextually whether this delta contains a canonical decision, user
+correction, unresolved obligation, or artifact pointer worth storing. Never
+copy content already preserved in an artifact. This worker is add-only.
 
 Output contract: stdout contains JSON objects only, one per line:
-  {"tier":"working|durable","type":"<descriptive type>","body":"<summary>"}
+  {"tier":"working|durable","type":"decision|user-correction|unresolved-obligation|artifact-pointer","body":"<minimal canonical content>","headline":"<retrieval headline>","aliases":[],"entities":[],"topics":[],"artifact_refs":[]}
 
 Choose the tier from its lifecycle: working is finite-lived; durable persists.
-Type is a descriptive label, not a semantic gate. Emit no prose, Markdown, or
-code fences. Emit nothing when you judge that no addition is useful.
+artifact-pointer requires artifact_refs and records only why/when to retrieve
+the artifact. Emit no prose, Markdown, or code fences. Emit nothing when no
+addition is useful.
 EOF
 fi
 

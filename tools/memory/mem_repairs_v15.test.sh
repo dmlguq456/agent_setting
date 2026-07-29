@@ -51,14 +51,16 @@ rows = [
   '2026-07-01','2026-07-01',None,None,'[]','[]',
   'renamed project key remap depends on the live AGENT_HOME checkout',1,'2026-07-01',0,'ordinary'),
 ]
-c.executemany('INSERT INTO records VALUES(' + ','.join('?'*16) + ')', rows)
+c.executemany('INSERT INTO records(id,tier,scope,type,cwd_origin,created,updated,expires,source,'
+              'tags,links,body,strength,last_accessed,injection_flag,delivery_state) '
+              'VALUES(' + ','.join('?'*16) + ')', rows)
 c.execute('PRAGMA user_version=5'); c.commit(); c.close()
 PY
 python3 "$MEM" stats >/dev/null 2>"$TMP/mig6.err"
 grep -q "\[migrate v6\] applied" "$TMP/mig6.err" \
   && ok "v6 migration ran and logged its apply line" || bad "v6 log missing: $(cat "$TMP/mig6.err")"
 DB="$STORE/memory.db"
-[ "$(q "$DB" "PRAGMA user_version")" = 6 ] && ok "user_version advanced to 6" || bad "user_version not 6"
+[ "$(q "$DB" "PRAGMA user_version")" = 7 ] && ok "user_version advanced to 7" || bad "user_version not 7"
 [ "$(q "$DB" "SELECT cwd_origin FROM records WHERE id='leg_enc'")" = "$CANON" ] \
   && ok "encoded key remapped to canonical project key" || bad "leg_enc not remapped"
 [ "$(q "$DB" "SELECT cwd_origin FROM records WHERE id='leg_raw'")" = "$CANON" ] \
@@ -94,7 +96,7 @@ PY
 python3 "$MEM" stats >/dev/null 2>"$TMP/mig6b.err"
 SNAP2="$(python3 -c "import sqlite3,sys;print('|'.join(f'{a}:{b}' for a,b in sqlite3.connect(sys.argv[1]).execute('SELECT id,cwd_origin FROM records ORDER BY id')))" "$DB")"
 [ "$SNAP1" = "$SNAP2" ] && ok "forced rerun changes nothing (idempotent)" || bad "rerun drifted: $SNAP2"
-[ "$(q "$DB" "PRAGMA user_version")" = 6 ] && ok "user_version restored to 6 after rerun" || bad "rerun version wrong"
+[ "$(q "$DB" "PRAGMA user_version")" = 7 ] && ok "user_version restored to 7 after rerun" || bad "rerun version wrong"
 
 echo "== repair 1c: absorb path emits canonical keys (regeneration fix) =="
 STORE2="$TMP/store-absorb"; PROJECTS="$TMP/projects"
@@ -106,7 +108,7 @@ type: lesson
 absorb path regression: auto-memory record must carry the canonical project key
 EOF
 ( cd "$TMP" && MEM_STORE="$STORE2" MEM_PROJECTS="$PROJECTS" \
-    python3 "$MEM" migrate --apply >/dev/null 2>&1 )
+    python3 "$MEM" migrate --apply --all-projects >/dev/null 2>&1 )
 DB2="$STORE2/memory.db"
 [ "$(q "$DB2" "SELECT cwd_origin FROM records WHERE source LIKE 'auto-memory:%'")" = "$CANON" ] \
   && ok "auto-memory absorb writes canonical cwd_origin" || bad "absorb still writes encoded key"
@@ -116,7 +118,7 @@ mkdir -p "$PROJ/.agent_reports"
 printf '## Decisions\n- fixture postit decision body over fourteen characters\n' \
   > "$PROJ/.agent_reports/post-it.md"
 ( cd "$PROJ" && MEM_STORE="$STORE2" MEM_PROJECTS="$PROJECTS" \
-    python3 "$MEM" migrate --apply >/dev/null 2>&1 )
+    python3 "$MEM" migrate --apply --all-projects >/dev/null 2>&1 )
 [ "$(q "$DB2" "SELECT cwd_origin FROM records WHERE source LIKE 'post-it:%'")" = "$CANON" ] \
   && ok "post-it absorb writes canonical cwd_origin" || bad "post-it absorb key wrong"
 [ "$(q "$DB2" "SELECT COUNT(*) FROM records WHERE source LIKE 'post-it:$ENC:%'")" = 1 ] \

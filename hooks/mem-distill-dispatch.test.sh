@@ -43,6 +43,8 @@ STUBCAP="$(mktemp -d)"      # argv-capture stub (echoes argv to ARGV file)
 CLEANUP=("$STORE" "$PROJ" "$STUBBIN" "$STUBCAP")
 trap 'rm -rf "${CLEANUP[@]}"; rm -f "${SENTINEL_B:-}"' EXIT
 export MEM_STORE="$STORE" MEM_PROJECTS="$PROJ"
+# Isolate shared model-worker admission from live sessions and other tests.
+export AGENT_MODEL_GOVERNOR_ROOT="$STORE/.test-model-governor"
 
 # RP-M4 decision: stubs kept INLINE (not extracted to hooks/test-helpers/dispatch-stub.sh).
 # Rationale — each stub is 2 lines; the two test files' isolation setups differ (this file uses
@@ -117,19 +119,21 @@ rmdir "$STORE/.distill-lock-$SID2B" 2>/dev/null || true
 echo "== ③ lock 동시 1개 — 사전 lock 존재 시 skip, 제거 후 재호출 시 spawn 경로 진입 =="
 SID3="dispatchsid3"
 mkfix "$SID3"
+STUBLOCK="$(mktemp -d)"; CLEANUP+=("$STUBLOCK")
+printf '#!/bin/sh\ntouch "%s/CLAUDE_CALLED"\n' "$STUBLOCK" > "$STUBLOCK/claude"; chmod +x "$STUBLOCK/claude"
 # 도는 distiller 모사: lock 사전 생성
 mkdir -p "$STORE/.distill-lock-$SID3"
-rm -f "$STUBBIN/CLAUDE_CALLED"
+rm -f "$STUBLOCK/CLAUDE_CALLED"
 rc3=0
 echo "{\"session_id\":\"$SID3\",\"cwd\":\"/tmp\"}" \
-  | MEM_DISTILL_ENABLE=1 PATH="$STUBBIN:$PATH" bash "$DISPATCH" || rc3=$?
+  | MEM_DISTILL_ENABLE=1 PATH="$STUBLOCK:$PATH" bash "$DISPATCH" || rc3=$?
 [ "$rc3" = "0" ] && ok "③ 사전 lock 존재 → exit 0 (skip)" || bad "③ 사전 lock skip 시 exit code: $rc3"
-[ ! -e "$STUBBIN/CLAUDE_CALLED" ] \
+[ ! -e "$STUBLOCK/CLAUDE_CALLED" ] \
   && ok "③ 사전 lock 존재 → sentinel ABSENT (분사 skip, 동시 1개)" \
   || bad "③ 사전 lock 임에도 claude 분사됨 (lock skip 실패)"
 # lock 제거 후 재호출 → spawn 경로 진입 (동기 lock 재생성으로 단언, race-free)
 rmdir "$STORE/.distill-lock-$SID3" 2>/dev/null || true
-MEM_DISTILL_ENABLE=1 PATH="$STUBBIN:$PATH" bash "$DISPATCH" distill "$SID3" "/tmp"
+MEM_DISTILL_ENABLE=1 PATH="$STUBLOCK:$PATH" bash "$DISPATCH" distill "$SID3" "/tmp"
 [ -d "$STORE/.distill-lock-$SID3" ] \
   && ok "③ lock 제거 후 재호출 → spawn 경로 진입 (lock dir 재생성)" \
   || bad "③ lock 제거 후 재호출 — spawn 경로 미진입 (lock dir 부재)"
@@ -141,36 +145,38 @@ rmdir "$STORE/.distill-lock-$SID3" 2>/dev/null || true
 echo "== ④ 재귀가드 — MEM_DISTILL=1 시 dispatch(양 모드)·turn-nudge 즉시 exit 0, sentinel ABSENT =="
 SID4="dispatchsid4"
 mkfix "$SID4"
+STUBRECUR="$(mktemp -d)"; CLEANUP+=("$STUBRECUR")
+printf '#!/bin/sh\ntouch "%s/CLAUDE_CALLED"\n' "$STUBRECUR" > "$STUBRECUR/claude"; chmod +x "$STUBRECUR/claude"
 
 # dispatch stdin-JSON 모드
-rm -f "$STUBBIN/CLAUDE_CALLED"
+rm -f "$STUBRECUR/CLAUDE_CALLED"
 rc4a=0
 echo "{\"session_id\":\"$SID4\",\"cwd\":\"/tmp\"}" \
-  | MEM_DISTILL=1 MEM_DISTILL_ENABLE=1 PATH="$STUBBIN:$PATH" bash "$DISPATCH" || rc4a=$?
+  | MEM_DISTILL=1 MEM_DISTILL_ENABLE=1 PATH="$STUBRECUR:$PATH" bash "$DISPATCH" || rc4a=$?
 [ "$rc4a" = "0" ] && ok "④ dispatch stdin-JSON: 재귀가드 exit 0" || bad "④ dispatch stdin-JSON exit: $rc4a"
-[ ! -e "$STUBBIN/CLAUDE_CALLED" ] \
+[ ! -e "$STUBRECUR/CLAUDE_CALLED" ] \
   && ok "④ dispatch stdin-JSON: MEM_DISTILL=1 → sentinel ABSENT" \
   || bad "④ dispatch stdin-JSON: 재귀가드 실패 (sentinel PRESENT)"
 
 # dispatch argument 모드
-rm -f "$STUBBIN/CLAUDE_CALLED"
+rm -f "$STUBRECUR/CLAUDE_CALLED"
 rc4b=0
-MEM_DISTILL=1 MEM_DISTILL_ENABLE=1 PATH="$STUBBIN:$PATH" bash "$DISPATCH" distill "$SID4" "/tmp" || rc4b=$?
+MEM_DISTILL=1 MEM_DISTILL_ENABLE=1 PATH="$STUBRECUR:$PATH" bash "$DISPATCH" distill "$SID4" "/tmp" || rc4b=$?
 [ "$rc4b" = "0" ] && ok "④ dispatch argument: 재귀가드 exit 0" || bad "④ dispatch argument exit: $rc4b"
-[ ! -e "$STUBBIN/CLAUDE_CALLED" ] \
+[ ! -e "$STUBRECUR/CLAUDE_CALLED" ] \
   && ok "④ dispatch argument: MEM_DISTILL=1 → sentinel ABSENT" \
   || bad "④ dispatch argument: 재귀가드 실패 (sentinel PRESENT)"
 
 # turn-nudge (stdin 파이프 주입 — guard-path drain + exit0 under pipefail 확인, Step 2.1 RP-M5)
-rm -f "$STUBBIN/CLAUDE_CALLED"
+rm -f "$STUBRECUR/CLAUDE_CALLED"
 rc4c=0
 printf '{"hook_event_name":"UserPromptSubmit","session_id":"%s","prompt":"x"}' "$SID4" \
   | MEM_DISTILL=1 MEM_DISTILL_ENABLE=1 MEM_STORE="$STORE" MEM_NUDGE_INTERVAL=1 \
-    PATH="$STUBBIN:$PATH" bash "$TURNNUDGE" || rc4c=$?
+    PATH="$STUBRECUR:$PATH" bash "$TURNNUDGE" || rc4c=$?
 [ "$rc4c" = "0" ] \
   && ok "④ turn-nudge: MEM_DISTILL=1 + stdin 파이프 → drain + exit 0 (pipefail 무탈)" \
   || bad "④ turn-nudge: 재귀가드 exit code under pipefail: $rc4c"
-[ ! -e "$STUBBIN/CLAUDE_CALLED" ] \
+[ ! -e "$STUBRECUR/CLAUDE_CALLED" ] \
   && ok "④ turn-nudge: MEM_DISTILL=1 → sentinel ABSENT (재분사 차단)" \
   || bad "④ turn-nudge: 재귀가드 실패 (sentinel PRESENT)"
 
@@ -178,6 +184,8 @@ printf '{"hook_event_name":"UserPromptSubmit","session_id":"%s","prompt":"x"}' "
 # D-42 main/worker boundary — every compatibility marker fails closed
 # ============================================================
 echo "== D-42 worker boundary — all worker markers skip before state/model work =="
+STUBWORKER="$(mktemp -d)"; CLEANUP+=("$STUBWORKER")
+printf '#!/bin/sh\ntouch "%s/CLAUDE_CALLED"\n' "$STUBWORKER" > "$STUBWORKER/claude"; chmod +x "$STUBWORKER/claude"
 worker_case=0
 for assignment in \
   "AGENT_SESSION_ROLE=worker" \
@@ -189,13 +197,13 @@ for assignment in \
   worker_case=$((worker_case + 1))
   workersid="worker-boundary-$worker_case"
   mkfix "$workersid"
-  rm -f "$STUBBIN/CLAUDE_CALLED"
+  rm -f "$STUBWORKER/CLAUDE_CALLED"
   rm -rf "$STORE/.distill-lock-$workersid" "$STORE/.distill-state-$workersid"
   rc_worker=0
-  env "$assignment" MEM_DISTILL_ENABLE=1 PATH="$STUBBIN:$PATH" \
+  env "$assignment" MEM_DISTILL_ENABLE=1 PATH="$STUBWORKER:$PATH" \
     bash "$DISPATCH" distill "$workersid" "/tmp" || rc_worker=$?
   if [ "$rc_worker" = "0" ] \
-    && [ ! -e "$STUBBIN/CLAUDE_CALLED" ] \
+    && [ ! -e "$STUBWORKER/CLAUDE_CALLED" ] \
     && [ ! -e "$STORE/.distill-lock-$workersid" ] \
     && [ ! -e "$STORE/.distill-state-$workersid" ]; then
     ok "D-42 portable dispatcher: $assignment → silent no-op before state/model"
@@ -206,10 +214,10 @@ done
 
 adapter_sid="worker-boundary-claude-adapter"
 mkfix "$adapter_sid"
-rm -f "$STUBBIN/CLAUDE_CALLED"
-AGENT_SESSION_ROLE=worker MEM_DISTILL_ENABLE=1 PATH="$STUBBIN:$PATH" \
+rm -f "$STUBWORKER/CLAUDE_CALLED"
+AGENT_SESSION_ROLE=worker MEM_DISTILL_ENABLE=1 PATH="$STUBWORKER:$PATH" \
   bash "$CLAUDE_DISPATCH" distill "$adapter_sid" "/tmp"
-if [ ! -e "$STUBBIN/CLAUDE_CALLED" ] \
+if [ ! -e "$STUBWORKER/CLAUDE_CALLED" ] \
   && [ ! -e "$STORE/.distill-lock-$adapter_sid" ]; then
   ok "D-42 Claude adapter dispatcher: portable worker marker no-ops"
 else
@@ -334,13 +342,13 @@ JSONL
 LONG_BODY="$(python3 -c "print('x' * 2001)")"
 cat > "$STUBa/claude" <<STUBEOF
 #!/bin/sh
-printf '%s\n' '{"tier":"durable","type":"lesson","body":"this is a valid durable lesson record"}' \
-              '{"tier":"working","type":"thread","body":"this is a valid working thread item"}' \
+printf '%s\n' '{"tier":"durable","type":"decision","body":"this is a valid durable decision record","headline":"Durable decision","aliases":[],"entities":[],"topics":["tests"],"artifact_refs":[]}' \
+              '{"tier":"working","type":"unresolved-obligation","body":"this is a valid working obligation item","headline":"Working obligation","aliases":[],"entities":[],"topics":["tests"],"artifact_refs":[]}' \
               'not-json-garbage-line' \
-              '{"tier":"durable","type":"lesson"}' \
-              '{"tier":"durable","body":"missing type field here okay"}' \
-              '{"tier":"baz","type":"lesson","body":"bad tier value test record"}' \
-              "{\"tier\":\"durable\",\"type\":\"lesson\",\"body\":\"$LONG_BODY\"}"
+              '{"tier":"durable","type":"decision"}' \
+              '{"tier":"durable","body":"missing type field here okay","headline":"Missing type","aliases":[],"entities":[],"topics":[],"artifact_refs":[]}' \
+              '{"tier":"baz","type":"decision","body":"bad tier value test record","headline":"Bad tier","aliases":[],"entities":[],"topics":[],"artifact_refs":[]}' \
+              "{\"tier\":\"durable\",\"type\":\"decision\",\"body\":\"$LONG_BODY\",\"headline\":\"Too long\",\"aliases\":[],\"entities\":[],\"topics\":[],\"artifact_refs\":[]}"
 STUBEOF
 chmod +x "$STUBa/claude"
 
@@ -351,7 +359,7 @@ MEM_STORE="$STOREa" MEM_PROJECTS="$PROJa" MEM_DISTILL_ENABLE=1 PATH="$STUBa:$PAT
 # 유효 2줄 → row count == 2 기대, 하지만 quality_ok(≥15자) 이미 충족
 for _ in $(seq 1 50); do
   cnt_a="$(MEM_STORE="$STOREa" python3 "$MEM" stats 2>/dev/null | grep -E '^\s+total:' | awk '{print $2}')"
-  [ "-e" -ge 2 ] 2>/dev/null && break
+  [ "${cnt_a:-0}" -ge 2 ] 2>/dev/null && break
   sleep 0.1
 done
 cnt_a="$(MEM_STORE="$STOREa" python3 "$MEM" stats 2>/dev/null | grep -E '^\s+total:' | awk '{print $2}')"
@@ -379,8 +387,8 @@ JSONL
 cat > "$STUBm3/claude" <<'STUBEOF'
 #!/bin/sh
 printf '%s\n' '```json' \
-              '{"tier":"durable","type":"lesson","body":"fenced valid durable lesson record"}' \
-              '{"tier":"working","type":"thread","body":"fenced valid working thread record"}' \
+              '{"tier":"durable","type":"decision","body":"fenced valid durable decision record","headline":"Fenced decision","aliases":[],"entities":[],"topics":[],"artifact_refs":[]}' \
+              '{"tier":"working","type":"unresolved-obligation","body":"fenced valid working obligation record","headline":"Fenced obligation","aliases":[],"entities":[],"topics":[],"artifact_refs":[]}' \
               '```'
 STUBEOF
 chmod +x "$STUBm3/claude"
@@ -391,7 +399,7 @@ MEM_STORE="$STOREm3" MEM_PROJECTS="$PROJm3" MEM_DISTILL_ENABLE=1 PATH="$STUBm3:$
 # 폴링: row count ≥ 1 대기 (내부 유효 2줄 기대)
 for _ in $(seq 1 50); do
   cnt_m3="$(MEM_STORE="$STOREm3" python3 "$MEM" stats 2>/dev/null | grep -E '^\s+total:' | awk '{print $2}')"
-  [ "-e" -ge 2 ] 2>/dev/null && break
+  [ "${cnt_m3:-0}" -ge 2 ] 2>/dev/null && break
   sleep 0.1
 done
 cnt_m3="$(MEM_STORE="$STOREm3" python3 "$MEM" stats 2>/dev/null | grep -E '^\s+total:' | awk '{print $2}')"
@@ -469,8 +477,10 @@ cat > "$STUBb/claude" <<STUBEOF
 #!/bin/sh
 python3 -c "
 import json
-payload = {'tier': 'durable', 'type': 'lesson',
-           'body': 'normal text \"; touch $SENTINEL_B ; echo \"'}
+payload = {'tier': 'durable', 'type': 'decision',
+           'body': 'normal text \"; touch $SENTINEL_B ; echo \"',
+           'headline': 'Injection safety decision', 'aliases': [], 'entities': [],
+           'topics': [], 'artifact_refs': []}
 print(json.dumps(payload))
 "
 STUBEOF
@@ -553,8 +563,10 @@ cat > "$STUBg4/claude" <<STUBEOF
 #!/bin/sh
 python3 -c "
 import json
-print(json.dumps({'action':'add','tier':'durable','type':'lesson',
-                  'body':'normal text \"; touch $SENTINEL_G4 ; echo \"'}))
+print(json.dumps({'action':'add','tier':'durable','type':'decision',
+                  'body':'normal text \"; touch $SENTINEL_G4 ; echo \"',
+                  'headline':'Curator injection decision','aliases':[],'entities':[],
+                  'topics':[],'artifact_refs':[]}))
 "
 STUBEOF
 chmod +x "$STUBg4/claude"

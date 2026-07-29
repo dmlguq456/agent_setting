@@ -31,7 +31,7 @@ c=sqlite3.connect(sys.argv[1]); print(c.execute('pragma user_version').fetchone(
 print(' '.join(f'{a}:{b}' for a,b in c.execute('select id,delivery_state from records order by id')))
 PY
 )"
-grep -q '^6$' <<<"$STATE" && grep -q 'old_h:pending' <<<"$STATE" \
+grep -q '^7$' <<<"$STATE" && grep -q 'old_h:pending' <<<"$STATE" \
   && grep -q 'old_hint:pending' <<<"$STATE" && grep -q 'old_body:pending' <<<"$STATE" \
   && grep -q 'old_plain:ordinary' <<<"$STATE" && ok "migration v5 backfills only handoff shapes" \
   || bad "migration/backfill: $STATE"
@@ -72,7 +72,9 @@ c=sqlite3.connect(sys.argv[1]); t='2026-07-10'
 rows=[
  ('other_id','durable','project','note','other-project',t,t,None,None,'[]','[]','other project visible only with all',1,'2000-01-01',0,'ordinary'),
  ('flagged_id','durable','project','note',sys.argv[2],t,t,None,None,'[]','[]','flagged secret should never show',1,'2000-01-01',1,'ordinary')]
-c.executemany('insert into records values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',rows); c.commit(); c.close()
+c.executemany('insert into records(id,tier,scope,type,cwd_origin,created,updated,expires,source,'
+              'tags,links,body,strength,last_accessed,injection_flag,delivery_state) '
+              'values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',rows); c.commit(); c.close()
 PY
 cli show other_id >/dev/null 2>&1; rc_default=$?
 cli show other_id --all >/dev/null 2>&1; rc_all=$?

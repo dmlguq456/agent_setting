@@ -47,7 +47,7 @@ and `ADAPTATION.md`; command output is authoritative for current support.
 |---|---|
 | lifecycle | `preflight.sh session-end`, `preflight.sh prompt-signal`, `preflight.sh turn-nudge` |
 | workflow/context | `preflight.sh status`, `preflight.sh briefing`, `preflight.sh worklog` |
-| memory | `preflight.sh memory`, `preflight.sh recall`, `preflight.sh distill-delta`, `preflight.sh distill-propose` |
+| memory | `preflight.sh memory`, `preflight.sh recall-gate`, `preflight.sh recall`, `preflight.sh distill-delta`, `preflight.sh distill-propose` |
 | token/UI | `preflight.sh token-budget`, `preflight.sh ui-info`, `preflight.sh tui-config` |
 | delegation/QA | `preflight.sh subagent-info --check`, `preflight.sh qa-policy <level> [code|research|doc|general]` |
 | readiness/loops | `preflight.sh doctor [--runtime]`, `preflight.sh loop-info <oncall|note|study|drill|runtime-watch>` |
@@ -152,9 +152,10 @@ one surface never silently extends to the other.
 
 ## Memory and Context
 
-Memory semantics belong to the acting agent. Use a targeted `preflight.sh recall
-"<query>" [cwd]`; retrieve a full pending obligation before applying and
-consuming it. Workers do not run main memory lifecycle.
+Memory semantics belong to the acting agent. At work intake, record `recall` or
+`skip` with `preflight.sh recall-gate <cwd> ...`. For recall, use a targeted
+query and retrieve full pending obligations before applying or consuming them.
+Workers do not run main memory lifecycle.
 
 `preflight.sh token-budget` exposes exact-session telemetry. The normal, unknown, repeated-band, and validated-native states inject zero bytes; a verified
 tight/critical transition may emit one directive of at most 240 UTF-8 bytes.

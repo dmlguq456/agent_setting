@@ -1,0 +1,1 @@
+../../../../tools/memory/mem_v24.test.sh

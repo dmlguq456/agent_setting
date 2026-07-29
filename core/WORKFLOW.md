@@ -23,6 +23,13 @@ simple factual or explanatory answer that requests no new durable artifact, or
 an explicit conversational/no-files constraint.
 `direct` is an intensity inside the selected entry route, not a bypass around entry routing.
 
+Before material work or read-only context recovery proceeds, make the memory
+opportunity explicit: record `recall` with one focused query when prior context
+could materially improve the judgment, or record `skip` with a short contextual
+reason. Use `mem recall-gate` (or the adapter wrapper), which records no raw
+prompt. This gate makes a previously silent omission observable; it does not
+classify the prompt, prescribe topic categories, or restore automatic recall.
+
 ### 0.1. Read-Only Orientation Before Capability Routing
 
 Before selecting a capability or Skill, distinguish read-only orientation from
@@ -35,10 +42,12 @@ keyword classifier.
 Read-only orientation invokes no capability and writes no artifact. Recover
 context in this order:
 
-1. Choose one targeted memory query from the task and recall it before broad
-   discovery. This is an agent judgment for orientation, not a prompt-keyword
-   classifier. A shortened, ellipsized, or otherwise insufficient hit is only
-   an index: read the full body by record ID before using it as evidence.
+1. Record `recall` at the memory opportunity gate with one targeted query from
+   the task, then search before broad discovery. This is an agent judgment for
+   orientation, not a prompt-keyword classifier. A shortened, ellipsized, or
+   otherwise insufficient hit is only an index: read the full body by record ID
+   before using it as evidence. Record `applied` or `miss` against the gate id
+   after the evidence decision.
 2. Use the adapter status surface and `utilities/artifact-root.sh` to resolve
    the project-wide canonical artifact root. In a linked worktree, ignore its
    tracked artifact snapshot and read the primary worktree's canonical root.

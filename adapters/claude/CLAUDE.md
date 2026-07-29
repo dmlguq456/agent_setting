@@ -57,7 +57,7 @@ Use `statusline.sh` only for runtime status. Harness detail remains available th
 
 ## Context and Memory
 
-Memory semantics belong to the acting agent. When prior context may materially help, choose a targeted query through `tools/memory/recall.sh`; retrieve full pending obligations before applying and consuming them.
+At work intake, record `recall` or `skip` with `mem recall-gate`. For recall, use a targeted query and retrieve full pending obligations before applying or consuming them.
 
 Context pressure is orthogonal to quality and stage graph. Ordinary hook states stay silent. Static bytes, code lines, and directive counts are footprint measures, not token or billing savings. `core/ADAPTATION.md §6.1` owns budgets; real savings claims require paired production sessions.
 
