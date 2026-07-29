@@ -108,8 +108,23 @@ def _state(home: Path) -> dict:
     real = Path(str(value.get("real_command", "")))
     if not real.is_absolute() or not real.exists() or not os.access(real, os.X_OK):
         raise LauncherError(f"real Codex command is unavailable: {real}")
+    if _is_harness_wrapper(real):
+        raise LauncherError(
+            f"real Codex command resolves to an agent-harness launcher wrapper: {real}"
+        )
     value["real_command"] = str(real)
     return value
+
+
+def _is_harness_wrapper(command: Path) -> bool:
+    """A recorded binding must never point at any install's launcher ingress."""
+    try:
+        if command.is_symlink() or not command.is_file() or command.stat().st_size > 4096:
+            return False
+        payload = command.read_bytes()
+    except OSError:
+        return False
+    return b"agent-harness" in payload and b"codex-launcher.py" in payload
 
 
 def _first_positional(args: list[str]) -> str | None:
@@ -222,6 +237,15 @@ def main() -> int:
     args = sys.argv[1:]
     runtime_home = _codex_home()
     try:
+        # execv keeps the PID, so a circular binding (wrapper -> launcher ->
+        # wrapper ...) re-enters this process. Spawned children get new PIDs
+        # and are unaffected. Fail fast instead of looping forever.
+        guard_pid = os.environ.get("AGENT_CODEX_LAUNCHER_GUARD_PID")
+        if guard_pid == str(os.getpid()):
+            raise LauncherError(
+                "launcher re-entered itself; the recorded real Codex command is circular"
+            )
+        os.environ["AGENT_CODEX_LAUNCHER_GUARD_PID"] = str(os.getpid())
         state_home = launcher_state_home(runtime_home)
         value = _state(state_home)
         real = Path(value["real_command"])

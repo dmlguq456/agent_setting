@@ -95,6 +95,38 @@ class CodexLauncherRuntimeTest(unittest.TestCase):
             auth.chmod(0o644)
             self.assertFalse(launcher.managed_auth_ready(home))
 
+    def test_state_rejects_a_wrapper_real_command(self) -> None:
+        # Binding to another install's ingress would exec this launcher forever.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home = root / ".codex"
+            state_dir = home / ".harness"
+            state_dir.mkdir(parents=True)
+            home.chmod(0o700)
+            wrapper = root / "other" / "codex"
+            wrapper.parent.mkdir()
+            wrapper.write_bytes(
+                b"#!/bin/sh\nexec python3 $HOME/.codex/agent-harness/utilities/"
+                b"codex-launcher.py \"$@\"\n# agent-harness ingress\n"
+            )
+            wrapper.chmod(0o755)
+            state = state_dir / "codex-launcher.json"
+            state.write_text(
+                '{"schema": 1, "phase": "installed", "real_command": "%s"}' % wrapper,
+                encoding="utf-8",
+            )
+            state.chmod(0o600)
+            with self.assertRaises(launcher.LauncherError):
+                launcher._state(home)
+
+    def test_reentry_guard_detects_a_circular_binding(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {"AGENT_CODEX_LAUNCHER_GUARD_PID": str(os.getpid())},
+        ):
+            with mock.patch.object(launcher.sys, "argv", ["codex-launcher.py", "--version"]):
+                self.assertEqual(launcher.main(), 69)
+
     def test_private_runtime_home_falls_back_to_global_binding_only(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

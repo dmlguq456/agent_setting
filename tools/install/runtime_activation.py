@@ -63,6 +63,8 @@ _IGNORE_NAMES = {
     ".dispatch",
     ".agent_reports",
     ".claude_reports",
+    ".core-grounding",
+    ".spec-grounding",
     ".harness",
     ".venv",
     "__pycache__",
@@ -1157,6 +1159,31 @@ def _claude_hooks_healthy(active_root: Path, scope: str = "global") -> bool:
         present = {json.dumps(item, sort_keys=True) for item in actual[event]}
         if any(json.dumps(item, sort_keys=True) not in present for item in entries):
             return False
+    return _hook_command_files_present(actual)
+
+
+_HOOK_COMMAND_PATH_RE = re.compile(r"\$HOME/[^\s\"']+")
+
+
+def _hook_command_files_present(hooks: dict) -> bool:
+    """A registered hook whose command file is gone breaks every matching event."""
+    home = os.environ.get("HOME") or str(Path.home())
+    for entries in hooks.values():
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            for hook in entry.get("hooks", []):
+                if not isinstance(hook, dict):
+                    continue
+                command = hook.get("command")
+                if not isinstance(command, str):
+                    continue
+                for raw in _HOOK_COMMAND_PATH_RE.findall(command):
+                    candidate = Path(raw.replace("$HOME", home, 1))
+                    if candidate.suffix and not candidate.exists():
+                        return False
     return True
 
 
@@ -1979,6 +2006,91 @@ def refresh(
         scope,
         selected_profile,
     )
+
+
+def _unmerge_claude_hooks(state: dict, scope: str, dry_run: bool = False) -> List[str]:
+    """Remove exactly the managed hook entries activation merged into settings."""
+    managed = state.get("managed_config", {}).get("claude_hooks", {})
+    if not isinstance(managed, dict) or not managed:
+        return []
+    config = _config_path("claude", scope, "settings.json")
+    if not config.exists():
+        return []
+    try:
+        data = _read_json_object(config, "Claude settings")
+    except ActivationError:
+        return []
+    hooks = data.get("hooks")
+    if not isinstance(hooks, dict):
+        return []
+    changed = False
+    for event, entries in managed.items():
+        current = hooks.get(event)
+        if not isinstance(current, list) or not isinstance(entries, list):
+            continue
+        managed_set = {json.dumps(item, sort_keys=True) for item in entries}
+        kept = [item for item in current if json.dumps(item, sort_keys=True) not in managed_set]
+        if len(kept) != len(current):
+            changed = True
+            if kept:
+                hooks[event] = kept
+            else:
+                hooks.pop(event)
+    if changed and not dry_run:
+        _atomic_json(config, data)
+    return [str(config)] if changed else []
+
+
+def deactivate(runtime: str, scope: str = "global", dry_run: bool = False) -> dict:
+    """Remove activation-owned projections so uninstall leaves no harness surface.
+
+    Only paths the activation state provably owns are touched; user-owned files
+    and foreign links survive via the same trust gate refresh uses.
+    """
+    if runtime not in RUNTIMES:
+        raise ActivationError(f"unsupported runtime: {runtime}")
+    _validate_scope(runtime, scope)
+    state_file = _state_path(runtime, scope)
+    state = _load_json(state_file)
+    if state is None:
+        return {"runtime": runtime, "status": "not-active", "removed": [], "restored_configs": []}
+    desired: List[dict] = []
+    try:
+        source_root = Path(state["source_root"])
+        active_root = Path(state.get("active_root") or state["source_root"])
+        resolution = _profile_resolution(source_root, state.get("profile", "full"))
+        desired = _desired_entries(
+            runtime,
+            state["mode"],
+            source_root,
+            active_root,
+            state["active_revision"],
+            scope,
+            resolution,
+        )
+    except ActivationError:
+        desired = []
+    trusted = _trusted_owned(runtime, state, desired, scope)
+    removed = []
+    for value in sorted(trusted):
+        dest = Path(value)
+        if not dest.is_symlink() and not dest.exists():
+            continue
+        if not dry_run:
+            _remove_path(dest)
+        removed.append(value)
+    restored = _unmerge_claude_hooks(state, scope, dry_run=dry_run) if runtime == "claude" else []
+    if not dry_run:
+        bundles = paths.harness_state_dir(runtime, scope) / "bundles"
+        if bundles.is_dir() and not bundles.is_symlink():
+            shutil.rmtree(bundles)
+        state_file.unlink(missing_ok=True)
+    return {
+        "runtime": runtime,
+        "status": "planned" if dry_run else "deactivated",
+        "removed": removed,
+        "restored_configs": restored,
+    }
 
 
 def doctor(runtime: str, strict: bool = False, scope: str = "global") -> dict:
