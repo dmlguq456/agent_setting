@@ -388,6 +388,11 @@ class DispatchJob:
     qa_source: Optional[str] = None     # provenance of effective qa: argv | jobslog | plan | default
     source: str = "proc"                # proc | jobs
     status: Optional[str] = None        # raw jobs.log status (open/running/...)
+    afterglow: bool = False             # F-46 (v29): a `done` registry row still inside the
+                                        # 15-min afterglow window. Display-only and additive —
+                                        # `status` stays the verbatim registry word, the row is
+                                        # dim/blinkless, and it counts in no working/idle/job
+                                        # census.
     liveness: str = "unknown"
     profile: Optional[str] = None       # dispatch profile name (masked config home) — None = main home
     artifact_root: Optional[str] = None  # registry artifact_root meta — a source-only worktree
@@ -906,10 +911,11 @@ def classify_job(ev_in, now, key=None):
     if ev_in.get("source") == "proc" and ev_in.get("is_loop"):
         return out("working", 2, "proc", "loop process alive")
 
-    # tier-1: terminal registry words. NOTE these are unreachable through collect() —
-    # dispatch.py filters terminal rows BEFORE classification and that filter is
-    # invariant (plan §2.3). This is a vocabulary contract so the render layer can
-    # never reinterpret a raw word; it is exercised by calling classify_job() directly.
+    # tier-1: terminal registry words. `killed`/`cancelled` stay unreachable through
+    # collect() — dispatch.py drops those rows BEFORE classification. `done` IS reachable
+    # since F-46 (v29): a done row inside the afterglow window survives the merge carrying
+    # `afterglow=True`, and lands here to be settled as the tier-1 `done` state. This is a
+    # vocabulary contract so the render layer can never reinterpret a raw word.
     if raw == "done":
         return out("done", 1, "registry", "jobs.log status=done")
     if raw == "killed":

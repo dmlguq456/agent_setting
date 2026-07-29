@@ -1652,7 +1652,12 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     # slug stays the fallback — same title → name → slug chain as session rows.
     slug_name = getattr(j, "title", None) or j.slug or key
     gch, gkey = _glyph(j.liveness, dim=True)
-    dead_stale_j = j.liveness in ("dead", "stale")
+    afterglow_j = bool(getattr(j, "afterglow", False))
+    if afterglow_j:
+        gch, gkey = _LIVE_GLYPH["done"], "dim"   # F-46: dim ✓, never the live green
+    # F-46 rides the same "no live telemetry" lane as dead/stale (F-13): a finished row has
+    # no model/effort/stage left worth tinting.
+    dead_stale_j = j.liveness in ("dead", "stale") or afterglow_j
     # SD-F3: the job's own effort is first-class; when it's absent (proc-scan rows — env
     # doesn't export it yet), fall back to the parent's effort, shown plain (user
     # 2026-07-16: the `~` derived-value marker is retired — qa left the display with the
@@ -1707,6 +1712,14 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
             # (the time column already shows elapsed) — "dead @exec" tells you WHERE it died.
             last_stage = stage if stage not in (None, "", "open", "running") else key
             segs.append(("dead @%s" % last_stage, "g_dead"))
+    elif afterglow_j:
+        # F-46: the job-row mirror of group cooling — dim `✓ done <since completion>` in the
+        # status zone, no blink, no telemetry. The elapsed value is measured from the `done`
+        # registry row's own timestamp, so it counts UP to the 15-min window and the row then
+        # disappears on the next tick.
+        segs.append((" " * _WIDE_STAGE_GAP, None))
+        segs += [("-", "dim"), ("  ", None),
+                 ("%s done %s" % (_LIVE_GLYPH["done"], fmt_min(j.elapsed_min)), "dim")]
     elif j.liveness == "stale":
         # F-13: a stale job has no live model/effort/stage worth showing — collapse the whole
         # telemetry zone (model cell + stage breadcrumb) into one `last seen <age>` cell.
@@ -1849,6 +1862,9 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     # slug stays the fallback — same title → name → slug chain as session rows.
     slug_name = getattr(j, "title", None) or j.slug or key
     gch, gkey = _glyph(j.liveness, dim=True)
+    afterglow_j = bool(getattr(j, "afterglow", False))
+    if afterglow_j:
+        gch, gkey = _LIVE_GLYPH["done"], "dim"   # F-46 parity with the wide row
     hn = _BADGE_TEXT.get(j.harness, "—") if j.harness else "—"
 
     prefix = _dispatch_prefix(j, orphan=orphan)
@@ -1859,7 +1875,7 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     else:
         shown_name = _compact_dispatch_name(slug_name)
     # user 2026-07-20: 분사 행 제목도 컬러 (dim harness hue) — same rule as the wide row.
-    name_key_j = ("name_dim" if j.liveness in ("dead", "stale")
+    name_key_j = ("name_dim" if (j.liveness in ("dead", "stale") or afterglow_j)
                   else _BADGE_KEY.get(j.harness, "name_dim"))
     l1 = [("  ", None), (prefix, "dim"), (gch, gkey), (" ", None),
           (_pad(hn, max(1, _HW - len(prefix))), _BADGE_KEY.get(j.harness, "dim")), (shown_name, name_key_j)]
@@ -1871,17 +1887,23 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
         l1.extend(br_segs)
 
     stage = stage_override if stage_override is not None else (j.stage or "")
-    eff = j.effort or parent_effort or None
-    l2 = [("    ", None), (_pad(fmt_min(j.elapsed_min), _HW), "dim")]
-    l2 += _model_cell(j.model or parent_model, eff, _MW, dim=True)
-    l2.append(("    ", None))
-    opt_segs, optw = _opts_segs(j)
-    l2 += opt_segs
-    if optw < _OPTW:
-        l2.append((" " * (_OPTW - optw), None))
-    l2 += _stage_zone_segs(
-        _dispatch_stage_segs(j, key, stage, slug_name, working=(j.liveness == "working"),
-                             route_seq=route_seq))
+    if afterglow_j:
+        # F-46: the L2 telemetry line collapses to the same dim `✓ done <since completion>`
+        # cell the wide row shows — no model/effort/options/breadcrumb for finished work.
+        l2 = [("    ", None),
+              ("%s done %s" % (_LIVE_GLYPH["done"], fmt_min(j.elapsed_min)), "dim")]
+    else:
+        eff = j.effort or parent_effort or None
+        l2 = [("    ", None), (_pad(fmt_min(j.elapsed_min), _HW), "dim")]
+        l2 += _model_cell(j.model or parent_model, eff, _MW, dim=True)
+        l2.append(("    ", None))
+        opt_segs, optw = _opts_segs(j)
+        l2 += opt_segs
+        if optw < _OPTW:
+            l2.append((" " * (_OPTW - optw), None))
+        l2 += _stage_zone_segs(
+            _dispatch_stage_segs(j, key, stage, slug_name, working=(j.liveness == "working"),
+                                 route_seq=route_seq))
     if _split:
         return l1, l2, br_segs
     return l1, l2
@@ -1937,7 +1959,11 @@ def _pulse_segs(sessions, jobs):
     n_id = sum(1 for s in _real if s.liveness == "idle")
     n_un = sum(1 for s in _real if s.liveness == "unused")
     n_dt = sum(1 for s in _real if s.detached and s.liveness not in ("stale", "dead"))
-    listed_jobs = jobs if _SHOW_ALL else [j for j in jobs if j.liveness != "dead"]
+    # F-46: an afterglow row is finished work kept on screen for readability — it is never
+    # part of the census (working/idle/job count), exactly as a cooling group is not "hot".
+    listed_jobs = [j for j in jobs if not getattr(j, "afterglow", False)]
+    if not _SHOW_ALL:
+        listed_jobs = [j for j in listed_jobs if j.liveness != "dead"]
     jw = sum(1 for j in listed_jobs if j.liveness == "working")
     spin = _SPIN[int(time.time() * 10) % len(_SPIN)]
     pulse = [("  fleet ", "head"),
@@ -3512,7 +3538,13 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
         # group fold decision (R4) — computed BEFORE emitting anything for this group.
         live_sessions = [s for s in group_sessions
                           if s.liveness not in ("stale", "dead") and not s.app_server]
-        must_show_jobs = bool(group_jobs)   # conservative: any job present blocks the fold
+        # conservative: any LIVE job present blocks the fold (R4's "never hide a dispatch").
+        # F-46: an afterglow row is not live work — it must not keep an otherwise dormant
+        # group expanded, per the spec's "접힘을 막지 않는다". The group's own cooling glyph
+        # (✓ + time since completion) already carries "this dir just finished" at the fold
+        # level, so nothing is lost: the afterglow row only ever hides in a group that has
+        # no live session and no live job at all.
+        must_show_jobs = any(not getattr(j, "afterglow", False) for j in group_jobs)
         fold = (not _SHOW_ALL) and (not live_sessions) and (not must_show_jobs)
 
         if fold:

@@ -60,6 +60,12 @@ _PIPE_TOK = re.compile(r"[,\s]+")
 _DRILL_SLUG_RE = re.compile(r"^drill-[a-z]+-(.+)-\d{14}-\d+$")   # registry slug → case
 _DRILL_CWD_COMP_RE = re.compile(r"^drill-(.+)-[^-]+$")           # /tmp/drill-<case>-<rand> component to case
 _TERMINAL_REGISTRY_STATUSES = frozenset(("done", "killed", "cancelled"))
+# F-46 (v29): a `done` row lingers this long as a display-only afterglow row — the job-row
+# mirror of the group cooling window (render `_COOL_WINDOW_MIN`). Rationale: a multi-minute
+# quick dispatch used to evaporate the instant it finished, so the user read it as "never
+# ran". `killed`/`cancelled` are NOT afterglow (they keep the existing stale/dead path):
+# an interrupted attempt is not a completion worth lingering on.
+DONE_AFTERGLOW_MIN = 15
 _PID_HOST_NAMESPACE_PROOF = "nspid-procfs-root-v1"
 _DEGRADATION_CACHE = {}
 _DEGRADATION_CACHE_LIMIT = 128
@@ -1674,8 +1680,17 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None, registry_priority=0):
     for slug in order:
         registry_order, fields = latest[slug]
         ts, status, repo, worktree, _slug, pipe = fields
+        row_age_min = _iso_elapsed_min(ts)
+        afterglow = False
         if status not in ("open", "running"):
-            continue                          # newest state is terminal (done/killed/…) → not live
+            # F-46: `done` within the afterglow window survives as a display-only row
+            # (status stays the verbatim registry word `done`; `afterglow=True` is the
+            # additive display marker — `--json` consumers see no changed key meaning).
+            # Every other terminal word — and any `done` older than the window — is dropped
+            # exactly as before, so the row self-clears on the next tick past the window.
+            if status != "done" or row_age_min is None or row_age_min > DONE_AFTERGLOW_MIN:
+                continue                      # newest state is terminal → not live
+            afterglow = True
         cwd = worktree if worktree not in ("-", "(main-tree)") else ""
         if slug in seen_slugs:
             continue                          # already shown as a live process job
@@ -1716,7 +1731,7 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None, registry_priority=0):
             key=pname, stage=status, mode=meta.get("mode"),
             capability_mode=capability_mode, worker_mode=worker_mode,
             mode_axis_conflict=mode_axis_conflict, qa=q,
-            elapsed_min=_iso_elapsed_min(ts), slug=slug or worktree or repo,
+            elapsed_min=row_age_min, slug=slug or worktree or repo,
             cwd=cwd, parent_sid=parent_sid, parent_cwd=parent_cwd, parent_slug=parent_slug,
             is_child=bool(parent_slug or parent_sid or parent_cwd), qa_source=qsrc, source="jobs", status=status,
             harness=harness, model=meta.get("model"),
@@ -1754,12 +1769,18 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None, registry_priority=0):
             artifact_root=meta.get("artifact_root"),
             registry_order=registry_order,
             registry_priority=registry_priority,
+            afterglow=afterglow,
         )
         job._log_file = meta.get("log_file")
         job._registry_metadata = dict(meta)
         jobs.append(job)
     quick_groups = {}
     for job in jobs:
+        # F-46: an afterglow row is a finished attempt, not a live one — it must never make a
+        # legitimate successor look like `quick-multiple-live`, and its own contract shape is
+        # already settled history.
+        if job.afterglow:
+            continue
         if job.intensity != "quick" or not job.route_id or not job.route_node:
             continue
         key = (job.route_id, job.route_node)
