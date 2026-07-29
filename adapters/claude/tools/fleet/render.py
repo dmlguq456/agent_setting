@@ -2266,10 +2266,23 @@ _SUBAGENT_IND = "      "  # strip indent: pure inset, no connector glyph, 6 cell
 
 
 def _subagent_elapsed_min(sa):
+    """Runtime minutes: an active entry keeps counting; a completed entry with an
+    observed completion time STOPS there (사용자 2026-07-29 — before this, a done
+    sub-agent's elapsed kept growing forever, conflating runtime with idle)."""
     started = getattr(sa, "started_at", None)
     if not started:
         return None
-    return max(0, int((time.time() - started) / 60))
+    end = getattr(sa, "ended_at", None) if not sa.active else None
+    return max(0, int(((end or time.time()) - started) / 60))
+
+
+def _subagent_idle_min(sa):
+    """Minutes since a completed entry finished — the '잠든 시간' tail. None when
+    active or when no completion time was observed (honest gap)."""
+    ended = getattr(sa, "ended_at", None)
+    if sa.active or not ended:
+        return None
+    return max(0, int((time.time() - ended) / 60))
 
 
 def _subagent_strip(subs, depth=0):
@@ -2287,7 +2300,10 @@ def _subagent_strip(subs, depth=0):
     sub-agent's ACTUAL execution budget when the collector observed one (F-3 honest
     gap: absent budget renders nothing) — model keeps its family color, effort uses
     the `_EFF_SHORT` 2-char form with the heat-ramp color keyed by the full value
-    (same F-9(c) idiom as `_harness_model_cell`). `depth` = the owning dispatch row's
+    (same F-9(c) idiom as `_harness_model_cell`). A completed entry's elapsed stops
+    at its observed completion time and gains a dim `(<idle>)` tail — minutes asleep
+    since it finished (사용자 2026-07-29 '언제 끝났는지'; no completion evidence →
+    no tail). `depth` = the owning dispatch row's
     depth (0 for a session row): each level pushes the strip 2 more cells inward so it
     stays visibly inside its own owner (사용자 2026-07-16 "서브 세션에 서브 에이전트도")."""
     segs = [(_SUBAGENT_IND + "  " * max(0, depth), None), (_ICON_SUBAGENT, "dim")]
@@ -2315,6 +2331,11 @@ def _subagent_strip(subs, depth=0):
         else:
             segs.append((" ✓", "dim"))
         segs.append(("  " + tail, "dim"))
+        idle = _subagent_idle_min(sa)
+        if idle is not None:
+            # 잠든 시간 (사용자 2026-07-29): total runtime alone can't say WHEN a
+            # completed leg ended — the parenthetical is minutes-asleep since then.
+            segs.append((" (" + fmt_min(idle) + ")", "dim"))
     return [segs]
 
 

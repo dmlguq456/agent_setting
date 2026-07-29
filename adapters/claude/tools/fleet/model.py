@@ -337,6 +337,12 @@ class SubAgent:
     # via the subagents/*.meta.json toolUseId join.
     model: Optional[str] = None         # resolved model id (or requested alias fallback)
     effort: Optional[str] = None        # reasoning effort level observed in the transcript
+    # When a completed sub-agent actually FINISHED (사용자 2026-07-29: '언제
+    # 끝났는지' — total runtime and time-asleep are different questions).
+    # Claude: tool_result/task-notification timestamp, else the sub-agent
+    # transcript's mtime; Codex: the thread's updated_at. None for active
+    # entries and sources without a completion signal (honest gap).
+    ended_at: Optional[float] = None    # epoch sec of completion, when observable
 
     def to_dict(self):
         return asdict(self)

@@ -1100,6 +1100,61 @@ class ClaudeSubagentBudgetTest(unittest.TestCase):
             self.assertEqual(subs[0].model, "claude-sonnet-5")
             self.assertEqual(subs[0].effort, "xhigh")
 
+    def test_paired_tool_result_timestamp_becomes_ended_at(self):
+        """완료 시각 (사용자 2026-07-29 '언제 끝났는지'): the resolving tool_result's
+        own timestamp is the completion time."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "sess.jsonl")
+            _write_transcript(path, [
+                _tool_use_line("t1", "explore", name="Agent", ts="2026-07-15T10:00:00Z"),
+                _tool_result_line("t1", ts="2026-07-15T10:05:00Z"),
+            ])
+            subs = claude._tail_subagents(path)
+            self.assertFalse(subs[0].active)
+            self.assertEqual(subs[0].ended_at, claude._ts_to_epoch("2026-07-15T10:05:00Z"))
+
+    def test_async_notification_timestamp_becomes_ended_at(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "sess.jsonl")
+            _write_transcript(path, [
+                _tool_use_line("t1", "explore", name="Agent"),
+                _async_ack_line("t1", "a1b2c3d4e5"),
+                _task_notification_line("a1b2c3d4e5", ts="2026-07-15T10:07:00Z"),
+            ])
+            subs = claude._tail_subagents(path)
+            self.assertFalse(subs[0].active)
+            self.assertEqual(subs[0].ended_at, claude._ts_to_epoch("2026-07-15T10:07:00Z"))
+
+    def test_active_entry_has_no_ended_at(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "sess.jsonl")
+            _write_transcript(path, [_tool_use_line("t1", "explore", name="Agent")])
+            subs = claude._tail_subagents(path)
+            self.assertTrue(subs[0].active)
+            self.assertIsNone(subs[0].ended_at)
+
+    def test_budget_join_mtime_fallback_fills_missing_ended_at(self):
+        """A resolving record with no timestamp leaves ended_at None; the sub-agent's
+        own transcript mtime (its actual last activity) is the honest fallback."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "sess.jsonl")
+            no_ts = {"type": "user", "message": {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": "t1", "content": "done"}]}}
+            _write_transcript(path, [
+                _tool_use_line("t1", "general-purpose", name="Agent"), no_ts])
+            sub_dir = os.path.join(tmp, "sess", "subagents")
+            os.makedirs(sub_dir)
+            with open(os.path.join(sub_dir, "agent-abc.meta.json"), "w", encoding="utf-8") as f:
+                json.dump({"agentType": "general-purpose", "toolUseId": "t1",
+                           "spawnDepth": 1, "model": "sonnet"}, f)
+            jl = os.path.join(sub_dir, "agent-abc.jsonl")
+            with open(jl, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"type": "assistant", "effort": "medium",
+                                    "message": {"model": "claude-sonnet-5"}}) + "\n")
+            subs = claude._tail_subagents(path)
+            self.assertFalse(subs[0].active)
+            self.assertEqual(subs[0].ended_at, os.stat(jl).st_mtime)
+
     def test_missing_subagents_dir_leaves_honest_none(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "sess.jsonl")
@@ -1196,6 +1251,33 @@ class SubagentStripBudgetTest(unittest.TestCase):
         # non-wire-id values pass through untouched for _clean_model to handle
         self.assertEqual(render._short_model_id("sonnet"), "sonnet")
         self.assertIsNone(render._short_model_id(None))
+
+    def test_completed_elapsed_stops_at_ended_at_and_gains_idle_tail(self):
+        """사용자 2026-07-29 '언제 끝났는지': 30m runtime that finished 45m ago must
+        read `30m (45m)` — not a forever-growing 75m."""
+        now = time.time()
+        sa = SubAgent(agent_type="explore", active=False,
+                      started_at=now - 75 * 60, ended_at=now - 45 * 60)
+        self.assertEqual(render._subagent_elapsed_min(sa), 30)
+        self.assertEqual(render._subagent_idle_min(sa), 45)
+        text = self._strip_text([sa])
+        self.assertIn("30m (45m)", text)
+
+    def test_completed_without_ended_at_keeps_the_old_tail_only(self):
+        now = time.time()
+        sa = SubAgent(agent_type="explore", active=False, started_at=now - 75 * 60)
+        self.assertEqual(render._subagent_elapsed_min(sa), 75)
+        self.assertIsNone(render._subagent_idle_min(sa))
+        self.assertNotIn("(", self._strip_text([sa]))
+
+    def test_active_entry_never_shows_an_idle_tail(self):
+        now = time.time()
+        sa = SubAgent(agent_type="explore", active=True,
+                      started_at=now - 10 * 60, ended_at=now - 5 * 60)
+        # active rows keep counting and show no idle even with a stray ended_at
+        self.assertEqual(render._subagent_elapsed_min(sa), 10)
+        self.assertIsNone(render._subagent_idle_min(sa))
+        self.assertNotIn("(", self._strip_text([sa]))
 
 
 if __name__ == "__main__":
