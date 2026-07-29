@@ -2832,8 +2832,10 @@ if python3 "$ROOT/tools/context-footprint.py" --root "$ROOT" --skip-runtime --sk
   && grep -q '^unit-family=qa ' "$TMP/context_footprint.out" \
   && ! grep -q '^surface=native-bootstrap-agent-modes' "$TMP/context_footprint.out" \
   && { grep -q '^status=ok' "$TMP/context_footprint.out" \
-    || { grep -q '^status=warn warnings=3$' "$TMP/context_footprint.out" \
+    || { grep -q '^status=warn warnings=5$' "$TMP/context_footprint.out" \
+      && grep -q 'bootstrap:claude footprint regression' "$TMP/context_footprint.out" \
       && grep -q 'bootstrap:codex footprint regression' "$TMP/context_footprint.out" \
+      && grep -q 'bootstrap:opencode footprint regression' "$TMP/context_footprint.out" \
       && grep -q 'missing from context footprint baseline: unit-catalog:total' "$TMP/context_footprint.out" \
       && grep -q 'was not measured: native-bootstrap:agent-modes-total' "$TMP/context_footprint.out"; }; }; then
   ok "context-footprint reports bootstrap and skill metadata without runtime hooks"
