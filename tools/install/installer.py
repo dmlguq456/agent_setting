@@ -523,7 +523,16 @@ def cmd_status(args):
         driver = get_driver(rt)
         s = driver.status(scope=args.scope)
         detail = f"channel={s['channel']} version={s['version']} drift={s['drift_count']}"
-        checks.append({"id": f"{rt}.status", "ok": True, "detail": detail})
+        try:
+            activation = runtime_activation.status(rt, scope=args.scope)
+            freshness = activation.get("freshness", "unknown")
+            if activation.get("mode") is None:
+                freshness = "not-activated"
+        except runtime_activation.ActivationError as exc:
+            freshness = f"error:{exc}"
+        detail += f" projection={freshness}"
+        healthy = freshness in ("fresh", "not-activated")
+        checks.append({"id": f"{rt}.status", "ok": healthy, "detail": detail})
         lines.append(f"{rt}: {detail}")
     return {"runtime": runtimes, "channel": "dev", "checks": checks, "drift": [], "exit": EXIT_OK, "lines": lines}
 
@@ -561,6 +570,28 @@ def cmd_uninstall(args):
                     "exit": EXIT_BLOCKED,
                     "lines": lines,
                 }
+        try:
+            deactivated = runtime_activation.deactivate(
+                rt, scope=args.scope, dry_run=args.dry_run
+            )
+        except runtime_activation.ActivationError as exc:
+            deactivated = None
+            lines.append(f"uninstall: {rt} — projection deactivation blocked: {exc}")
+            checks.append({"id": f"{rt}.deactivate", "ok": False, "detail": str(exc)})
+        if deactivated is not None and deactivated["status"] != "not-active":
+            verb = "would remove" if args.dry_run else "removed"
+            lines.append(
+                f"uninstall: {rt} — projection {deactivated['status']}; "
+                f"{verb} {len(deactivated['removed'])} owned path(s)"
+            )
+            checks.append(
+                {
+                    "id": f"{rt}.deactivate",
+                    "ok": True,
+                    "detail": f"{deactivated['status']}: {len(deactivated['removed'])} path(s)",
+                }
+            )
+
         manifest_path = manifest._manifest_path(rt, args.scope)
         manifest_data = manifest._load_manifest(manifest_path)
 

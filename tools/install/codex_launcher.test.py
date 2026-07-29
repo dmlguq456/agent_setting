@@ -158,6 +158,55 @@ class CodexLauncherInstallTest(unittest.TestCase):
             with self.assertRaises(launcher.CodexUnavailableError):
                 launcher.install(codex_home=self.codex_home, bin_dir=self.bin_dir)
 
+    def _write_foreign_wrapper(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(launcher.wrapper_bytes())
+        path.chmod(0o755)
+
+    def test_binding_skips_a_foreign_install_wrapper_on_path(self) -> None:
+        # A second HOME's wrapper earlier on PATH must never become real_command:
+        # binding to it makes the launcher exec itself forever.
+        foreign_bin = self.root / "other-home" / ".local" / "bin"
+        self._write_foreign_wrapper(foreign_bin / "codex")
+        real_bin = self.root / "real-bin"
+        real_bin.mkdir()
+        real_cli = real_bin / "codex"
+        real_cli.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        real_cli.chmod(0o755)
+        self.target.unlink()
+        with mock.patch.dict(
+            os.environ, {"PATH": os.pathsep.join([str(foreign_bin), str(real_bin)])}
+        ):
+            with mock.patch.object(
+                launcher.shutil, "which", return_value=str(foreign_bin / "codex")
+            ):
+                created = launcher.install(codex_home=self.codex_home, bin_dir=self.bin_dir)
+        self.assertEqual(created["status"], "created")
+        state = json.loads(launcher.state_path(self.codex_home).read_text())
+        self.assertEqual(state["real_command"], str(real_cli))
+
+    def test_binding_fails_closed_when_only_wrappers_are_on_path(self) -> None:
+        foreign_bin = self.root / "other-home" / ".local" / "bin"
+        self._write_foreign_wrapper(foreign_bin / "codex")
+        self.target.unlink()
+        with mock.patch.dict(os.environ, {"PATH": str(foreign_bin)}):
+            with mock.patch.object(
+                launcher.shutil, "which", return_value=str(foreign_bin / "codex")
+            ):
+                with self.assertRaises(launcher.CodexUnavailableError):
+                    launcher.install(codex_home=self.codex_home, bin_dir=self.bin_dir)
+
+    def test_explicit_wrapper_real_command_is_rejected(self) -> None:
+        foreign = self.root / "elsewhere" / "codex"
+        self._write_foreign_wrapper(foreign)
+        self.target.unlink()
+        with self.assertRaises(launcher.CodexLauncherError):
+            launcher.install(
+                codex_home=self.codex_home,
+                bin_dir=self.bin_dir,
+                real_command=str(foreign),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -580,6 +580,60 @@ test ! -e "$HOME/.codex/skills/demo" && test ! -L "$HOME/.codex/skills/demo" \
   || fail "refresh left a removed skill symlink behind"
 ok "linked status and refresh remove deleted owned discovery entries"
 
+# --- fresh-install verification regressions (2026-07-29) ---
+
+mkdir -p "$SRC/.core-grounding/fixture-home/core"
+ln -s /absolute/outside-target "$SRC/.core-grounding/fixture-home/core/CORE.md"
+harness runtime activate --runtime codex --mode linked --source "$SRC" --json \
+  > "$TMP/marker-dir-activate.json" \
+  || { cat "$TMP/marker-dir-activate.json" >&2; fail "runtime marker symlink blocked activation"; }
+ok "activation ignores absolute symlinks under runtime marker directories"
+
+rm "$SRC/adapters/claude/utilities/fixture.sh"
+harness runtime status --runtime claude --json > "$TMP/hook-file-missing.json" || true
+python3 - "$TMP/hook-file-missing.json" <<'PY'
+import json, sys
+row=json.load(open(sys.argv[1]))
+assert row["freshness"] == "missing", row["freshness"]
+PY
+printf '%s\n' '#!/bin/sh' 'exit 0' > "$SRC/adapters/claude/utilities/fixture.sh"
+chmod +x "$SRC/adapters/claude/utilities/fixture.sh"
+harness runtime status --runtime claude --json > "$TMP/hook-file-restored.json"
+python3 - "$TMP/hook-file-restored.json" <<'PY'
+import json, sys
+row=json.load(open(sys.argv[1]))
+assert row["freshness"] == "fresh", row["freshness"]
+PY
+ok "claude status flags a registered hook whose command file is missing"
+
+harness uninstall codex > "$TMP/uninstall-codex.log" 2>&1 \
+  || { cat "$TMP/uninstall-codex.log" >&2; fail "codex uninstall failed"; }
+test ! -e "$HOME/.codex/agent-harness" && test ! -L "$HOME/.codex/agent-harness" \
+  || fail "uninstall left the codex agent-harness projection"
+test ! -e "$HOME/.codex/AGENTS.md" && test ! -L "$HOME/.codex/AGENTS.md" \
+  || fail "uninstall left the codex AGENTS.md projection"
+harness runtime status --runtime codex --json > "$TMP/uninstalled-codex.json" || true
+python3 - "$TMP/uninstalled-codex.json" <<'PY'
+import json, sys
+row=json.load(open(sys.argv[1]))
+assert row["mode"] is None, row["mode"]
+PY
+ok "codex uninstall removes activation-owned projections and state"
+
+harness uninstall claude > "$TMP/uninstall-claude.log" 2>&1 \
+  || { cat "$TMP/uninstall-claude.log" >&2; fail "claude uninstall failed"; }
+test ! -e "$HOME/.claude/CLAUDE.md" && test ! -L "$HOME/.claude/CLAUDE.md" \
+  || fail "uninstall left the claude bootstrap projection"
+python3 - "$HOME/.claude/settings.json" <<'PY'
+import json, sys
+settings=json.load(open(sys.argv[1]))
+assert settings["theme"] == "user"
+hooks=settings.get("hooks", {})
+assert not hooks.get("SessionStart"), hooks
+assert settings["enabledPlugins"]["foreign@fixture"] is True
+PY
+ok "claude uninstall unmerges managed hooks and keeps user settings"
+
 test ! -s "$SENTINEL_LOG" || fail "external command invoked: $(tr '\n' ' ' < "$SENTINEL_LOG")"
 ok "activation path used no runtime, marketplace, network, npm, or bun command"
 

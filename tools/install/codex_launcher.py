@@ -134,17 +134,36 @@ def _absolute_link_target(path: Path) -> Path:
     return raw if raw.is_absolute() else (path.parent / raw).absolute()
 
 
+def is_harness_wrapper(command: Path) -> bool:
+    """Detect any install's launcher ingress, not just this target path.
+
+    A fresh HOME can inherit a PATH whose `codex` is another installation's
+    wrapper; binding to it makes the launcher exec itself forever.
+    """
+    try:
+        if command.is_symlink() or not command.is_file() or command.stat().st_size > 4096:
+            return False
+        payload = command.read_bytes()
+    except OSError:
+        return False
+    return b"agent-harness" in payload and b"codex-launcher.py" in payload
+
+
 def _validate_real_command(command: Path, target: Path) -> Path:
     command = command.expanduser().absolute()
     if command == target.absolute():
         raise CodexLauncherError("real Codex command resolves to the launcher path")
     if not command.exists() or command.is_dir() or not os.access(command, os.X_OK):
         raise CodexLauncherError(f"real Codex command is unavailable: {command}")
+    if is_harness_wrapper(command):
+        raise CodexLauncherError(
+            f"real Codex command resolves to an agent-harness launcher wrapper: {command}"
+        )
     return command
 
 
 def _discover_real_command_after_launcher(target: Path) -> Path | None:
-    """Find a Codex executable later on PATH, excluding our ingress path."""
+    """Find a Codex executable later on PATH, excluding any harness ingress."""
 
     for raw_directory in os.environ.get("PATH", "").split(os.pathsep):
         if not raw_directory:
@@ -152,8 +171,11 @@ def _discover_real_command_after_launcher(target: Path) -> Path | None:
         candidate = (Path(raw_directory).expanduser() / "codex").absolute()
         if candidate == target.absolute():
             continue
-        if candidate.exists() and not candidate.is_dir() and os.access(candidate, os.X_OK):
-            return candidate
+        if not candidate.exists() or candidate.is_dir() or not os.access(candidate, os.X_OK):
+            continue
+        if is_harness_wrapper(candidate):
+            continue
+        return candidate
     return None
 
 
@@ -164,6 +186,14 @@ def _discover_initial_binding(target: Path, real_command: str | None) -> tuple[P
         if not resolved:
             raise CodexUnavailableError("Codex command was not found on PATH")
         discovered = Path(resolved)
+        if is_harness_wrapper(discovered.absolute()):
+            fallback = _discover_real_command_after_launcher(target)
+            if fallback is None:
+                raise CodexUnavailableError(
+                    "PATH resolves codex to another harness launcher wrapper and no "
+                    "real Codex command was found behind it"
+                )
+            discovered = fallback
 
     if target.exists() or target.is_symlink():
         if not target.is_symlink():
