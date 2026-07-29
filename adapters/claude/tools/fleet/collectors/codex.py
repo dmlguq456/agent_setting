@@ -317,9 +317,16 @@ def _build_thread_subagents(db_path):
             started_at = created_ms / 1000.0
         elif isinstance(created, (int, float)) and created > 0:
             started_at = float(created)
+        ended_at = None
+        if not active:
+            # 완료 시각 = the thread's last update (사용자 2026-07-29 '언제 끝났는지')
+            if isinstance(updated_ms, (int, float)) and updated_ms > 0:
+                ended_at = updated_ms / 1000.0
+            elif isinstance(updated, (int, float)) and updated > 0:
+                ended_at = float(updated)
         entry = (parent_id, SubAgent(
             agent_type=_agent_type(role, agent_path), active=active,
-            started_at=started_at, source="codex-state-db"))
+            started_at=started_at, ended_at=ended_at, source="codex-state-db"))
         by_child.setdefault(child_id, []).append(entry)
 
     mapped = {}

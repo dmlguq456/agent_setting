@@ -185,8 +185,10 @@ def _tail_subagents(path, chunk=8192, max_scan=None):
     window = chunk
     calls = {}      # tool_use_id -> SubAgent
     resolved = set()
+    ended = {}      # tool_use_id -> epoch of the resolving tool_result (완료 시각)
     async_ids = {}  # tool_use_id -> background agentId (launch ack seen, not completion)
     notified = set()  # agentIds whose stop notification has appeared
+    notif_at = {}   # agentId -> epoch of that stop notification
     while True:
         start = max(0, sz - window)
         try:
@@ -200,7 +202,16 @@ def _tail_subagents(path, chunk=8192, max_scan=None):
             lines = lines[1:]           # drop the partial first line
         for ln in lines:
             if "task-notification" in ln and "<task-id>" in ln:
-                notified.update(_TASK_NOTIF_ID_RE.findall(ln))
+                ids = _TASK_NOTIF_ID_RE.findall(ln)
+                if ids:
+                    notified.update(ids)
+                    try:
+                        ts = _ts_to_epoch(json.loads(ln).get("timestamp"))
+                    except Exception:
+                        ts = None
+                    if ts:
+                        for aid in ids:
+                            notif_at[aid] = ts
             if "tool_use" not in ln and "tool_result" not in ln:
                 continue
             try:
@@ -236,6 +247,9 @@ def _tail_subagents(path, chunk=8192, max_scan=None):
                         # marker without a parseable id: untrackable — fall through to the
                         # pre-async pairing (completed) rather than showing active forever.
                     resolved.add(tid)
+                    ts = _ts_to_epoch(d.get("timestamp"))
+                    if ts:
+                        ended[tid] = ts
         if window >= limit:
             break
         window = min(window * 8, limit)
@@ -244,8 +258,11 @@ def _tail_subagents(path, chunk=8192, max_scan=None):
         aid = async_ids.get(tid)
         if aid is not None:
             sa.active = aid not in notified
+            if not sa.active:
+                sa.ended_at = notif_at.get(aid)
         elif tid in resolved:
             sa.active = False
+            sa.ended_at = ended.get(tid)
         out.append(sa)
     _join_subagent_budget(path, calls)
     out.sort(key=lambda sa: sa.started_at or 0, reverse=True)
@@ -253,29 +270,33 @@ def _tail_subagents(path, chunk=8192, max_scan=None):
     return out
 
 
-_SUBAGENT_BUDGET_CACHE = {}   # subagent jsonl path -> (mtime, size, (model, effort))
+_SUBAGENT_BUDGET_CACHE = {}   # subagent jsonl path -> (mtime, size, (model, effort, last_ts))
 
 
 def _subagent_budget(jsonl_path, chunk=65536):
-    """Last assistant (model, effort) from one sub-agent transcript tail.
+    """Last assistant (model, effort, last-activity epoch) from one sub-agent
+    transcript tail.
 
     The per-turn `effort` field and `message.model` sit on every assistant
-    record, so the newest one in the tail window is the current budget. Any
-    read/parse failure returns (None, None) — honest gap, never a guess."""
+    record, so the newest one in the tail window is the current budget. The
+    third element is the transcript's mtime — its last activity, used as the
+    completion-time fallback when the parent transcript carries no resolving
+    timestamp. Any read/parse failure returns (None, None, None) — honest gap,
+    never a guess."""
     try:
         st = os.stat(jsonl_path)
     except OSError:
-        return (None, None)
+        return (None, None, None)
     cached = _SUBAGENT_BUDGET_CACHE.get(jsonl_path)
     if cached and cached[0] == st.st_mtime and cached[1] == st.st_size:
         return cached[2]
-    detail = (None, None)
+    detail = (None, None, st.st_mtime)
     try:
         with open(jsonl_path, "rb") as f:
             f.seek(max(0, st.st_size - chunk))
             lines = f.read().decode("utf-8", "replace").splitlines()
     except OSError:
-        return (None, None)
+        return (None, None, None)
     for ln in reversed(lines):
         if '"assistant"' not in ln:
             continue
@@ -288,7 +309,8 @@ def _subagent_budget(jsonl_path, chunk=65536):
         msg = d.get("message")
         if isinstance(msg, dict) and msg.get("model"):
             eff = d.get("effort")
-            detail = (msg.get("model"), eff if isinstance(eff, str) else None)
+            detail = (msg.get("model"), eff if isinstance(eff, str) else None,
+                      st.st_mtime)
             break
     _SUBAGENT_BUDGET_CACHE[jsonl_path] = (st.st_mtime, st.st_size, detail)
     return detail
@@ -323,10 +345,12 @@ def _join_subagent_budget(path, calls):
         sa = calls.get(meta.get("toolUseId"))
         if sa is None:
             continue
-        model, effort = _subagent_budget(mpath[:-len(".meta.json")] + ".jsonl")
+        model, effort, last_ts = _subagent_budget(mpath[:-len(".meta.json")] + ".jsonl")
         raw_alias = meta.get("model")
         sa.model = model or (raw_alias if isinstance(raw_alias, str) else None)
         sa.effort = effort
+        if not sa.active and sa.ended_at is None and last_ts:
+            sa.ended_at = last_ts     # 완료 시각 폴백: 자기 transcript의 마지막 활동
 
 
 def _apply_statusline(sess, d):
