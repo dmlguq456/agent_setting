@@ -1,0 +1,243 @@
+#!/usr/bin/env python3
+"""Route interactive Codex CLI surfaces through the managed App Server entry."""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import stat
+import sys
+import tempfile
+
+
+PASSTHROUGH_COMMANDS = {
+    "app",
+    "app-server",
+    "apply",
+    "a",
+    "archive",
+    "cloud",
+    "completion",
+    "debug",
+    "delete",
+    "doctor",
+    "e",
+    "exec",
+    "exec-server",
+    "features",
+    "help",
+    "login",
+    "logout",
+    "mcp",
+    "mcp-server",
+    "plugin",
+    "remote-control",
+    "review",
+    "sandbox",
+    "unarchive",
+    "update",
+}
+INTERACTIVE_COMMANDS = {"resume", "fork"}
+VALUE_OPTIONS = {
+    "-a",
+    "--add-dir",
+    "--ask-for-approval",
+    "-c",
+    "--cd",
+    "--config",
+    "-C",
+    "--disable",
+    "--enable",
+    "-i",
+    "--image",
+    "--local-provider",
+    "-m",
+    "--model",
+    "-p",
+    "--profile",
+    "--remote",
+    "--remote-auth-token-env",
+    "-s",
+    "--sandbox",
+}
+PASSTHROUGH_FLAGS = {"-h", "--help", "-V", "--version"}
+
+
+class LauncherError(RuntimeError):
+    """Installed launcher state is unsafe or incomplete."""
+
+
+def _codex_home() -> Path:
+    raw = os.environ.get("CODEX_HOME")
+    home = Path(raw).expanduser() if raw else Path.home() / ".codex"
+    return home.absolute()
+
+
+def launcher_state_home(runtime_home: Path) -> Path:
+    """Resolve the global CLI binding without hijacking a private CODEX_HOME."""
+
+    runtime_state = runtime_home / ".harness" / "codex-launcher.json"
+    if runtime_state.is_file() and not runtime_state.is_symlink():
+        return runtime_home
+    default_home = (Path.home() / ".codex").absolute()
+    default_state = default_home / ".harness" / "codex-launcher.json"
+    if default_home != runtime_home and default_state.is_file() and not default_state.is_symlink():
+        return default_home
+    return runtime_home
+
+
+def _state(home: Path) -> dict:
+    if home.is_symlink() or not home.is_dir():
+        raise LauncherError(f"managed CODEX_HOME is unsafe: {home}")
+    harness_state = home / ".harness"
+    if harness_state.is_symlink() or not harness_state.is_dir():
+        raise LauncherError(f"managed launcher state directory is unsafe: {harness_state}")
+    path = home / ".harness" / "codex-launcher.json"
+    if path.is_symlink() or not path.is_file() or path.stat().st_size > 32_768:
+        raise LauncherError(f"managed launcher state is unavailable: {path}")
+    info = path.stat()
+    if info.st_uid != os.geteuid() or info.st_mode & 0o077:
+        raise LauncherError(f"managed launcher state permissions are unsafe: {path}")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise LauncherError(f"managed launcher state is invalid: {path}") from exc
+    if not isinstance(value, dict) or value.get("schema") != 1 or value.get("phase") != "installed":
+        raise LauncherError(f"managed launcher state is incomplete: {path}")
+    real = Path(str(value.get("real_command", "")))
+    if not real.is_absolute() or not real.exists() or not os.access(real, os.X_OK):
+        raise LauncherError(f"real Codex command is unavailable: {real}")
+    value["real_command"] = str(real)
+    return value
+
+
+def _first_positional(args: list[str]) -> str | None:
+    index = 0
+    while index < len(args):
+        value = args[index]
+        if value == "--":
+            return args[index + 1] if index + 1 < len(args) else None
+        if value in VALUE_OPTIONS:
+            index += 2
+            continue
+        if any(value.startswith(option + "=") for option in VALUE_OPTIONS if option.startswith("--")):
+            index += 1
+            continue
+        if value.startswith("-"):
+            index += 1
+            continue
+        return value
+    return None
+
+
+def should_manage(args: list[str]) -> bool:
+    if os.environ.get("AGENT_CODEX_LAUNCHER_BYPASS") == "1":
+        return False
+    if any(value == "--remote" or value.startswith("--remote=") for value in args):
+        return False
+    if any(value in {"-h", "--help", "-V", "--version"} for value in args):
+        return False
+    command = _first_positional(args)
+    if command in INTERACTIVE_COMMANDS:
+        return True
+    if command in PASSTHROUGH_COMMANDS:
+        return False
+    if command is None and any(value in PASSTHROUGH_FLAGS for value in args):
+        return False
+    return True
+
+
+def managed_auth_ready(home: Path) -> bool:
+    """Let the real CLI own first-login and unsafe-auth remediation."""
+
+    auth = home / "auth.json"
+    if auth.is_symlink() or not auth.is_file():
+        return False
+    info = auth.stat()
+    return info.st_uid == os.geteuid() and not info.st_mode & 0o077
+
+
+def private_directory(path: Path) -> Path:
+    if path.is_symlink():
+        raise LauncherError(f"managed state directory must not be a symlink: {path}")
+    path.mkdir(parents=True, exist_ok=True)
+    info = path.stat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid():
+        raise LauncherError(f"managed state directory is not owner-controlled: {path}")
+    os.chmod(path, 0o700)
+    return path
+
+
+def workspace(args: list[str]) -> Path:
+    current = Path.cwd()
+    index = 0
+    selected: str | None = None
+    while index < len(args):
+        value = args[index]
+        if value in {"-C", "--cd"} and index + 1 < len(args):
+            selected = args[index + 1]
+            index += 2
+            continue
+        if value.startswith("--cd="):
+            selected = value.partition("=")[2]
+        index += 1
+    if selected is None:
+        return current
+    candidate = Path(selected).expanduser()
+    return (candidate if candidate.is_absolute() else current / candidate).resolve(strict=False)
+
+
+def managed_command(args: list[str], home: Path, real: Path) -> list[str]:
+    agent_home_raw = os.environ.get("AGENT_HOME")
+    agent_home = Path(agent_home_raw) if agent_home_raw else home / "agent-harness"
+    entry = agent_home / "utilities" / "codex-managed-entry.py"
+    if not entry.is_file():
+        raise LauncherError(f"managed-entry projection is unavailable: {entry}")
+    harness_state = private_directory(home / ".harness")
+    state_root = private_directory(harness_state / "managed-sessions")
+    session = Path(tempfile.mkdtemp(prefix="session-", dir=str(state_root)))
+    os.chmod(session, 0o700)
+    dispatch_root = private_directory(harness_state / "dispatch")
+    jobs = dispatch_root / "jobs.log"
+    return [
+        sys.executable,
+        str(entry),
+        "--codex",
+        str(real),
+        "--codex-home",
+        str(home),
+        "--state-dir",
+        str(session),
+        "--workspace",
+        str(workspace(args)),
+        "--jobs",
+        str(jobs),
+        "--",
+        *args,
+    ]
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    runtime_home = _codex_home()
+    try:
+        state_home = launcher_state_home(runtime_home)
+        value = _state(state_home)
+        real = Path(value["real_command"])
+        # A global launcher may be used with a one-off CODEX_HOME for tests,
+        # repair, or an administrative command. Its global binding remains
+        # usable, but only a home with its own launcher state may become a
+        # managed interactive parent.
+        if state_home == runtime_home and should_manage(args) and managed_auth_ready(runtime_home):
+            command = managed_command(args, runtime_home, real)
+        else:
+            command = [str(real), *args]
+        os.execv(command[0], command)
+    except (LauncherError, OSError) as exc:
+        print(f"agent-harness: Codex launcher failed: {exc}", file=sys.stderr)
+        return 69
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

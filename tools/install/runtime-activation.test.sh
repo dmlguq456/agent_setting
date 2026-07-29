@@ -145,6 +145,16 @@ for row in data["runtimes"]:
     assert row["duplicate_sources"] == [] and row["external_dependencies"] == []
     assert row["session_action"] == expected[row["runtime"]]
 PY
+test -x "$HOME/.local/bin/codex" || fail "Codex managed launcher was not installed"
+test ! -L "$HOME/.local/bin/codex" || fail "Codex managed launcher remained a passthrough symlink"
+python3 - "$HOME/.codex/.harness/codex-launcher.json" "$BIN/codex" <<'PY'
+import json, os, stat, sys
+state=json.load(open(sys.argv[1]))
+assert state["phase"] == "installed", state
+assert state["real_command"] == os.path.abspath(sys.argv[2]), state
+assert state["previous_wrapper"] == {"kind": "missing"}, state
+assert stat.S_IMODE(os.stat(os.path.dirname(os.path.dirname(sys.argv[1]))).st_mode) == 0o700
+PY
 test -L "$HOME/.config/opencode/skills/demo" || fail "OpenCode plural skills projection missing"
 test -L "$HOME/.config/opencode/agents/demo.md" || fail "OpenCode plural agents projection missing"
 test -L "$HOME/.config/opencode/commands/demo.md" || fail "OpenCode plural commands projection missing"

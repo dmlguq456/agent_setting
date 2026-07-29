@@ -4,10 +4,12 @@
 # codex_setting/. Idempotent: re-running only refreshes harness-owned symlinks.
 #
 # It NEVER touches Codex-owned credentials, sessions, history, logs, caches,
-# config.toml, or local databases. It only creates/refreshes the harness
-# `agent-*` pointers, `hooks.json`, and selected per-skill / per-agent symlinks. A
+# config.toml, or local databases. It creates/refreshes the harness `agent-*`
+# pointers, `hooks.json`, selected per-skill / per-agent symlinks, and the
+# manifest-backed interactive launcher in the user's harness bin directory. A
 # pre-existing real `hooks.json` is backed up once to `hooks.json.pre-harness`
-# before it is replaced by the projection symlink.
+# before it is replaced by the projection symlink. The launcher records the real
+# Codex binding and restores it through `harness uninstall codex`.
 #
 # Plugin install is opt-in: pass --install-plugin to run the `codex plugin`
 # commands; otherwise the plugin is left untouched (the checker reports it). Skill
@@ -168,6 +170,23 @@ if [ "$install_plugin" = "1" ]; then
   fi
 else
   printf 'plugin_install=not-requested hint=rerun-with---install-plugin\n'
+fi
+
+default_codex_home=$HOME/.codex
+if [ -z "${HARNESS_BIN_DIR:-}" ] && [ "$(real "$CODEX_HOME")" != "$(real "$default_codex_home")" ]; then
+  # A temporary/private CODEX_HOME must not silently replace the user's global
+  # CLI ingress. Operators can opt in with an explicit HARNESS_BIN_DIR.
+  printf 'managed_launcher=skipped reason=non-default-codex-home-without-harness-bin-dir\n'
+elif command -v codex >/dev/null 2>&1; then
+  launcher_result=$(python3 "$AGENT_HOME/tools/install/codex_launcher.py" install \
+    --codex-home "$CODEX_HOME" --json) || {
+      printf '%s\n' "$launcher_result" >&2
+      echo "install-runtime-projection: managed Codex launcher installation failed" >&2
+      exit 3
+    }
+  printf 'managed_launcher=%s\n' "$launcher_result"
+else
+  printf 'managed_launcher=skipped-unavailable reason=codex-command-not-found\n'
 fi
 
 printf 'status=ok\n'

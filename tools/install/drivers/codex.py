@@ -15,6 +15,7 @@ import paths
 import projector
 import manifest
 import verifier
+import codex_launcher
 
 RUNTIME = "codex"
 
@@ -167,6 +168,24 @@ def install(scope="global", plugin=False, dry_run=False):
 
     if plugin:
         actions.append(_plugin_action(dry_run))
+        try:
+            actions.append(codex_launcher.install(dry_run=dry_run))
+        except codex_launcher.CodexUnavailableError as exc:
+            actions.append(
+                {
+                    "action": "managed-launcher",
+                    "status": "skipped-unavailable",
+                    "detail": str(exc),
+                }
+            )
+        except codex_launcher.CodexLauncherError as exc:
+            actions.append(
+                {
+                    "action": "managed-launcher",
+                    "status": "blocked",
+                    "detail": str(exc),
+                }
+            )
 
     manifest_result = None
     if not dry_run:

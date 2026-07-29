@@ -46,7 +46,7 @@ Keep `ROUTE_FILE`, `CANONICAL_JOBS`, `NODE_ID`, and the captured `ATTEMPT_ID` to
 that node's completion transaction succeeds. Never dispatch standard+ with a raw wrapper
 command that omits the route record.
 
-The prompt carries only subskill name, absolute input paths, output contract, intensity, and slug. It never carries plan bodies or prior-stage conversation. Each stage reads files; the conductor reads only verdict and gate state. Register every stage in `.dispatch/jobs.log`, monitor liveness, and keep conductor plus active stages at or below five processes. One-line or no-artifact micro-stages stay inline.
+The prompt carries only subskill name, absolute input paths, output contract, intensity, and slug. It never carries plan bodies or prior-stage conversation. Each stage reads files; the conductor reads only verdict and gate state. Register every stage in `.dispatch/jobs.log` and keep conductor plus active stages at or below five processes. Runtime-owned completion observes exact liveness outside the model; the conductor never adds a recurring monitor. One-line or no-artifact micro-stages stay inline.
 
 #### Runtime-Owned Batch Join
 
@@ -189,7 +189,7 @@ others. When a non-anchor leg wins or a graft is required, materialize the final
 
 For standard+, run the route-bound dispatch transaction with `NODE_ID=execute`; its route node
 selects `assigned_contract=code-execute` and the portable implementer role. Pass the absolute
-`plan/plan.md` path, retain the emitted attempt ID, poll, and publish exact completion. Fallback
+`plan/plan.md` path, retain the emitted attempt ID, yield for the typed receipt, and publish exact completion. Fallback
 to in-session only under the closed rules above.
 
 Read plan frontmatter after harvest:
@@ -219,7 +219,7 @@ verdict is read and the merge is recorded.
 
 For standard+, run the route-bound dispatch transaction with `NODE_ID=test`; its route node
 selects `assigned_contract=code-test` and the reviewer role. strong+ may select a deeper reviewer.
-Pass plan verification and checklist paths, retain the emitted attempt ID, poll, and publish exact
+Pass plan verification and checklist paths, retain the emitted attempt ID, yield for the typed receipt, and publish exact
 completion from `test_logs/test_report.md`. code-test is read-only and never hotfixes.
 
 quick reports verify-lite failure without retry. Other graphs may open at most one pipeline-level retry:
@@ -241,7 +241,7 @@ quick reports verify-lite failure without retry. Other graphs may open at most o
 
 For standard+, run the route-bound dispatch transaction with `NODE_ID=report`; its route node
 selects `assigned_contract=code-report` and the writer role. Pass plan, checklist, dev logs,
-test logs, and review paths, retain the emitted attempt ID, poll, and publish exact completion
+test logs, and review paths, retain the emitted attempt ID, yield for the typed receipt, and publish exact completion
 from the final report. Use the closed fallback when needed.
 
 ### Step 6: Pipeline Summary

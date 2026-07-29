@@ -1,0 +1,120 @@
+{
+  "schema_version": 2,
+  "capability": "autopilot-code",
+  "capability_mode": "dev",
+  "requested_intensity": "direct",
+  "effective_intensity": "direct",
+  "owner_model_profile": null,
+  "execution_topology": "inline",
+  "owner_dispatch_depth": 0,
+  "max_dispatch_depth": 0,
+  "tracking": "tracked",
+  "tracked_gate_evidence": {
+    "spec_read": {
+      "satisfied": true,
+      "source": "passed:user-decision-plus-core-contract"
+    },
+    "drift_verdict": "SPEC-SIGNIFICANT-transparent-launcher-approved",
+    "workflow_mode": "tracked",
+    "artifact_guard": {
+      "satisfied": true,
+      "source": "passed:canonical-primary-artifact-root"
+    }
+  },
+  "spec_touch": false,
+  "cwd": "/home/Uihyeop/agent_setting",
+  "artifact_root": "/home/Uihyeop/agent_setting/.agent_reports",
+  "source_commit": "3972b420ff7ce8591cab6b5028b19494fd56d589",
+  "registry_digest": "sha256:9e136d7268ff991f34e71baa450fa450868d4192fbad504d7ef5027e19a77d5c",
+  "dispatch_defaults_digest": "sha256:04a44c0a8540a6d742c75a0e8171ad222dc6bed5db82e2d96066367af866d6f0",
+  "selection": {
+    "direct_predicates": [
+      "atomic-outcome",
+      "focused-verification",
+      "known-scope",
+      "no-artifact-handoff",
+      "no-independent-verifier",
+      "no-resource-run",
+      "no-shared-contract"
+    ],
+    "promotion_signals": [],
+    "selection_basis": [
+      {
+        "axis": "direct-predicate",
+        "signal": "atomic-outcome",
+        "source": "caller"
+      },
+      {
+        "axis": "direct-predicate",
+        "signal": "focused-verification",
+        "source": "caller"
+      },
+      {
+        "axis": "direct-predicate",
+        "signal": "known-scope",
+        "source": "caller"
+      },
+      {
+        "axis": "direct-predicate",
+        "signal": "no-artifact-handoff",
+        "source": "caller"
+      },
+      {
+        "axis": "direct-predicate",
+        "signal": "no-independent-verifier",
+        "source": "caller"
+      },
+      {
+        "axis": "direct-predicate",
+        "signal": "no-resource-run",
+        "source": "caller"
+      },
+      {
+        "axis": "direct-predicate",
+        "signal": "no-shared-contract",
+        "source": "caller"
+      }
+    ],
+    "escalation_basis": [],
+    "transport": "interactive",
+    "transport_evidence": "caller-approved-inline-self-modification",
+    "inline_reason": "dispatch-infra-self-modification"
+  },
+  "nodes": [
+    {
+      "id": "inline",
+      "kind": "capability-owner",
+      "dispatch_depth": 0,
+      "role": "orchestrator",
+      "write_scope": [
+        "source-scoped",
+        "plans/<cycle>/**"
+      ],
+      "resource_class": "normal",
+      "execution_surface": "inline",
+      "registered_worker": false,
+      "completion_gate": "inline-complete"
+    }
+  ],
+  "parallel_groups": [],
+  "completion_gates": [
+    "inline-complete"
+  ],
+  "human_gates": [],
+  "resume_retry_boundaries": [
+    "frame",
+    "plan",
+    "plan-check",
+    "execute",
+    "impl-review",
+    "test",
+    "report"
+  ],
+  "dispatch_evidence": null,
+  "dispatch_contract_version": 3,
+  "registered_headless_candidates": null,
+  "registered_headless_policy": null,
+  "unit_catalog_digest": "sha256:46672b3c16f5eec4c97112e5f85d6dfe4c51b8125349154fbc5b02f2be643d47",
+  "route_hash": "sha256:afe5d71b27ec644d88a6dbf7f3c521403d62454f7973588d29a3b694646484df",
+  "route_id": "rt-afe5d71b27ec644d"
+}

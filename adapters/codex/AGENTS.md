@@ -60,8 +60,11 @@ The recommended footer fragment is `codex_setting/codex-config/tui-statusline.to
 
 Registered standard+ headless owners use the checked App Server completion
 supervisor: the runtime joins exact child batches and resumes the same thread once
-per batch. New interactive Codex sessions opt in through
-`utilities/codex-managed-entry.py`: single ingress keeps the TUI sole approval/
+per batch. The GitHub/runtime installer projects a reversible `codex` launcher,
+so new interactive `codex`, `codex resume`, and `codex fork` sessions enter
+`utilities/codex-managed-entry.py` transparently; administrative and headless
+subcommands pass through to the recorded real CLI unchanged. The utility remains
+the explicit diagnostic entry. Single ingress keeps the TUI sole approval/
 subscription owner and sends one bounded receipt. Parent runtime decides—Codex
 gateway or Claude async-rewake/`--resume`—regardless of child. Managed completion never uses Stop continuation or a PreToolUse park; rejected steer defers once to
 idle, with crash state `sent-ambiguous`. A new unmanaged interactive Codex

@@ -1059,6 +1059,13 @@
       "hard_block": false
     },
     {
+      "slug": "hook__dispatch-owner-rewake.py__PostToolUse",
+      "name": "dispatch-owner-rewake.py",
+      "mono": "dispatch-owner-rewake.py",
+      "event": "PostToolUse",
+      "hard_block": false
+    },
+    {
       "slug": "hook__material-route-guard.py__PostToolUse",
       "name": "material-route-guard.py",
       "mono": "material-route-guard.py",

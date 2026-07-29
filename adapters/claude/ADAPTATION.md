@@ -130,8 +130,14 @@ main/orchestrator chooses per job and the wrapper only reflects that choice:
   settings object applies only to the spawned command and never edits the user's
   Claude settings.
 - Direct registered child completion is selected by the parent runtime, not by
-  the child wrapper. A Claude parent therefore keeps this same
-  async-rewake/`--resume` path for either a Claude or Codex child. A Codex parent
+  the child wrapper. An interactive Claude parent receives the successful exact
+  owner-start receipt through `PostToolUse(Bash)` and arms one native
+  `asyncRewake` hook for that owner attempt. The hook waits for terminal
+  quiescence outside the model and wakes once with an exact harvest command;
+  ordinary Bash calls are silent no-ops, and no Background Bash monitor,
+  `dispatch-wait`, progress recap, or periodic re-arm is created. Registered
+  Claude owners keep the separate `--session-id`/`--resume` supervisor for their
+  internal batches. Both paths work for either a Claude or Codex child. A Codex parent
   that launches a Claude child uses the checked `codex-managed-gateway` only
   when that parent was created through the explicit managed entry; its
   completion sidecar is control-only and never becomes a Claude or Codex

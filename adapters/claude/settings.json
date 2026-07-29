@@ -199,6 +199,17 @@
             "timeout": 15
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$HOME/.claude/hooks/dispatch-owner-rewake.py\"",
+            "asyncRewake": true,
+            "timeout": 21600
+          }
+        ]
       }
     ],
     "SessionEnd": [

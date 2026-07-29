@@ -298,6 +298,42 @@ else
 fi
 fi
 
+# Transparent interactive launcher. A private CODEX_HOME without an explicit
+# HARNESS_BIN_DIR is an isolated projection fixture, not authority to inspect or
+# replace the user's global CLI ingress.
+launcher_json=$(python3 "$AGENT_HOME/tools/install/codex_launcher.py" status \
+  --codex-home "$CODEX_HOME" --json 2>/dev/null || true)
+launcher_fields=$(python3 - "$launcher_json" <<'PY' 2>/dev/null || true
+import json, sys
+try:
+    value=json.loads(sys.argv[1])
+except (IndexError, json.JSONDecodeError):
+    raise SystemExit(0)
+print("installed=" + ("1" if value.get("installed") else "0"))
+print("healthy=" + ("1" if value.get("healthy") else "0"))
+print("detail=" + str(value.get("detail", "unknown")))
+PY
+)
+launcher_installed=$(printf '%s\n' "$launcher_fields" | sed -n 's/^installed=//p')
+launcher_healthy=$(printf '%s\n' "$launcher_fields" | sed -n 's/^healthy=//p')
+launcher_detail=$(printf '%s\n' "$launcher_fields" | sed -n 's/^detail=//p')
+default_codex_home=$HOME/.codex
+if [ "${CODEX_RUNTIME_PROJECTION_SKIP_CLI_DISCOVERY:-0}" = "1" ]; then
+  printf 'check=managed-launcher:skipped reason=codex-cli-discovery-skipped\n'
+elif [ -z "${HARNESS_BIN_DIR:-}" ] && [ "$(real "$CODEX_HOME")" != "$(real "$default_codex_home")" ]; then
+  printf 'check=managed-launcher:skipped reason=non-default-codex-home-without-harness-bin-dir\n'
+elif [ "$launcher_healthy" = "1" ]; then
+  printf 'check=managed-launcher:ok\n'
+elif [ "$launcher_installed" = "1" ]; then
+  printf 'check=managed-launcher:failed installed=%s reason=%s\n' \
+    "${launcher_installed:-0}" "${launcher_detail:-status-unavailable}"
+  fails=$((fails + 1))
+elif command -v codex >/dev/null 2>&1; then
+  printf 'check=managed-launcher:missing hint=run-runtime-refresh\n'
+else
+  printf 'check=managed-launcher:skipped reason=codex-command-not-found\n'
+fi
+
 # Bootstrap discovery (soft): requires the codex CLI. Headless preflight may
 # intentionally skip this when `codex` is stubbed for launch testing.
 if [ "${CODEX_RUNTIME_PROJECTION_SKIP_CLI_DISCOVERY:-0}" = "1" ]; then

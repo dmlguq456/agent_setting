@@ -40,6 +40,7 @@ so that residual runtime input is reported separately from profile masking.
 | spec read gate | `hooks/spec-skill-gate.sh` + `hooks/spec-read-marker.sh` |
 | git safety gate | `hooks/git-state-guard.sh` |
 | material route gate | `hooks/material-route-guard.py`; same-session route compile marker plus source Edit/Write and `git commit` chokepoints |
+| interactive owner completion | `hooks/dispatch-owner-rewake.py`; `PostToolUse(Bash)` `asyncRewake` arms only from a successful same-session depth-1 owner start, waits outside the model, and returns one exact-attempt receipt without recurring background monitors |
 | memory write guard | `hooks/builtin-memory-guard.sh` |
 
 ## Runtime Home Projection

@@ -44,6 +44,14 @@ For `autopilot-code`, `direct` is inline, `quick` is one registered dispatch-dep
 owner, and `standard+` follows `code-plan -> code-execute -> code-test ->
 code-report` under `core/OPERATIONS.md §5.10`. Dispatch depth 3 is forbidden.
 
+After an interactive `dispatch-owner --start` reports
+`parent_completion_delivery=claude-parent-runtime`, the projected
+`PostToolUse(Bash)` `asyncRewake` hook owns that exact owner attempt until one
+terminal receipt. Do not launch or re-arm Background Bash, `Monitor`, liveness,
+or `dispatch-wait`, and do not emit periodic progress recaps. End the turn after
+the ordinary one-time launch notice; the native hook wakes this session once.
+Only an explicit `poll-fallback` authorizes a model-owned bounded wait.
+
 Checked wrappers keep `capability_mode` separate from a non-owner
 `worker_mode`, which must equal its portable `unit`. A dispatch-depth-1 owner is
 `_kernel/owner` with no worker mode; contradictory owner/stage tuples fail

@@ -29,6 +29,7 @@ import bootstrap
 import runtime_activation
 import extensions
 import distribution
+import codex_launcher
 from drivers import get_driver, RUNTIMES
 
 # Exit codes map one-to-one to the PRD CLI table.
@@ -533,6 +534,33 @@ def cmd_uninstall(args):
     checks = []
 
     for rt in runtimes:
+        if rt == "codex":
+            try:
+                launcher_result = codex_launcher.uninstall(dry_run=args.dry_run)
+                lines.append(
+                    "uninstall: codex — managed launcher "
+                    + launcher_result["status"]
+                )
+                checks.append(
+                    {
+                        "id": "codex.managed-launcher",
+                        "ok": True,
+                        "detail": launcher_result["status"],
+                    }
+                )
+            except codex_launcher.CodexLauncherError as exc:
+                lines.append(f"uninstall: codex — managed launcher blocked: {exc}")
+                checks.append(
+                    {"id": "codex.managed-launcher", "ok": False, "detail": str(exc)}
+                )
+                return {
+                    "runtime": runtimes,
+                    "channel": "dev",
+                    "checks": checks,
+                    "drift": [],
+                    "exit": EXIT_BLOCKED,
+                    "lines": lines,
+                }
         manifest_path = manifest._manifest_path(rt, args.scope)
         manifest_data = manifest._load_manifest(manifest_path)
 
@@ -626,7 +654,7 @@ def cmd_runtime(args):
     snapshots = []
 
     try:
-        if args.runtime_command in {"activate", "refresh"} and len(targets) > 1:
+        if args.runtime_command in {"activate", "refresh"}:
             source = args.source if args.runtime_command == "activate" else None
             for runtime in targets:
                 snapshots.append(
@@ -669,6 +697,27 @@ def cmd_runtime(args):
                 f"freshness={freshness} "
                 f"next={report.get('next_action', 'none')}"
             )
+        if args.runtime_command in {"activate", "refresh"} and "codex" in targets:
+            try:
+                launcher_result = codex_launcher.install()
+            except codex_launcher.CodexUnavailableError as exc:
+                launcher_result = {
+                    "action": "managed-launcher",
+                    "status": "skipped-unavailable",
+                    "target": str(codex_launcher.wrapper_path(codex_launcher.default_bin_dir())),
+                    "detail": str(exc),
+                }
+            except codex_launcher.CodexLauncherError as exc:
+                raise runtime_activation.ActivationError(
+                    f"Codex managed launcher installation failed: {exc}"
+                ) from exc
+            lines.append(
+                "codex: managed-launcher "
+                f"status={launcher_result['status']} target={launcher_result['target']}"
+            )
+            for report in reports:
+                if report.get("runtime") == "codex":
+                    report["managed_launcher"] = launcher_result
     except runtime_activation.ActivationError as exc:
         rollback_errors = []
         for snapshot in reversed(snapshots):
