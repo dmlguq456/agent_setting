@@ -635,10 +635,61 @@ if [ "$prompt_contract_ok" = 1 ]; then
 else
   bad "D-35: a runtime distill prompt is missing PROTECTED PENDING"
 fi
-if ! grep -q '"action":"prune"' "$OPENCODE_DISTILL" && grep -q 'increment/add-only' "$OPENCODE_DISTILL"; then
+# A4 added a curate branch that legitimately names destructive actions
+# (prune/merge/graduate/reattribute), so the increment/add-only assertion must
+# scope to the increment prompt heredoc only, not the whole worker file.
+opencode_increment_prompt=$(awk '
+  /You are a memory distillation worker\./ { flag=1 }
+  flag { print }
+  flag && /^EOF$/ { exit }
+' "$OPENCODE_DISTILL")
+if ! printf '%s\n' "$opencode_increment_prompt" | grep -q '"action":"prune"' \
+  && printf '%s\n' "$opencode_increment_prompt" | grep -q 'increment/add-only'; then
   ok "D-35: OpenCode increment prompt exposes add-only actions"
 else
   bad "D-35: OpenCode increment prompt still exposes destructive actions"
+fi
+opencode_curate_prompt=$(awk '
+  /You are a no-tools session memory curator\./ { flag=1 }
+  flag { print }
+  flag && /^EOF$/ { exit }
+' "$OPENCODE_DISTILL")
+if printf '%s\n' "$opencode_curate_prompt" | grep -q '"action":"add"' \
+  && printf '%s\n' "$opencode_curate_prompt" | grep -q '"action":"reinforce"' \
+  && printf '%s\n' "$opencode_curate_prompt" | grep -q '"action":"merge"' \
+  && printf '%s\n' "$opencode_curate_prompt" | grep -q '"action":"prune"' \
+  && printf '%s\n' "$opencode_curate_prompt" | grep -q '"action":"graduate"' \
+  && printf '%s\n' "$opencode_curate_prompt" | grep -q '"action":"reattribute"' \
+  && ! printf '%s\n' "$opencode_curate_prompt" | grep -q '"action":"delete"' \
+  && ! printf '%s\n' "$opencode_curate_prompt" | grep -q '"action":"consume"'; then
+  ok "A4: OpenCode curate prompt names exactly the six allowed actions"
+else
+  bad "A4: OpenCode curate prompt should name exactly the six allowed actions and no delete/consume"
+fi
+
+echo "== A4 OpenCode distill-worker mode/lock/advance =="
+if "$OPENCODE_DISTILL" -h 2>&1 | grep -q 'increment|curate'; then
+  ok "A4: OpenCode distill-worker usage documents increment|curate"
+else
+  bad "A4: OpenCode distill-worker usage should document increment|curate"
+fi
+if OPENCODE_DISTILL_ENABLE=1 "$OPENCODE_DISTILL" a4-badmode /tmp bogus-mode >/tmp/a4_badmode.out 2>/tmp/a4_badmode.err; then
+  bad "A4: OpenCode distill-worker should reject an unknown mode"
+else
+  [ "$?" -eq 64 ] && ok "A4: OpenCode distill-worker rejects an unknown mode (exit 64)" \
+    || bad "A4: OpenCode distill-worker wrong exit for unknown mode"
+fi
+if MEM_DISTILL=1 OPENCODE_DISTILL_ENABLE=1 "$OPENCODE_DISTILL" a4-recursion /tmp increment >/tmp/a4_recursion.out 2>/tmp/a4_recursion.err \
+  && [ ! -s /tmp/a4_recursion.out ]; then
+  ok "A4: OpenCode distill-worker MEM_DISTILL=1 stays a no-op"
+else
+  bad "A4: OpenCode distill-worker should stay a no-op under MEM_DISTILL=1"
+fi
+if "$OPENCODE_DISTILL" a4-disabled /tmp increment >/tmp/a4_disabled.out 2>/tmp/a4_disabled.err \
+  && [ ! -s /tmp/a4_disabled.out ]; then
+  ok "A4: OpenCode distill-worker exits 0 with no output when OPENCODE_DISTILL_ENABLE is unset"
+else
+  bad "A4: OpenCode distill-worker should exit 0 silently when OPENCODE_DISTILL_ENABLE is unset"
 fi
 
 PEND_TMP="$(mktemp -d)"; CLEANUP+=("$PEND_TMP")

@@ -4319,6 +4319,102 @@ else
   bad "opencode session-end should debounce repeated triggers"
 fi
 
+# session-end selects curate: preflight.sh session-end passes "curate" as the
+# distill-worker's third positional argument (:756); distill-propose stays
+# increment. Both are asserted against the source, not a live model call.
+if grep -q 'distill-worker.sh" "\$sid" "\$cwd" curate' adapters/opencode/bin/preflight.sh; then
+  ok "opencode preflight session-end selects curate mode"
+else
+  bad "opencode preflight session-end should select curate mode"
+fi
+if awk '/distill-propose\)/{flag=1} flag{print} flag && /;;/{exit}' adapters/opencode/bin/preflight.sh \
+  | grep -q 'distill-worker.sh" "\$sid" "\$cwd"$'; then
+  ok "opencode preflight distill-propose stays default increment"
+else
+  bad "opencode preflight distill-propose should stay default increment"
+fi
+
+# A4: OpenCode distill-worker mode/lock/advance, using a stub OPENCODE_BIN so
+# no live model call is made. The stub reads/captures the fed prompt from
+# stdin so mode selection (increment vs curate) is verifiable without a model.
+OC_STUB="$TMP/oc-stub"
+mkdir -p "$OC_STUB"
+cat > "$OC_STUB/opencode" <<'STUBEOF'
+#!/bin/sh
+cat > "$OPENCODE_STUB_CAPTURE" 2>/dev/null || true
+STUBEOF
+chmod +x "$OC_STUB/opencode"
+OC_STUB_FAIL="$TMP/oc-stub-fail"
+mkdir -p "$OC_STUB_FAIL"
+cat > "$OC_STUB_FAIL/opencode" <<'STUBEOF'
+#!/bin/sh
+exit 1
+STUBEOF
+chmod +x "$OC_STUB_FAIL/opencode"
+
+OC_CAPTURE_CURATE="$TMP/opencode-curate-capture.txt"
+OC_STORE_CURATE="$TMP/oc-store-curate"
+if OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" OPENCODE_DISTILL_ENABLE=1 OPENCODE_BIN="$OC_STUB/opencode" \
+   OPENCODE_STUB_CAPTURE="$OC_CAPTURE_CURATE" MEM_STORE="$OC_STORE_CURATE" \
+   "$OPENCODE_DISTILL" oc-curate-sid "$TMP/flowproj" curate >/tmp/opencode_curate.out 2>/tmp/opencode_curate.err \
+   && grep -q 'no-tools session memory curator' "$OC_CAPTURE_CURATE"; then
+  ok "opencode distill worker curate mode builds the curator prompt"
+else
+  bad "opencode distill worker curate mode should build the curator prompt"
+fi
+OC_CAPTURE_INCREMENT="$TMP/opencode-increment-capture.txt"
+OC_STORE_INCREMENT="$TMP/oc-store-increment"
+if OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" OPENCODE_DISTILL_ENABLE=1 OPENCODE_BIN="$OC_STUB/opencode" \
+   OPENCODE_STUB_CAPTURE="$OC_CAPTURE_INCREMENT" MEM_STORE="$OC_STORE_INCREMENT" \
+   "$OPENCODE_DISTILL" oc-increment-sid "$TMP/flowproj" >/tmp/opencode_increment_mode.out 2>/tmp/opencode_increment_mode.err \
+   && grep -q 'You are a memory distillation worker' "$OC_CAPTURE_INCREMENT" \
+   && ! grep -q 'no-tools session memory curator' "$OC_CAPTURE_INCREMENT"; then
+  ok "opencode distill worker defaults to increment mode and builds the increment prompt"
+else
+  bad "opencode distill worker should default to increment mode"
+fi
+OC_STORE_LOCK="$TMP/oc-store-lock"
+mkdir -p "$OC_STORE_LOCK/.opencode-distill-lock-oc-locksid"
+if OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" OPENCODE_DISTILL_ENABLE=1 OPENCODE_BIN="$OC_STUB/opencode" MEM_STORE="$OC_STORE_LOCK" \
+   "$OPENCODE_DISTILL" oc-locksid "$TMP/flowproj" increment >/tmp/opencode_lock.out 2>/tmp/opencode_lock.err \
+   && grep -q 'another distill in progress' /tmp/opencode_lock.err; then
+  ok "opencode distill worker skips when the same-sid lock is already held"
+else
+  bad "opencode distill worker should skip when the same-sid lock is already held"
+fi
+rmdir "$OC_STORE_LOCK/.opencode-distill-lock-oc-locksid" 2>/dev/null || true
+
+OC_STORE_ADV="$TMP/oc-store-adv"
+if OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" OPENCODE_DISTILL_ENABLE=1 OPENCODE_DISTILL_APPLY=1 OPENCODE_BIN="$OC_STUB/opencode" MEM_STORE="$OC_STORE_ADV" \
+   "$OPENCODE_DISTILL" oc-adv-sid "$TMP/flowproj" increment >/tmp/opencode_adv.out 2>/tmp/opencode_adv.err \
+   && AGENT_HOME="$ROOT" MEM_STORE="$OC_STORE_ADV" OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" \
+      python3 "$ROOT/tools/memory/mem.py" distill oc-adv-sid --source opencode >/tmp/opencode_adv_check.out 2>/tmp/opencode_adv_check.err \
+   && [ ! -s /tmp/opencode_adv_check.out ]; then
+  ok "opencode distill worker advances the marker after a successful exec in apply mode"
+else
+  bad "opencode distill worker should advance the marker after a successful exec in apply mode"
+fi
+OC_STORE_NOADV="$TMP/oc-store-noadv"
+OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" OPENCODE_DISTILL_ENABLE=1 OPENCODE_DISTILL_APPLY=1 OPENCODE_BIN="$OC_STUB_FAIL/opencode" OPENCODE_DISTILL_TIMEOUT=5 MEM_STORE="$OC_STORE_NOADV" \
+  "$OPENCODE_DISTILL" oc-noadv-sid "$TMP/flowproj" increment >/tmp/opencode_noadv.out 2>/tmp/opencode_noadv.err
+if AGENT_HOME="$ROOT" MEM_STORE="$OC_STORE_NOADV" OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" \
+   python3 "$ROOT/tools/memory/mem.py" distill oc-noadv-sid --source opencode >/tmp/opencode_noadv_check.out 2>/tmp/opencode_noadv_check.err \
+   && [ -s /tmp/opencode_noadv_check.out ]; then
+  ok "opencode distill worker does not advance the marker on a failed exec"
+else
+  bad "opencode distill worker should not advance the marker on a failed exec"
+fi
+OC_STORE_PREVIEW="$TMP/oc-store-preview"
+OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" OPENCODE_DISTILL_ENABLE=1 OPENCODE_BIN="$OC_STUB/opencode" MEM_STORE="$OC_STORE_PREVIEW" \
+  "$OPENCODE_DISTILL" oc-preview-sid "$TMP/flowproj" increment >/tmp/opencode_preview.out 2>/tmp/opencode_preview.err
+if AGENT_HOME="$ROOT" MEM_STORE="$OC_STORE_PREVIEW" OPENCODE_EXPORT_FILE="$TMP/opencode-export.json" \
+   python3 "$ROOT/tools/memory/mem.py" distill oc-preview-sid --source opencode >/tmp/opencode_preview_check.out 2>/tmp/opencode_preview_check.err \
+   && [ -s /tmp/opencode_preview_check.out ]; then
+  ok "opencode distill worker does not advance the marker on a preview-only (non-apply) run"
+else
+  bad "opencode distill worker should not advance the marker on a preview-only run"
+fi
+
 echo "== SD-11b stage-dispatch gate (deny 상향 + opt-out + intensity 불명) =="
 # (i) conductor + standard + code-plan, NO opt-out → HARD DENY (CLI: exit 2, stderr ⛔)
 err=$(CLAUDE_CODE_CHILD_SESSION=1 AGENT_DISPATCH_SELF_SLUG=cyc "$SDR" --skill code-plan --dispatch-depth 1 --intensity standard 2>&1 >/dev/null); rc=$?

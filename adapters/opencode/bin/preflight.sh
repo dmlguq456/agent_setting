@@ -765,7 +765,7 @@ EOF
     AGENT_HOME="$AGENT_ROOT" \
       OPENCODE_DISTILL_ENABLE="${OPENCODE_DISTILL_ENABLE:-1}" \
       OPENCODE_DISTILL_APPLY="${OPENCODE_DISTILL_APPLY:-1}" \
-      "$ROOT/adapters/opencode/bin/distill-worker.sh" "$sid" "$cwd"
+      "$ROOT/adapters/opencode/bin/distill-worker.sh" "$sid" "$cwd" curate
     ;;
   role)
     [ "$#" -ge 2 ] || { echo "opencode preflight: role requires a portable role" >&2; exit 64; }
