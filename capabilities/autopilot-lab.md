@@ -88,11 +88,14 @@ separable stage inline requires the recorded reason in the experiment
 
 Full-run entry is gated by a current hash-bound smoke attestation and detached
 resource-run identity. Evaluation reports use one `report_manifest.json`
-validated by `tools/report-manifest-verify.py` for Markdown and HTML outputs,
-48 kHz/full-band media, summary statistics, hashes, 1:1
-audio/waveform/spectrogram/playback sets, and visual evidence. The legacy
-figure-semantic verifier remains a compatibility checker, not a second report
-manifest.
+validated by `tools/report-manifest-verify.py` for 48 kHz/full-band media, summary statistics, hashes,
+1:1 audio/waveform/spectrogram/playback sets, and visual evidence. Its optional `bundle`
+block declares each representation's `format`, `roles`, and file binding plus one shared
+`title` and one `primary_representation_id`; for audio/media evaluations the playback HTML
+is the primary `interactive` representation and `REPORT.md` is its `summary`/`navigation`
+companion, not an interchangeable equivalent format. A manifest without `bundle` stays
+readable and is classified `legacy/unspecified`. The legacy figure-semantic verifier
+remains a compatibility checker, not a second report manifest.
 
 `autopilot-lab` owns new empirical work: training setup, checkpoint
 reevaluation, metric/ablation computation, and experiment figure/media

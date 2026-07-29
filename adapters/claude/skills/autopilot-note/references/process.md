@@ -17,7 +17,8 @@ For each source:
 3. Extract note material: results, decisions, hypotheses, metrics, and next steps.
 4. Extract L1 attachment hints from frontmatter `project` or pipeline-state `task_card`.
 5. Extract L2 attachment hints from architecture and task keywords plus reusable-asset emergence signals.
-6. Return `[(source, keywords, note_material, l1_hints, l2_hints)]`.
+6. When the source carries a `report_manifest.json`, read it and build `report_bundle`: `classification` (`declared` when a `bundle` block is present, otherwise `legacy/unspecified`), the `manifest` path, `title`, `primary_representation_id`, and one row per representation with `id`, `format`, `roles`, resolved `path`, and `sha256`. For a legacy manifest record `legacy/unspecified` with null `title` and `primary_representation_id` and no representations; never infer a role, a primary, or equivalence from a filename, an extension, or the fact that two outputs coexist.
+7. Return `[(source, keywords, note_material, l1_hints, l2_hints, report_bundle)]`.
 
 ### Stage C — Target matching
 
@@ -26,7 +27,7 @@ Apply Target Resolution to each source and return:
 ```
 [(source, note_id, card_id, backbone_ids, task_ids, paper_id, intent, work_status,
   routing_status, routing_confidence, routing_reason, matched_signals[],
-  run_id, run_at, emerge_catalog[])]
+  run_id, run_at, emerge_catalog[], report_bundle)]
 ```
 
 `run_id` and `run_at` identify one execution batch. Set them once when Stage A begins and apply the same values to every note in that run: `run-{YYYYMMDD}-{HHMM}`.
@@ -46,7 +47,7 @@ When a reviewer raises an issue, record it in `_internal/reviews/round_{N}.md` a
 
 1. **Create L2 notes (#1, #2, #3, #4):**
    - Create `<target>/_layer2/notes/<id>.md`. Derive `id` as `note-{YYYYMMDD}-{six-character source-path hash}` for idempotency.
-   - Write frontmatter for `card_id`, **`secondary_card_ids`** (multiple secondary card links, v32), `backbone_ids`, `task_ids`, `paper_id`, `intent`, `work_status`, `routing_status`, **`routing_confidence`, `routing_reason`, `matched_signals`, `run_id`, and `run_at`**, plus `created_at` and `source`. Always record `routing_status: confirmed`.
+   - Write frontmatter for `card_id`, **`secondary_card_ids`** (multiple secondary card links, v32), `backbone_ids`, `task_ids`, `paper_id`, `intent`, `work_status`, `routing_status`, **`routing_confidence`, `routing_reason`, `matched_signals`, `run_id`, and `run_at`**, plus `created_at`, `source`, and `report_bundle` (carried through unchanged from Stage B; omit the block when the source has no manifest). Always record `routing_status: confirmed`.
    - Write a readable summary of the source: results, decisions, metrics, next steps, and `[[links]]`. Follow the selected audience language rather than imposing a fixed locale.
 2. **Emerge L2 catalog entries (#3):**
    - When a referenced backbone, task, or paper slug is absent under `<target>/_layer2/{backbones,tasks,papers}/`, create the entry from that directory's README frontmatter specification and log the emergence.

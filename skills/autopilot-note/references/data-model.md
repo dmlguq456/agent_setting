@@ -36,11 +36,26 @@ matched_signals: [project:TF-Restormer, path:plans/2026-..._exp-043, kw:ablation
 run_id: run-20260610-0500       # Nightly batch that created this note
 run_at: 2026-06-10T05:00:00.000Z
 created_at: 2026-06-09T00:00:00.000Z
-source: <artifact-root>/plans/2026-06-08_x/   # Original artifact path (idempotency-check key)
+source: <artifact-root>/experiments/2026-06-08_x/   # Original artifact path (idempotency-check key)
+report_bundle:                       # Present when the source carries a report_manifest.json
+  classification: declared           # declared | legacy/unspecified
+  manifest: <artifact-root>/experiments/2026-06-08_x/report_manifest.json
+  title: "Audio evaluation — checkpoint 18000"
+  primary_representation_id: playback
+  representations:
+    - {id: playback, format: html, roles: [interactive], path: report/report.html, sha256: <64 hex>}
+    - {id: summary, format: md, roles: [summary, navigation], path: REPORT.md, sha256: <64 hex>}
 ---
 
 A readable note derived from the artifact. Summarize results, decisions, hypotheses, and metrics, and include [[links]].
 ```
+
+`source` is the artifact **directory** path and remains the single-path idempotency key;
+`report_bundle.manifest` therefore carries the manifest file path separately.
+`report_bundle` is the routing payload the board uses to pick an opening target. Paths are
+already resolved against the manifest so a consumer never re-joins `outputs`. A legacy
+manifest records `classification: legacy/unspecified` with null `title` and
+`primary_representation_id` and an empty `representations` list — never a guessed primary.
 
 ## Position in the autopilot family
 

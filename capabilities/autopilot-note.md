@@ -33,6 +33,8 @@ cron uses `quick` intensity and its derived rigor; use `standard+` for weekly
 bulk consolidation, Notion migration, or pre-handoff cleanup. Source 6 is the
 gated Phase 3 Notion mirror.
 
+When a source artifact carries a `report_manifest.json`, the note preserves its bundle metadata as a `report_bundle` block — classification, shared title, `primary_representation_id`, and each representation's `id`, `format`, `roles`, resolved path, and hash — instead of flattening the outputs into an unlabeled pair. `source` remains the single-path idempotency key.
+
 Publication is part of this capability contract: Stages A–F culminate in the deterministic Stage G `publish cycle`. Skipped or failed publication is surfaced without invalidating Markdown already written; mechanics live in the process contract.
 
 Adapters may expose this capability through native commands, skill files, prompt instructions, or explicit wrappers. The adapter must report unsupported runtime mechanics instead of silently treating another runtime's native file format as portable.
