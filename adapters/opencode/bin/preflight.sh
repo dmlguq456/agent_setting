@@ -64,6 +64,8 @@ usage() {
   cat <<'EOF'
 usage: preflight.sh write <file> [session-id]
        preflight.sh read <file> [session-id]
+       preflight.sh material-route <bind|check|clear> [options]
+       preflight.sh worktree-path --tool <tool> [--command <cmd>] [--cwd <dir>] [--session <id>]
        preflight.sh capability <name> [cwd] [session-id]
        preflight.sh skill <name> [cwd] [session-id]
        preflight.sh memory [cwd]
@@ -227,6 +229,16 @@ case "$cmd" in
     "$ROOT/hooks/core-first-guard.sh" --file "$file" --session "$sid"
     "$ROOT/hooks/artifact-guard.sh" --file "$file" --session "$sid"
     "$ROOT/hooks/builtin-memory-guard.sh" --file "$file"
+    "$0" material-route check --tool Write --file "$file" --cwd "$(dirname "$file")" --session "$sid"
+    ;;
+  material-route)
+    [ "$#" -ge 2 ] || { echo "opencode preflight: material-route requires an action" >&2; exit 64; }
+    shift
+    exec python3 "$ROOT/hooks/material-route-guard.py" --agent-home "$ROOT" "$@"
+    ;;
+  worktree-path)
+    shift
+    exec "$ROOT/hooks/worktree-path-guard.sh" "$@"
     ;;
   read)
     [ "$#" -ge 2 ] || { echo "opencode preflight: read requires a file path" >&2; exit 64; }
@@ -766,7 +778,42 @@ EOF
       exit 64
     fi
     shift
-    exec python3 "$ROOT/utilities/capability-route.py" compile "$@"
+    # D1: bind only after a successful compile with exactly one --output, a
+    # --cwd, and a nonempty OPENCODE_SESSION_ID (from the plugin's shell.env
+    # hook). Scan the already-tokenized argv only, never the command text.
+    # No --output (optional on the compiler), no sid, more than one --output,
+    # or a nonzero compile all pass through unbound and silently, preserving
+    # the compiler's own stdout/stderr/exit status.
+    output_count=0
+    output_val=""
+    cwd_val=""
+    prev=""
+    for a in "$@"; do
+      case "$a" in
+        --output=*) output_count=$((output_count + 1)); output_val=${a#--output=} ;;
+        --cwd=*) cwd_val=${a#--cwd=} ;;
+      esac
+      case "$prev" in
+        --output) output_count=$((output_count + 1)); output_val=$a ;;
+        --cwd) cwd_val=$a ;;
+      esac
+      prev=$a
+    done
+    set +e
+    python3 "$ROOT/utilities/capability-route.py" compile "$@"
+    compile_rc=$?
+    set -e
+    bind_rc=0
+    if [ "$compile_rc" -eq 0 ] && [ "$output_count" -eq 1 ] && [ -n "$cwd_val" ] && [ -n "${OPENCODE_SESSION_ID:-}" ]; then
+      set +e
+      "$0" material-route bind --route "$output_val" --cwd "$cwd_val" --session "$OPENCODE_SESSION_ID"
+      bind_rc=$?
+      set -e
+    fi
+    if [ "$bind_rc" -ne 0 ]; then
+      exit "$bind_rc"
+    fi
+    exit "$compile_rc"
     ;;
   worker-route)
     shift

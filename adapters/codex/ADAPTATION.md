@@ -438,6 +438,7 @@ Codex-native counterpart today.
 | mode guides | Use `adapters/codex/modes/<family>/<mode>.md` as the Codex-native realization guide reported by `mode-info`; satisfy named tool contracts or report unavailable before claiming support |
 | design modes | Use `adapters/codex/modes/design/<mode>.md` as the Codex-native realization guide; satisfy `visual-harness` or report unavailable before claiming rendered visual verification |
 | hook invariants | `pretooluse-write-guard.py` owns only material-route and targeted write safety. `stop-lifecycle.py` is a silent no-op with no subprocess, lifecycle, registry, or completion authority. Deterministic tests assert that wildcard PreToolUse, Stop joins/blocks/subprocesses, new `codex-stop-hook` stamps, and parent-state writes are absent; legacy exact-terminal harvest recovery remains covered separately. Session, prompt, permission, read-marker, design-check, native-subagent, and explicit preflight fallback mappings remain unchanged |
+| worktree path isolation | The native shell PreToolUse bridge (`pretooluse-write-guard.py`) runs the worktree guard before material-route in its shell branch, with `preflight.sh worktree-path` as the explicit fallback. This covers shell `git worktree add`; the built-in-worktree-tool deny is Claude-native and has no Codex counterpart |
 | capabilities | Read `capabilities/README.md`, then run `adapters/codex/bin/preflight.sh capability-info <capability>`; do not assume Claude Skill invocation |
 
 For a manual/completion race, a managed Codex gateway accepts same-turn
