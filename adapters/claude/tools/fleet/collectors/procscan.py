@@ -9,12 +9,26 @@ process holding that cwd; the liveness layer paints it stale/dead — honest obs
 no fragile broker-vs-leaf heuristics).
 """
 import os
+import re
 import subprocess
 
 from ..model import Session, etime_to_min
 
 HARNESSES = ("claude", "codex", "opencode")
 _DELETED = " (deleted)"
+
+# Managed (client-server) Codex keeps one state dir per session and carries its socket
+# paths in argv: `--listen unix://<dir>/app-server.sock` on the session process that owns
+# the rollout fd, and `--remote unix://<dir>/managed-tui.sock` on the visible TUI client.
+# <dir> is the only deterministic join key between the two halves (see collectors/codex.py
+# prepare_tick). Parsed here because a Session row keeps no argv.
+_MANAGED_DIR_RE = re.compile(r"(?:unix://)?(/[^\s]*/managed-sessions/[^/\s]+)/[^/\s]+\.sock(?:\s|$)")
+
+
+def _managed_dir(args):
+    """Managed-codex session state dir from argv, else None (exact match only, no guessing)."""
+    match = _MANAGED_DIR_RE.search(args or "")
+    return match.group(1) if match else None
 
 
 def _read_cwd(pid):
@@ -328,6 +342,7 @@ def scan(harness_filter=None):
             cwd=cwd,
             orphan=orphan,
             app_server=app_server,
+            managed_dir=_managed_dir(args) if comm == "codex" else None,
             is_child=is_child,
             detached=detached,
             elapsed_min=etime_to_min(etime),

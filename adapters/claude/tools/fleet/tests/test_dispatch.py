@@ -206,6 +206,108 @@ class RegistryHomeTest(unittest.TestCase):
             ])
 
 
+# --- D1b: installed per-runtime-home registries (<runtime-home>/.harness/dispatch/jobs.log)
+class InstalledRuntimeRegistryTest(unittest.TestCase):
+    """An activated install roots its agent home at <runtime-home>/.harness/, so its
+    canonical registry is NOT <agent-home>/.dispatch/jobs.log. Fleet must read those too
+    or a managed-Codex dispatch is invisible (jobs=0 + is_child session hiding)."""
+
+    def _homes(self, tmp, present=()):
+        homes = {
+            "codex": os.path.join(tmp, ".codex"),
+            "claude": os.path.join(tmp, ".claude"),
+            "opencode": os.path.join(tmp, ".config", "opencode"),
+        }
+        made = {}
+        for name in present:
+            path = os.path.join(homes[name], ".harness", "dispatch", "jobs.log")
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("")
+            made[name] = path
+        return homes, made
+
+    def _env(self, tmp, homes):
+        return {
+            "HOME": tmp,
+            "CODEX_HOME": homes["codex"],
+            "CLAUDE_CONFIG_DIR": homes["claude"],
+        }
+
+    def test_only_existing_installed_registries_are_candidates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            homes, made = self._homes(tmp, present=("codex", "opencode"))
+            with mock.patch.dict(os.environ, self._env(tmp, homes), clear=True):
+                self.assertEqual(
+                    dispatch._installed_registry_paths(),
+                    [made["codex"], made["opencode"]],
+                )
+
+    def test_no_installed_registry_keeps_legacy_only_behavior(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            homes, _ = self._homes(tmp)
+            with mock.patch.dict(os.environ, self._env(tmp, homes), clear=True):
+                self.assertEqual(dispatch._installed_registry_paths(), [])
+
+    def test_candidate_paths_append_installed_registries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            homes, made = self._homes(tmp, present=("codex", "claude"))
+            agent_jobs = os.path.join(tmp, "agent_setting", ".dispatch", "jobs.log")
+            with mock.patch.dict(os.environ, self._env(tmp, homes), clear=True), \
+                 mock.patch.object(dispatch, "_jobs_path", return_value=agent_jobs):
+                self.assertEqual(dispatch._candidate_jobs_paths(), [
+                    agent_jobs, made["codex"], made["claude"],
+                ])
+
+    def test_explicit_override_stays_a_single_registry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            homes, _ = self._homes(tmp, present=("codex",))
+            with mock.patch.dict(os.environ, self._env(tmp, homes), clear=True):
+                self.assertEqual(
+                    dispatch._candidate_jobs_paths(override="/override/jobs.log"),
+                    ["/override/jobs.log"],
+                )
+
+    def test_env_registry_stays_a_single_registry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            homes, _ = self._homes(tmp, present=("codex",))
+            env = dict(self._env(tmp, homes), AGENT_DISPATCH_JOBS="/env/jobs.log")
+            with mock.patch.dict(os.environ, env, clear=True):
+                self.assertEqual(dispatch._candidate_jobs_paths(), ["/env/jobs.log"])
+
+    def test_installed_registry_duplicate_is_deduped_by_realpath(self):
+        """CLAUDE_CONFIG_DIR pointing at the codex home must not yield the row twice."""
+        with tempfile.TemporaryDirectory() as tmp:
+            homes, made = self._homes(tmp, present=("codex",))
+            homes["claude"] = homes["codex"]
+            agent_jobs = os.path.join(tmp, "agent_setting", ".dispatch", "jobs.log")
+            with mock.patch.dict(os.environ, self._env(tmp, homes), clear=True), \
+                 mock.patch.object(dispatch, "_jobs_path", return_value=agent_jobs):
+                self.assertEqual(dispatch._candidate_jobs_paths(),
+                                 [agent_jobs, made["codex"]])
+
+    def test_open_row_in_installed_codex_registry_becomes_a_dispatch_job(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            homes, made = self._homes(tmp, present=("codex",))
+            with open(made["codex"], "w", encoding="utf-8") as f:
+                f.write(
+                    "2026-07-29T08:49:46+00:00\topen\trepo\t%s\tmanaged-child\t"
+                    "capability=autopilot-code,harness=claude,dispatch_depth=1,"
+                    "parent_sid=019facc9-fe83-7480-89f6-9e64fbebf0ca,"
+                    "attempt_id=att-installed00001\n" % tmp
+                )
+            agent_jobs = os.path.join(tmp, "agent_setting", ".dispatch", "jobs.log")
+            with mock.patch.dict(os.environ, self._env(tmp, homes), clear=True), \
+                 mock.patch.object(dispatch, "_jobs_path", return_value=agent_jobs), \
+                 mock.patch.object(dispatch, "_scan_processes", return_value=[]), \
+                 mock.patch.object(dispatch, "_dispatch_liveness", return_value="working"):
+                jobs = dispatch.collect()
+
+        row = next(j for j in jobs if j.slug == "managed-child")
+        self.assertEqual(row.source, "jobs")
+        self.assertEqual(row.attempt_id, "att-installed00001")
+
+
 # --- D2: runtime home (_proj_home / claude._home) must NOT follow the registry home ---
 class RuntimeHomeIndependenceTest(unittest.TestCase):
 
