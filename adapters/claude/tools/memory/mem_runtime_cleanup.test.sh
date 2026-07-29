@@ -1,0 +1,1 @@
+../../../../tools/memory/mem_runtime_cleanup.test.sh
