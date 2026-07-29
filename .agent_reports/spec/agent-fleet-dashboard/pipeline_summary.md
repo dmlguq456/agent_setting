@@ -1,5 +1,34 @@
 # agent-fleet-dashboard — Spec Pipeline Summary
 
+## 2026-07-28 · v28 fallback degradation 관측
+
+Fleet가 정상 동작만 가정해 온 경계를 닫는다. 2026-07-28 사고에서 owner는 inline으로 강등해
+실제로 작업을 진행했지만 화면은 37분 `preparing…`, 이어 51분 `pending`이었고, 병렬 batch의 codex
+leg 실패(`exit_code=65`)는 어느 표면에도 없었다. 원인은 Fleet의 판정 결함이 아니라 소비할 기록이
+없다는 것이었고, 생산 계약은 stage-dispatch v34 SD-93이 새로 소유한다.
+
+- 강등 실행을 6번째 canonical node state `degraded`로 투영한다. `_node_state()`의 마지막
+  `pending` 직전 한 곳에만 분기를 넣고 기존 6분기는 손대지 않는다. ledger는 상태 소스 위계의
+  네 번째이자 최약 계층이며 `active`를 주조할 수 없다 — `active`는 job 핸들에서 pid·model·effort를
+  꺼내 렌더하게 만들고 강등 실행에는 그 핸들이 없다.
+- 표시는 `◐`(반쪽 잉크) · amber · blink 없음 · `(hop·reason)`이며 pid·model·effort는 미렌더한다.
+  기존 잉크 농도 사다리(`● > ○ > ◌`) 안에서 고른 글리프이고 `~`·흰 바·reverse 배지·대문자 배지는
+  전부 기각 이력이다. 경과는 강등 이후만 세며 시간 임계에 따른 자동 `failed` 전이는 금지한다.
+- 실패 leg는 상태가 아니라 alert다. 기존 alert 표면에 네 번째 버킷 `degradation`을 추가하고
+  leg 좌표(`i/n`)를 명시해 sibling을 묶어 숨기지 않는다. route당 N=3 상한을 넘긴 분량은 침묵하지
+  않고 잘림을 명시한다.
+- SD-50의 "without claiming Fleet parity"에 조작적 정의를 부여했다 — pid 미렌더, kill 커서 대상
+  제외, model·effort 미렌더, `--json`에 `registered_worker: 0`과 `fleet_visibility` 노출.
+  규범 본문은 SD-50이 계속 소유하고 Fleet PRD는 조작적 정의만 소유한다.
+- 개정을 여는 김에 기존 드리프트도 닫았다. `node_state` 정규형에서 `reconciling`이 빠지고 코드에
+  없는 `unknown`이 들어 있던 F-36a를 실측 반환 집합과 정합화했고, 병렬 집계 우선순위에
+  `degraded`를 `reconciling` 위로 넣었다(끝난 노드의 marker 대기보다 관측 불가 진행이 덜 끝난
+  상태다).
+
+정직성 경계는 그대로다. inline 실행 내부의 진행률·도구 호출 수·실제 사용 모델은 추정하지 않고,
+ledger는 *결정*을 증명하지 *실행*을 증명하지 않는다. 강등 이력 조회 표면은 이번 범위 밖이며
+구현은 다음 autopilot-code 사이클이다. 구현 첫 단계는 `◐`/`◑`의 실터미널 폭·글리프 실측이다.
+
 ## 2026-07-27 · v25 route completion reconciliation
 
 BC_ResNet_tf의 frame depth-2 workers가 terminal output을 남긴 뒤 owner의 exact
@@ -343,3 +372,23 @@ contract/unit 라벨과 중복 표시하지 않는다.
   live `--once`에서 현재 main은 `code(debug·direct)`, capability 없는 과거 main은 `-`로 확인했다.
 - 전체 `portable-guards.test.sh`는 관련 route/write/hook 및 신규 F-43 케이스가 통과했으나,
   현 설치/runtime projection·dispatch/drill fixture의 기존 환경 의존 15건은 별도 실패로 남았다.
+
+## 2026-07-29 · v29 correction — managed-codex 귀속·분사 레지스트리 가시성·done afterglow
+
+사용자 관찰 2건("codex가 아예 안 잡혀", "분사 세션이 안 보여")의 라이브 진단에서 두 결손을
+확정하고 구현 선행으로 고친 뒤 소급 등재한다(구현 선행·등재 후행 관례).
+
+- F-24 correction: managed(client-server) Codex는 rollout fd를 app-server가 쥐고 가시 행은
+  fd 없는 `--remote` TUI 클라이언트라, prepare_tick 예약이 오히려 가시 행의 fallback까지 막아
+  session_id/title/ctx%/working이 전부 결손이었다. 동일 managed-sessions 디렉토리 argv를
+  결정적 조인 증거로 rollout을 TUI 행에 이관한다(쌍 유일성 필수, donor sid 재청구 금지).
+  구현 `46845f17`.
+- 레지스트리 가시성: dispatch collector가 <agent-home>+legacy 두 경로만 읽어, managed Codex
+  부모가 분사한 잡(runtime home 레지스트리 등록)이 통째로 비가시였고 is_child 세션 숨김과
+  겹쳐 분사가 화면에서 사라졌다. 존재하는 runtime home의 `.harness/dispatch/jobs.log`를
+  additive·realpath-dedup 병합한다. 구현 `995108a2`.
+- F-46 신설(미구현 handoff): done 분사 행 15분 dim ✓ afterglow — 수 분짜리 quick 분사가 완료
+  직후 증발해 "안 보였다"로 인지되는 UX 결손의 계약화. killed/cancelled 제외, 표시층 전용.
+- 검증: hermetic 신규 테스트(managed 귀속 6건·레지스트리 병합), Fleet 전체 회귀 0, 라이브
+  smoke에서 managed TUI 행 sid/ctx% 회수와 codex-home 레지스트리 canary 분사 행 렌더를 실측
+  확인. main 병합 `1dd7a784`(tools/fleet ↔ adapters 양 트리 미러 포함).

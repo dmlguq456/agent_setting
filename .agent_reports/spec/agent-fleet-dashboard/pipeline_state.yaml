@@ -7,14 +7,20 @@ inputs:
   - research/agent-fleet-dashboard/01_tap_mechanics.md
   - spec/stage-dispatch/prd.md   # v2: SD-3·§9-13 스테이지 row 관제 parity
   - spec/prd.md                  # v3/F-19: Unified Memory System v15 Cluster J (write-events 저널 = F-19 소스)
+  - spec/stage-dispatch/prd.md   # v28/F-44~45: SD-93 degradation ledger = 소비 소스 (생산 계약은 stage-dispatch 소유)
+  - reviews/spec/fleet-fallback-observability/verdict.md  # v28: R1~R7 단일 결정 (2-way research + adversarial review)
 phases:
-  spec: done            # PRD v27: inline capability truth correction
+  spec: done            # PRD v29: managed-codex 귀속 + 분사 레지스트리 가시성 + F-46 afterglow
   scaffolding: deferred # lean — skeleton 은 autopilot-code 로 이월 (module 구조만 §9 확정)
   design: n/a           # 시각 UI 아님 (터미널 TUI 레이아웃은 PRD §4)
-  dev: done             # F-43 projection/router implementation + 926 Fleet regressions
-last_updated: 2026-07-27
-spec_version: v27
+  dev: pending          # F-44/F-45/F-46 미구현 — v28·v29 handoff (v29 귀속·레지스트리는 구현 선행 46845f17·995108a2, main 1dd7a784)
+last_updated: 2026-07-29
+spec_version: v29
 decisions_locked:
+  - 'F-24(v29 correction): managed Codex의 rollout은 동일 managed-sessions 디렉토리 argv 증거로 app-server에서 fd-less --remote TUI 행에 이관한다. (fd-owner, TUI) 쌍이 dir당 유일할 때만이며 donor는 sid를 재청구하지 않는다. dispatch collector는 존재하는 runtime home의 .harness/dispatch/jobs.log를 additive·realpath-dedup 병합하고 명시 AGENT_DISPATCH_JOBS는 단일 선택을 유지한다'
+  - 'F-46(v29): done 분사 행은 15분 dim ✓ afterglow 후 소거한다. blink 없음·카운트 제외·표시층 전용이며 killed/cancelled는 대상이 아니다'
+  - 'F-44(v28): 강등 실행은 6번째 canonical node state degraded로 투영한다. 소스는 SD-93 ledger(route_hash 일치·상위 6분기 미해당)이며 상태 소스 위계의 최약 계층이라 active를 주조할 수 없다. 표시는 ◐·amber·blink 없음·(hop·reason)이고 pid/model/effort는 미렌더하며 시간 임계 자동 failed 전이는 금지한다. node_state 정규형은 active|degraded|reconciling|failed|done|pending이고 unknown은 projection resolver 전용이다'
+  - 'F-45(v28): 실패 leg는 상태가 아니라 기존 alert 표면의 네 번째 버킷 degradation이다. leg 좌표 명시·event_id dedup·route당 N=3 상한과 잘림 명시를 강제하고, quick 강등은 계약 위반 문구로만·고아 event는 standalone alert로만 노출한다'
   - 'F-43(v27): spec-read marker는 active capability가 아니며 fresh exact-sid capability=autopilot-spec일 때만 inline spec breadcrumb를 허용한다; Codex router는 main-session capability marker를 best-effort 기록한다'
   - 'F-41(v25): exact shared-observer reconcile-needed는 route node reconciling/…로 표시하며 marker 전에는 done·gate·successor를 주장하지 않고 generic stale/dead는 계속 failed/✕다'
   - 'F-40(v23): capability_mode, worker_mode, unit은 독립 필드다. owner는 capability mode만 표시하고 legacy slash mode는 conflict이며, depth-2 worker mode는 JSON evidence로 보존하되 contract/unit과 중복 렌더하지 않는다'
