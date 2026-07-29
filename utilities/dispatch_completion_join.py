@@ -1443,7 +1443,13 @@ def close_finished_child(row: ChildRow, *, jobs: str | Path) -> str:
         artifact_root_metadata=metadata.get("artifact_root"),
     )
     if terminal.get("state") != "valid":
-        return "terminal-%s" % (terminal.get("state") or "absent")
+        # Carry the inspector's own enum: a bare `terminal-invalid` sends the
+        # next reader back through the parser to learn whether the envelope was
+        # missing, malformed, or a runtime error.  The enum is a fixed vocabulary,
+        # never raw agent text.
+        skip = "terminal-%s" % (terminal.get("state") or "absent")
+        detail = terminal.get("reason")
+        return f"{skip}:{detail}" if detail else skip
     if terminal.get("artifact_state") != "readable":
         return "evidence-%s" % (terminal.get("artifact_state") or "absent")
     # The inspector never returns a raw path — it hands back a bounded
