@@ -210,7 +210,7 @@ export const AgentHarnessGuards = async (ctx) => {
     // sessionID, only typed optional upstream), not a theoretical one — never
     // throw here, and set nothing when input.sessionID is absent.
     const sid = input && input.sessionID
-    if (!sid) return
+    if (!sid || !output) return
     if (!output.env) output.env = {}
     output.env.OPENCODE_SESSION_ID = sid
   },
