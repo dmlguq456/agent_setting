@@ -2122,10 +2122,14 @@ def _runtime_memory_cleanup_plan():
     """
     candidates = []
     manifest = {}
+    projects_root = PROJECTS.expanduser().resolve()
     con = get_con()
     try:
         for memory_dir in sorted(PROJECTS.glob("*/memory")):
-            if memory_dir.is_symlink() or not memory_dir.is_dir():
+            project_dir = memory_dir.parent
+            if (memory_dir.is_symlink() or project_dir.is_symlink()
+                    or not memory_dir.is_dir()
+                    or project_dir.resolve().parent != projects_root):
                 raise RuntimeError(f"unsafe runtime-memory path: {memory_dir}")
             project_ns = memory_dir.parent.name
             files = []
@@ -2217,6 +2221,11 @@ def cleanup_runtime_memory(apply=False, archive=None):
     if not archive:
         raise RuntimeError("--cleanup-runtime-memory --apply requires --cleanup-archive PATH")
     archive_path = _archive_runtime_memory(candidates, manifest, archive)
+    rechecked_candidates, rechecked_manifest = _runtime_memory_cleanup_plan()
+    if rechecked_candidates != candidates or rechecked_manifest != manifest:
+        raise RuntimeError(
+            f"runtime-memory sources changed after archive creation; preserved {archive_path}"
+        )
     for memory_dir in candidates:
         shutil.rmtree(memory_dir)
     print(f"  runtime cleanup archive: {archive_path}")

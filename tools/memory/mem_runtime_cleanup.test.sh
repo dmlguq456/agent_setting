@@ -31,6 +31,19 @@ test ! -e "$TMP/mismatch.tar.gz"
 
 printf '%s\n' 'A durable runtime-memory topic with enough detail to migrate.' \
   > "$MEM_PROJECTS/-tmp-project/memory/topic.md"
+mkdir -p "$TMP/external-project/memory"
+printf '%s\n' 'An external topic reached only through an unsafe project symlink.' \
+  > "$TMP/external-project/memory/external.md"
+ln -s "$TMP/external-project" "$MEM_PROJECTS/-linked-project"
+if python3 "$MEM" migrate --apply --cleanup-runtime-memory \
+    --cleanup-archive "$TMP/symlink.tar.gz" >/dev/null 2>&1; then
+  echo 'FAIL: symlinked project parent was accepted' >&2
+  exit 1
+fi
+test -f "$TMP/external-project/memory/external.md"
+test ! -e "$TMP/symlink.tar.gz"
+rm "$MEM_PROJECTS/-linked-project"
+
 python3 "$MEM" migrate --apply --cleanup-runtime-memory \
   --cleanup-archive "$TMP/recovery.tar.gz" >/dev/null
 test -f "$TMP/recovery.tar.gz"
