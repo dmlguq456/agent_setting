@@ -304,11 +304,6 @@ if len(seen) > 3: out.append(f"+{len(seen)-3}")
 print(" \033[1;37m/\033[0m ".join(out))
 ' "$S_CWD" 2>/dev/null || true)
 
-# 당직 보고 미처리 nudge (✅ 처리됨·"이상 없음" heartbeat 는 표시 안 함)
-latest_oncall=$(ls -t /home/nas/user/Uihyeop/notes/oncall/*.md 2>/dev/null | head -1 || true)
-if [ -n "$latest_oncall" ] && ! grep -qE '✅|이상 없음' "$latest_oncall" 2>/dev/null; then
-  segs_arr+=("${YEL}📋당직${RST}")
-fi
 # context gauge — mid-line ━/─ (fleet design): filled in the level color, empty track dim
 if [ "${S_CTX}" -ge 0 ] 2>/dev/null; then
   cc=$(pcol "$S_CTX")
