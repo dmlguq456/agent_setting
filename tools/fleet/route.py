@@ -487,7 +487,7 @@ def _is_reconciling_attempt(job):
     return True
 
 
-def _node_state(node_id, route_jobs, ev_by_node, now, completion_marked=False):
+def _node_state(node_id, route_jobs, ev_by_node, now, completion_marked=False, degradation=None):
     """One node's state, per the priority table (PRD F-41): active (live job) beats a
     published completion marker (done); explicit killed/cancelled/fail-note evidence beats
     exact reconciliation; the current exact ``reconcile-needed`` attempt becomes
@@ -570,6 +570,10 @@ def _node_state(node_id, route_jobs, ev_by_node, now, completion_marked=False):
         return {"state": "done", "elapsed_min": _ev_elapsed(ev, now), "model": ev.get("model"),
                 "harness": ev.get("harness"), "effort": ev.get("effort"), "pid": ev.get("pid"),
                 "note": note, "job": None}
+    if isinstance(degradation, dict) and degradation.get("route_node") == node_id:
+        return {"state": "degraded", "elapsed_min": _ev_elapsed(degradation, now),
+                "model": None, "harness": None, "effort": None, "pid": None,
+                "note": degradation.get("reason"), "job": None}
     return {"state": "pending", "elapsed_min": None, "model": None, "harness": None,
             "effort": None, "pid": None, "note": None, "job": None}
 
@@ -593,7 +597,8 @@ def _heuristic_view(route_id, route_jobs):
             "nodes": [], "key": route_id}
 
 
-def _record_view(record, route_id, route_jobs, ev_by_node, now, gate_marks_for_route=None):
+def _record_view(record, route_id, route_jobs, ev_by_node, now, gate_marks_for_route=None,
+                 degradations_for_route=None):
     levels = node_order(record)
     node_by_id = {n["id"]: n for n in (record.get("nodes") or [])
                   if isinstance(n, dict) and isinstance(n.get("id"), str)}
@@ -603,8 +608,16 @@ def _record_view(record, route_id, route_jobs, ev_by_node, now, gate_marks_for_r
     for level_i, level in enumerate(levels):
         for nid in level:
             rn = node_by_id.get(nid, {})
+            degradation_candidates = [item for item in (degradations_for_route or ())
+                                      if isinstance(item, dict)
+                                      and item.get("kind") == "degradation"
+                                      and item.get("dispatch_depth") != 1
+                                      and item.get("route_node") == nid
+                                      and item.get("route_hash") == record.get("route_hash")]
+            degradation = (max(degradation_candidates, key=lambda item: item.get("ts", 0))
+                           if degradation_candidates else None)
             st = _node_state(nid, route_jobs, ev_by_node, now,
-                             completion_marked=bool(marks.get(nid)))
+                             completion_marked=bool(marks.get(nid)), degradation=degradation)
             unit = rn.get("unit") if isinstance(rn.get("unit"), str) else None
             raw_unit_choices = rn.get("unit_choices")
             unit_choices = (
@@ -634,6 +647,7 @@ def _record_view(record, route_id, route_jobs, ev_by_node, now, gate_marks_for_r
                 "note": st["note"],
                 "elapsed_min": st["elapsed_min"], "model": st["model"], "harness": st["harness"],
                 "effort": st["effort"], "pid": st["pid"], "job": st["job"],
+                "degradation": degradation if st["state"] == "degraded" else None,
             })
     return {"route_id": route_id, "route_hash": record.get("route_hash"), "source": "record",
             "capability": record.get("capability"), "capability_mode": record.get("capability_mode"),
@@ -644,7 +658,7 @@ def _record_view(record, route_id, route_jobs, ev_by_node, now, gate_marks_for_r
             "progress": {"done": done, "total": len(nodes)}, "nodes": nodes, "key": route_id}
 
 
-def build_views(jobs, node_evidence, records, now, gate_marks=None):
+def build_views(jobs, node_evidence, records, now, gate_marks=None, degradations=None):
     """PURE — jobs/node_evidence/records/now/gate_marks are the entire input; no file I/O, no
     clock read. `gate_marks` (resolve_gate_marks()'s output) is optional and defaults to "no
     marks resolved" = every node no-claim, which is exactly the honest answer for a caller that
@@ -681,7 +695,7 @@ def build_views(jobs, node_evidence, records, now, gate_marks=None):
             views.append(_heuristic_view(rid, route_jobs))
         else:
             views.append(_record_view(record, rid, route_jobs, node_evidence.get(rid) or {}, now,
-                                      gate_marks.get(rid)))
+                                      gate_marks.get(rid), (degradations or {}).get(rid)))
     return views
 
 
@@ -734,14 +748,14 @@ def resolve_records(jobs, node_evidence=None):
     return records
 
 
-def collect_views(jobs, node_evidence=None, now=None):
+def collect_views(jobs, node_evidence=None, now=None, degradations=None):
     """Convenience wrapper used by fleet.py/render.py: resolve_records() (impure) + build_views
     (pure). `now` defaults to time.time() here — the ONLY place in this module that reads the
     clock — so build_views itself never needs to."""
     now = time.time() if now is None else now
     node_evidence = node_evidence or {}
     records = resolve_records(jobs, node_evidence)
-    return build_views(jobs, node_evidence, records, now, resolve_gate_marks(records))
+    return build_views(jobs, node_evidence, records, now, resolve_gate_marks(records), degradations)
 
 
 def summary(views):
@@ -760,6 +774,9 @@ def summary(views):
                   "elapsed_min": n.get("elapsed_min"), "model": n.get("model"),
                   "harness": n.get("harness"), "effort": n.get("effort")}
                  for n in v.get("nodes") or []]
+        for node, source in zip(nodes, v.get("nodes") or []):
+            if source.get("degradation") is not None:
+                node["degradation"] = source.get("degradation")
         out.append({"route_id": v.get("route_id"), "route_hash": v.get("route_hash"),
                     "source": v.get("source"), "capability": v.get("capability"),
                     "capability_mode": v.get("capability_mode"),

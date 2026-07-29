@@ -61,6 +61,11 @@ _DRILL_SLUG_RE = re.compile(r"^drill-[a-z]+-(.+)-\d{14}-\d+$")   # registry slug
 _DRILL_CWD_COMP_RE = re.compile(r"^drill-(.+)-[^-]+$")           # /tmp/drill-<case>-<rand> component to case
 _TERMINAL_REGISTRY_STATUSES = frozenset(("done", "killed", "cancelled"))
 _PID_HOST_NAMESPACE_PROOF = "nspid-procfs-root-v1"
+_DEGRADATION_CACHE = {}
+_DEGRADATION_CACHE_LIMIT = 128
+_DEGRADATION_REQUIRED = {"schema_version", "kind", "ts", "route_id", "route_node",
+                         "route_hash", "dispatch_depth", "fallback_hop",
+                         "execution_surface", "writer"}
 
 
 def _drill_case_from_slug(slug):
@@ -987,6 +992,60 @@ def _has_entries(p):
             return any(True for _ in entries)
     except OSError:
         return False
+
+
+def _scan_degradations(route_ids, agent_home=None, tail=64):
+    """Read only resolved route shards; malformed evidence is non-fatal and skipped."""
+    root = os.path.join(agent_home or _registry_home(), ".dispatch", "degradations")
+    out, seen = {}, set()
+    paths = [os.path.join(root, str(rid) + ".jsonl") for rid in (route_ids or ())]
+    paths.append(os.path.join(root, "_unattributed.jsonl"))
+    for path in paths:
+        try:
+            st = os.stat(path)
+        except OSError:
+            continue
+        key = (st.st_mtime_ns, st.st_size)
+        cached = _DEGRADATION_CACHE.get(path)
+        if cached and cached[:2] == key:
+            rows = cached[2]
+        else:
+            try:
+                with open(path, "rb") as stream:
+                    stream.seek(max(0, st.st_size - 256 * tail))
+                    raw = stream.read().splitlines()[-tail:]
+                rows = []
+                for line in raw:
+                    try:
+                        row = json.loads(line.decode("utf-8"))
+                    except (UnicodeDecodeError, json.JSONDecodeError):
+                        continue
+                    if not isinstance(row, dict) or not _DEGRADATION_REQUIRED.issubset(row):
+                        continue
+                    if row.get("schema_version") != 1 or row.get("kind") not in {"degradation", "chain-exhausted", "leg-failure"}:
+                        continue
+                    if path.endswith("_unattributed.jsonl"):
+                        row = dict(row)
+                        row["_unattributed"] = True
+                    rows.append(row)
+            except OSError:
+                continue
+            _DEGRADATION_CACHE[path] = (key[0], key[1], rows)
+            if len(_DEGRADATION_CACHE) > _DEGRADATION_CACHE_LIMIT:
+                for old in sorted(_DEGRADATION_CACHE, key=lambda item: _DEGRADATION_CACHE[item][:2])[:-_DEGRADATION_CACHE_LIMIT]:
+                    _DEGRADATION_CACHE.pop(old, None)
+        for row in rows:
+            event = row.get("event_id")
+            if event and event in seen:
+                continue
+            if event:
+                seen.add(event)
+            rid = row.get("route_id")
+            if row.get("_unattributed") or not rid:
+                out.setdefault("_unattributed", []).append(row)
+            elif rid in route_ids:
+                out.setdefault(rid, []).append(row)
+    return out
 
 
 def _is_code_job(key=None, capability=None, worker_role=None):
@@ -1972,9 +2031,11 @@ def collect(jobs_path=None, harness_filter=None):
     # (module attribute, not a return-signature change — every existing caller stays untouched).
     collect.last_route_nodes = route_nodes
     collect.last_terminal_attempts = terminal_attempts
+    collect.last_degradations = _scan_degradations(set(route_nodes) | {getattr(j, "route_id", None) for j in jobs if getattr(j, "route_id", None)})
     return jobs
 
 
 collect.last_malformed = 0
 collect.last_route_nodes = {}
 collect.last_terminal_attempts = {}
+collect.last_degradations = {}

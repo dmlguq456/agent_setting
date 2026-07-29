@@ -247,7 +247,8 @@ def collect_all(harness_filter=None, jobs_path=None):
         # for a node the registry already resolved.
         attach_projections(sessions, jobs, artifact_root=os.environ.get("AGENT_ARTIFACT_ROOT"),
                            now=_time.time(),
-                           node_evidence=getattr(dispatch.collect, "last_route_nodes", None))
+                           node_evidence=getattr(dispatch.collect, "last_route_nodes", None),
+                           degradations=getattr(dispatch.collect, "last_degradations", None))
     except Exception:
         # Projection failure is fail-closed at the row boundary, never a reason to drop data.
         from ..model import WorkProjection

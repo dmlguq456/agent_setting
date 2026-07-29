@@ -106,7 +106,10 @@ class ContextProjection:
     source: str = "unknown"
 
     def to_dict(self):
-        return _public_value(self)
+        payload = _public_value(self)
+        if payload.get("degradation") is None:
+            payload.pop("degradation", None)
+        return payload
 
 
 @dataclass(frozen=True)
@@ -147,9 +150,13 @@ class ActiveNodeProjection:
     replica_group: Optional[str] = None  # one-window route compatibility alias
     model_profile: Optional[str] = None
     perspective: Optional[str] = None
+    degradation: Optional[dict] = None
 
     def to_dict(self):
-        return _public_value(self)
+        payload = _public_value(self)
+        if payload.get("degradation") is None:
+            payload.pop("degradation", None)
+        return payload
 
 
 @dataclass(frozen=True)

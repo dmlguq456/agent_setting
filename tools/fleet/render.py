@@ -323,12 +323,12 @@ def _live_key(state):
 # ○ was NOT available: _DETACHED_GLYPH already owns it, and detached (attach axis) vs unused
 # (activity-history axis) are unrelated — separating them by color alone would break the
 # "Readable without color" contract this table is built on.
-_LIVE_GLYPH = {"working": "●", "idle": "●", "unused": "◌", "blocked": "◑", "done": "✓",
+_LIVE_GLYPH = {"working": "●", "idle": "●", "unused": "◌", "blocked": "◑", "done": "✓", "degraded": "◐",
                "stale": "·", "dead": "✕", "queued": "◦", "unknown": "·"}
 _DETACHED_GLYPH = "○"   # Ring means no attached client; idle uses a filled dim-green dot.
 _GLYPH_KEY = {"working": "g_work", "idle": "g_work_off", "unused": "g_unused",
               "blocked": "g_idle", "done": "green",
-              "stale": "g_stale", "dead": "g_dead", "queued": "dim", "unknown": "dim"}
+              "stale": "g_stale", "dead": "g_dead", "degraded": "lvl_y", "queued": "dim", "unknown": "dim"}
 
 # group "cooling" state (user 2026-07-03): a directory with NO active work whose newest session
 # A recent transcript write reads as cooling after completion, between hot
@@ -778,6 +778,8 @@ def _route_stage_segs(route_seq, working, max_width):
         return "stg%d_on" % (i % 5)
     cur_i = next((i for i, (_nid, st) in enumerate(route_seq) if st == "active"), None)
     if cur_i is None:
+        cur_i = next((i for i, (_nid, st) in enumerate(route_seq) if st == "degraded"), None)
+    if cur_i is None:
         cur_i = next((i for i, (_nid, st) in enumerate(route_seq)
                       if st == "reconciling"), None)
     if cur_i is None:
@@ -787,6 +789,8 @@ def _route_stage_segs(route_seq, working, max_width):
     for i, (nid, st) in enumerate(route_seq):
         if st == "failed":
             items.append((i, nid + "✕", "lvl_r"))
+        elif st == "degraded":
+            items.append((i, nid + "◐", "lvl_y"))
         elif st == "reconciling":
             items.append((i, nid + "…", "lvl_y"))
         elif st == "done":
@@ -2410,6 +2414,7 @@ def _stage_detail_rows(nodes, depth=0, term_width=None, indent=None):
             "active": ("●", "g_work" if _BLINK_ON else "g_work_off"),
             "reconciling": ("…", "lvl_y"),
             "failed": ("✕", "lvl_r"),
+            "degraded": ("◐", "lvl_y"),
             "pending": ("○", "dim"),
         }.get(state, ("○", "dim"))
         token = "%s %s" % (node.get("id") or "?", mark)
@@ -2553,6 +2558,12 @@ def _route_node_text(n):
     if st == "failed":
         tail = (" " + fmt_min(elapsed)) if elapsed is not None else ""
         return "%s ✕%s%s" % (nid, tail, deps), "lvl_r", mark
+    if st == "degraded":
+        degradation = n.get("degradation") or {}
+        hop = degradation.get("fallback_hop") or "?"
+        reason = degradation.get("reason") or "degraded"
+        tail = (" " + fmt_min(degradation.get("ts") and max(0, int((time.time() - degradation.get("ts")) / 60)))) if degradation.get("ts") else ""
+        return "%s ◐%s (%s·%s)%s" % (nid, tail, hop, reason, deps), "lvl_y", mark
     return "%s ○%s" % (nid, deps), "dim", mark
 
 
@@ -3007,6 +3018,7 @@ def _build_process_lines(sessions, jobs, route_views_by_id, malformed, memory, t
         return lines
 
     seen_keys = set()
+    _seen_glyphs = set()
     covered_pids = set()
     first = True
     for view in real_views:
@@ -3028,6 +3040,8 @@ def _build_process_lines(sessions, jobs, route_views_by_id, malformed, memory, t
             nj = n.get("job") if isinstance(n, dict) else None
             if nj is not None and getattr(nj, "pid", None):
                 covered_pids.add(nj.pid)
+            if isinstance(n, dict) and n.get("state") == "degraded":
+                _seen_glyphs.add("degraded")
         seen_keys.add(meta["card_key"])
 
     for job in degrade_jobs:
@@ -3111,16 +3125,20 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     # live_stage() or a renderer-specific route resolver. Terminal node evidence is the
     # collector's read-only input for routes whose live child has already disappeared.
     _node_evidence = {}
+    _degradations = {}
     try:
         from .collectors import dispatch as _dispatch
         _node_evidence = getattr(_dispatch.collect, "last_route_nodes", None) or {}
+        _degradations = getattr(_dispatch.collect, "last_degradations", None) or {}
     except Exception:
         _node_evidence = {}
+        _degradations = {}
     if jobs and all(getattr(entity, "work_projection", None) is None
                     for entity in list(sessions) + list(jobs)):
         try:
             from .projection import attach_projections
-            attach_projections(sessions, jobs, node_evidence=_node_evidence, now=time.time())
+            attach_projections(sessions, jobs, node_evidence=_node_evidence, now=time.time(),
+                               degradations=_degradations)
         except Exception:
             pass
     # A completed route can have no live entity at all.  Keep an ephemeral projection
@@ -3140,7 +3158,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 _carrier = DispatchJob(key="", slug="", route_id=_rid, route_file=_rf,
                                        route_hash=_ev.get("route_hash"), route_node=_rn,
                                        liveness="done")
-                attach_projections([], [_carrier], node_evidence=_node_evidence, now=time.time())
+                attach_projections([], [_carrier], node_evidence=_node_evidence, now=time.time(),
+                                   degradations=_degradations)
                 _projection_entities.append(_carrier)
         except Exception:
             pass
@@ -3263,12 +3282,12 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
         order = live_order.reconcile_groups(visible_order, visible_tiers) + non_card_order
 
     lines = []
+    _seen_glyphs = set()
     # F-12(c) legend glyph-appearance tracking — LOCAL to this call (never module/global state,
     # _OFFSET invariant R3): which of the conditional legend glyphs actually got emitted this
     # build. working/idle/dispatch/`~` stay unconditional (always relevant vocabulary); the
     # rest (detached/stale/dead/child-jobs/worktrees) only show up in the legend when at least
     # one row used them.
-    _seen_glyphs = set()
     # account-level usage — shared per harness/account. ONE LINE PER HARNESS (user 2026-07-01:
     # Use long gauges, generous gaps, and aligned windows.
     # rate is account-shared → take the FRESHEST session's value per harness (a stale session's
@@ -3377,6 +3396,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             if len(ctx_items) > 1 else "context %d%% %s" % (
                 ctx_items[0][1], _alert_name(ctx_items[0][0]))
         buckets.append((ctx_text, "lvl_r" if worst >= 90 else "lvl_y"))
+    for _degradation_text in _degradation_alert_rows(_degradations, show_all=_SHOW_ALL):
+        buckets.append((_degradation_text, "lvl_y"))
     mem_bucket = _mem_alert_bucket(memory)   # F-19 — last in priority (dead > stale > ctx > mem)
     if mem_bucket:
         buckets.append(mem_bucket)
@@ -3791,6 +3812,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
         legend += [("·", "g_stale"), (" stale   ", "dim")]
     if "dead" in _seen_glyphs:
         legend += [("✕", "g_dead"), (" dead     ", "dim")]
+    if "degraded" in _seen_glyphs:
+        legend += [("◐", "lvl_y"), (" degraded node   ", "dim"), ("◑", "g_idle"), (" blocked session   ", "dim")]
     if "child" in _seen_glyphs:
         legend += [("▾N", "dim"), (" child jobs   ", "dim")]
     if "subagent" in _seen_glyphs:
@@ -4106,6 +4129,49 @@ def _cursor_index(targets):
         if _entry_id(e) == _CURSOR_ID:
             return i
     return None
+
+
+def _degradation_alert_rows(degradations, show_all=False):
+    """Format failed-leg evidence without aggregating away sibling coordinates."""
+    rows = []
+    all_events = []
+    for key, events in (degradations or {}).items():
+        for event in events or ():
+            if isinstance(event, dict):
+                all_events.append(event)
+    unique = {}
+    for event in all_events:
+        unique[event.get("event_id") or repr(sorted(event.items()))] = event
+    grouped = {}
+    orphan = []
+    for event in unique.values():
+        if event.get("_unattributed") or not event.get("route_id"):
+            orphan.append(event)
+        else:
+            grouped.setdefault(event.get("route_id"), []).append(event)
+    for route_id, events in grouped.items():
+        events.sort(key=lambda item: item.get("ts", 0), reverse=True)
+        visible = events if show_all else events[:3]
+        for event in visible:
+            node = event.get("route_node") or "?"
+            if event.get("kind") == "chain-exhausted":
+                rows.append("⚠ %s fallback-chain-exhausted · all hops exhausted" % node)
+            elif int(event.get("dispatch_depth", 2) or 2) == 1:
+                rows.append("⚠ contract violation: quick degradation row · %s · %s · %s" % (
+                    route_id, node, event.get("fallback_hop") or "?"))
+            else:
+                index = event.get("parallel_leg_index")
+                count = event.get("parallel_leg_count")
+                coord = (" leg %s/%s" % (int(index) + 1, count)
+                         if index is not None and count else "")
+                rows.append("⚠ %s%s %s ✕ exit=%s %s" % (
+                    node, coord, event.get("harness") or "?",
+                    event.get("exit_code", "?"), event.get("reason") or "leg-failure"))
+        if not show_all and len(events) > 3:
+            rows.append("⚠ +%d more failed legs (--json)" % (len(events) - 3))
+    for event in orphan:
+        rows.append("⚠ unattributed degradation · %s" % (event.get("reason") or event.get("kind") or "event"))
+    return rows
 
 
 def _enter_select(targets):
