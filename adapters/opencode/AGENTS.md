@@ -23,11 +23,13 @@ adapter.
 
 ## Runtime Mapping
 
-- `AGENT_HOME` is the installed harness root. Resolve the canonical artifact root with `utilities/artifact-root.sh`; linked worktrees write the primary checkout's `.agent_reports/`.
+- `AGENT_HOME` is the installed harness root. Resolve the canonical artifact root with `utilities/artifact-root.sh`; linked worktrees write the primary checkout's `.agent_reports/`, and legacy `.claude_reports/` is only a fallback.
+- Portable model roles stay vendor-neutral in shared artifacts; never use vendor model names as portable semantics.
 - Capabilities come from `capabilities/`. OpenCode-native generated Skills, commands, agents, and plugins live under `adapters/opencode/` and project through `opencode_setting/opencode-skills`, `opencode_setting/opencode-commands`, `opencode_setting/opencode-agents`, and `opencode_setting/opencode-plugins`.
 - Validate native discovery with `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1`; Claude compatibility autoload must not mask missing OpenCode output.
 - Run `preflight.sh capability-info <capability>` and `preflight.sh mode-info <family/mode>`; obey named `tool_contract`, `tool_contract_check`, `runtime_surface`, and `fallback`.
 - Before edits run `preflight.sh write <file> [session-id]`. Read portable core first for `adapters/**`; mark core/spec reads with `preflight.sh read <file> [session-id]`; run `preflight.sh capability <name> [cwd] [session-id]` for spec changes.
+- Material source work needs route participation, not a card alone: before a source write or a commit containing source changes, hold a current cwd-bound route record (`preflight.sh material-route check`), at least `autopilot-code direct` for code. Hotfixes do not bypass it.
 - Use explicit guards when the OpenCode plugin is unavailable or untrusted. Never port Claude allowedTools, settings MCP, command, agent, or hook formats.
 
 Detailed lifecycle and edge-case contracts live in
@@ -69,7 +71,8 @@ Route by `core/WORKFLOW.md §0.2`: when a request matches one manifest
 `entry-router` trigger and no exclusion, that entry is the primary route
 and `direct` sets intensity, not routing. Apply §0.3 and present the
 five-field card in §0.4 before material work unless scope and route are
-already approved. Load full capability detail only in the acting owner or worker.
+already approved, and close material work with the five-field completion card
+in §0.5. Load full capability detail only in the acting owner or worker.
 
 Check `preflight.sh headless [--check] <worktree>`. Launch only registered jobs
 through `preflight.sh dispatch --dry-run|--register|--start` with the complete
@@ -91,10 +94,18 @@ routes are read-only migration inputs; the retired broker exposes only legacy
 `code-plan -> code-execute -> code-test -> code-report` workers. `direct` is
 inline; `quick` is one registered-headless dispatch-depth-1 one-shot conductor; dispatch depth 3 is forbidden. Record
 inline exceptions in plan metrics. After merge, integrated verification, and
-push, use `preflight.sh worktree-cleanup --check` before `--apply`.
+push, use `preflight.sh worktree-cleanup --check` before `--apply`. A
+`session.idle` or other session-end event never owns destructive worktree
+cleanup; it may expose diagnostics only.
 
-Keep native agent delegation distinct from registered headless work. The
-main/orchestrator chooses portable roles and concrete model settings per job.
+Keep native agent delegation distinct from registered headless work; a
+restriction on one surface never silently extends to the other. Before
+delegating to a native subagent, verify it against its declared
+`opencode_setting/opencode-agents` file and the runtime's current agent list —
+never assume a Codex or Claude agent surface exists here. The
+main/orchestrator chooses portable roles and concrete model settings per job,
+and preserves model role, intensity, depth, tests, safety, and validation on
+fallback.
 
 ## Memory and Context
 
@@ -114,8 +125,9 @@ Do not run drill automatically.
 Portable behavior contract = `roles/response-policy.md`.
 
 - **Audience-language first** — user artifacts default to the user's current communication language unless a stronger audience/repository contract applies.
-- Keep responses concise, match promises with same-turn action, verify before asserting, and follow current conventions.
-- Ask only for non-obvious or destructive choices. Continue reversible in-flow work and its implied validation, records, commit, and push.
+- Keep responses concise, match promises with same-turn action, verify before asserting, and follow current conventions; expose a convention change before committing it.
+- Ask only for genuinely non-obvious or destructive choices. Continue reversible in-flow work and its implied validation, records, commit, and push.
+- Under `core/OPERATIONS.md §5.11`, commit and push validated `<agent-home>` instruction, rule, hook, preflight, or status-surface changes in the same turn without a separate user signal.
 
 ## Compatibility Boundary
 

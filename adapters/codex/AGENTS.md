@@ -30,7 +30,7 @@ local projection, and parity gaps; plan a checked fallback.
 
 ## Runtime Mapping
 
-- `AGENT_HOME` is the installed harness root. Resolve artifacts through `utilities/artifact-root.sh`; linked worktrees write the primary checkout's `.agent_reports/`.
+- `AGENT_HOME` is the installed harness root. Resolve artifacts through `utilities/artifact-root.sh`; linked worktrees write the primary checkout's `.agent_reports/`, and legacy `.claude_reports/` is only a fallback.
 - Portable model roles remain vendor-neutral. Resolve them with `preflight.sh role <portable-role|role-profile|pipeline-stage>`.
 - Capabilities come from `capabilities/`; Codex-native generated Skills/plugin, agents, and modes live under `adapters/codex/`. Expose them through `codex_setting/codex-plugin-marketplace`, `codex_setting/codex-agents`, and `codex_setting/codex-modes`.
 - Hooks are Codex bridges under `codex_setting/codex-hooks`; never project Claude settings, commands, hooks, or allowedTools.
@@ -99,7 +99,8 @@ Route by `core/WORKFLOW.md §0.2`: when a request matches one manifest
 `entry-router` trigger and no exclusion, that entry is the primary route
 and `direct` sets intensity, not routing. Apply §0.3 and present the
 five-field card in §0.4 before material work unless scope and route are
-already approved. Load full capability detail only in the acting owner or worker.
+already approved, and close material work with the five-field completion card
+in §0.5. Load full capability detail only in the acting owner or worker.
 
 An ordinary dispatch-depth-1 owner launches through `preflight.sh dispatch-owner
 --dry-run|--register|--start`, a separate low-level surface from `preflight.sh
@@ -148,7 +149,8 @@ verification, and push, use `preflight.sh worktree-cleanup --check` before
 For `autopilot-code`, `capability-info` and `route` print the portable pipeline contract (`code-plan>code-execute>code-test>code-report` for `standard+`).
 Use native subagents only after `preflight.sh subagent-info --check`; native
 subagents and registered headless workers remain distinct. A restriction on
-one surface never silently extends to the other.
+one surface never silently extends to the other. Preserve model role, intensity,
+depth, tests, safety, and validation on fallback.
 
 ## Memory and Context
 
@@ -173,8 +175,9 @@ logs, caches, databases, or `$CODEX_HOME/config.toml`.
 Portable behavior contract = `roles/response-policy.md`.
 
 - **Audience-language first** — user artifacts default to the user's current communication language unless a stronger audience/repository contract applies.
-- Keep responses concise, match promises with same-turn action, verify before asserting, and follow current conventions.
+- Keep responses concise, match promises with same-turn action, verify before asserting, and follow current conventions; expose a convention change before committing it.
 - Ask only for genuinely non-obvious or destructive choices. Continue reversible in-flow work and its implied validation, records, commit, and push.
+- Under `core/OPERATIONS.md §5.11`, commit and push validated `<agent-home>` instruction, rule, hook, preflight, or status-surface changes in the same turn without a separate user signal.
 
 ## Compatibility Boundary
 

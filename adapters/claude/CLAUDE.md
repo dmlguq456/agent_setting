@@ -16,6 +16,10 @@ touches the named domain.
 5. `core/MEMORY.md` for memory
 6. `capabilities/README.md`, `roles/README.md`, and `roles/MODES.md` for task behavior
 
+For runtime-surface or parity changes, verify current official documentation,
+then inspect the local realization and its fallback. Never infer support from
+another adapter.
+
 ## Runtime Router
 
 - Treat `AGENT_HOME` as the installed harness root.
@@ -32,12 +36,13 @@ Route by `core/WORKFLOW.md §0.2`: when a request matches one manifest
 `entry-router` trigger and no exclusion, that entry is the primary route
 and `direct` sets intensity, not routing. Apply §0.3 and present the
 five-field card in §0.4 before material work unless scope and route are
-already approved. Load full capability detail only in the acting owner or worker; spec
+already approved, and close material work with the five-field completion card
+in §0.5. Load full capability detail only in the acting owner or worker; spec
 work also requires the spec-read gate.
 
 For `autopilot-code`, `direct` is inline, `quick` is one registered dispatch-depth-1
 owner, and `standard+` follows `code-plan -> code-execute -> code-test ->
-code-report` under `core/OPERATIONS.md §5.10`.
+code-report` under `core/OPERATIONS.md §5.10`. Dispatch depth 3 is forbidden.
 
 Checked wrappers keep `capability_mode` separate from a non-owner
 `worker_mode`, which must equal its portable `unit`. A dispatch-depth-1 owner is
@@ -71,7 +76,7 @@ Portable behavior contract = `roles/response-policy.md`.
 - Ask only for genuinely non-obvious or destructive choices; proceed with the recommended reversible path when no answer is needed.
 - In an active “do X” flow, implied records, validation, commit, and push follow without repeated confirmation.
 
-Claude-specific realization: keep work grounded in current files, expose changes before committing, and commit/push validated harness changes.
+Claude-specific realization: keep work grounded in current files, expose changes before committing, and commit/push validated harness changes in the same turn under `core/OPERATIONS.md §5.11`.
 
 ## Compatibility Boundary
 

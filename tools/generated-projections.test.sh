@@ -155,6 +155,27 @@ for bootstrap in \
     echo "not ok - entry confirmation pointer missing from $bootstrap" >&2
     exit 1
   }
+  # Bootstrap prose is hard-wrapped, so match against a whitespace-normalized
+  # copy: a restored clause must survive an unrelated reflow.
+  bootstrap_flat=$(tr '\n' ' ' < "$bootstrap" | tr -s ' ' | tr 'A-Z' 'a-z')
+  while IFS='|' read -r needle label; do
+    [ -n "$needle" ] || continue
+    case "$bootstrap_flat" in
+      *"$needle"*) ;;
+      *)
+        echo "not ok - $label missing from $bootstrap" >&2
+        exit 1
+        ;;
+    esac
+  done <<'BOOTSTRAP_PARITY_EOF'
+five-field completion card in §0.5|WORKFLOW §0.5 completion report pointer
+§5.11|OPERATIONS §5.11 same-turn commit/push policy
+dispatch depth 3 is forbidden|dispatch-depth-3 prohibition
+genuinely non-obvious|genuinely-non-obvious ask clause
+legacy `.claude_reports/` is only a fallback|legacy artifact-root fallback qualifier
+depth, tests, safety, and validation on fallback|fallback preservation guarantee
+before committing|expose-change-before-committing clause
+BOOTSTRAP_PARITY_EOF
 done
 if grep -Fq '## Projected Portable Details' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md"; then
   echo "not ok - entry-router Codex Skill preloads projected details" >&2
