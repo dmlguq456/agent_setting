@@ -277,6 +277,12 @@ class Session:
     session_total_tokens: Optional[int] = None
     status: Optional[str] = None        # raw harness status (claude idle/shell/busy)
     task_lifecycle: Optional[str] = None  # exact Codex task_started/task_complete/turn_aborted
+    # F-47 (v30) — owned exec evidence, additive. `exec_child` = the long-lived non-helper
+    # descendant this session is running ({'pid','comm','etime_s'}, collectors/procscan.py);
+    # `exec_tool` = a Codex rollout tool_call with no matching output yet ({'name','command'}).
+    # Both are None when there is no evidence — never a guess (prd.md:263).
+    exec_child: Optional[dict] = None
+    exec_tool: Optional[dict] = None
     mtime: Optional[float] = None       # newest transcript/db mtime (epoch sec) for liveness
     liveness: str = "unknown"
     # --- F-25/F-26 registry first-class fields (all Optional → absent harness = None) ---
@@ -613,13 +619,51 @@ def _settle(key, state, tier, now, source, rule):
     return state, tier, desc, hyst
 
 
-def _session_status_state(status):
-    """tier-1 registry status → activity-axis state. None = registry is silent."""
+def exec_child_evidence(exec_child):
+    """The `exec_child` dict when it is usable F-47 evidence, else None.
+
+    Re-applies the ≥`SESSION_WORK_SEC` age gate here rather than trusting the collector:
+    `classify_session` is a pure function over a caller-supplied evidence dict (demo
+    fixtures, `--json` replays, tests), so the threshold has to hold at the decision point
+    too. A malformed/short-lived entry is silent, never a promotion.
+    """
+    if not isinstance(exec_child, dict):
+        return None
+    comm = exec_child.get("comm")
+    etime = exec_child.get("etime_s")
+    if not comm or not isinstance(etime, (int, float)) or isinstance(etime, bool):
+        return None
+    if etime < SESSION_WORK_SEC:
+        return None
+    return exec_child
+
+
+def _session_status_state(status, exec_child=None):
+    """tier-1 registry status → activity-axis state. None = registry is silent.
+
+    F-47 (v30, prd.md:612): `shell` is "the Bash tool is running", not an idle synonym. On
+    its own it stays idle (a shell waiting at a prompt really is idle), but combined with
+    tier-2 evidence that the session owns a long-lived child it resolves to `working` — the
+    registry says WHAT the session is doing and the process tree confirms it is still doing
+    it, so the two tiers agree rather than compete. `busy`/`idle` are untouched.
+    """
     if status == "busy":
+        return "working"
+    if status == "shell" and exec_child_evidence(exec_child):
         return "working"
     if status in ("idle", "shell"):
         return "idle"
     return None
+
+
+def _status_desc(status, state, exec_child):
+    """(source, rule) for a tier-1 registry verdict — honest about the combined F-47 case."""
+    if status == "shell" and state == "working":
+        child = exec_child_evidence(exec_child)
+        return ("claude-registry+proc",
+                "registry status=shell + long-lived child %s (%ds)"
+                % (child.get("comm"), int(child.get("etime_s"))))
+    return ("claude-registry", "registry status=%s" % status)
 
 
 def deterministic_progress_fingerprint(ev_in):
@@ -852,7 +896,8 @@ def classify_session(ev_in, now, stale_min=SESSION_STALE_MIN, key=None):
         return out("stale", 2, "proc", "orphan cwd (deleted worktree)")
 
     status = ev_in.get("status")
-    st = _session_status_state(status)
+    st = _session_status_state(status, exec_child=ev_in.get("exec_child"))
+    st_source, st_rule = _status_desc(status, st, ev_in.get("exec_child"))
     m = ev_in.get("mtime")
 
     lifecycle = ev_in.get("task_lifecycle")
@@ -868,7 +913,7 @@ def classify_session(ev_in, now, stale_min=SESSION_STALE_MIN, key=None):
             if _is_unused(st, ev_in):
                 return out("unused", 1, "claude-registry",
                            "idle refined to unused (no transcript, updatedAt≈startedAt)")
-            return out(st, 1, "claude-registry", "registry status=%s" % status)
+            return out(st, 1, st_source, st_rule)
         return out("idle", 3, "mtime", "no mtime and no registry status")
 
     age_min = (now - m) / 60.0
@@ -887,7 +932,7 @@ def classify_session(ev_in, now, stale_min=SESSION_STALE_MIN, key=None):
         if _is_unused(st, ev_in):
             return out("unused", 1, "claude-registry",
                        "idle refined to unused (no transcript, updatedAt≈startedAt)")
-        return out(st, 1, "claude-registry", "registry status=%s" % status)
+        return out(st, 1, st_source, st_rule)
     # codex/opencode expose no status field → recency heuristic (fresh write == working)
     if age_min * 60.0 < SESSION_WORK_SEC:
         return out("working", 3, "mtime", "activity within %ds" % SESSION_WORK_SEC)

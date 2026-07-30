@@ -2424,6 +2424,45 @@ def _compact_context_gauge_width(available, depth=0):
     return min(desired, max(4, available - fixed))
 
 
+_EXEC_GLYPH = "⚙"
+
+
+def _fmt_exec_age(seconds):
+    """Sub-minute exec ages need seconds; past that reuse `fmt_min`'s one vocabulary."""
+    seconds = int(seconds)
+    if seconds < 60:
+        return "%ds" % max(0, seconds)
+    return fmt_min(seconds // 60)
+
+
+def _exec_detail_segs(entity):
+    """F-47 `⚙ <command> <elapsed>` detail segments for a session row, or [].
+
+    Two evidence shapes feed one badge: an owned process descendant (`exec_child`, carries
+    an elapsed time) and a Codex rollout tool_call still awaiting its output (`exec_tool`,
+    carries no clock). Process evidence wins when both exist — it is the stronger signal
+    and the only one with a real elapsed. Brightness follows the CLASSIFICATION, not the
+    badge: a promoted `working` row gets the live hue, a background child under an idle row
+    stays dim (prd.md:263 — the badge never makes a row or its group look hot).
+    """
+    key = "g_work" if getattr(entity, "liveness", None) == "working" else "dim"
+    child = getattr(entity, "exec_child", None)
+    if isinstance(child, dict) and child.get("comm"):
+        etime = child.get("etime_s")
+        text = "%s %s" % (_EXEC_GLYPH, child["comm"])
+        if isinstance(etime, (int, float)) and not isinstance(etime, bool):
+            text += " %s" % _fmt_exec_age(etime)
+        return [(text, key)]
+    tool = getattr(entity, "exec_tool", None)
+    if isinstance(tool, dict):
+        # Tool name first: a rollout `cmd` string usually starts with shell prologue
+        # (`set -eu`, an assignment), so its first token would name the wrong thing.
+        label = tool.get("name") or tool.get("command")
+        if label:
+            return [("%s %s" % (_EXEC_GLYPH, label), key)]
+    return []
+
+
 def _context_detail_row(entity, depth=0, term_width=None):
     """One ``📚 <gauge> <value>   NOW`` row for every live card.
 
@@ -2450,14 +2489,30 @@ def _context_detail_row(entity, depth=0, term_width=None):
     else:
         value_text = "%d%%" % shown_pct
     segs.append((value_text.rjust(_CONTEXT_VALUE_W), "dim"))
-    if now_text:
+    exec_segs = _exec_detail_segs(entity)
+    if now_text or exec_segs:
         prefix_width = sum(_dw(text) for text, _key in segs)
         gap = max(_CONTEXT_NOW_GAP, _NAME_COL - prefix_width)
         total_width = term_width or _SUMMARY_FALLBACK_W
         now_room = max(0, total_width - prefix_width - gap)
-        now_text = _clip_w(str(now_text), now_room) if now_room else ""
+        tail = []
+        # F-47 drop order: the `⚙` badge is the anchor (it is the whole reason the row reads
+        # as busy rather than idle) and yields only when the zone cannot hold it at all; the
+        # descriptive NOW sentence clips first, exactly as it already did.
+        exec_w = sum(_dw(text) for text, _key in exec_segs)
+        if exec_segs and exec_w <= now_room:
+            tail.extend(exec_segs)
+            now_room -= exec_w
         if now_text:
-            segs.extend([(" " * gap, None), (now_text, "dim")])
+            sep = "  " if tail else ""
+            clipped = _clip_w(str(now_text), now_room - _dw(sep)) if now_room > _dw(sep) else ""
+            if clipped:
+                if sep:
+                    tail.append((sep, None))
+                tail.append((clipped, "dim"))
+        if tail:
+            segs.append((" " * gap, None))
+            segs.extend(tail)
     return [segs]
 
 

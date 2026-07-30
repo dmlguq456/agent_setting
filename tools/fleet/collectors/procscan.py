@@ -149,6 +149,147 @@ def _ps_lines():
     return out.splitlines()
 
 
+# --- F-47 exec visibility (v30) --------------------------------------------------------
+# A session that left `python train.py` running and is waiting on it is NOT idle, and the
+# only owned evidence for that is its own process subtree (prd.md:263 — no guessing, no
+# daemonized/reparented processes). Age is the primary defense against harness-internal
+# noise: every statusline / title-refresh / mem-worker helper finishes in seconds, so a
+# ≥60s child is already almost certainly real work. `SESSION_WORK_SEC` (model.py:477) is
+# the same 60s constant the classifier uses — one threshold, one place.
+EXEC_MIN_AGE_SEC = 60
+# Second defense, and the general form of "exclude harness-internal helpers": a child that
+# started WITH its session was launched by the runtime, not by a tool call. Observed
+# 2026-07-30 — an idle Codex row carried `node /tmp/steward-mcp-bridge.cjs` aged 237s inside a
+# 238s session, i.e. a stdio MCP server that lives for the whole session and would have
+# badged every row forever. A real exec cannot begin until a user turn has been prompted and
+# answered, so a same-cohort child is plumbing by construction. Preferred over a name list
+# (F-26: name lists rot and each new helper needs a code change).
+EXEC_BOOT_GRACE_SEC = 10
+# `zsh -c '<snapshot> && <real command>'` is how Claude's Bash tool runs everything, so the
+# direct child is almost never the interesting name — descend to the real work (prd.md:263).
+_EXEC_WRAPPER_COMMS = ("sh", "bash", "zsh", "dash", "ksh", "fish")
+# Harness-internal helpers that could in principle outlive 60s. Deliberately short: the
+# canonical identification is the env marker below (same keys as `mem_worker` in scan()),
+# these are only the comm-visible shapes that carry no env of their own.
+_EXEC_HELPER_COMMS = ("statusline", "ps", "tmux", "ss")
+_EXEC_MAX_DEPTH = 4
+
+
+def _exec_is_helper(pid, comm):
+    """True for a child that is harness plumbing, not the session's work.
+
+    A nested harness process is excluded because it already owns a row of its own (a
+    session or an F-29 sub-agent) — surfacing it again as its parent's `⚙` detail would
+    double-count the same work.
+    """
+    base = (comm or "").strip()
+    # A harness process, or one of a harness's own hyphenated companion binaries (observed
+    # 2026-07-30: every idle Codex row carried a long-lived `codex-code-mode` child, which is
+    # runtime plumbing, not the user's work). Nested harnesses already own their own rows.
+    if base in HARNESSES or any(base.startswith(h + "-") for h in HARNESSES):
+        return True
+    low = base.lower()
+    if any(needle in low for needle in _EXEC_HELPER_COMMS):
+        return True
+    env = read_environ(pid)
+    return env.get("MEM_DISTILL") == "1" or env.get("FLEET_TITLE_REFRESH") == "1"
+
+
+def proc_tree():
+    """{pid: (ppid, etime_sec, comm)} from one cheap `ps`.
+
+    A separate invocation on purpose: `_ps_lines`' four-column format is a shared contract
+    (collectors/dispatch.py, and every test that mocks it), so the parent/child columns get
+    their own call — the same reason `_pid_ttys` is separate. comm is placed LAST because it
+    can contain spaces; the numeric columns stay unambiguously splittable.
+    """
+    try:
+        out = subprocess.run(["ps", "-eo", "pid=,ppid=,etimes=,comm="],
+                             capture_output=True, text=True, timeout=5).stdout
+    except Exception:
+        return {}
+    tree = {}
+    for line in out.splitlines():
+        parts = line.split(None, 3)
+        if len(parts) < 4:
+            continue
+        try:
+            tree[int(parts[0])] = (int(parts[1]), int(parts[2]), parts[3].strip())
+        except ValueError:
+            continue
+    return tree
+
+
+def children_index(tree):
+    """{ppid: [pid, ...]} — the reverse edge of `proc_tree`, built once per tick."""
+    kids = {}
+    for pid, entry in tree.items():
+        kids.setdefault(entry[0], []).append(pid)
+    for pids in kids.values():
+        pids.sort()
+    return kids
+
+
+def _oldest_work_child(pid, tree, kids, min_age=0, max_age=None):
+    """(cpid, etime, comm) of the longest-running non-helper child, or None.
+
+    Longest-running rather than newest: the thing the session is *waiting on* is the thing
+    that has been alive longest, and it makes the pick deterministic across ticks (pid
+    breaks exact-age ties). `max_age` applies the boot-cohort cut (see EXEC_BOOT_GRACE_SEC).
+    """
+    best = None
+    for cpid in kids.get(pid, ()):
+        entry = tree.get(cpid)
+        if entry is None:
+            continue
+        _ppid, etime, comm = entry
+        if etime < min_age or (max_age is not None and etime > max_age):
+            continue
+        if _exec_is_helper(cpid, comm):
+            continue
+        if best is None or (etime, -cpid) > (best[1], -best[0]):
+            best = (cpid, etime, comm)
+    return best
+
+
+def exec_child(pid, tree=None, kids=None, min_age=EXEC_MIN_AGE_SEC,
+               max_depth=_EXEC_MAX_DEPTH):
+    """Long-lived work descendant of `pid` → {'pid','comm','etime_s'}, else None.
+
+    The ≥`min_age` gate applies to the session's DIRECT child (that is what "this session
+    has been running something for a while" means); the reported comm/etime then come from
+    the descended process, per prd.md:263 ("명령 = 하강 후 자식의 comm, 경과 = 그 프로세스 etime").
+    A wrapper with no work child of its own reports the wrapper itself — a 2-minute `zsh` IS
+    a 2-minute Bash tool call, and inventing nothing is the honest reading.
+
+    Children older than `session age - EXEC_BOOT_GRACE_SEC` are dropped as boot-cohort
+    plumbing. An unknown session age (pid absent from `tree`) disables that cut rather than
+    hiding the evidence — absence of a fact is never used as a fact.
+    """
+    if tree is None:
+        tree = proc_tree()
+    if kids is None:
+        kids = children_index(tree)
+    entry = tree.get(pid)
+    max_age = None
+    if entry is not None and entry[1] > EXEC_BOOT_GRACE_SEC:
+        max_age = entry[1] - EXEC_BOOT_GRACE_SEC
+    picked = _oldest_work_child(pid, tree, kids, min_age=min_age, max_age=max_age)
+    if picked is None:
+        return None
+    cur_pid, cur_etime, cur_comm = picked
+    seen = {pid}
+    for _ in range(max(0, max_depth)):
+        if cur_pid in seen or cur_comm not in _EXEC_WRAPPER_COMMS:
+            break
+        seen.add(cur_pid)
+        nxt = _oldest_work_child(cur_pid, tree, kids)
+        if nxt is None:
+            break
+        cur_pid, cur_etime, cur_comm = nxt
+    return {"pid": cur_pid, "comm": cur_comm, "etime_s": cur_etime}
+
+
 def _pid_ttys():
     """{pid: 'pts/N'} controlling tty per process (separate cheap ps so the main _ps_lines
     contract, shared with the dispatch scan, stays untouched). '?' (no tty) is kept as-is."""
@@ -303,6 +444,8 @@ def scan(harness_filter=None):
     orca_panes = []                      # (Session, ORCA_RELAY_SOCKET_PATH) rows
     pid_tty = _pid_ttys()
     det_ttys = _detached_ttys()
+    tree = proc_tree()                   # F-47: one ps for the whole parent/child map
+    kids = children_index(tree)
     for line in _ps_lines():
         line = line.strip()
         if not line:
@@ -358,6 +501,7 @@ def scan(harness_filter=None):
             worker_type=env.get("AGENT_DISPATCH_WORKER_TYPE") or None,
             owner=env.get("AGENT_DISPATCH_OWNER") or None,
             model_role=env.get("AGENT_DISPATCH_MODEL_ROLE") or None,
+            exec_child=exec_child(pid, tree, kids),
         )
         sessions.append(sess)
         orca_sock = env.get("ORCA_RELAY_SOCKET_PATH")
