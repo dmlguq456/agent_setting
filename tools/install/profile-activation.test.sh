@@ -74,13 +74,13 @@ check_profile starter 6 5 11
 test ! -e "$HOME/.codex/skills/autopilot-design" || fail "starter exposed a design-only capability"
 test ! -e "$HOME/.codex/agent-modes/design/maker.md" || fail "starter exposed a design mode"
 
-check_profile builder 14 7 20
+check_profile builder 13 7 19
 test -L "$HOME/.codex/skills/autopilot-spec" || fail "builder omitted autopilot-spec"
 test ! -e "$HOME/.codex/skills/autopilot-draft" || fail "builder exposed a full-only document capability"
 
 # full codex mode links = 28: manifest includes internal design/_design_rules,
 # which has no native projection.
-check_profile full 27 8 28
+check_profile full 26 8 28
 # codex-review-team wrapper retired 2026-07-22 (재홈): cross-harness review is a
 # dispatched unit; only the memory-scout kernel helper is projected.
 test ! -e "$HOME/.claude/agents/codex-review-team.md" || fail "full re-projected the retired codex-review-team wrapper"
@@ -126,7 +126,7 @@ python3 - "$TMP/default.json" <<'PY'
 import json, sys
 row=json.load(open(sys.argv[1]))
 assert row["profile"] == "builder", row
-assert row["profile_counts"]["capabilities"] == 14, row
+assert row["profile_counts"]["capabilities"] == 13, row
 PY
 test ! -e "$HOME/.codex/agents/legacy-external.toml" \
   || fail "profile refresh retained a legacy harness agent"
