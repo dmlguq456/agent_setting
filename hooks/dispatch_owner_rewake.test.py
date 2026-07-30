@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -122,6 +124,155 @@ class DispatchOwnerRewakeTest(unittest.TestCase):
         payload = self.payload(tool_name="Read")
         with mock.patch.object(rewake.sys, "stdin", io.StringIO(__import__("json").dumps(payload))):
             self.assertEqual(rewake.main(), 0)
+
+    def test_intact_stdout_never_consults_the_registry(self) -> None:
+        launch = rewake.parse_launch(self.payload())
+        assert launch is not None
+        self.assertEqual(launch.armed, "stdout")
+        payload = self.payload()
+        with mock.patch.object(rewake.sys, "stdin", io.StringIO(json.dumps(payload))), (
+            mock.patch.object(rewake, "registry_launch")
+        ) as fallback, mock.patch.object(
+            rewake, "wait_for_attempt", return_value=("ready", "terminal-quiescent")
+        ), mock.patch.object(rewake.sys, "stderr", io.StringIO()):
+            self.assertEqual(rewake.main(), 2)
+        fallback.assert_not_called()
+
+
+class RegistryConfirmArmTest(unittest.TestCase):
+    """A filtered `dispatch-owner --start` stdout still arms from the registry."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.jobs = self.root / "jobs.log"
+        self.jobs.write_text(self.row(), encoding="utf-8")
+        self.environment = mock.patch.dict(
+            os.environ, {"AGENT_DISPATCH_JOBS": str(self.jobs)}, clear=False
+        )
+        self.environment.start()
+        self.addCleanup(self.environment.stop)
+
+    def stamp(self, age_seconds: float = 0.0) -> str:
+        moment = datetime.now(timezone.utc) - timedelta(seconds=age_seconds)
+        return moment.isoformat().replace("+00:00", "Z")
+
+    def row(
+        self,
+        *,
+        attempt_id: str = "att-owner-1",
+        status: str = "open",
+        parent_sid: str = "session-1",
+        age_seconds: float = 0.0,
+        **overrides: str,
+    ) -> str:
+        metadata = {
+            "capability": "autopilot-code",
+            "dispatch_depth": "1",
+            "worker_type": "owner",
+            "parent_sid": parent_sid,
+            "parent_completion_delivery": "claude-parent-runtime",
+            "launch_claimed": "1",
+            "launch_started": "1",
+            "attempt_id": attempt_id,
+        }
+        metadata.update(overrides)
+        pipe = ",".join(f"{key}={value}" for key, value in metadata.items())
+        columns = [self.stamp(age_seconds), status, "/repo", "/repo", "slug", pipe]
+        return "\t".join(columns) + "\n"
+
+    def payload(self, *, stdout: str = "check=ok", **replacements):
+        payload = {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "session_id": "session-1",
+            "tool_input": {
+                "command": "python3 utilities/dispatch-owner.py --start --slug owner | tail -5"
+            },
+            "tool_response": {"stdout": stdout, "stderr": ""},
+        }
+        payload.update(replacements)
+        return payload
+
+    def test_filtered_stdout_arms_from_the_single_matching_row(self) -> None:
+        launch = rewake.registry_launch(self.payload())
+        self.assertIsNotNone(launch)
+        assert launch is not None
+        self.assertEqual(launch.attempt_id, "att-owner-1")
+        self.assertEqual(launch.jobs, self.jobs)
+        self.assertEqual(launch.session_id, "session-1")
+        self.assertEqual(launch.armed, "registry")
+
+    def test_registry_armed_run_reaches_the_unchanged_wait_path(self) -> None:
+        with mock.patch.object(rewake.sys, "stdin", io.StringIO(json.dumps(self.payload()))), (
+            mock.patch.object(
+                rewake, "wait_for_attempt", return_value=("ready", "terminal-quiescent")
+            )
+        ) as wait, mock.patch.object(rewake.sys, "stderr", io.StringIO()) as stderr:
+            self.assertEqual(rewake.main(), 2)
+            message = stderr.getvalue()
+        self.assertEqual(wait.call_args.args[0].attempt_id, "att-owner-1")
+        self.assertIn("armed=registry", message)
+        self.assertIn("attempt_id=att-owner-1", message)
+
+    def test_foreign_stale_ambiguous_or_sessionless_input_never_arms(self) -> None:
+        self.jobs.write_text(self.row(parent_sid="session-2"), encoding="utf-8")
+        self.assertIsNone(rewake.registry_launch(self.payload()))
+        self.jobs.write_text(self.row(age_seconds=4_000), encoding="utf-8")
+        self.assertIsNone(rewake.registry_launch(self.payload()))
+        self.jobs.write_text(
+            self.row() + self.row(attempt_id="att-owner-2"), encoding="utf-8"
+        )
+        self.assertIsNone(rewake.registry_launch(self.payload()))
+        self.jobs.write_text(self.row(), encoding="utf-8")
+        self.assertIsNone(rewake.registry_launch(self.payload(session_id="")))
+        self.assertIsNone(rewake.registry_launch(self.payload(session_id=None)))
+
+    def test_closed_or_non_owner_rows_never_arm(self) -> None:
+        self.jobs.write_text(
+            self.row() + self.row(status="done", note="completed-marker"), encoding="utf-8"
+        )
+        self.assertIsNone(rewake.registry_launch(self.payload()))
+        self.jobs.write_text(self.row(dispatch_depth="2"), encoding="utf-8")
+        self.assertIsNone(rewake.registry_launch(self.payload()))
+        self.jobs.write_text(self.row(launch_started="0"), encoding="utf-8")
+        self.assertIsNone(rewake.registry_launch(self.payload()))
+        self.jobs.write_text(
+            self.row(parent_completion_delivery="one-shot"), encoding="utf-8"
+        )
+        self.assertIsNone(rewake.registry_launch(self.payload()))
+
+    def test_command_jobs_argument_wins_and_symlinks_are_rejected(self) -> None:
+        other = self.root / "explicit.log"
+        other.write_text(self.row(attempt_id="att-owner-explicit"), encoding="utf-8")
+        payload = self.payload()
+        payload["tool_input"]["command"] = (
+            f"python3 utilities/dispatch-owner.py --start --jobs {other} --slug owner | tail -5"
+        )
+        launch = rewake.registry_launch(payload)
+        assert launch is not None
+        self.assertEqual(launch.attempt_id, "att-owner-explicit")
+        self.assertEqual(launch.jobs, other)
+        link = self.root / "jobs-link.log"
+        link.symlink_to(other)
+        payload["tool_input"]["command"] = (
+            f"python3 utilities/dispatch-owner.py --start --jobs={link} --slug owner | tail -5"
+        )
+        linked = rewake.registry_launch(payload)
+        assert linked is not None
+        self.assertEqual(linked.jobs, self.jobs)
+
+    def test_a_start_free_dispatch_owner_command_never_arms(self) -> None:
+        payload = self.payload()
+        payload["tool_input"]["command"] = "python3 utilities/dispatch-owner.py --status"
+        self.assertIsNone(rewake.registry_launch(payload))
+
+    def test_space_delimited_registry_metadata_is_tolerated(self) -> None:
+        self.jobs.write_text(self.row().replace(",", " "), encoding="utf-8")
+        launch = rewake.registry_launch(self.payload())
+        assert launch is not None
+        self.assertEqual(launch.attempt_id, "att-owner-1")
 
 
 if __name__ == "__main__":
