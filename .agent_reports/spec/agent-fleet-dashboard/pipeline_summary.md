@@ -392,3 +392,19 @@ contract/unit 라벨과 중복 표시하지 않는다.
 - 검증: hermetic 신규 테스트(managed 귀속 6건·레지스트리 병합), Fleet 전체 회귀 0, 라이브
   smoke에서 managed TUI 행 sid/ctx% 회수와 codex-home 레지스트리 canary 분사 행 렌더를 실측
   확인. main 병합 `1dd7a784`(tools/fleet ↔ adapters 양 트리 미러 포함).
+
+## 2026-07-30 · v30 — F-47 exec 가시성
+
+사용자 관찰: "bash나 python 뭐 하나 돌려두고 대기하는 세션이 fleet에서 idle과 구분이 안 된다."
+
+- 라이브 실측: status=shell인 claude 세션 밑에 12분째 도는 `python run.py dataset generate`
+  자식이 있는데 fleet은 shell을 idle 동치로 매핑(model.py:613)해 버리고 있었다.
+- 결정: shell은 "Bash 도구 실행 중" 신호다 — 장수 자식(≥60s 비헬퍼)과 결합 시 working,
+  자식 없으면 idle 유지. 실행 상세는 `⚙ <명령> <경과>`로 세션 행에 표시한다.
+- codex는 task_started lifecycle 판정이 이미 정확하므로 상태 규칙 불변 — 미종결 tool_call과
+  자식 스캔(managed_dir 조인 재사용)으로 상세만 추가한다.
+- 턴 종료 후 background 자식(claude run_in_background 대기, codex & 분리 실행)은 분류 승격
+  없이 idle + dim ⚙ 배지 — 모델은 실제로 대기 중이고, 사용자가 필요한 건 "돌고 있음"의 가시성.
+- daemonize(재부모화) 프로세스는 소유 증거가 없어 정직 결손. zero-injection 불변.
+- 구현 handoff: procscan 자식 스캔, claude/codex collector, model 분류기, render 배지, hermetic
+  테스트 + 라이브 smoke(현재 TTS 학습 세션이 ⚙로 보여야 함).

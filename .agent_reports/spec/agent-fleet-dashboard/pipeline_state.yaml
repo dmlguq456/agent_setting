@@ -10,13 +10,14 @@ inputs:
   - spec/stage-dispatch/prd.md   # v28/F-44~45: SD-93 degradation ledger = 소비 소스 (생산 계약은 stage-dispatch 소유)
   - reviews/spec/fleet-fallback-observability/verdict.md  # v28: R1~R7 단일 결정 (2-way research + adversarial review)
 phases:
-  spec: done            # PRD v29: managed-codex 귀속 + 분사 레지스트리 가시성 + F-46 afterglow
+  spec: done            # PRD v30: F-47 exec 가시성 (shell 정정 + 자식 스캔 + ⚙ 상세)
   scaffolding: deferred # lean — skeleton 은 autopilot-code 로 이월 (module 구조만 §9 확정)
   design: n/a           # 시각 UI 아님 (터미널 TUI 레이아웃은 PRD §4)
-  dev: pending          # F-44/F-45/F-46 미구현 — v28·v29 handoff (v29 귀속·레지스트리는 구현 선행 46845f17·995108a2, main 1dd7a784)
-last_updated: 2026-07-29
-spec_version: v29
+  dev: pending          # F-44/F-45 미구현(v28), F-47 미구현(v30) — F-46은 구현 완료(afd64aa9)
+last_updated: 2026-07-30
+spec_version: v30
 decisions_locked:
+  - 'F-47(v30): claude shell+장수 자식(≥60s 비헬퍼)은 working이고 자식 없는 shell은 idle이다. 실행 상세는 ⚙ <명령> <경과>로 표시하며 턴 종료 후 background 자식은 분류 불변 idle + dim ⚙ 배지다. codex는 task_started 판정 불변에 미종결 tool_call·자식 스캔 상세만 추가하고, daemonize 재부모화는 정직 결손이다'
   - 'F-24(v29 correction): managed Codex의 rollout은 동일 managed-sessions 디렉토리 argv 증거로 app-server에서 fd-less --remote TUI 행에 이관한다. (fd-owner, TUI) 쌍이 dir당 유일할 때만이며 donor는 sid를 재청구하지 않는다. dispatch collector는 존재하는 runtime home의 .harness/dispatch/jobs.log를 additive·realpath-dedup 병합하고 명시 AGENT_DISPATCH_JOBS는 단일 선택을 유지한다'
   - 'F-46(v29): done 분사 행은 15분 dim ✓ afterglow 후 소거한다. blink 없음·카운트 제외·표시층 전용이며 killed/cancelled는 대상이 아니다'
   - 'F-44(v28): 강등 실행은 6번째 canonical node state degraded로 투영한다. 소스는 SD-93 ledger(route_hash 일치·상위 6분기 미해당)이며 상태 소스 위계의 최약 계층이라 active를 주조할 수 없다. 표시는 ◐·amber·blink 없음·(hop·reason)이고 pid/model/effort는 미렌더하며 시간 임계 자동 failed 전이는 금지한다. node_state 정규형은 active|degraded|reconciling|failed|done|pending이고 unknown은 projection resolver 전용이다'

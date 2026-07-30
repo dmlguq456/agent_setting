@@ -13,9 +13,6 @@
 > · **v25 correction 2026-07-27** (route completion reconciliation — exact terminal 관측 뒤 completion marker를 기다리는 노드를 실패 `✕`와 분리해 `reconciling`/`…`로 표시, gate·progress는 계속 미완료)
 > · **v26 correction 2026-07-27** (pre-stage truthfulness + depth-2 stage hue + subtitle column — 실제 stage/route가 생기기 전 고정 breadcrumb를 `preparing…`으로 대체하고, worker `running`과 NOW 설명을 각각 해당 stage hue·session 열에 정렬)
 > · **v27 correction 2026-07-27** (inline capability truth — spec-read marker를 현재 작업 증거로 단독 채택하지 않고, active entry capability가 `autopilot-spec`일 때만 spec breadcrumb를 표시하며 Codex router가 capability marker를 기록)
-> · **v28 2026-07-28** (fallback degradation 관측 — 강등 노드 6번째 canonical state `degraded`·실패 leg alert 버킷·SD-50 "without claiming Fleet parity"의 조작적 정의, F-44~F-45. `node_state` 정규형의 기존 `reconciling`/`unknown` 드리프트 동시 해소. 근거 = stage-dispatch SD-93 ledger + 2026-07-28 실측 사고 37분 `preparing…`/51분 `pending`)
-> · **v29 correction 2026-07-29** (managed-codex 귀속·분사 레지스트리 가시성·done afterglow — F-24 correction: managed Codex의 app-server/`--remote` 2-프로세스 분리를 동일 managed-dir 증거 기반 rollout 이관으로 흡수(구현 선행 `46845f17`); §4 dispatch 소스에 per-runtime-home installed 레지스트리 병합 등재(구현 선행 `995108a2`); F-46 done afterglow 15분 신설(미구현 handoff). 근거 = 2026-07-29 사용자 관찰 "codex가 아예 안 잡혀"·"분사 세션이 안 보여" + 라이브 실측)
-> · **v30 2026-07-30** (F-47 exec 가시성 — "뭔가 돌려두고 대기하는 세션"과 idle의 구분. claude registry `shell`을 idle 동치에서 분리해 장수 자식 증거와 결합 시 working으로 정정; 세션 프로세스 트리의 장수 비헬퍼 자식(≥60s)을 read-only 스캔해 `⚙ <명령> <경과>` 상세를 표시; codex는 기존 task_started lifecycle 판정을 유지하고 미종결 tool_call + 자식 스캔(managed_dir 조인 재사용)으로 상세만 추가; 턴 종료 후 살아있는 background 자식은 분류 불변(idle) + `⚙` 배지. 근거 = 2026-07-30 사용자 관찰 "bash나 python 돌려두고 대기하는 세션이 idle과 구분이 안 된다" + status=shell 세션의 12분짜리 python 학습 자식 라이브 실측)
 > 컴포넌트: `agent_setting` repo 의 **별도 내부 도구** — 기존 `spec/prd.md`(Unified Memory System)와 무관, 이 폴더(`spec/agent-fleet-dashboard/`)가 자체 청사진.
 > 입력(1순위 근거): `research/agent-fleet-dashboard/00_prior_art.md`(build-vs-adopt·herdr·렌더스택) · `research/agent-fleet-dashboard/01_tap_mechanics.md`(하네스별 tap·discovery·liveness, file-cited)
 > **v2 추가 입력**: `spec/stage-dispatch/prd.md`(SD-1~9 — 스테이지 단위 depth-2 headless 분사 계약, §9-13 fleet 표시 = Phase 2 잔여) · 현행 `tools/fleet/` 코드 전수 실측(2026-07-10 Explore, file:line-cited) · 사용자 관찰("워크플로우를 못 따라감 + UI 아쉬운 점 다수").
@@ -159,12 +156,10 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 - **qa 실측 레이어드 fallback(R3)**: effective qa = argv `--qa` → jobs.log pipe 의 `qa=` 구조필드(신형 `capability=…,mode=…,qa=…` codex 형식) → 잡 산출물 `plans/*_<slug>/pipeline_state.yaml` 의 `qa_level` 실측 → CONVENTIONS §1.4 capability→default 맵 순. 명시값(argv)이 아닌 유도값(2~4)은 dim + `~` 접두(예 `~thorough`)로 구분 — argv 텍스트 오탐 방지 위해 `--qa` 파싱은 `[a-z]+` + valid-level 화이트리스트로 좁힌다. 이 fallback은 QA 표시만 다룬다. mode는 명시 구조필드를 우선하고, stage는 아래 `WorkProjection`의 단일 authority만 소비한다.
 - stage = `WorkProjection.stage_label`. 기존 `live_stage()`는 `projection.py` 내부의 legacy artifact adapter로만 남으며, route tuple이 완전히 부재하고 exact plan-directory 후보가 하나일 때에만 호출되어 `stage_label` 하나만 제공한다. fuzzy/복수 후보 선택이나 route/node/progress/gate/completion 합성은 금지한다.
 - 소스 = (a) 프로세스 스캔의 Claude autopilot/loops 잡 + (b) jobs.log 의 running/open 행(codex/opencode dispatch 는 여기서만 보임 — §6). dispatch 의 stale/dead 는 `--all` 무관 **항상 노출**(정리 신호).
-- **[v29 correction] jobs.log 레지스트리 후보 집합**: 기본 후보는 `<agent-home>/.dispatch/jobs.log`(agent-home 해석: `AGENT_HOME`→`CLAUDE_HOME`→`~/agent_setting`→`~/.claude`)와 legacy `~/.claude/.dispatch/jobs.log`에 더해, **존재하는 각 installed runtime home의 `<runtime-home>/.harness/dispatch/jobs.log`**(`$CODEX_HOME`|`~/.codex`, `$CLAUDE_CONFIG_DIR`|`~/.claude`, opencode config home)를 additive·realpath-dedup으로 병합해 읽는다 — managed Codex 부모가 분사한 잡은 codex runtime home 레지스트리에만 등록되므로 이 병합 없이는 분사가 통째로 비가시였다(2026-07-29 실측). 명시 `AGENT_DISPATCH_JOBS`/override는 종전대로 그 단일 레지스트리만 선택한다. 구현 선행 `995108a2`.
 
 ### stale/companion 표시 비대칭 (v2 신설 — 세션 ≠ dispatch)
 - **세션**: stale/dead 상태 또는 codex app-server companion 은 그룹별로 **기본 숨김**, 그룹 하단에 `+N stale/companion hidden` 요약 행(클릭·`a` 토글 가능). 표시로 전환 시 telemetry(모델/ctx%/rl/effort/cost)는 **dim(어둡게)** 처리 — last-observed 값이며 라이브 값이 아님을 시각적으로 구분. codex app-server 는 표시 전환 시 ctx%/rl 이 대시(`—`)로 남는다(companion 오귀속 문제 — §7 참조).
 - **dispatch**: stale/dead 잡은 `--all` 여부와 무관하게 **항상 표시**(숨김 폴드 없음) — 잡 실패·중단 신호를 놓치지 않기 위함.
-- **[v29 신설] F-46 (done afterglow — 미구현 handoff)**: `done` 분사 행은 종료 즉시 사라지지 않고 **15분** 동안 dim `✓ done <경과>` afterglow 행으로 남는다 — 그룹 cooling의 잔열 개념을 잡 행 레벨로 미러한 것으로, blink 없음·working/idle/잡 카운트 제외·표시층 전용(`--json`은 registry status 원형 보존)이다. `killed`/`cancelled`는 afterglow 없이 기존 stale/dead 경로 그대로다. 근거 = 2026-07-29 사용자 관찰(수 분짜리 quick 분사가 완료 직후 증발해 "분사가 안 보였다"로 인지됨).
 - **그룹 접기(R4, nested-tree cycle 2026-07-01)**: live 세션(비-stale/dead)이 0인 프로젝트 그룹은 **기본 접기** + `━━ 📁 <name>  (+N folded)` 요약 행(같은 `a`/클릭 토글로 펼침) — 세션 stale-hide 를 그룹 레벨로 미러. **caveat**: 노출 필요한 dispatch(active/stale/orphan 잡)가 그룹에 있으면 접지 않는다(dispatch 를 절대 숨기지 않기 — 접기 조건 = live 세션 0 AND 그룹 잡 0). 접힌 요약 행도 `_TOGGLE_ROWS` 등록으로 클릭 토글.
 
 ### 렌더 모델 (zero-dep curses)
@@ -248,7 +243,6 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 - **F-24 (portable worker 귀속 + Codex 세션 ID 단일 소유, 2026-07-15)**:
   - 모든 repo-owned background launcher의 `AGENT_SESSION_ROLE=worker`를 procscan/dispatch collector가 `is_child`의 강한 **귀속 증거**로 사용한다. 이 마커 자체는 title/NOW scheduler 제외 조건이 아니다. scheduler는 `mem_worker`(`FLEET_TITLE_REFRESH`/`MEM_DISTILL`), app-server, dead/stale, transcript가 없는 비대화식 loop/cron처럼 명시적으로 내부·비요약 대상으로 분류된 행만 제외한다. 일반 registered dispatch 자식은 대화 transcript가 있고 내부 제외 태그가 없으면 F-17/F-23/F-39에 따라 150초 debounce 대상이다.
   - Codex는 같은 cwd의 두 TUI 중 한 프로세스만 rollout fd를 소유할 수 있다. collector tick 시작 시 모든 `/proc/<pid>/fd` 기반 강한 rollout 소유권을 먼저 예약하고, fd가 없는 row의 cwd/start-time fallback은 예약된 sid를 절대 재사용하지 않는다. 따라서 한 sid/title이 두 PID에 동시에 찍히지 않는다. 식별 불충분 row는 `session_id/title=None`으로 정직하게 degrade하며 살아 있는 프로세스를 숨기지는 않는다.
-  - **[v29 correction] managed(client-server) 토폴로지 흡수**: managed Codex는 한 세션을 rollout fd를 쥔 `codex app-server --listen unix://<managed-dir>/app-server.sock`(procscan companion, 기본 숨김)과 fd 0개의 `codex --remote unix://<managed-dir>/managed-tui.sock` TUI 클라이언트(가시 행)로 쪼갠다. prepare_tick prepass는 두 argv의 동일 `<managed-dir>`를 결정적 조인 증거로 삼아 app-server가 소유한 rollout을 그 TUI 행에 이관한다. 이관 조건 = 같은 dir에서 fd-owner app-server 정확히 1개 + TUI 클라이언트 정확히 1개이며, 그 외(미발견·복수 후보·fd 미보유)는 이관 없이 기존의 정직한 결손으로 degrade한다. donor app-server 행과 그 pid의 same-cwd fallback은 해당 sid를 재청구하지 않아 live `--json` 스냅샷 포함 어디서도 sid 중복이 없다. 구현 선행 `46845f17`.
   - acceptance: 같은 cwd의 fd-owner + fd-less TUI fixture에서 owner만 sid/title을 얻고 worker marker는 child 귀속만 증명한다. 대화 transcript가 있고 내부 제외 태그가 없는 일반 registered child는 150초 debounce 뒤 scheduler 대상이며, `mem_worker`/app-server/dead/stale 및 transcript 없는 비대화식 내부 loop/cron 행만 0회다. live `--json` snapshot에서도 동일 sid 중복이 없어야 한다.
 - **적용 순서(정보 위계, v7 정정)**: §4.6(F-9~F-13)은 표시층(render.py) 한정 — collector 계약·모델 스키마 불변(SD-F4 만 collector). §4.7(F-14~F-24)은 각 항목에 명시된 표면까지 — F-17/F-21 neutral sidecar+shared trigger, F-18/F-24 procscan environ 태깅·Codex identity ownership, F-19 신규 collector(`collectors/memory.py`)·`--json` additive `memory` 키, F-20 Codex usage runtime-currentness, F-22 responsive render/provider, F-23 모든 title-provider ingress 안전 경계. 시각 결정이 substantial 해지면 autopilot-design 리드.
 - **🧠 글리프 위계 (v3 명문화, audit 정보성 반영)**: 같은 글리프의 두 표면 — 그룹 헤더 `🧠 N` = F-18b mem-*워커 프로세스* 수 / pulse 인접 `🧠 mem …` 행 = F-19 메모리 *이벤트* 집계. 라벨 문맥(`N` vs `mem`)이 구분자 — 새 🧠 표면 추가 시 이 두 의미와 충돌 금지.
@@ -260,11 +254,6 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 - **F-25 (세션·잡 상태 판정의 단일 상태 모델)** ★ v8 핵심 — "기준 불안정" 해소.
   - **문제**: 상태 판정이 층층이 쌓인 사고별 휴리스틱에 분산돼 있다 — proc scan, transcript/rollout mtime 창(15min), slug 상관 dedup(F-18a), `open`→queued 매핑과 worktree mtime 유도(F-15), env 마커(F-18b/F-24), rollout fd 소유권(F-24). 각각은 정당하나 **우선순위·충돌 규칙이 코드 암묵**이라 같은 세션이 tick마다 다른 기준으로 분류될 수 있고, 사용자는 "왜 이 상태인가"를 검증할 수 없다.
   - **계약**: 단일 분류기(`model.py` 소유)가 모든 세션/잡의 상태를 결정한다. 입력 소스 우선순위를 규범으로 고정: **(1) 명시 registry 상태**(jobs.log status, `~/.claude/sessions` status) > **(2) 강한 프로세스 증거**(exact pid + `/proc` start-time, rollout fd 소유권, `AGENT_SESSION_ROLE` 등 env 마커) > **(3) mtime 휴리스틱**(최후, 유도값 표시 `~` 접두 유지). 하위 소스는 상위 소스와 모순될 때 절대 이기지 못한다.
-  - **[v30 신설] F-47 (exec 가시성 — 실행 중 vs 대기 구분)**: 
-    - **증거**: ① claude tier-1 registry `status=shell`(도구 실행 중), ② 세션 프로세스 트리의 **장수 비헬퍼 자식** — read-only `/proc` 스캔, 나이 ≥60초, shell wrapper(`zsh`/`bash`/`sh`)는 실작업 자식이 있으면 그 자식으로 하강, statusline/mem-worker 등 harness 내부 헬퍼 제외, ③ codex rollout tail의 **미종결 tool_call**(call/output 짝 불일치). managed codex의 자식은 app-server 밑에 있으므로 v29의 managed_dir 조인으로 가시 TUI 행에 귀속한다.
-    - **분류 규칙(F-25 위계 편입)**: claude `shell`+장수 자식 → working. codex는 기존 `task_started` lifecycle 판정(tier-2) 불변 — 오분류가 없으므로 상태 규칙을 추가하지 않는다. **턴 종료 후에도 살아있는 background 자식**(claude `idle`+자식, codex `task_complete`+자식)은 분류를 승격하지 않고 idle을 유지한다 — 모델 관점 대기가 사실이며, 대신 표시로만 구분한다.
-    - **표시**: 실행 상세 `⚙ <명령> <경과>`(예 `⚙ python 12m`)를 세션 행의 NOW/summary 존에 표시. working 승격 케이스는 working 글리프+`⚙` 상세, background 케이스는 idle 글리프+dim `⚙` 배지. 명령 = 하강 후 자식의 comm, 경과 = 그 프로세스 etime. 그룹 활동 tier·pulse 카운트는 분류 결과만 따른다(배지가 그룹을 hot으로 만들지 않는다).
-    - **한계(정직 결손)**: init으로 재부모화된 daemonize 프로세스는 소유 증거가 없어 표시하지 않는다. 추측 금지 — 자식 소유(프로세스 트리)와 registry/rollout 신호만 쓴다. zero-injection 불변(§0.5).
   - **exact lifecycle 보강(v12)**: registered dispatch는 exact
     `attempt_id+route_id+route_node`의 terminal watchdog/log observation이 과거
     heartbeat·PID·cwd mtime보다 우선한다. canonical attempt identity가 있으면
@@ -339,12 +328,12 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 
 > 현행 계약(v14, 2026-07-22): topology registry `capabilities/topologies.json`은 schema v3이며 portable unit catalog를 참조한다. immutable route record는 route schema v2·dispatch contract v3을 유지하고 top-level `unit_catalog_digest`, optional `composed`, `nodes[].unit`/`unit_choices`를 sealed hash에 포함한다. jobs.log pipe는 `route_file=/route_id=/route_hash=/unit=`로 링크하며, topology schema와 route schema를 같은 버전으로 오인하지 않는다.
 
-- **F-28a (route record 소비 — v16 evidence 경계 개정)**: dispatch collector가 pipe/env의 `route_file`/`route_id`/`route_hash`/`route_node`를 read-only 로드하고 검증한다. **route tuple이 완전히 부재한 legacy 행**은 기존 pipe/artifact fallback을 사용할 수 있다. 반면 명시 route tuple이 하나라도 있는데 record 부재·파싱 실패·hash/정체성 불일치가 나면 `unknown`+기계 판독 가능 ambiguity로 남고 artifact 유도로 덮지 않는다. 검증된 record+정확 entity tuple만 topology/progress/node state/gate를 주장할 수 있고, record 없는 jobs.log/env exact evidence는 관측된 identity 필드만 보존한다. exact-evidence 소스는 세 가지다 — 레지스트리 live 행, 레지스트리 terminal 행, 그리고 SD-93 degradation ledger. ledger 레코드의 `route_hash`가 record와 불일치하면 `degraded`를 주조하지 않고 `route-record-mismatch` ambiguity로 남긴다(ledger를 노드 상태 주장 소스로 승격하는 이상 이 문장이 안전판이며, 예외를 두면 본 조항이 무의미해진다). `--json route`는 `unit_catalog_digest`, `composed`, 각 node의 `unit`/`unit_choices`를 additive로 보존하며 구 record/row의 필드 부재는 정상이다.
+- **F-28a (route record 소비 — v16 evidence 경계 개정)**: dispatch collector가 pipe/env의 `route_file`/`route_id`/`route_hash`/`route_node`를 read-only 로드하고 검증한다. **route tuple이 완전히 부재한 legacy 행**은 기존 pipe/artifact fallback을 사용할 수 있다. 반면 명시 route tuple이 하나라도 있는데 record 부재·파싱 실패·hash/정체성 불일치가 나면 `unknown`+기계 판독 가능 ambiguity로 남고 artifact 유도로 덮지 않는다. 검증된 record+정확 entity tuple만 topology/progress/node state/gate를 주장할 수 있고, record 없는 jobs.log/env exact evidence는 관측된 identity 필드만 보존한다. `--json route`는 `unit_catalog_digest`, `composed`, 각 node의 `unit`/`unit_choices`를 additive로 보존하며 구 record/row의 필드 부재는 정상이다.
 - **F-28b (route-aware breadcrumb)**: conductor·stage 행의 stage breadcrumb을 고정 `_PIPE_STAGES` 하드코딩 대신 **record의 `nodes[].id` + `depends_on` DAG**에서 생성 — 임의 capability 파이프(lab eval, research 등)가 code 4단 강제 없이 자기 모양대로 표시된다. 노드 점등 = 해당 depth-2 자식 행 실측 우선(SD-F2 원칙 불변). 기존 breadcrumb은 route tuple이 완전히 부재한 legacy 잡에서만 유지하고, 명시 tuple이 하나라도 있으나 record가 부재·무효·불일치하면 unknown/ambiguity를 표시한다.
 - **F-30 (처리-과정 뷰 — 전용 모드, 설계 확정)**:
   - **진입**: 전용 키 `p`(process) 토글 — 기존 `w` 레이아웃 cycle과 직교(그룹 뷰 ↔ 과정 뷰 전환). footer 키 바에 표기. 비대화식 투영 = `--view {group,process}` CLI 플래그 + `FLEET_VIEW` env — `p` 토글과 같은 전역 상태 하나를 공유하며 별도 코드 경로를 만들지 않는다(v10 구현이 3폭 캡처·디자인 비평 등 비대화식 검증용으로 추가, 2026-07-16 사용자 확정 minor).
   - **단위**: 카드 1장 = 활성 route 1개 (프로젝트 그룹 대신 파이프라인 중심 재그룹).
-  - **카드 구성**: L1 = `[capability·mode·intensity] <route_id 단축> — <n/m nodes> ⏳<경과>`; L2 = DAG 가로 흐름 `plan ✓12m › exec ● 8m (opus·high) › test ○ › report ○` — 노드별 상태 글리프(✓ 완료 / ● 활성+경과+모델 / ◐ 강등 실행+경과+`(hop·reason)` / ○ 미기동 / `…` completion-marker 조정 대기 / ✕ 실패)와 completion gate 통과 여부. 강등 노드 형태는 `exec ◐ 51m (inline·runtime-unavailable)`이며 pid·model·effort 칸을 렌더하지 않는다(F-44c·F-44e). `depends_on`이 병렬인 노드는 세로 분기(들여쓴 병렬 행)로.
+  - **카드 구성**: L1 = `[capability·mode·intensity] <route_id 단축> — <n/m nodes> ⏳<경과>`; L2 = DAG 가로 흐름 `plan ✓12m › exec ● 8m (opus·high) › test ○ › report ○` — 노드별 상태 글리프(✓ 완료 / ● 활성+경과+모델 / ○ 미기동 / `…` completion-marker 조정 대기 / ✕ 실패)와 completion gate 통과 여부. `depends_on`이 병렬인 노드는 세로 분기(들여쓴 병렬 행)로.
   - **gate 통과 증거 소스 (2026-07-16 확정, v10 minor #2 — 재개 조건 충족)**: v10 구현은 통과 증거 부재로 정직 결손(`—`) 처리했다(carryover §1). stage-dispatch v13(SD-56)이 canonical marker `.dispatch/<agent-home 기준>/completion/<route_id>/<node_id>.json`을 실사용으로 착륙시켜 재개 조건이 충족됐다. 판정 규칙: **marker 존재 + record의 route_id/route_hash 일치 = 통과**(별도 gate 표식, 상태 글리프와 독립 차원). marker 부재 = "무주장"(실패·미통과로 표시 금지, F-28 tolerant 원칙 불변). read-only, mtime 캐시, 이력 파일 중 최신만 authoritative.
   - **자식 연결**: 활성 노드 아래 그 노드를 실행 중인 세션 행(축약형)과 그 서브에이전트 `└⚡`(F-29 재사용)를 중첩 — "누가 지금 어느 단계를 어떤 모델로" 한눈에.
   - **마우스**: 노드/카드 클릭 = 접기·펼치기, 세션 축약행 클릭 = 선택(F-27 문법 재사용). 완료 route는 기본 1행 접힘, 실패 노드 포함 route는 자동 펼침 + 적색 강조.
@@ -379,7 +368,7 @@ statusline 잡스캔 로직 재사용(**top-3 cap 제거** + `.dispatch/jobs.log
 
 > **목표**: interactive 메인 세션과 registered dispatch 잡을 서로 다른 stage 판정기로 그리지 않는다. 동일한 read-only evidence를 단 하나의 `WorkProjection`으로 정규화하고 group/process/plain/JSON 표면은 이 결과만 소비한다. 오귀속보다 부재가 낫고, context pressure는 intensity와 직교한다.
 
-- **F-36a (공통 stage/progress projection)**: `Session`과 `DispatchJob`은 additive `work_projection`을 공유한다. 정규형은 `source`(`route-exact|registry-exact|artifact-inferred|none`), `route_id`, `route_hash`, `route_node`, `attempt_id`, `assigned_contract`, `unit`, `stage_label`, `node_state`(`active|degraded|reconciling|failed|done|pending`), `active_nodes[]`, `progress{done,total}`, `ambiguity[]`를 운반한다. leaf는 정확히 한 `route_node`를, owner/conductor는 같은 route의 0개 이상 병렬 `active_nodes[]`를 표현한다. `projection.py`가 source-agnostic 단일 resolver를 소유하고 render/`--once`/`--json`은 `live_stage()`를 별도로 호출해 stage를 재판정하지 않는다. `unknown`은 projection resolver 전용 fail-closed 값이며 `route.py::_node_state()`의 반환값이 아니다 — 위 정규형은 v28에서 실측 반환 집합과 정합화한 것으로, `reconciling` 누락(F-41 착륙 시 미동기화)과 `unknown` 오등재를 `degraded` 추가와 같은 개정에서 함께 해소했다.
+- **F-36a (공통 stage/progress projection)**: `Session`과 `DispatchJob`은 additive `work_projection`을 공유한다. 정규형은 `source`(`route-exact|registry-exact|artifact-inferred|none`), `route_id`, `route_hash`, `route_node`, `attempt_id`, `assigned_contract`, `unit`, `stage_label`, `node_state`(`active|done|failed|pending|unknown`), `active_nodes[]`, `progress{done,total}`, `ambiguity[]`를 운반한다. leaf는 정확히 한 `route_node`를, owner/conductor는 같은 route의 0개 이상 병렬 `active_nodes[]`를 표현한다. `projection.py`가 source-agnostic 단일 resolver를 소유하고 render/`--once`/`--json`은 `live_stage()`를 별도로 호출해 stage를 재판정하지 않는다.
 - **F-36b (evidence 우선순위·모호성 거부)**:
   1. hash 검증된 immutable route record + 동일 entity의 명시 `route_id/route_node/attempt_id`;
   2. jobs.log 또는 process env의 명시 route/node evidence를 exact `(pid,proc_start)`로 결합;
@@ -460,11 +449,8 @@ public JSON consumer 회귀 0, mirror parity 통과.
   `…gate`로 표시한다. `✕`·적색 failed alert·실패 자동 펼침은 실제 실패에만 쓴다.
   public route JSON은 node `state=reconciling`을 그대로 노출하고 completion/gate
   필드는 기존 의미를 유지한다.
-- **F-41d (병렬 집계, v28 개정)**: 병렬 그룹 상태 우선순위는
-  `failed > active > degraded > reconciling > done > pending`이다. `degraded`가
-  `reconciling` 위인 이유는 `reconciling`이 사실상 끝난 노드의 marker 대기인 반면
-  `degraded`는 관측 불가 표면에서 아직 진행 중일 수 있기 때문이며, 그룹 요약은 덜 끝난
-  쪽을 대표해야 한다. 한 leg가 조정 대기라는
+- **F-41d (병렬 집계)**: 병렬 그룹 상태 우선순위는
+  `failed > active > reconciling > done/pending fallback`이다. 한 leg가 조정 대기라는
   이유만으로 그룹을 실패로 만들지 않되, 다른 leg의 실제 실패를 숨기지 않는다.
 
 **acceptance**: BC_ResNet_tf에서 관찰된 exact
@@ -514,77 +500,6 @@ column이 모든 지원 폭에서 session 열과 같고 canonical↔Claude mirro
 기존 lit breadcrumb를 유지, (4) Codex router 호출이 exact session marker를 생성, (5) full Fleet,
 portable guard, generator/mirror parity 회귀 0.
 
-## 4.17 [v28 신설] fallback degradation 관측 — F-44 (강등 노드) / F-45 (실패 leg alert)
-
-> 근거: 2026-07-28 실측 사고(agent-note `board-project-live-reflect`) — inline 강등 뒤 37분
-> `preparing…`, 이어 51분 `pending`. 두 구간 모두 실제로는 작업이 진행 중이었고, 같은 사이클의
-> codex leg `exit_code=65`는 어느 표면에도 없었다. 소비 계약 부재이며 생산 계약은
-> `spec/stage-dispatch/prd.md` SD-93이 소유한다. 본 절은 소비만 다룬다(중복 기술 0).
-> 사용자 확정 범위: 강등 실행 + 실패 leg 전부. 강등 **이력 조회** 표면은 범위 밖이다.
-
-- **F-44a (6번째 canonical node state `degraded`)**: `route.py::_node_state()`에 `degraded`를
-  추가하고 삽입 위치는 **마지막 `return pending` 직전 단 한 곳**이다. 기존 6개 분기는 한 줄도
-  바꾸지 않는다. 판정 순서는
-  `active > done(marker⊃dead attempt) > failed(explicit) > reconciling > failed(generic) >
-  done(ev_status) > ★degraded(ledger ∧ route_hash 일치) > pending`이다.
-  이탈 경로는 4개뿐이다 — ① completion marker → `done`, ② 이후 등록 attempt → `active`,
-  ③ terminal 레지스트리 증거 → `done`/`failed`, ④ route 대체. **경과 시간 임계에 따른 자동
-  `failed` 전이는 금지한다**(관측 부재는 실패 증거가 아니다).
-- **F-44b (소비 이음매)**: collector가 ledger 파일 I/O를 소유하고, 파싱된 dict를
-  `build_views()`의 네 번째 순수 인자로 전달해 `route.py`의 PURE 계약을 보존한다.
-  `collect.last_route_nodes` ↔ `collect.last_degradations` 대칭을 유지하고, mtime 캐시와
-  route별 tail K=64를 사용하며, 읽기 대상은 **이미 해석된 route로 제한**한다(전역 파일이 아닌
-  route 샤딩을 쓰는 이유가 이 자연 상한이다).
-- **F-44c (표시 문법)**: 노드 글리프 `◐`(U+25D0), 색 `lvl_y`(amber), **blink 없음**, 괄호 내용
-  `(hop·reason)`. pid·model·effort 칸은 **미렌더**한다 — `—`도 아니다(`—`는 "읽어야 하는데 못
-  읽었다"이고 여기서는 "값 개념이 없다"). 경과 라벨은 **강등 이후 경과**이며 스스로 색을 바꾸지
-  않는다. breadcrumb 커서 규칙은 `active` → **`degraded`** → `reconciling` → 마지막 `done` 다음
-  순이다. 글리프 선택 근거는 기존 잉크 농도 사다리(`● filled > ○ ring > ◌ dotted ring`)이며
-  `◐`는 `●`와 `○` 사이의 반쪽 잉크 = "강등 사실은 증명됐고 실행은 관측 불가"라는 정확히 절반의
-  지식이다. `_LIVE_GLYPH`의 `◑`(blocked)와는 축이 다르므로 충돌하지 않되(session/job liveness 축
-  vs route 노드 상태 축), 두 항목이 legend에 동시에 뜰 수 있으므로 라벨 문맥
-  (`◐ degraded node` vs `◑ blocked session`)을 legend에 못박는다.
-  **`~` 재도입 금지**(F-34(b) — "물결로 예측 표시하는 건 안 하면 안 되나"). 흰 바·reverse 배지·
-  대문자 영문 배지도 동일 기각 이력이다.
-- **F-44d (정직성 경계)**: 표시 가능한 것은 강등 사실·`fallback_hop`·`reason`·강등 시각과 그
-  이후 경과·`route_id`/`route_node`·`execution_surface`·`registered_worker: 0`·
-  `fleet_visibility`·거부된 상위 hop 증거뿐이다. 표시 금지는 inline 실행 내부 진행률, 도구 호출
-  수, 실제 사용 모델·effort, pid, 완료 예상 시각이다. 조작적 규칙 3개 — ① ledger는 *결정*을
-  증명하지 *실행*을 증명하지 않는다, ② 경과는 강등 이후만 센다, ③ 부재는 `—`가 아니라 미렌더다.
-- **F-44e (SD-50 "without claiming Fleet parity"의 조작적 정의)**: 다음 4개의 논리곱으로
-  확정한다 — ① pid를 렌더하지 않는다(pid는 제어 가능성의 표식이다), ② F-26 세션 제어(kill 커서)
-  순회 대상에서 제외한다, ③ model·effort 튜플을 렌더하지 않는다(유일한 정당한 소스인 job 핸들이
-  없다), ④ `--json`에 `registered_worker: 0`과 `fleet_visibility`를 그대로 노출해 소비자가 등록
-  행이 아님을 기계 판독할 수 있게 한다. 한 문장으로: **"제어 가능한 대상처럼 보이지 않고, 등록
-  행이 있다고 주장하는 필드를 하나도 만들지 않는 것"**. 규범 본문은 SD-50이 소유하고 본 조항은
-  그 조작적 정의를 소유한다(상호 앵커 인용, 중복 기술 아님).
-- **F-44f (`--json`)**: 가법 `degradation` 객체만 추가하고 기존 키는 불변이다. `attempt_trace`는
-  `--json` 전용이다.
-- **F-45a (실패 leg alert)**: 실패 leg는 노드 **상태가 아니라 alert**다. 기존 alert 집계 표면의
-  버킷(dead/stale/ctx)에 **네 번째 버킷 `degradation`을 추가**하고 새 표면을 만들지 않는다.
-  행 문법은 `⚠ <route_node> leg <i>/<n> <harness> ✕ exit=<code> <reason>`이며 leg 좌표
-  (`parallel_leg_index`/`parallel_leg_count`)를 명시해 sibling을 묶어 숨기지 않는다.
-- **F-45b (상한과 잘림 명시)**: `event_id`로 dedup하고 route당 최근 N=3을 표시하며, 초과분은
-  침묵하지 않고 `⚠ +K more failed legs (--json)`으로 잘림을 명시한다. `a` 토글에서 전체를
-  노출한다.
-- **F-45c (특수 문구)**: `kind=chain-exhausted`는 전 hop 소진을 명시한다. quick(`dispatch_depth==1`)
-  강등은 정상 상태로 승격하지 않고
-  `⚠ contract violation: quick degradation row · <route_id> · <route_node> · <fallback_hop>`으로만
-  노출한다(SD-73/SD-93e). `_unattributed.jsonl` event는 **standalone alert 전용이며 route card에
-  귀속하지 않는다**.
-
-**acceptance**: (1) R-불변식 property 테스트 — 임의의 `(route_id, route_node)`에 대해
-`ledger_record_exists ∧ route_hash 일치 ∧ 상위 6분기 미해당 ⇒ state ≠ "pending"`을
-`_node_state()` 단위 테스트에 직접 적는다. (2) 사고 재현 fixture(`fleet_visibility=none` inline
-강등 + 등록 행 없음 + marker 없음 + 51분 경과)가 `pending`이 아니라 `degraded`로 렌더되는지를
-breadcrumb·카드·`--json` 3표면에서 확인한다. (3) `route_hash` 불일치 fixture는 `degraded`가 아니라
-`route-record-mismatch` ambiguity로 남는다. (4) `done` 카운트와 `gate_passed`는 문자열 동등비교라
-자동 불변임을 회귀로 고정한다(F-41b가 `reconciling`에 대해 세운 분리의 선례). (5) 병렬 collapse,
-group/process 뷰, wide/narrow/stack, public JSON, canonical↔Claude mirror가 같은 상태를 보존한다.
-(6) **선행 검증**: 구현 사이클 첫 단계에서 `◐`·`◑`를 실제 사용자 터미널에 출력해 폭 1칸·missing
-glyph 없음을 실측한다. 실패 시 대체 후보는 기존 잉크 사다리 안에서 다시 고른다
-(`~`·`⊘`·reverse 배지·흰 바는 전부 기각 이력).
-
 ## 5. 능동 변경 — fleet-owned local state write
 
 현재 `statusline.sh:10` 이 **모든 세션을 `~/.claude/.statusline-last.json` 한 파일에 덮어씀**(last-writer-wins) → 멀티세션 대시보드가 세션별 telemetry 를 못 얻음. 해결:
@@ -609,7 +524,6 @@ glyph 없음을 실측한다. 실패 시 대체 후보는 기존 잉크 사다�
 - claude/codex = transcript(또는 rollout) mtime; opencode = DB `MAX(time_updated)`. `age ≤ 15min` → live, 초과 → `stale`, 없음 → `dead`.
 - 추가 신호: pid `kill -0`(프로세스 생존), cwd symlink `(deleted)` 접미사 = orphan(worktree 지워짐), claude `sessions/<pid>.json.status`(idle/shell/busy).
 - 4-상태(herdr) 매핑: `busy`/최근 write=working, `idle`=idle, (blocked 은 herdr 소켓 있을 때만 — 스코프 밖), stale/dead 는 별도.
-- **[v30/F-47] `shell` 상태 정정**: claude registry `status=shell`은 idle 동치가 아니라 "Bash 도구 실행 중" 신호다. `shell` + 장수 자식(≥60s, 비헬퍼) = **working**(exec 상세 표시); 자식 없는 `shell`(bash 입력 대기 등)은 종전대로 idle. `busy`=working·`idle`=idle 매핑은 불변.
 
 ## 8. herdr 계약 재사용 (채택 X)
 
@@ -737,11 +651,11 @@ flowchart TD
 
 ## 확정 결정 (v7 승격, 2026-07-15 — worker attribution + Codex identity ownership)
 
-- **F-24 lock**: `AGENT_SESSION_ROLE=worker`는 cross-harness child 귀속의 portable 강한 표식이다. Codex rollout fd 소유권을 tick prepass에서 먼저 예약해 same-cwd fallback이 이미 소유된 sid를 복제하지 못하게 한다. 불확실한 PID는 unknown으로 남기며 live row 자체는 보존한다. managed(client-server) 토폴로지에서는 동일 `managed-sessions/<id>` 디렉토리 argv 증거로 app-server 소유 rollout을 fd-less TUI 클라이언트 행에 이관하되, dir당 (fd-owner app-server, TUI) 쌍이 유일하지 않으면 이관하지 않는다(v29).
+- **F-24 lock**: `AGENT_SESSION_ROLE=worker`는 cross-harness child 귀속의 portable 강한 표식이다. Codex rollout fd 소유권을 tick prepass에서 먼저 예약해 same-cwd fallback이 이미 소유된 sid를 복제하지 못하게 한다. 불확실한 PID는 unknown으로 남기며 live row 자체는 보존한다.
 
 ## 확정 결정 (v8 승격, 2026-07-15 — 관제 신뢰성·세션 제어·분사 정책 연동, 사용자 확인 3건)
 
-- **F-25 lock (상태 판정 단일 모델)**: 모든 세션/잡 상태는 `model.py` 소유 단일 분류기가 결정한다. 소스 우선순위 = 명시 registry > 강한 프로세스 증거(pid+start-time·fd 소유·env 마커) > mtime 휴리스틱. 하향 전이만 hysteresis, `--json`에 `state_evidence` additive 노출, 어휘 매핑 표 규범화. 기존 휴리스틱은 입력 계층으로 재배치. 접근 방식 "전면 재설계"는 사용자 확인(2026-07-15). **v28 가법**: 네 번째이자 최약 계층으로 SD-93 degradation ledger를 둔다 — 등록 행이 부재한 구간에 한정하며 위 세 계층을 이기지 못한다. **ledger는 `active`를 주조할 수 없다**: `active`는 pid·model·effort·elapsed를 job 핸들에서 꺼내 렌더하게 만들고, 강등 실행에는 그 핸들이 없어 값을 채우면 거짓이 되고 비우면 텔레메트리가 전부 빈 이질적 행이 된다.
+- **F-25 lock (상태 판정 단일 모델)**: 모든 세션/잡 상태는 `model.py` 소유 단일 분류기가 결정한다. 소스 우선순위 = 명시 registry > 강한 프로세스 증거(pid+start-time·fd 소유·env 마커) > mtime 휴리스틱. 하향 전이만 hysteresis, `--json`에 `state_evidence` additive 노출, 어휘 매핑 표 규범화. 기존 휴리스틱은 입력 계층으로 재배치. 접근 방식 "전면 재설계"는 사용자 확인(2026-07-15).
 - **F-26 lock (세션 레지스트리 1급)**: `~/.claude/sessions`를 1급 enrichment로. 이름 사슬에 registry name 삽입, `unused` 상태 신설(무transcript+무활동), provenance dim 태그 best-effort.
 - **F-27 lock (제한적 세션 제어)**: 범위 = kill+정리만(사용자 확인 — attach/resume 비대상 유지). 행 선택+확인 게이트, exact pid+start-time 재검증, SIGTERM→명시 SIGKILL, action log 기록, kill 성공 시 registry row `done,note=fleet-kill` 마감(무write 불변식의 명시 단일 예외). 자동 제어 0.
 - **F-28 lock (분사 정책 연동)**: 타이밍 = "계약 선고정, 구현 후행"(사용자 확인). route record/topology registry 착륙 후 pipe 휴리스틱을 canonical record 소비로 대체한다. fallback은 route tuple이 완전히 부재한 legacy 행에만 허용하고, 명시 tuple의 record 부재·무효·불일치는 unknown/ambiguity로 남긴다. detached run registry·governor lease 관측은 소스 착륙 후 단계 적용.
@@ -757,7 +671,7 @@ flowchart TD
 ## 확정 결정 (v10 승격, 2026-07-15 — 처리-과정 시각화 설계 확정)
 
 - **F-28a~c lock (v16 evidence 경계 개정)**: route record는 read-only로 소비하고 arbitrary DAG breadcrumb을 생성한다. 명시 route tuple이 없는 legacy 행만 artifact/pipe fallback을 허용하며, tuple-record 불일치·무효 record는 unknown/ambiguity로 남고 추론으로 숨기지 않는다. 자식 실측 우선과 detached run·governor 조건부 probe는 불변이다.
-- **F-30 lock (과정 뷰)**: `p` 토글 전용 모드, 카드=route 1개, DAG 가로 흐름 + 병렬 세로 분기, 노드 상태 글리프(✓/●/◐/…/○/✕), 활성 노드 아래 세션·서브에이전트 중첩, 마우스 접기/펼치기(F-27 문법), 완료 접힘·실패 자동 펼침이다. route tuple이 완전히 부재한 legacy 행만 degrade 카드를 사용하며 명시 tuple을 검증하지 못한 행은 unknown/ambiguity로 남긴다. 실측 스키마(schema_version 1) 기준 — 스키마 변경 시 stage-dispatch spec과 동기 의무(F-19 선례).
+- **F-30 lock (과정 뷰)**: `p` 토글 전용 모드, 카드=route 1개, DAG 가로 흐름 + 병렬 세로 분기, 노드 상태 글리프(✓/●/○/✕), 활성 노드 아래 세션·서브에이전트 중첩, 마우스 접기/펼치기(F-27 문법), 완료 접힘·실패 자동 펼침이다. route tuple이 완전히 부재한 legacy 행만 degrade 카드를 사용하며 명시 tuple을 검증하지 못한 행은 unknown/ambiguity로 남긴다. 실측 스키마(schema_version 1) 기준 — 스키마 변경 시 stage-dispatch spec과 동기 의무(F-19 선례).
 
 ## 확정 결정 (v14 승격, 2026-07-22 — portable unit·compositional route)
 
@@ -799,32 +713,11 @@ flowchart TD
   fresh exact-sid capability grounding이 `autopilot-spec`일 때만 허용하고, Codex capability
   router는 native Skill hook 부재를 marker 기록으로 보완한다.
 
-## 확정 결정 (v28 승격, 2026-07-28 — fallback degradation 관측)
+## Next — current v27 implementation handoff (`autopilot-code`)
 
-- **F-44 lock**: 강등 실행은 6번째 canonical node state `degraded`로 투영한다. 판정 소스는
-  SD-93 ledger이며 `route_hash` 일치와 상위 6분기 미해당을 요구하고, `_node_state()`의 마지막
-  `pending` 직전 한 곳에만 삽입한다. ledger는 상태 소스 위계의 최약 계층이며 `active`를 주조할
-  수 없다. 표시는 `◐`·amber·blink 없음·`(hop·reason)`이고 pid·model·effort는 미렌더한다.
-  경과 시간 임계에 따른 자동 `failed` 전이는 금지한다.
-- **F-45 lock**: 실패 leg는 상태가 아니라 기존 alert 표면의 네 번째 버킷 `degradation`이다.
-  leg 좌표를 명시하고 `event_id`로 dedup하며 route당 N=3 상한을 넘긴 분량은 침묵하지 않고
-  잘림을 명시한다. quick 강등은 계약 위반 문구로만, 고아 event는 standalone alert로만 노출한다.
-- **node_state 정규형 정정**: `active|degraded|reconciling|failed|done|pending`이며 `unknown`은
-  projection resolver 전용 fail-closed 값으로 분리한다. 병렬 집계는
-  `failed > active > degraded > reconciling > done > pending`이다.
-- **parity 경계**: SD-50 "without claiming Fleet parity"의 조작적 정의는 F-44e가 소유하고
-  SD-50 본문은 불변이다. 두 PRD는 앵커로 상호 인용하며 같은 불변식을 두 곳에 기술하지 않는다.
-
-## Next — current v28 implementation handoff (`autopilot-code`)
-
-1. 선행 검증: `◐`(U+25D0)와 기존 `◑`(U+25D1)를 실제 사용자 터미널에 출력해 폭 1칸·missing glyph
-   부재를 실측한다. 실패 시 대체 글리프를 기존 잉크 사다리 안에서 재선정한다.
-2. `collectors/dispatch.py`가 ledger tail을 read-only로 소유하고, `build_views()`에 파싱된 dict를
-   네 번째 순수 인자로 전달한다(`route.py` PURE 계약 보존).
-3. `route.py::_node_state()`에 `degraded` 분기를 마지막 `pending` 직전에 추가하고, R-불변식을
-   property 테스트로 고정한다.
-4. `render.py`의 5개 변경면(breadcrumb 커서, breadcrumb 글리프 분기, `_collapse_parallel_nodes`,
-   카드 라인, 요약 스트립)과 alert 버킷 `degradation`을 구현한다.
-5. 사고 재현 fixture·`route_hash` 불일치 fixture·quick 위반 fixture·고아 event fixture,
-   full Fleet 회귀, generated projection, canonical↔Claude mirror parity를 완료 게이트로 삼는다.
-   생산 측 SD-93 writer 착륙은 stage-dispatch v34 구현 사이클이 소유한다.
+1. `projection.py`가 capability grounding을 먼저 결합하고 active `autopilot-spec`일 때만
+   spec marker fallback을 허용한다.
+2. Codex `preflight.sh route` 성공 경로가 main-session capability marker를 best-effort로
+   기록하고 worker를 제외하도록 구현한다.
+3. spec-only/code/spec marker matrix, Codex router marker, full Fleet, portable guard,
+   generator 및 canonical↔Claude mirror parity를 완료 게이트로 삼는다.
