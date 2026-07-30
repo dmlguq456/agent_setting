@@ -13,7 +13,18 @@ Route here when the user asks to collect recent artifacts, update the note layer
 - Initial historical import: `--scope all`
 - Resolve `<target>` from explicit `--target` first, then the configured `<agent-notes-root>`. If neither exists, report the missing configuration instead of guessing a personal path.
 
-Use a deterministic note ID derived from date plus source-path hash. Reprocessing the same source updates or skips the same note rather than creating a duplicate.
+Use a deterministic note ID derived from the canonical source path. A readable
+date prefix, when present, comes from the source artifact's stable identity and
+is retained; never derive it from the reprocessing date. Reprocessing the same
+source updates or skips the same note rather than creating a duplicate.
+Preserve stable identity and user/DB-owned routing/workflow fields; refresh only
+agent-derived content and run/source-revision evidence unless the owning user
+surface explicitly changed those fields.
+
+When another capability invokes the automatic `follow-up note cycle`, it must
+first receive `connected` from `utilities/note-db-readiness.sh --check`. Any
+unavailable result skips this capability with `skipped/db-unavailable`. This
+gate does not apply to an explicit standalone user invocation.
 
 ## Invocation Forms
 

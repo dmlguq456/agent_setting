@@ -1,0 +1,21 @@
+project_name: note-publication
+component: db-gated-note-follow-up-topology
+created: 2026-07-30
+version: 1
+mode: [library, cli]
+phases:
+  spec: done
+  scaffolding: done
+  design: n/a
+  dev: done
+last_updated: 2026-07-30
+decisions_locked:
+  - "NP-1: automatic note follow-up activates only after a bounded live remote-DB SELECT 1 probe; unavailable is a typed non-error skip"
+  - "NP-2: topology schema v6 seals conditional_follow_ups and route compiler realizes terminal anchors for every intensity without new dispatch depth"
+  - "NP-3: connected means required, unavailable means skipped, publication failure remains explicit without invalidating the primary artifact"
+  - "NP-4: same canonical source is an upsert preserving stable identity and user/DB-owned fields; refine hands off the canonical revised artifact"
+  - "NP-5: explicit preflight and route metadata own correctness; hooks are not required"
+non_goals:
+  - database migrations or credential changes
+  - scheduler or production runtime configuration changes
+  - note follow-ups for recipes without declared note-source outputs

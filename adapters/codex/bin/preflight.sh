@@ -76,6 +76,7 @@ usage: preflight.sh write <file> [session-id] [turn-id]
        preflight.sh worktree-cleanup [--check|--apply] (--worktree <path>|--all-eligible [--repo <path>]) [--integration-ref <ref>] [--jobs <jobs.log>]
        preflight.sh mcp [--check]
        preflight.sh worklog [cwd]
+       preflight.sh note-readiness --check
        preflight.sh ui-info
        preflight.sh loop-info <oncall|note|study|drill|runtime-watch>
        preflight.sh claim-verify [--check] <claim> [--out <file>]
@@ -778,6 +779,10 @@ EOF
       WORKLOG_BOARD_APP="${WORKLOG_BOARD_APP:-}" \
       WORKLOG_BOARD_WT="${WORKLOG_BOARD_WT:-}" \
       "$ROOT/utilities/agent-worklog-state.sh" "$cwd"
+    ;;
+  note-readiness)
+    shift
+    exec "$ROOT/utilities/note-db-readiness.sh" "$@"
     ;;
   ui-info)
     cat <<'EOF'

@@ -123,7 +123,7 @@ complete status when this evidence is absent or failing.
 
 ## Relay
 
-Before returning the brief, run the default `follow-up note cycle` by invoking `autopilot-note --from <plan-artifact-path>` after report and completion artifacts are durable, unless the user explicitly requested omission, per `WORKFLOW.md §0.2`. Live publication remains owned by the note cycle.
+Before returning the brief, make the report and completion artifacts durable and return the canonical `final_report.md` source path to the capability owner. The report-stage worker does not independently invoke the note cycle. After the report terminal, the owner evaluates the route-sealed DB readiness condition from `WORKFLOW.md §0.2`: `connected` requires `autopilot-note --from <final-report-path>`, while unavailable records `skipped/db-unavailable`. Live publication remains owned by the note cycle.
 
 Return a concise 2–3 paragraph brief in the conversation language, not only a path. Include final status and commit hash, 3–5 concrete deliverables, any report/evidence discrepancy, and obvious next steps.
 

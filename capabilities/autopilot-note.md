@@ -28,7 +28,10 @@ with `routing_status: confirmed`, confidence, and reason; links
 `backbone_ids`/`task_ids` to the L2 catalog, creating entries when necessary;
 or parks an unmatched ambient `card_id: null` note with `routing_status:
 confirmed`. `routing_confidence` is an ordering and emphasis signal. Append daily digests to
-`<agent-notes-root>/digests/YYYY-MM-DD.md`. Processing is idempotent. Routine
+`<agent-notes-root>/digests/YYYY-MM-DD.md`. Processing is idempotent and uses
+the canonical source path as its stable upsert identity. Reprocessing the same
+source updates or skips the existing note rather than creating a duplicate.
+Routine
 cron uses `quick` intensity and its derived rigor; use `standard+` for weekly
 bulk consolidation, Notion migration, or pre-handoff cleanup. Source 6 is the
 gated Phase 3 Notion mirror.
@@ -68,6 +71,25 @@ Adapters must preserve the portable invariants relevant to this capability:
 `WORKFLOW §0.2` it is always a secondary, final step and never substitutes for
 the execution capability that produces the results it routes. The concrete
 handoff is the `follow-up note cycle` with `autopilot-note --from <artifact-path>`.
+
+Automatic follow-up invocation is conditional on the portable
+`agent-note-db-connected` readiness contract. The owning capability runs the
+shared bounded read-only live probe through its adapter entry immediately before
+handoff. `connected` makes the follow-up required. Unconfigured, local-file,
+timed-out, unauthorized, or unreachable DB state records
+`skipped/db-unavailable` and does not invoke this capability; hooks and mere
+environment-variable presence do not activate it. This condition does not
+restrict an explicit standalone user invocation of `autopilot-note`.
+
+## Same-Source Update Contract
+
+`--from` canonicalizes the source path before identity calculation. When a
+note with that source already exists, preserve `id`, `source`, `created_at`,
+and user/DB-owned routing or workflow fields. Refresh agent-derived summary,
+results, decisions, metrics, next steps, source-revision evidence, `run_id`,
+and `run_at`; return `unchanged` when neither the source revision nor the
+derived body changed. A refine snapshot, diff preview, run ID, or temporary
+path never creates a new note. Only a different canonical source artifact does.
 
 ## Adapter Realization
 

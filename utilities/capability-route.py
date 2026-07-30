@@ -242,7 +242,7 @@ def _parallel_path(path, suffix):
     return f"{head}{sep}{name}.{suffix}{dot}{ext}"
 
 def _expand_parallel_groups(nodes, parallel_groups, effective_intensity):
-    """Expand registry-v5 groups into ordered 2..4-way sibling nodes.
+    """Expand registry-v6 groups into ordered 2..4-way sibling nodes.
 
     The first leg keeps the anchor id for stable downstream references. Extra
     legs get suffix-specific ids, outputs, and write scopes. Direct consumers
@@ -317,6 +317,18 @@ def _realized_parallel_groups(nodes):
         })
         row["members"].append(node["id"])
     return list(groups.values())
+
+
+def _realize_conditional_follow_ups(recipe, effective_intensity):
+    """Seal owner postconditions without turning them into dispatch nodes."""
+    rows = json.loads(json.dumps(recipe.get("conditional_follow_ups", [])))
+    terminal = "inline" if effective_intensity == "direct" else (
+        "one-shot" if effective_intensity == "quick" else None
+    )
+    if terminal is not None:
+        for row in rows:
+            row["after"] = [terminal]
+    return rows
 
 def _seal_dispatch_defaults(nodes, capability):
     """Return dispatch_defaults_digest and stamp each dispatch-depth-2 node's
@@ -475,6 +487,7 @@ def _compile_from_recipe(registry, recipe, capability, capability_mode, requeste
                    "escalation_basis":[{"signal":s,"source":"caller"} for s in signals],
                    "transport":transport,"transport_evidence":transport_evidence,"inline_reason":inline_reason},
       "nodes":nodes,"parallel_groups":_realized_parallel_groups(nodes),
+      "conditional_follow_ups":_realize_conditional_follow_ups(recipe, effective),
       "completion_gates":gates,"human_gates":recipe["human_gates"],
       "resume_retry_boundaries":recipe["resume_retry_boundaries"],
       "dispatch_evidence":checked_dispatch,
@@ -521,6 +534,19 @@ def verify_route(route, expected_cwd=None):
         if ([_node_identity(n) for n in route.get("nodes",[])]
                 != [_node_identity(n) for n in expected_nodes]):
             raise ValueError("composed route nodes differ from embedded composed recipe")
+        route_recipe=composed_recipe
+    else:
+        route_recipe=TOPO.resolve_recipe(
+            registry, route.get("capability"), route.get("capability_mode")
+        )
+    expected_follow_ups=_realize_conditional_follow_ups(
+        route_recipe, route.get("effective_intensity")
+    )
+    if route.get("conditional_follow_ups") != expected_follow_ups:
+        raise ValueError("route conditional follow-ups differ from the sealed recipe")
+    route_node_ids={node.get("id") for node in route.get("nodes", [])}
+    if any(not set(row["after"]) <= route_node_ids for row in expected_follow_ups):
+        raise ValueError("route conditional follow-up anchor is not realized")
     if route.get("owner_dispatch_depth") not in {0, 1} or route.get("max_dispatch_depth") not in {0, 1, 2}:
         raise ValueError("invalid qualified dispatch depth")
     if any(key in route for key in ("depth", "owner_depth", "max_depth")):

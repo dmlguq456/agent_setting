@@ -1,5 +1,14 @@
 ## Process
 
+### Automatic follow-up entry gate
+
+For a route-sealed `follow-up note cycle`, the primary owner runs
+`utilities/note-db-readiness.sh --check` immediately before Stage A. Enter Stages
+A–G only on `connected`. Any unavailable reason records
+`skipped/db-unavailable` on the primary route and performs no note/digest
+write. Explicit standalone `autopilot-note` invocations begin at Stage A and
+retain the normal publication reporting below.
+
 ### Stage A — Source scan
 
 If one or more repeatable `--from <artifact-path>` values are supplied, process those exact source artifacts directly, bypassing the date filter, `--scope`, and `<artifact-root>/notes/.last_run.yaml`, and return the same tuple used by Stage B. If `--scope` is also present, `--from` takes precedence, the scope is ignored, and report one warning. For `autopilot-note`, `--from` selects source artifacts; it is not resume or re-entry.
@@ -50,7 +59,14 @@ When a reviewer raises an issue, record it in `_internal/reviews/round_{N}.md` a
    - Write a readable summary of the source: results, decisions, metrics, next steps, and `[[links]]`. Follow the selected audience language rather than imposing a fixed locale.
 2. **Emerge L2 catalog entries (#3):**
    - When a referenced backbone, task, or paper slug is absent under `<target>/_layer2/{backbones,tasks,papers}/`, create the entry from that directory's README frontmatter specification and log the emergence.
-3. **Check idempotency:** when the note `id` or frontmatter `source` marker already exists, update or skip it. The same source must resolve to the same note, never a duplicate.
+3. **Check idempotency and update ownership:** canonicalize the source path
+   before deriving identity. When the note `id` or frontmatter `source` marker
+   already exists, preserve `id`, `source`, `created_at`, and user/DB-owned
+   routing or workflow fields. Refresh agent-derived summary, results,
+   decisions, metrics, next steps, source-revision evidence, `run_id`, and
+   `run_at`, or return `unchanged` when neither source revision nor derived body
+   changed. The same source must resolve to the same note, never a duplicate;
+   snapshots, diff previews, run IDs, and temporary paths are not new sources.
 4. **Preserve L1 cards:** treat `<target>/cards/**.md` as read-only; do not create new cards. When no card matches, keep the note ambient with `card_id: null`.
 5. **Maintain manifests on every run (PRD v33):** scan the backbone catalog and:
    - For a backbone with an **empty body and at least three accumulated notes**, draft its definition and uses from those notes and set `manifest_status: draft`. This fills an empty slot without overwriting user content and naturally covers backbones that emerged earlier.

@@ -65,6 +65,13 @@ Adapters must preserve the portable invariants relevant to this capability:
 - enforce spec-read gating when this capability changes spec-backed code or specs;
 - use DB memory paths, not runtime-native memory files.
 
+## Routing Boundary
+
+After finalization makes the canonical `final-artifact` durable, apply the
+route-sealed DB readiness condition. When connected, the owner runs the final
+`autopilot-note --from <final-artifact>` follow-up. When unavailable, record
+`skipped/db-unavailable`; do not fail or duplicate the finalized document.
+
 ## Adapter Realization
 
 | Adapter | Realization |

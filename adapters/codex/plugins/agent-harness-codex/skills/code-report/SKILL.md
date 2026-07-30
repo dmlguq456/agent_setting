@@ -49,6 +49,12 @@ shared lock where required). It consumes plan, checklist, development, and test
 evidence but must not rewrite source or another stage's evidence class. This is
 the report half of the stage ownership contract in `core/OPERATIONS.md` §5.10.
 
+The stage returns the canonical `final_report.md` source path to the
+dispatch-depth-1 capability owner. It does not independently invoke
+`autopilot-note`. After the report terminal, the owner evaluates the
+route-sealed DB readiness condition: `connected` requires the note handoff and
+an unavailable probe records `skipped/db-unavailable`.
+
 When the report references generated spectrograms, consume the semantic
 manifest, verifier result, and representative visual-review evidence from the
 test stage. Do not publish band-sensitive claims or mark the report complete

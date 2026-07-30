@@ -18,7 +18,7 @@ Follow the frontmatter specification in `<target>/_layer2/notes/README.md`:
 
 ```yaml
 ---
-id: note-YYYYMMDD-xxxxxx        # Generated: date + six-character source-path hash (idempotency key)
+id: note-YYYYMMDD-xxxxxx        # Stable source date + source-path hash; never the reprocessing date
 card_id: research_some-task     # → Layer 1 card-file stem; null means ambient/no matching card
 backbone_ids: [sr-corrnet]      # → _layer2/backbones/<slug>.md (M:N)
 task_ids: [sep]                 # → _layer2/tasks/<slug>.md (M:N)
@@ -41,6 +41,13 @@ source: <artifact-root>/plans/2026-06-08_x/   # Original artifact path (idempote
 
 A readable note derived from the artifact. Summarize results, decisions, hypotheses, and metrics, and include [[links]].
 ```
+
+For an existing canonical `source`, `id`, `source`, and `created_at` are stable.
+DB/user-owned routing and workflow fields are also preserved during source
+reprocessing. The agent may refresh the readable body, derived facts,
+source-revision evidence, `run_id`, and `run_at`; an unchanged derivation is a
+no-op. A refine snapshot or diff preview never replaces the canonical source
+identity.
 
 ## Position in the autopilot family
 

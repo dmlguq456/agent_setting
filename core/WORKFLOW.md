@@ -135,13 +135,27 @@ Precedence, highest first:
    the execution primary.
 4. Formal report prose assembly routes through `autopilot-draft` or the owning
    capability's draft handoff as a secondary step.
-5. Final artifact routing and note registration is `autopilot-note`, always secondary and last, as the `follow-up note cycle` after the primary durable completion gate succeeds (or reaches a durable terminal failure artifact for lab). The concrete handoff is `autopilot-note --from <artifact-path>`; it never substitutes for or broadens the primary capability.
+5. Final artifact routing and note registration is `autopilot-note`, always secondary and last. A note-eligible primary declares a `follow-up note cycle` after its durable terminal and hands off the canonical source with `autopilot-note --from <artifact-path>`; it never substitutes for or broadens the primary capability.
+
+   Automatic follow-up is **DB-gated**. The primary owner runs the checked
+   `agent-note-db-connected` readiness contract immediately before handoff. A
+   live remote DB makes the follow-up required; missing configuration, a local
+   file fallback, timeout, authentication failure, or network failure produces
+   a typed `skipped/db-unavailable` result and leaves the primary result valid.
+   Hooks are not activation authority. A connected probe followed by note or
+   publication failure is reported explicitly rather than silently treated as
+   complete.
 
    | Primary capability | `follow-up note cycle` policy |
    |---|---|
-   | `autopilot-lab` | Always run; cannot be skipped, including completed setup and eval terminal states. |
-   | `autopilot-code`, `autopilot-draft`, `autopilot-research`, `analyze-project` | Run by default; skip only when the user explicitly requests omission. |
-   | `autopilot-spec`, `autopilot-refine` | Optional, as before. |
+   | `autopilot-code`, `autopilot-draft`, `autopilot-lab`, `autopilot-refine`, `autopilot-research` | Topology-sealed after the declared durable terminal; required only while the remote DB readiness check is connected. |
+   | `analyze-project` | Same DB-gated contract after persistent analysis completes; this pre-capability has no entry-recipe topology row. |
+   | `autopilot-apply`, `autopilot-design`, `autopilot-ship`, `autopilot-spec` | No automatic follow-up until the recipe declares a concrete note-source output; explicit user-invoked `autopilot-note` remains available. |
+
+   Reprocessing the same canonical source is an upsert: it updates or skips the
+   same Layer 2 note, preserves its stable identity and user/DB-owned routing
+   fields, and never creates a duplicate merely because feedback triggered a
+   new refine run.
 6. A secondary capability must never substitute for the primary execution
    capability, and the primary never absorbs a secondary's artifact ownership.
 

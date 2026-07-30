@@ -1,5 +1,5 @@
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "intensities": [
     "direct",
     "quick",
@@ -54,6 +54,15 @@
     "user-restricted"
   ],
   "gate_command": "python3 utilities/capability-route.py complete --route <route> --node <node> --evidence <path> --jobs <canonical-jobs.log> --attempt-id <exact-attempt-id>",
+  "activation_conditions": {
+    "agent-note-db-connected": {
+      "check": "utilities/note-db-readiness.sh --check",
+      "probe_kind": "live-read-only",
+      "success_state": "connected",
+      "unavailable_exit_code": 69,
+      "unavailable_reason": "db-unavailable"
+    }
+  },
   "recipes": [
     {
       "capability": "autopilot-apply",
@@ -590,6 +599,23 @@
           }
         ]
       },
+      "conditional_follow_ups": [
+        {
+          "id": "publish-note",
+          "capability": "autopilot-note",
+          "activation_condition": "agent-note-db-connected",
+          "after": [
+            "report"
+          ],
+          "source_outputs": [
+            {
+              "node": "report",
+              "output": "final_report.md"
+            }
+          ],
+          "on_unavailable": "skip"
+        }
+      ],
       "completion_gates": [
         "code-frame",
         "code-plan",
@@ -1154,6 +1180,23 @@
           }
         ]
       },
+      "conditional_follow_ups": [
+        {
+          "id": "publish-note",
+          "capability": "autopilot-note",
+          "activation_condition": "agent-note-db-connected",
+          "after": [
+            "finalize"
+          ],
+          "source_outputs": [
+            {
+              "node": "finalize",
+              "output": "final-artifact"
+            }
+          ],
+          "on_unavailable": "skip"
+        }
+      ],
       "completion_gates": [
         "draft-strategy",
         "draft-strategy-review",
@@ -1282,9 +1325,10 @@
               "reviews/smoke-attestation.json",
               "config"
             ],
-            "outputs": [
-              "run.json",
-              "logs/**"
+          "outputs": [
+            "run.json",
+            "logs/**",
+            "experiment-artifact"
             ],
             "write_scope": [
               "run.json",
@@ -1331,6 +1375,23 @@
           }
         ]
       },
+      "conditional_follow_ups": [
+        {
+          "id": "publish-note",
+          "capability": "autopilot-note",
+          "activation_condition": "agent-note-db-connected",
+          "after": [
+            "full-run"
+          ],
+          "source_outputs": [
+            {
+              "node": "full-run",
+              "output": "experiment-artifact"
+            }
+          ],
+          "on_unavailable": "skip"
+        }
+      ],
       "completion_gates": [
         "lab-scaffold",
         "hash-bound-smoke",
@@ -1478,9 +1539,10 @@
               "summary-stats.json",
               "report_manifest.json"
             ],
-            "outputs": [
-              "REPORT.md",
-              "report.html"
+          "outputs": [
+            "REPORT.md",
+            "report.html",
+            "experiment-artifact"
             ],
             "write_scope": [
               "REPORT.md",
@@ -1589,6 +1651,23 @@
           }
         ]
       },
+      "conditional_follow_ups": [
+        {
+          "id": "publish-note",
+          "capability": "autopilot-note",
+          "activation_condition": "agent-note-db-connected",
+          "after": [
+            "sync"
+          ],
+          "source_outputs": [
+            {
+              "node": "report",
+              "output": "experiment-artifact"
+            }
+          ],
+          "on_unavailable": "skip"
+        }
+      ],
       "completion_gates": [
         "hash-bound-eval",
         "lab-metrics",
@@ -1848,6 +1927,23 @@
           }
         ]
       },
+      "conditional_follow_ups": [
+        {
+          "id": "publish-note",
+          "capability": "autopilot-note",
+          "activation_condition": "agent-note-db-connected",
+          "after": [
+            "transaction"
+          ],
+          "source_outputs": [
+            {
+              "node": "transaction",
+              "output": "revised-artifact"
+            }
+          ],
+          "on_unavailable": "skip"
+        }
+      ],
       "completion_gates": [
         "refine-review",
         "refine-transaction"
@@ -1963,8 +2059,9 @@
               "analysis_summary.md",
               "cards/**"
             ],
-            "outputs": [
-              "report/**"
+          "outputs": [
+            "report/**",
+            "research-artifact"
             ],
             "write_scope": [
               "report/**"
@@ -2074,6 +2171,23 @@
           }
         ]
       },
+      "conditional_follow_ups": [
+        {
+          "id": "publish-note",
+          "capability": "autopilot-note",
+          "activation_condition": "agent-note-db-connected",
+          "after": [
+            "claim-verify"
+          ],
+          "source_outputs": [
+            {
+              "node": "report",
+              "output": "research-artifact"
+            }
+          ],
+          "on_unavailable": "skip"
+        }
+      ],
       "completion_gates": [
         "research-retrieval",
         "research-synthesis",

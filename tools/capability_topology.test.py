@@ -23,11 +23,11 @@ PRESERVED_FULL_FIELD_DIGESTS = {
         "24338ba81e05c0bc6ccad3ee5af02dfb9a1ec6b49dbd9e2302ae49147296ce13",
     ),
     ("autopilot-lab", ("setup",)): (
-        "7aef6679d2008d35f6657be5d16c446ce13fff7284ffcdac4d64daab251f5bed",
+        "0afe453d9d0373f932b0cdf9ef4606581de132f1a6c665f49c61b1aa9c04d5a2",
         "9a26c0fea9a635d94f784379941c90a25d35ad7d2bcf1c3f21a1fcd5fad57183",
     ),
     ("autopilot-lab", ("eval",)): (
-        "3b1830800fd0f9f60b7f9e1e94ba3e85f4315e486dcbd009792f177d8b24479d",
+        "f5b459f6ff8fa7cbd7c83e220504b157cccd33dffbf58d63ebc70efd2bb038ad",
         "47160a6d9acf73cf29ff137dcb90c1af3036148530af2a1628162692078f1e24",
     ),
     ("autopilot-note", ("default",)): (
@@ -39,7 +39,7 @@ PRESERVED_FULL_FIELD_DIGESTS = {
         "d39b4446e7c7fca7def4629560d9ee10a342b536fa644ffee8023c5f06326203",
     ),
     ("autopilot-research", ("academic", "market", "technology")): (
-        "a1c79f39348c65b5377b44169c0165997650f04942c903cbc11988947e79b4ce",
+        "786e54143e67bb126a2d8459c2bb66ca284562a51f27fc65463de14552d29621",
         "1c314d9a1c578256757109a35b0f08548d22391b3f079df0a790fe3534bfc057",
     ),
     ("autopilot-ship", ("default",)): (
@@ -109,9 +109,44 @@ class TestTopology(unittest.TestCase):
         self.assertRaisesRegex(T.TopologyError,"enforced",T.validate_registry,r)
         r=copy.deepcopy(self.r); r["rollout"]["legacy_low_level_dispatch"]=True
         self.assertRaisesRegex(T.TopologyError,"retired",T.validate_registry,r)
-        for legacy in (2,3):
+        for legacy in (2,3,4,5):
             r=copy.deepcopy(self.r); r["schema_version"]=legacy
             self.assertRaisesRegex(T.TopologyError,"read-only",T.validate_registry,r)
+    def test_conditional_note_follow_up_coverage(self):
+        expected={
+            ("autopilot-code",("audit","debug","dev")):("report","report","final_report.md"),
+            ("autopilot-draft",("doc","paper","presentation")):("finalize","finalize","final-artifact"),
+            ("autopilot-lab",("setup",)):("full-run","full-run","experiment-artifact"),
+            ("autopilot-lab",("eval",)):("sync","report","experiment-artifact"),
+            ("autopilot-refine",("default",)):("transaction","transaction","revised-artifact"),
+            ("autopilot-research",("academic","market","technology")):("claim-verify","report","research-artifact"),
+        }
+        observed={}
+        for recipe in self.r["recipes"]:
+            rows=recipe.get("conditional_follow_ups",[])
+            if not rows: continue
+            self.assertEqual(len(rows),1)
+            row=rows[0]; source=row["source_outputs"][0]
+            observed[(recipe["capability"],tuple(recipe["modes"]))]=(
+                row["after"][0],source["node"],source["output"])
+            self.assertEqual(row["activation_condition"],"agent-note-db-connected")
+            self.assertEqual(row["on_unavailable"],"skip")
+        self.assertEqual(observed,expected)
+    def test_conditional_follow_up_validation_fails_closed(self):
+        def code_recipe(registry):
+            return next(x for x in registry["recipes"] if x["capability"]=="autopilot-code")
+        r=copy.deepcopy(self.r); code_recipe(r)["conditional_follow_ups"][0]["activation_condition"]="mystery"
+        self.assertRaisesRegex(T.TopologyError,"unknown activation",T.validate_registry,r)
+        r=copy.deepcopy(self.r); code_recipe(r)["conditional_follow_ups"][0]["after"]=["execute"]
+        self.assertRaisesRegex(T.TopologyError,"terminal nodes",T.validate_registry,r)
+        r=copy.deepcopy(self.r); code_recipe(r)["conditional_follow_ups"][0]["source_outputs"][0]["output"]="missing.md"
+        self.assertRaisesRegex(T.TopologyError,"not declared",T.validate_registry,r)
+        r=copy.deepcopy(self.r); code_recipe(r)["conditional_follow_ups"][0]["capability"]="autopilot-code"
+        self.assertRaisesRegex(T.TopologyError,"non-self",T.validate_registry,r)
+        r=copy.deepcopy(self.r); code_recipe(r)["conditional_follow_ups"][0]["on_unavailable"]="fail"
+        self.assertRaisesRegex(T.TopologyError,"must be skip",T.validate_registry,r)
+        r=copy.deepcopy(self.r); r["activation_conditions"]["agent-note-db-connected"]["success_state"]="configured"
+        self.assertRaisesRegex(T.TopologyError,"activation contract mismatch",T.validate_registry,r)
     def test_unknown_unit_ref_fails_closed(self):
         r=copy.deepcopy(self.r); r["recipes"][0]["standard_plus"]["nodes"][0]["unit"]="dev/does-not-exist"
         self.assertRaisesRegex(T.TopologyError,"unknown unit",T.validate_registry,r)

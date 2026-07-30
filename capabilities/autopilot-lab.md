@@ -65,7 +65,7 @@ The separable stages of a `standard+` eval are: (1) context and experiment
 contract, (2) evaluation harness preparation, (3) checkpoint evaluation run,
 (4) metrics and per-array analysis, (5) figures, audio, and playback HTML,
 (6) formal report assembly, (7) independent verification, and (8) spec sync
-when applicable plus the always-required `follow-up note cycle`. Group stages into workers by file ownership and dependency rather than
+when applicable followed by the DB-gated `follow-up note cycle`. Group stages into workers by file ownership and dependency rather than
 opening one session per stage:
 
 | Worker | Owns (write) | Typical stages |
@@ -74,7 +74,7 @@ opening one session per stage:
 | media worker | `figures/`, audio segments, playback `report/*.html` | 5 |
 | report worker | `REPORT.md`, `STORY.md`, `summary.md` | 6 |
 | verification worker | read-only checks; verdict artifact only | 7 |
-| closing stage | `autopilot-spec` update when applicable, then unskippable `autopilot-note --from <experiment-path>` after final artifacts are durable | 8 |
+| closing stage | `autopilot-spec` update when applicable, then apply the remote-DB readiness condition; connected runs `autopilot-note --from <experiment-path>`, unavailable records a typed skip | 8 |
 
 The main session or its dispatch-depth-1 conductor applies the `WORKFLOW §0.3`
 pre-execution gate before the checkpoint evaluation run, dispatches workers
@@ -101,7 +101,11 @@ generation. Under `WORKFLOW §0.2`, a request containing such work keeps
 update. `autopilot-refine` corrects existing document surfaces only;
 `autopilot-spec` records evaluation-policy or blueprint changes without
 executing them; formal prose assembly hands off to `autopilot-draft`; final
-routing and registration belong to `autopilot-note`. Every completed setup or eval terminal state runs the `follow-up note cycle` under `WORKFLOW §0.2`, separately from lab execution and other secondary ownership. None of these secondaries
+routing and registration belong to `autopilot-note`. Every completed setup or
+eval durable terminal evaluates the route-sealed follow-up under `WORKFLOW
+§0.2`: a live remote DB makes it required, while unavailable state records
+`skipped/db-unavailable` and preserves lab completion. The cycle remains
+separate from lab execution and other secondary ownership. None of these secondaries
 replaces the lab execution, and lab does not absorb their artifact ownership.
 
 ## Adapter Realization

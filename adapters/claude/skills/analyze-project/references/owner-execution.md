@@ -124,7 +124,7 @@ fan-out analyses.
 
 ## Completion
 
-Once the selected mode's analysis directory and QA evidence are durable, run the default `follow-up note cycle` with `autopilot-note --from <analysis-project-output-path>` unless explicitly omitted, per `WORKFLOW.md §0.2`. This applies across code, paper, and doc modes without duplicating their mode procedures.
+Once the selected mode's analysis directory and QA evidence are durable, apply the DB-gated `follow-up note cycle` policy from `WORKFLOW.md §0.2`. On `connected`, run `autopilot-note --from <analysis-project-output-path>` as the required final secondary step; on unavailable, record `skipped/db-unavailable`. This applies across code, paper, and doc modes without duplicating their mode procedures.
 
 ## Reference Index
 

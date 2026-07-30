@@ -26,7 +26,7 @@ Intensity selects the stage graph; see [CONVENTIONS §1](../../../core/CONVENTIO
 - `quick`: intake → orient-lite → micro-plan → plan-check-lite → produce → verify-lite → report; no independent QA after every stage.
 - `standard`: cross-harness-first 2-way framing (`frame` + `frame-alternative`) with asymmetric `balanced-deep`/`light` profiles → direction synthesis → durable code-plan → plan-check → code-execute → impl-review → code-test → code-report.
 - `strong`: widen framing to three perspectives, then run separate 2-way plan (`plan` + `plan-alternative`) and implementation-review (`impl-review` + `impl-review-alternative`) groups before their declared convergence points.
-- `thorough` and `adversarial`: retain 3-way framing and widen plan plus implementation review to three legs by adding the sealed implementation-risk and failure-mode perspectives. Every width/profile/perspective comes from registry-v5; no owner invents a leg.
+- `thorough` and `adversarial`: retain 3-way framing and widen plan plus implementation review to three legs by adding the sealed implementation-risk and failure-mode perspectives. Every width/profile/perspective comes from registry-v6; no owner invents a leg.
 
 Every non-direct graph has a plan-check, but expensive independent QA does not repeat after every substage.
 

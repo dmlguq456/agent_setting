@@ -43,7 +43,7 @@ Then report in the user's communication language:
 - For presentation output, remind the user that PowerPoint transfer is manual.
 - For peer-review output, identify the auto-discovered venue form; there are no built-in presets.
 
-After `pipeline_summary.md` is durable, run the default `follow-up note cycle` on the document artifact directory with `autopilot-note --from <document-artifact-path>` unless explicitly omitted, per `WORKFLOW.md §0.2`.
+After `pipeline_summary.md` is durable, apply the route-sealed DB readiness condition from `WORKFLOW.md §0.2`. On `connected`, run the required final `follow-up note cycle` with `autopilot-note --from <document-artifact-path>`; on unavailable, record `skipped/db-unavailable` without invalidating the document.
 
 ## Safety rules
 

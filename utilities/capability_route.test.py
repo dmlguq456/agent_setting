@@ -91,13 +91,14 @@ class TestRoute(unittest.TestCase):
   legacy["route_hash"]=R.route_hash(legacy); legacy["route_id"]="rt-"+legacy["route_hash"].split(":",1)[1][:16]
   return legacy
  def test_direct_all_and_stable(self):
-  a=R.compile_route(**self.args()); b=R.compile_route(**self.args()); self.assertEqual(a,b); self.assertEqual(a["effective_intensity"],"direct"); self.assertEqual(a["owner_dispatch_depth"],0); self.assertEqual(a["max_dispatch_depth"],0); self.assertEqual(a["nodes"][0]["dispatch_depth"],0); self.assertEqual(a["nodes"][0]["execution_surface"],"inline"); self.assertFalse(a["nodes"][0]["registered_worker"]); R.verify_route(a,R.ROOT)
+  a=R.compile_route(**self.args()); b=R.compile_route(**self.args()); self.assertEqual(a,b); self.assertEqual(a["effective_intensity"],"direct"); self.assertEqual(a["owner_dispatch_depth"],0); self.assertEqual(a["max_dispatch_depth"],0); self.assertEqual(a["nodes"][0]["dispatch_depth"],0); self.assertEqual(a["nodes"][0]["execution_surface"],"inline"); self.assertFalse(a["nodes"][0]["registered_worker"]); self.assertEqual(a["conditional_follow_ups"][0]["after"],["inline"]); R.verify_route(a,R.ROOT)
  def test_ambiguous_quick(self):
   a=R.compile_route(**self.args(predicates=[],transport=None,inline_reason=None,registered_headless_evidence=self.registered_headless()))
   self.assertEqual(a["effective_intensity"],"quick")
   self.assertEqual(a["nodes"][0]["dispatch_depth"],1)
   self.assertEqual(a["nodes"][0]["execution_surface"],"registered-headless")
   self.assertTrue(a["nodes"][0]["registered_worker"])
+  self.assertEqual(a["conditional_follow_ups"][0]["after"],["one-shot"])
  def test_quick_missing_eligibility_fails_closed(self):
   with self.assertRaisesRegex(ValueError,"quick-headless-unavailable"):
    R.compile_route(**self.args(predicates=[],transport=None,inline_reason=None))
@@ -125,6 +126,20 @@ class TestRoute(unittest.TestCase):
   evidence=self.dispatch(self.nested())
   a=R.compile_route(**self.args(signals=["public-api"],transport="headless",inline_reason=None,dispatch_evidence=evidence)); self.assertEqual([x["id"] for x in a["nodes"]],["frame","frame-alternative","plan","plan-check","execute","impl-review","test","report"])
   self.assertEqual(a["owner_model_profile"],"deep")
+  self.assertEqual(a["conditional_follow_ups"][0]["after"],["report"])
+  self.assertEqual(a["conditional_follow_ups"][0]["source_outputs"],[{"node":"report","output":"final_report.md"}])
+ def test_recipe_without_note_follow_up_seals_empty_list(self):
+  route=R.compile_route(**self.args(
+   capability="autopilot-spec",capability_mode="update"))
+  self.assertEqual(route["conditional_follow_ups"],[])
+  R.verify_route(route,R.ROOT)
+ def test_rehashed_conditional_follow_up_drift_is_rejected(self):
+  route=R.compile_route(**self.args())
+  route["conditional_follow_ups"][0]["after"]=["missing"]
+  route["route_hash"]=R.route_hash(route)
+  route["route_id"]="rt-"+route["route_hash"].split(":",1)[1][:16]
+  with self.assertRaisesRegex(ValueError,"conditional follow-ups"):
+   R.verify_route(route,R.ROOT)
  def test_complete_recipe_mode_intensity_owner_and_realized_node_census(self):
   registry=R.TOPO.load_registry()
   evidence=self.dispatch(self.nested())

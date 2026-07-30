@@ -207,6 +207,93 @@ def _validate_gate_contracts(recipe, registry):
             raise TopologyError(f"{recipe['capability']}: unknown gate contract kind {kind!r} for {gate}")
 
 
+def _validate_activation_conditions(registry):
+    conditions = registry.get("activation_conditions")
+    if not isinstance(conditions, dict) or set(conditions) != {"agent-note-db-connected"}:
+        raise TopologyError("activation_conditions must declare agent-note-db-connected")
+    expected_keys = {
+        "check", "probe_kind", "success_state", "unavailable_exit_code",
+        "unavailable_reason",
+    }
+    row = conditions["agent-note-db-connected"]
+    if not isinstance(row, dict) or set(row) != expected_keys:
+        raise TopologyError("agent-note-db-connected activation contract shape mismatch")
+    if row != {
+        "check": "utilities/note-db-readiness.sh --check",
+        "probe_kind": "live-read-only",
+        "success_state": "connected",
+        "unavailable_exit_code": 69,
+        "unavailable_reason": "db-unavailable",
+    }:
+        raise TopologyError("agent-note-db-connected activation contract mismatch")
+
+
+def _validate_conditional_follow_ups(recipe, registry, by_id, deps):
+    follow_ups = recipe.get("conditional_follow_ups", [])
+    if not isinstance(follow_ups, list):
+        raise TopologyError(f"{recipe['capability']}: conditional_follow_ups must be a list")
+    required = {
+        "id", "capability", "activation_condition", "after",
+        "source_outputs", "on_unavailable",
+    }
+    ids = [row.get("id") for row in follow_ups if isinstance(row, dict)]
+    if len(ids) != len(follow_ups) or len(ids) != len(set(ids)) or not all(ids):
+        raise TopologyError(f"{recipe['capability']}: duplicate/empty conditional follow-up id")
+    node_ids = set(by_id)
+    dependency_ids = {dep for node in by_id.values() for dep in node.get("depends_on", [])}
+    terminal_ids = node_ids - dependency_ids
+    known_conditions = set(registry["activation_conditions"])
+    for row in follow_ups:
+        if set(row) != required:
+            raise TopologyError(
+                f"{recipe['capability']}:{row.get('id')}: conditional follow-up requires exactly {sorted(required)}"
+            )
+        if row["capability"] != "autopilot-note" or row["capability"] == recipe["capability"]:
+            raise TopologyError(
+                f"{recipe['capability']}:{row['id']}: conditional follow-up must target non-self autopilot-note"
+            )
+        if row["activation_condition"] not in known_conditions:
+            raise TopologyError(
+                f"{recipe['capability']}:{row['id']}: unknown activation condition"
+            )
+        if row["on_unavailable"] != "skip":
+            raise TopologyError(
+                f"{recipe['capability']}:{row['id']}: unavailable action must be skip"
+            )
+        after = row["after"]
+        if (not isinstance(after, list) or not after or len(after) != len(set(after))
+                or not set(after) <= terminal_ids):
+            raise TopologyError(
+                f"{recipe['capability']}:{row['id']}: after must name unique terminal nodes"
+            )
+        sources = row["source_outputs"]
+        if not isinstance(sources, list) or not sources:
+            raise TopologyError(
+                f"{recipe['capability']}:{row['id']}: source_outputs must be non-empty"
+            )
+        seen_sources = set()
+        for source in sources:
+            if not isinstance(source, dict) or set(source) != {"node", "output"}:
+                raise TopologyError(
+                    f"{recipe['capability']}:{row['id']}: source output shape mismatch"
+                )
+            source_node, output = source["node"], source["output"]
+            key = (source_node, output)
+            if key in seen_sources:
+                raise TopologyError(
+                    f"{recipe['capability']}:{row['id']}: duplicate source output"
+                )
+            seen_sources.add(key)
+            if source_node not in by_id or output not in by_id[source_node].get("outputs", []):
+                raise TopologyError(
+                    f"{recipe['capability']}:{row['id']}: source output is not declared by its node"
+                )
+            if any(source_node != terminal and source_node not in deps(terminal) for terminal in after):
+                raise TopologyError(
+                    f"{recipe['capability']}:{row['id']}: source output must precede every terminal anchor"
+                )
+
+
 def _validate_recipe(recipe, registry, standard_plus_owner_profile):
     required = {"capability", "modes", "topology_class", "direct_predicates", "promotion_signals",
                 "quick", "standard_plus", "completion_gates", "human_gates", "resume_retry_boundaries"}
@@ -453,13 +540,15 @@ def _validate_recipe(recipe, registry, standard_plus_owner_profile):
             if left["id"] in deps(right["id"]) or right["id"] in deps(left["id"]): continue
             if any(_overlap(a, b) for a in left["write_scope"] for b in right["write_scope"]):
                 raise TopologyError(f"{recipe['capability']}: concurrent scope overlap {left['id']}/{right['id']}")
+    _validate_conditional_follow_ups(recipe, registry, by_id, deps)
     if not recipe["resume_retry_boundaries"] or not set(recipe["resume_retry_boundaries"]) <= set(ids):
         raise TopologyError(f"{recipe['capability']}: invalid retry boundaries")
 
 
 def validate_registry(registry, manifest=None):
-    if registry.get("schema_version") != 5:
+    if registry.get("schema_version") != 6:
         raise TopologyError("legacy topology registry is read-only")
+    _validate_activation_conditions(registry)
     expected_profiles = {
         "deep": {"rank": 4, "tier": "deep", "effort": "xhigh", "registered_topology": True},
         "balanced-deep": {"rank": 3, "tier": "deep", "effort": "medium", "registered_topology": True},

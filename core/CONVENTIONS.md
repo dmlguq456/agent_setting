@@ -48,6 +48,15 @@ to a runtime-native subagent or inline. Dispatch dispatch depth 3 or greater is 
 Resource runners and Claude agent-team teammate sessions are separate lifecycle
 surfaces and carry no dispatch depth.
 
+Conditional capability follow-ups are owner postconditions, not dispatch
+nodes. `capabilities/topologies.json` declares their activation condition,
+terminal anchors, and source-output references; the route compiler seals the
+effective direct, quick, or standard+ anchors. A false readiness predicate
+produces its declared typed skip and does not add dispatch depth or invalidate
+the primary artifact. For the note follow-up, only a bounded live remote-DB
+probe activates the postcondition; hooks and environment-variable presence
+alone are insufficient.
+
 ### §1.1. Verification Rigor Tiers
 
 Rigor is an assurance budget inside the graph selected by intensity. It does not create stages, choose topology, or grant dispatch depth 2. Reviewer counts are upper bounds for a selected pass rather than automatic fan-out after every stage.
@@ -63,7 +72,7 @@ Rigor is an assurance budget inside the graph selected by intensity. It does not
 Two properties cut across every rigor tier and do not scale away at low intensity:
 
 1. **Adversarial stance is universal (all tiers, including `direct` and `quick`).** Any review or self-check that runs adopts a refute-by-default posture: it actively tries to falsify the artifact's correctness claims, enumerates the concrete failure modes it can substantiate, and treats inadequate evidence as *not proven* rather than a pass. This is a stance inside whatever check already runs, not an added stage, so it adds no dispatch at `direct`/`quick`. It is what makes review adversarial before any separate adversary *pass* exists.
-2. **Independent exploration is bounded, asymmetric, and cross-harness first.** Registry-v5 `parallel_groups` declare exactly which direction, plan, review, or verification anchors fan out, their intensity-specific width, and ordered execution-profile/perspective legs. Width is 2–4 and is never inferred from reviewer count. `cross-harness` means the group realizes at least two eligible harnesses; `model-profile` and `perspective` axes reduce correlated failure when N exceeds available harness families. For the code track, framing starts at width two for `standard` and adds a deep contrarian leg at `strong+`; plan and implementation review start at width two for `strong` and add a light implementation-risk or deep failure-mode leg at `thorough+`. Other capabilities keep their migrated width-two groups unless their own registry/spec explicitly widens them. All legs are blind siblings at dispatch depth 2, write disjoint artifacts, and join before continuation; evidence synthesis is not a majority vote. When only one harness is available, an explicitly requested cross-harness pass fails loudly; an auto-selected group may use typed same-harness degradation while retaining profile/perspective diversity. `direct`/`quick` stay single-session but keep the adversarial stance from (1).
+2. **Independent exploration is bounded, asymmetric, and cross-harness first.** Registry-v6 `parallel_groups` declare exactly which direction, plan, review, or verification anchors fan out, their intensity-specific width, and ordered execution-profile/perspective legs. Width is 2–4 and is never inferred from reviewer count. `cross-harness` means the group realizes at least two eligible harnesses; `model-profile` and `perspective` axes reduce correlated failure when N exceeds available harness families. For the code track, framing starts at width two for `standard` and adds a deep contrarian leg at `strong+`; plan and implementation review start at width two for `strong` and add a light implementation-risk or deep failure-mode leg at `thorough+`. Other capabilities keep their migrated width-two groups unless their own registry/spec explicitly widens them. All legs are blind siblings at dispatch depth 2, write disjoint artifacts, and join before continuation; evidence synthesis is not a majority vote. When only one harness is available, an explicitly requested cross-harness pass fails loudly; an auto-selected group may use typed same-harness degradation while retaining profile/perspective diversity. `direct`/`quick` stay single-session but keep the adversarial stance from (1).
 
 Track rules:
 
@@ -152,7 +161,7 @@ For standard+ code stage dispatch, role and profile are explicit: ordinary frame
 2. Quick means one-session micro-plan, plan-check-lite, and verify-lite carrying the adversarial stance (§1.1). Requiring a durable plan, an added independent pass, or parallel/cross-harness reviewer fan-out for a small `direct`/`quick` task is still drift; the universal adversarial stance is a posture inside the existing check, not a new stage or session.
 3. Adversarial means thorough plus a selected external adversary, failure-mode, security, or claim-verification pass. `standard + external/Codex` is not the definition.
 4. Code has no fact-checker.
-5. Do not hardcode code-test to thorough or parallel QA on every call; scale final verification from intensity-derived rigor. Registry-v5 `parallel_groups` alone declare an anchor's intensity-specific width, profile, perspective, join, and independence axes. Width stays 2–4, is selective rather than universal, and never applies to `direct`/`quick`.
+5. Do not hardcode code-test to thorough or parallel QA on every call; scale final verification from intensity-derived rigor. Registry-v6 `parallel_groups` alone declare an anchor's intensity-specific width, profile, perspective, join, and independence axes. Width stays 2–4, is selective rather than universal, and never applies to `direct`/`quick`.
 6. `--no-fact-check` and `--no-style-audit` must not leak to unrelated capabilities.
 7. An external review wrapper is not the reviewer; separate the independent engine from the mechanical orchestrator.
 8. New or strengthened instructions, rules, and hooks preserve why, including the motivating incident and date, inline or in the commit message. Drills are the strongest executable preservation of intent.
@@ -160,6 +169,10 @@ For standard+ code stage dispatch, role and profile are explicit: ordinary frame
 10. Token pressure is orthogonal to intensity and cannot reduce graph, depth, dispatch, model role/profile, assurance, required guards, or input context.
 11. Primary routing is semantic (`WORKFLOW §0.2`): new empirical work keeps the execution capability primary, and secondary capabilities never substitute for it. Native sub-agent restrictions and registered headless-dispatch restrictions are separate delegation surfaces (`OPERATIONS §5.10`); extending one to the other requires verified runtime evidence, and the fallback is inline execution with the reason recorded.
 12. Two assurance properties are intensity-independent: (a) every review that actually runs carries the refute-by-default adversarial **stance** of §1.1; (b) an independent pass declares and records its actual independence axes. Cross-harness remains primary, while model-profile and perspective asymmetry generalize dual-model direction exploration into bounded N-way groups. Only the registry may select or widen a group, and neither property converts `direct`/`quick` into added sessions.
+13. Conditional follow-ups are route-sealed owner postconditions. They cannot be
+    inferred from hooks, silently omitted while their readiness condition is
+    true, or represented as an extra dispatch depth. A false condition records
+    the declared skip without changing primary completion.
 
 Token-budget accounting is observation, not attribution. Hook invocations,
 zero/emission outcomes, exact inserted-directive UTF-8 bytes, and monotonic

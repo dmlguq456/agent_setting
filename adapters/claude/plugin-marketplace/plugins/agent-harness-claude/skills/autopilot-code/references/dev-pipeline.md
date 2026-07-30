@@ -105,7 +105,7 @@ When implementation or reporting requires result plots, experiment-log visualiza
 
 ### Higher-Intensity Perspective Extensions
 
-Registry-v5 widens only selected leverage points. `strong` uses a 3-way frame group and
+Registry-v6 widens only selected leverage points. `strong` uses a 3-way frame group and
 2-way plan/implementation-review groups. `thorough|adversarial` keep the 3-way frame and
 widen plan plus implementation review to three legs. Their model profiles and perspectives
 are deliberately asymmetric. Any additional security/material/specialist node still needs

@@ -88,6 +88,7 @@ usage: preflight.sh write <file> [session-id] [turn-id]
        preflight.sh worktree-cleanup [--check|--apply] (--worktree <path>|--all-eligible [--repo <path>]) [--integration-ref <ref>] [--jobs <jobs.log>]
        preflight.sh mcp [--check]
        preflight.sh worklog [cwd]
+       preflight.sh note-readiness --check
        preflight.sh loop-info <oncall|note|study|drill|runtime-watch>
        preflight.sh claim-verify [--check] <claim> [--out <file>]
        preflight.sh browser-fetch [--check] <url> [--out <dir>]
@@ -589,6 +590,10 @@ EOF
       WORKLOG_BOARD_APP="${WORKLOG_BOARD_APP:-}" \
       WORKLOG_BOARD_WT="${WORKLOG_BOARD_WT:-}" \
       "$ROOT/utilities/agent-worklog-state.sh" "$cwd"
+    ;;
+  note-readiness)
+    shift
+    exec "$ROOT/utilities/note-db-readiness.sh" "$@"
     ;;
   loop-info)
     [ "$#" -eq 2 ] || { echo "opencode preflight: loop-info requires one loop name" >&2; exit 64; }
