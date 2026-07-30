@@ -88,6 +88,9 @@ def collect_evidence(sess):
         "orphan": bool(sess.orphan),
         "status": sess.status,
         "task_lifecycle": getattr(sess, "task_lifecycle", None),
+        # F-47: owned process-subtree evidence. Only `shell` consults it (prd.md:612) — the
+        # classifier decides, this layer just carries the fact.
+        "exec_child": getattr(sess, "exec_child", None),
         "mtime": sess.mtime,
         # `_has_transcript` is set by the claude enricher; other harnesses fall back to
         # "an mtime exists at all", which is the same signal they had pre-F-25.

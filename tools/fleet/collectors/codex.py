@@ -575,6 +575,11 @@ def _transfer_managed_rollouts(sessions, paths):
         if paths.get(client.pid):
             continue                       # client already owns a rollout — nothing to fix
         paths[client.pid] = paths.pop(server.pid)
+        # F-47: a managed session's exec children hang off the app-server, which is a hidden
+        # companion row — move the evidence onto the visible TUI client through the SAME
+        # exact managed-dir join, so the work shows up where the user can see it.
+        if getattr(server, "exec_child", None) and not getattr(client, "exec_child", None):
+            client.exec_child = server.exec_child
         donated.add(server.pid)
     return donated
 
@@ -638,6 +643,62 @@ def _tail_token_count(path, chunk=65536):
         if '"token_count"' in ln:
             last = ln
     return last
+
+
+_EXEC_CMD_RE = re.compile(r"""cmd:\s*['"]([^'"\n]+)""")
+
+
+def _tail_open_tool_call(path, chunk=65536):
+    """F-47: the newest `custom_tool_call` in the tail with no matching output → detail dict.
+
+    Same tolerant tail-chunk idiom as `_tail_token_count`: one bounded read, partial first
+    line dropped, any parse failure silently skipped. Pairing is by `call_id`, so a call
+    whose output row already landed is closed and reports nothing. This adds DISPLAY detail
+    only — Codex state stays on the exact `task_started`/`task_complete` lifecycle
+    (prd.md:263), so a rollout that is mid-tool but lifecycle-terminal remains idle.
+
+    Returns {'name', 'command'} (command None when the shell command is not extractable)
+    or None.
+    """
+    try:
+        size = os.path.getsize(path)
+        start = max(0, size - chunk)
+        with open(path, "rb") as handle:
+            handle.seek(start)
+            data = handle.read().decode("utf-8", "replace")
+    except OSError:
+        return None
+    lines = data.splitlines()
+    if start > 0 and lines:
+        lines = lines[1:]
+    calls, closed = [], set()
+    for line in lines:
+        if "custom_tool_call" not in line:
+            continue
+        try:
+            payload = json.loads(line).get("payload") or {}
+        except Exception:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        call_id = payload.get("call_id")
+        if not isinstance(call_id, str) or not call_id:
+            continue
+        kind = payload.get("type")
+        if kind == "custom_tool_call":
+            calls.append((call_id, payload))
+        elif kind == "custom_tool_call_output":
+            closed.add(call_id)
+    for call_id, payload in reversed(calls):
+        if call_id in closed:
+            continue
+        name = payload.get("name")
+        match = _EXEC_CMD_RE.search(payload.get("input") or "")
+        command = match.group(1).strip().split()[0] if match and match.group(1).strip() else None
+        if not name and not command:
+            return None
+        return {"name": name if isinstance(name, str) else None, "command": command}
+    return None
 
 
 def _apply_token_count(sess, line):
@@ -886,6 +947,9 @@ def enrich(sess, tick=None):
             pass
     lifecycle = _latest_task_lifecycle(path)
     sess.task_lifecycle = lifecycle[0] if lifecycle else None
+    # F-47 display detail only — never a state input (see _tail_open_tool_call).
+    if sess.task_lifecycle == "task_started":
+        sess.exec_tool = _tail_open_tool_call(path)
     tc = _tail_token_count(path)
     if tc:
         _apply_token_count(sess, tc)
