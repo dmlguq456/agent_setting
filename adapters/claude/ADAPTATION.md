@@ -53,9 +53,9 @@ Claude Code currently realizes the portable continuity layer through local paths
 | `<worklog-board-app>` | `/home/Uihyeop/.claude/worklog-board/` | external/local app workspace |
 | `<worklog-board-app>-wt/` | `/home/Uihyeop/.claude/worklog-board-wt/` | app worktrees |
 
-The Claude adapter preserves existing behavior: `autopilot-note` writes Layer 2
-notes, triage proposals, digests, and feedback/change-review queue entries under
-the notes root; the worklog-board app reads that state and owns UI approval
+The Claude adapter keeps note semantics outside the portable harness. A note
+application may register the optional app-neutral `artifact-sink` extension;
+the application owns ingestion, routing, scheduling, and UI approval
 flows. The adapter must not move or delete existing data during harness
 migration.
 

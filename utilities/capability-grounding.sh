@@ -43,7 +43,7 @@ record() {
   [ -n "$AGENT_HOME" ] || return 0
   # Only the entry-capability set is grounded; a sub-skill or tool call is not a session identity.
   case "$cap" in
-    autopilot-apply|autopilot-code|autopilot-design|autopilot-draft|autopilot-lab|autopilot-note|autopilot-refine|autopilot-research|autopilot-ship|autopilot-spec) ;;
+    autopilot-apply|autopilot-code|autopilot-design|autopilot-draft|autopilot-lab|autopilot-refine|autopilot-research|autopilot-ship|autopilot-spec) ;;
     *) return 0 ;;
   esac
   valid_intensity "$intensity" || intensity=""

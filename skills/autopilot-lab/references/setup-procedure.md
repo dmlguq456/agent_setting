@@ -109,6 +109,6 @@ At the same point, create `experiments/{date}_{slug}/run.json` with `status: "ru
 
 **S3-4. Escalate convergence failures on user request.** For prompts such as `loss 가 안 떨어져`, `NaN`, or `수렴 이상`, dispatch the `qa/ml-debug` unit. Provide the experiment directory, symptom, available logs, and `experiment_spec.md`. Check data shape/range/NaN/balance, model initialization/freezing/gradient flow, loss scale/sign/stability, optimizer learning rate/weight decay/warmup, and batch/device/mixed precision. Return the one or two most likely causes plus commands that distinguish them.
 
-After `experiment_spec.md`, scaffold files, pending `_RUNLOG.md`, and running `run.json` are durable, the owner applies the route-sealed DB readiness condition. A connected probe requires `/autopilot-note --from <experiment-path>` as the setup-terminal `follow-up note cycle`; an unavailable probe records `skipped/db-unavailable`. Eval repeats the same condition and, when connected, updates the same source note idempotently.
+After `experiment_spec.md`, scaffold files, pending `_RUNLOG.md`, and running `run.json` are durable, the owner evaluates the route-sealed optional artifact-sink extension. An available registered sink receives the canonical experiment artifact through the app-neutral receipt contract; an unavailable probe records `skipped/extension-unavailable`. Eval repeats the same extension check at its durable terminal.
 
 After training, continue with `/autopilot-lab "결과 평가"` in eval mode.

@@ -33,10 +33,10 @@ evidence but must not rewrite source or another stage's evidence class. This is
 the report half of the stage ownership contract in `core/OPERATIONS.md` §5.10.
 
 The stage returns the canonical `final_report.md` source path to the
-dispatch-depth-1 capability owner. It does not independently invoke
-`autopilot-note`. After the report terminal, the owner evaluates the
-route-sealed DB readiness condition: `connected` requires the note handoff and
-an unavailable probe records `skipped/db-unavailable`.
+dispatch-depth-1 capability owner. It does not independently invoke an artifact
+sink. After the report terminal, the owner evaluates the route-sealed optional
+extension: an available sink receives the app-neutral receipt and an
+unavailable probe records `skipped/extension-unavailable`.
 
 When the report references generated spectrograms, consume the semantic
 manifest, verifier result, and representative visual-review evidence from the

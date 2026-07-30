@@ -1,5 +1,5 @@
 {
-  "schema_version": 6,
+  "schema_version": 7,
   "intensities": [
     "direct",
     "quick",
@@ -55,12 +55,12 @@
   ],
   "gate_command": "python3 utilities/capability-route.py complete --route <route> --node <node> --evidence <path> --jobs <canonical-jobs.log> --attempt-id <exact-attempt-id>",
   "activation_conditions": {
-    "agent-note-db-connected": {
-      "check": "utilities/note-db-readiness.sh --check",
-      "probe_kind": "live-read-only",
-      "success_state": "connected",
+    "artifact-sink-available": {
+      "check": "utilities/artifact-sink.sh --check",
+      "probe_kind": "local-registration",
+      "success_state": "available",
       "unavailable_exit_code": 69,
-      "unavailable_reason": "db-unavailable"
+      "unavailable_reason": "extension-unavailable"
     }
   },
   "recipes": [
@@ -599,11 +599,11 @@
           }
         ]
       },
-      "conditional_follow_ups": [
+      "conditional_extensions": [
         {
-          "id": "publish-note",
-          "capability": "autopilot-note",
-          "activation_condition": "agent-note-db-connected",
+          "id": "offer-artifact",
+          "extension": "artifact-sink",
+          "activation_condition": "artifact-sink-available",
           "after": [
             "report"
           ],
@@ -1180,11 +1180,11 @@
           }
         ]
       },
-      "conditional_follow_ups": [
+      "conditional_extensions": [
         {
-          "id": "publish-note",
-          "capability": "autopilot-note",
-          "activation_condition": "agent-note-db-connected",
+          "id": "offer-artifact",
+          "extension": "artifact-sink",
+          "activation_condition": "artifact-sink-available",
           "after": [
             "finalize"
           ],
@@ -1375,11 +1375,11 @@
           }
         ]
       },
-      "conditional_follow_ups": [
+      "conditional_extensions": [
         {
-          "id": "publish-note",
-          "capability": "autopilot-note",
-          "activation_condition": "agent-note-db-connected",
+          "id": "offer-artifact",
+          "extension": "artifact-sink",
+          "activation_condition": "artifact-sink-available",
           "after": [
             "full-run"
           ],
@@ -1651,11 +1651,11 @@
           }
         ]
       },
-      "conditional_follow_ups": [
+      "conditional_extensions": [
         {
-          "id": "publish-note",
-          "capability": "autopilot-note",
-          "activation_condition": "agent-note-db-connected",
+          "id": "offer-artifact",
+          "extension": "artifact-sink",
+          "activation_condition": "artifact-sink-available",
           "after": [
             "sync"
           ],
@@ -1684,113 +1684,6 @@
         "report",
         "independent-verify",
         "sync"
-      ]
-    },
-    {
-      "capability": "autopilot-note",
-      "modes": [
-        "default"
-      ],
-      "topology_class": "map-reduce",
-      "direct_predicates": [
-        "atomic-outcome",
-        "known-scope",
-        "no-shared-contract",
-        "no-resource-run",
-        "no-artifact-handoff",
-        "no-independent-verifier",
-        "focused-verification"
-      ],
-      "promotion_signals": [
-        "source-fanout",
-        "artifact-fanout",
-        "multi-runtime-parity",
-        "independent-verifier"
-      ],
-      "quick": {
-        "topology": "one-shot-owner",
-        "worker_kind": "capability-owner",
-        "write_scope": [
-          "notes/**",
-          "digest/**",
-          "routing-log/**"
-        ],
-        "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 1,
-        "model_profile": "balanced-deep"
-      },
-      "standard_plus": {
-        "topology": "map-reduce",
-        "nodes": [
-          {
-            "id": "scan",
-            "kind": "map-worker",
-            "depends_on": [],
-            "role": "fast reviewer",
-            "inputs": [
-              "source-set"
-            ],
-            "outputs": [
-              "shards/source-coverage/**"
-            ],
-            "write_scope": [
-              "shards/source-coverage/**"
-            ],
-            "resource_class": "normal",
-            "completion_gate": "note-scan",
-            "dispatch_depth": 2,
-            "fallback_hops": [
-              "same-harness-headless",
-              "cross-harness-headless",
-              "native-subagent",
-              "inline"
-            ],
-            "unit": "qa/data-curate",
-            "model_profile": "light"
-          },
-          {
-            "id": "route-apply",
-            "kind": "capability-owner",
-            "depends_on": [
-              "scan"
-            ],
-            "role": "deep orchestrator",
-            "inputs": [
-              "shards/source-coverage/**"
-            ],
-            "outputs": [
-              "notes/**",
-              "digest/**",
-              "routing-log/**"
-            ],
-            "write_scope": [
-              "notes/**",
-              "digest/**",
-              "routing-log/**"
-            ],
-            "resource_class": "normal",
-            "completion_gate": "note-single-writer",
-            "dispatch_depth": 1,
-            "fallback_hops": [
-              "same-harness-headless",
-              "cross-harness-headless",
-              "inline"
-            ],
-            "unit": "_kernel/owner",
-            "model_profile": "deep"
-          }
-        ],
-        "owner_dispatch_depth": 1,
-        "max_dispatch_depth": 2
-      },
-      "completion_gates": [
-        "note-scan",
-        "note-single-writer"
-      ],
-      "human_gates": [],
-      "resume_retry_boundaries": [
-        "scan",
-        "route-apply"
       ]
     },
     {
@@ -1927,11 +1820,11 @@
           }
         ]
       },
-      "conditional_follow_ups": [
+      "conditional_extensions": [
         {
-          "id": "publish-note",
-          "capability": "autopilot-note",
-          "activation_condition": "agent-note-db-connected",
+          "id": "offer-artifact",
+          "extension": "artifact-sink",
+          "activation_condition": "artifact-sink-available",
           "after": [
             "transaction"
           ],
@@ -2171,11 +2064,11 @@
           }
         ]
       },
-      "conditional_follow_ups": [
+      "conditional_extensions": [
         {
-          "id": "publish-note",
-          "capability": "autopilot-note",
-          "activation_condition": "agent-note-db-connected",
+          "id": "offer-artifact",
+          "extension": "artifact-sink",
+          "activation_condition": "artifact-sink-available",
           "after": [
             "claim-verify"
           ],

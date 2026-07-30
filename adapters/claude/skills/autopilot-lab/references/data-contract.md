@@ -57,7 +57,7 @@ Use `run.json.parent` as the machine-readable edge for comparison and lineage gr
 
 At evaluation completion, emit the `run.json best` result plus its delta from the parent for the worklog approval queue and board to consume. Lab only emits; it does not push proactively. Worklog E3 performs receipt and card creation under PRD §25.7. Reuse the already computed `run.json best` without new analysis.
 
-“Lab only emits; it does not push proactively” scopes to the worklog approval queue and Layer 1 card creation. Layer 2 `follow-up note cycle` registration is separate and DB-gated by `WORKFLOW.md §0.2`: a connected readiness probe makes it required, while an unavailable probe records `skipped/db-unavailable`.
+“Lab only emits; it does not push proactively” scopes to the worklog approval queue and Layer 1 card creation. The optional artifact-sink extension is separate and app-neutral under `WORKFLOW.md §0.2`: an available registered sink receives the canonical artifact, while an unavailable probe records `skipped/extension-unavailable`.
 
 ### `report/` — iframe-rendered report artifacts
 

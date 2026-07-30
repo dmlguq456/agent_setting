@@ -116,7 +116,7 @@ class WorkingRegistryStageInductionTest(unittest.TestCase):
                 f.write("\t".join([
                     "2026-07-10T01:00:00+00:00", "open", "repo", wt,
                     "docs-sync",
-                    "capability=autopilot-note,mode=note,qa=light",
+                    "capability=autopilot-draft,mode=default,qa=light",
                 ]) + "\n")
             with mock.patch.object(dispatch, "_scan_processes", return_value=[]), \
                  mock.patch.object(dispatch, "_live_claude_cwds", return_value={}), \
@@ -133,7 +133,7 @@ class WorkingRegistryStageInductionTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             plan = os.path.join(tmp, ".agent_reports", "plans", "nearby_docs")
             os.makedirs(os.path.join(plan, "test_logs"))
-            self.assertEqual(dispatch.live_stage(tmp, "nearby-docs", "note", "autopilot-note"), "note")
+            self.assertEqual(dispatch.live_stage(tmp, "nearby-docs", "default", "autopilot-draft"), "default")
 
     def test_code_worker_derives_stage_from_artifacts(self):
         with tempfile.TemporaryDirectory() as tmp:

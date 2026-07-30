@@ -3,9 +3,9 @@
   "canonical_manifest": "harness-manifest.json",
   "topology_registry": {
     "source": "capabilities/topologies.json",
-    "digest": "sha256:06f3a8bf23649c1104afe59ecf529f70dc1ee8d1175a38e76e60c293df477140",
-    "capabilities": 10,
-    "recipes": 22
+    "digest": "sha256:14fbd096799a213d0bf281f7c5fcaa69578dc0da76785ee292a1e9622dd820c4",
+    "capabilities": 9,
+    "recipes": 21
   },
   "manifest_version": "1.2.0",
   "skills": [
@@ -122,18 +122,6 @@
       "use_when": "Use when training setup, checkpoint evaluation, ablation, metric computation, or other new empirical output is required.",
       "not_for": "Not for ordinary production-code changes that create no new experiment or evaluation result.",
       "argument_hint": "<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]"
-    },
-    {
-      "slug": "skill__autopilot-note",
-      "name": "autopilot-note",
-      "group": "entry",
-      "fam": "ops",
-      "modes": [],
-      "blurb": "Route and note artifacts, producing digests.",
-      "invocation_class": "entry-router",
-      "use_when": "Use when existing artifacts must be collected, digested, organized, or routed into a durable note workflow.",
-      "not_for": "Not for storing one scoped memory item or for performing the primary research, code, or document work.",
-      "argument_hint": "[--scope today|yesterday|since <date>|all] [--from <artifact-path>] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--source <list>]"
     },
     {
       "slug": "skill__autopilot-refine",
@@ -685,7 +673,6 @@
       "capabilities": [
         "analyze-user",
         "audit",
-        "autopilot-note",
         "post-it"
       ]
     },
@@ -729,7 +716,8 @@
         "operations"
       ],
       "units": [
-        "material/browser-fetch"
+        "material/browser-fetch",
+        "qa/data-curate"
       ]
     },
     "starter": {
@@ -753,7 +741,6 @@
         "audit",
         "autopilot-code",
         "autopilot-lab",
-        "autopilot-note",
         "autopilot-ship",
         "autopilot-spec",
         "code-execute",
@@ -777,7 +764,6 @@
         "plan/frame",
         "plan/plan-author",
         "qa/code-review",
-        "qa/data-curate",
         "qa/ml-debug",
         "qa/plan-review",
         "qa/security-review",
@@ -808,7 +794,6 @@
         "plan/frame",
         "plan/plan-author",
         "qa/code-review",
-        "qa/data-curate",
         "qa/ml-debug",
         "qa/plan-review",
         "qa/security-review",
@@ -819,12 +804,12 @@
       "kernel_agents": [
         "memory-scout"
       ],
-      "digest": "ba43a9220cde7b08376c9fc444810e466b47e2cda1c9de0c867f69b94760ef1e",
+      "digest": "5afe702e5dfc44f2e891a7dda2b976e62fa9bce19fc78aa7e88ba39db8806eaa",
       "counts": {
-        "capabilities": 14,
-        "units": 20,
+        "capabilities": 13,
+        "units": 19,
         "roles": 7,
-        "modes": 20
+        "modes": 19
       }
     },
     "full": {
@@ -845,7 +830,6 @@
         "autopilot-design",
         "autopilot-draft",
         "autopilot-lab",
-        "autopilot-note",
         "autopilot-refine",
         "autopilot-research",
         "autopilot-ship",
@@ -939,9 +923,9 @@
       "kernel_agents": [
         "memory-scout"
       ],
-      "digest": "11ec8711c025514e957676624b90edf0f8a4ac33bff0b46f5ae3e02450e93040",
+      "digest": "00343f0b597feef45172f31ff1f330048eb9ded29c9c058b0e186b33eea45c76",
       "counts": {
-        "capabilities": 27,
+        "capabilities": 26,
         "units": 28,
         "roles": 8,
         "modes": 29

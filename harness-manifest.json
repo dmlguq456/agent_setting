@@ -217,24 +217,6 @@
         ]
       }
     },
-    "autopilot-note": {
-      "group": "entry",
-      "family": "ops",
-      "modes": [],
-      "summary": "Route and note artifacts, producing digests.",
-      "invocation": {
-        "class": "entry-router",
-        "use_when": "Use when existing artifacts must be collected, digested, organized, or routed into a durable note workflow.",
-        "not_for": "Not for storing one scoped memory item or for performing the primary research, code, or document work."
-      },
-      "argument_shape": "[--scope today|yesterday|since <date>|all] [--from <artifact-path>] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--source <list>]",
-      "requires": {
-        "capabilities": [],
-        "units": [
-          "qa/data-curate"
-        ]
-      }
-    },
     "autopilot-refine": {
       "group": "entry",
       "family": "doc",
@@ -898,7 +880,6 @@
       "capabilities": [
         "analyze-user",
         "audit",
-        "autopilot-note",
         "post-it"
       ]
     },
@@ -942,7 +923,8 @@
         "operations"
       ],
       "units": [
-        "material/browser-fetch"
+        "material/browser-fetch",
+        "qa/data-curate"
       ]
     },
     "starter": {

@@ -67,10 +67,11 @@ Adapters must preserve the portable invariants relevant to this capability:
 
 ## Routing Boundary
 
-After finalization makes the canonical `final-artifact` durable, apply the
-route-sealed DB readiness condition. When connected, the owner runs the final
-`autopilot-note --from <final-artifact>` follow-up. When unavailable, record
-`skipped/db-unavailable`; do not fail or duplicate the finalized document.
+After finalization makes the canonical `final-artifact` durable, evaluate the
+route-sealed optional artifact-sink extension. When available, offer the
+artifact through the app-neutral receipt contract. When unavailable, record
+`skipped/extension-unavailable`; do not fail or duplicate the finalized
+document.
 
 ## Adapter Realization
 

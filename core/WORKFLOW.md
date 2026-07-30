@@ -135,33 +135,28 @@ Precedence, highest first:
    the execution primary.
 4. Formal report prose assembly routes through `autopilot-draft` or the owning
    capability's draft handoff as a secondary step.
-5. Final artifact routing and note registration is `autopilot-note`, always secondary and last. A note-eligible primary declares a `follow-up note cycle` after its durable terminal and hands off the canonical source with `autopilot-note --from <artifact-path>`; it never substitutes for or broadens the primary capability.
+5. Durable result routing may offer the canonical artifact to the optional
+   `artifact-sink` extension, always secondary and last. The portable harness
+   owns only the closed `artifact.completed` receipt and a local registration
+   check; it has no note, DB, credential, routing, or UI semantics.
 
-   Automatic follow-up is **DB-gated**. The primary owner runs the checked
-   `agent-note-db-connected` readiness contract immediately before handoff. A
-   live remote DB makes the follow-up required; missing configuration, a local
-   file fallback, timeout, authentication failure, or network failure produces
-   a typed `skipped/db-unavailable` result and leaves the primary result valid.
-   Hooks are not activation authority. A connected probe followed by note or
-   publication failure is reported explicitly rather than silently treated as
-   complete.
+   Extension absence is normal and silent. A registered handler that reports
+   unavailable produces `skipped/extension-unavailable`; an activated handler
+   failure is `failed/artifact-sink` and remains retryable without invalidating
+   the primary result. Hooks are not activation authority. The extension owns
+   product-specific setup guidance, identity, upsert behavior, and publication.
 
-   | Primary capability | `follow-up note cycle` policy |
+   | Primary capability | optional artifact-sink policy |
    |---|---|
-   | `autopilot-code`, `autopilot-draft`, `autopilot-lab`, `autopilot-refine`, `autopilot-research` | Topology-sealed after the declared durable terminal; required only while the remote DB readiness check is connected. |
-   | `analyze-project` | Same DB-gated contract after persistent analysis completes; this pre-capability has no entry-recipe topology row. |
-   | `autopilot-apply`, `autopilot-design`, `autopilot-ship`, `autopilot-spec` | No automatic follow-up until the recipe declares a concrete note-source output; explicit user-invoked `autopilot-note` remains available. |
-
-   Reprocessing the same canonical source is an upsert: it updates or skips the
-   same Layer 2 note, preserves its stable identity and user/DB-owned routing
-   fields, and never creates a duplicate merely because feedback triggered a
-   new refine run.
+   | `autopilot-code`, `autopilot-draft`, `autopilot-lab`, `autopilot-refine`, `autopilot-research` | Topology-sealed after the declared durable terminal; offered only while an extension handler is registered and available. |
+   | `analyze-project` | Same optional extension offer after persistent analysis completes; this pre-capability has no entry-recipe topology row. |
+   | `autopilot-apply`, `autopilot-design`, `autopilot-ship`, `autopilot-spec` | No automatic offer until the recipe declares a concrete durable source output. |
 6. A secondary capability must never substitute for the primary execution
    capability, and the primary never absorbs a secondary's artifact ownership.
 
 | Request shape | Primary | Secondary |
 |---|---|---|
-| "Reevaluate the model on a new test set and update the report" | `autopilot-lab --mode eval` | refine/draft document pass; `autopilot-spec` on policy change; `autopilot-note` |
+| "Reevaluate the model on a new test set and update the report" | `autopilot-lab --mode eval` | refine/draft document pass; `autopilot-spec` on policy change; optional artifact sink |
 | "Fix only the typos and sentences in REPORT.md" | `autopilot-refine` | — |
 | "Change the evaluation mixing policy to unscaled and reevaluate" | `autopilot-lab --mode eval` | `autopilot-spec` update; neither replaces the other |
 
@@ -410,12 +405,8 @@ Numeric prefixes such as `00_`, `01_`, `02_`, and `05_` are retired. Use plain n
 
 | Layer | Owner | Example | Update path |
 |---|---|---|---|
-| `<artifact-root>/notes/<date>/` | `autopilot-note` | Scan/routing and reviewer logs for this run | Capability artifact rules |
-| `<agent-notes-root>/_layer2/notes/` | Agent | Readable note row derived from one artifact | `autopilot-note` or board-approved migration |
-| `<agent-notes-root>/_layer2/{backbones,tasks,papers}/` | Agent | Reusable-axis, task, and paper catalogs | `autopilot-note` emergence or board-approved edit |
 | `<agent-notes-root>/cards/` | User | Layer 1 task and project cards | Worklog-board UI or direct user edit |
 | `<agent-notes-root>/_triage` | Retired review history | Read-only legacy records | Preserved until daemon cleanup |
-| `<agent-notes-root>/_feedback`, `_change_review` | User-agent queues | Feedback and code-change review | Worklog-board UI plus `autopilot-note --feedback` |
 | `<agent-notes-root>/digests`, `oncall`, `study`, `manual` | Loops and operators | Digests, reports, and manuals | Loop or board UI |
 
 `_layer2/`, the two active queues, the retired `_triage` history, and the local board DB are mutable runtime or user state and must not be committed to the harness repository. They may live in a separate notes repository, still independent of harness core and adapters. `<worklog-board-app>` displays this root and processes feedback or review. Changes to the app belong to `autopilot-code` in the app repository; harness migration must not move or delete board data.

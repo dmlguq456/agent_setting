@@ -335,7 +335,7 @@ def _grounding_home():
 
 _ENTRY_CAPABILITIES = frozenset((
     "autopilot-apply", "autopilot-code", "autopilot-design", "autopilot-draft",
-    "autopilot-lab", "autopilot-note", "autopilot-refine", "autopilot-research",
+    "autopilot-lab", "autopilot-refine", "autopilot-research",
     "autopilot-ship", "autopilot-spec",
 ))
 

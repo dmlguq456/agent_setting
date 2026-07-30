@@ -4,7 +4,6 @@
 # Portable CLI: spec-skill-gate.sh --skill <name> [--cwd <dir>] [--session <id>] [--agent-home <dir>]
 # Also deny when prd.md changed after that read, forcing a fresh read.
 # This is a verifiable hard gate rather than self-reporting. POSIX sh, no jq.
-# autopilot-note is excluded because digest work does not change the blueprint.
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 AGENT_HOME="${AGENT_HOME:-$("$SCRIPT_DIR/../utilities/agent-home.sh")}"

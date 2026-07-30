@@ -88,7 +88,7 @@ usage: preflight.sh write <file> [session-id] [turn-id]
        preflight.sh worktree-cleanup [--check|--apply] (--worktree <path>|--all-eligible [--repo <path>]) [--integration-ref <ref>] [--jobs <jobs.log>]
        preflight.sh mcp [--check]
        preflight.sh worklog [cwd]
-       preflight.sh note-readiness --check
+       preflight.sh artifact-sink <'--check'|'emit' ...>
        preflight.sh loop-info <oncall|note|study|drill|runtime-watch>
        preflight.sh claim-verify [--check] <claim> [--out <file>]
        preflight.sh browser-fetch [--check] <url> [--out <dir>]
@@ -591,9 +591,9 @@ EOF
       WORKLOG_BOARD_WT="${WORKLOG_BOARD_WT:-}" \
       "$ROOT/utilities/agent-worklog-state.sh" "$cwd"
     ;;
-  note-readiness)
+  artifact-sink)
     shift
-    exec "$ROOT/utilities/note-db-readiness.sh" "$@"
+    exec "$ROOT/utilities/artifact-sink.sh" "$@"
     ;;
   loop-info)
     [ "$#" -eq 2 ] || { echo "opencode preflight: loop-info requires one loop name" >&2; exit 64; }
@@ -652,13 +652,13 @@ source=loops/README.md
 status=unsupported
 runtime_surface=missing-native-loop
 trigger=external-scheduler
-related_capability=autopilot-note
-capability_check=adapters/opencode/bin/preflight.sh capability-info autopilot-note
-native_capability_surface=opencode-native-skill-command
-scheduler_surface=external-worklog-board
+related_extension=artifact-sink
+extension_check=adapters/opencode/bin/preflight.sh artifact-sink --check
+native_extension_surface=application-owned-plugin
+scheduler_surface=external-application
 action=not-implemented-in-repo
-fallback=worklog-board-or-manual-post-it-flow
-note=OpenCode has an on-demand autopilot-note capability projection, but this repo has no OpenCode-native scheduled note loop runner.
+fallback=extension-unavailable-or-application-scheduler
+note=The note application owns note semantics and scheduling; this harness exposes only the optional app-neutral artifact-sink port.
 EOF
         ;;
       runtime-watch)
