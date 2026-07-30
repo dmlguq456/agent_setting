@@ -4,6 +4,29 @@
 
 > **Concurrency guard for a shared `<artifact-root>`.** Immediately before a write stage—Step 3 or update-mode writes to `prd.md`, `pipeline_state.yaml`, or `pipeline_summary.md`—acquire `.pipeline-lock`. Release it on both normal completion and interruption; the protocol and snippet are defined in **OPERATIONS.md §5.8**. If acquisition is BLOCKED (`exit 3`) because another worktree is editing the spec, stop writing, report it, and decide whether to wait or override. This lock is also the single detect-only signal that this skill is editing a spec.
 
+### Blueprint Summary Block (every `prd.md`, 2026-07-30)
+
+A PRD is an agent artifact and grows verbose; the user-facing blueprint must stay concise. Every `prd.md` therefore opens with a bounded summary block **immediately after the H1 title line**, wrapped in exact markers:
+
+```markdown
+# <Project Name> Spec
+
+<!-- BLUEPRINT-SUMMARY:BEGIN -->
+## ✦ 청사진 요약 ⟨v{N}, YYYY-MM-DD⟩
+- **비전 한 줄**: <what this project is, in one line>
+- **현재 형태**: <current shape/stage, ≤3 lines>
+- **활성 결정·불변식**: <5–10 bullets — the decisions and invariants that currently govern the work>
+- **진행 중·직후 사이클**: <≤3 bullets>
+<!-- BLUEPRINT-SUMMARY:END -->
+```
+
+Rules:
+
+- **Hard cap 40 lines** between the markers. The block is a blueprint, not a changelog — rewrite it to stay current and short; never append version history into it.
+- **Same-transaction refresh**: every update-mode transaction (major or minor) refreshes the block together with the body under the same `.pipeline-lock`, and the block's `⟨v{N}⟩` marker matches the version being written. A stale summary is drift.
+- **Legacy adoption**: a PRD without the block gains it on its next update; do not run a separate sweep just to inject blocks.
+- **Stable contract**: the marker strings are consumed downstream by deterministic extractors (e.g., the agent-note spec mirror shows the block as the default blueprint view and feeds it to routing/steward context — agent-note PRD §54.10). Never rename, localize, or nest the markers; write the block content in the artifact language of the PRD.
+
 ### Step 1: Collect Information and Confirm
 
 **1-1. Determine the project name** from the request, cwd, and files such as `package.json` or `pyproject.toml`.
@@ -109,6 +132,11 @@ Use the following PRD structure. Render descriptive prose in the user's communic
 
 ````markdown
 # <Project Name> Spec
+
+<!-- BLUEPRINT-SUMMARY:BEGIN -->
+## ✦ 청사진 요약 ⟨v1, YYYY-MM-DD⟩
+(비전 한 줄 · 현재 형태 · 활성 결정·불변식 · 진행 중 사이클 — ≤40 lines, see Blueprint Summary Block above)
+<!-- BLUEPRINT-SUMMARY:END -->
 
 ## Common
 - Module structure
