@@ -15,6 +15,8 @@ For each artifact, decide which L1 card and which L2 catalogs it should attach t
 
 > ✅ **Routing policy (2026-07-28):** The agent confirms every routing result and records `routing_status: confirmed`. Keep `routing_confidence` only as an ordering and emphasis signal so low-confidence items can be corrected on the board note screen. The 2026-06-10 automatic-confirmation prohibition is historical and was withdrawn when the review surface was retired on 2026-07-28.
 
+> 📐 **Blueprint context (agent-note PRD §54.10, 2026-07-30):** before deciding Pass 2 matches or Pass 3 creation, read the target repo's blueprint summary block — the `<!-- BLUEPRINT-SUMMARY:BEGIN -->` … `<!-- BLUEPRINT-SUMMARY:END -->` markers at the top of `<artifact-root>/spec/prd.md`, when present — and use it as matching and creation context: the blueprint states which work streams and tasks the project expects, so it grounds both "which existing task does this note belong to" and "what new task is worth creating". A missing block changes nothing; never fall back to token matching as a substitute for reading it.
+
 ### Resolve `card_id` (→ Layer 1) in three passes
 
 #### Pass 1 — deterministic frontmatter
@@ -25,14 +27,14 @@ For each artifact, decide which L1 card and which L2 catalogs it should attach t
 #### Pass 2 — fuzzy keyword matching
 
 - Fuzzy-match artifact keywords against the `title` and body headings of **`kind: task`** files under `<target>/cards/**.md`.
-- **Task only (PRD v44 invariant).** A `card_id` always targets a task card; direct matching to `kind: project` is forbidden because a project is a derived label from the task's `project` field, not an attachment target. When no task matches, do not force the artifact onto a project. `secondary_card_ids` follows the same task-only rule. The v43 project-fallback behavior is retired.
+- **Task only (PRD v44 invariant; reaffirmed and write-layer-enforced by agent-note PRD §54, v125).** A `card_id` always targets a task card; direct matching to `kind: project` is forbidden because a project is a derived label from the task's `project` field, not an attachment target. When no task matches, do not force the artifact onto a project — the app write layer now rejects project-card note routing with 422 on every path. The v43 project-fallback behavior is retired.
 - Confidence: at **≥0.7**, set `card_id` and record high `routing_confidence`; at **0.4–0.7**, set `card_id` and record medium confidence; below **0.4**, continue to Pass 3. Always record `routing_reason` and `matched_signals` for correction on the board note screen.
-- **Multiple-card links (worklog-board PRD v32):** select one primary card and zero or more secondary cards. The highest-confidence match remains `card_id`. Put other meaningful task matches in `secondary_card_ids: [<id>, …]`; DB ingestion stores them in the `l2.note_cards` M:N relation. Reports, home widgets, and digests continue to use the single primary card.
+- **Single-card link (agent-note PRD §54, v125 — supersedes the v32 multiple-card rule):** emit exactly one `card_id` (the highest-confidence task match) and do not emit `secondary_card_ids`. The app write layer rejects new note secondary links (422) and the `l2.note_cards` relation is dormant (zero rows in production as of 2026-07-30). Record lower-confidence candidates in `routing_reason`/`matched_signals`, not as extra links.
 
 #### Pass 3 — ambient
 
-- When nothing matches, use `card_id: null`, `routing_status: confirmed`, and low `routing_confidence`; users may organize the ambient note later.
-- Do not create a Layer 1 card automatically. Leave unmatched artifacts as ambient notes with `card_id: null`; card creation remains a separate user action.
+- When nothing matches and no owning project is identifiable, use `card_id: null`, `routing_status: confirmed`, and low `routing_confidence`; users may organize the ambient note later.
+- **Gated task creation (agent-note PRD §54.4 ③, v125 — supersedes the earlier "card creation remains a separate user action" rule):** when the owning project is clear but no existing task fits, create a **task card** and route to it instead of leaving the note ambient or forcing it onto the project. All gates must hold: ⓐ the note content matches no existing task under the owning project — a semantic judgment on content (use the blueprint context above), never token matching; ⓑ bundle first — route N related notes to one new task, never one card per note; ⓒ retrospective records may be created directly with `process: done`; ⓓ the new task must carry the owning project's `project_id`; ⓔ never create a project card; ⓕ list every created card in the run report so the user can audit it — silent card growth is forbidden.
 
 ### Resolve `backbone_ids`, `task_ids`, and `paper_id` (→ Layer 2)
 
