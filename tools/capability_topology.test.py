@@ -30,10 +30,6 @@ PRESERVED_FULL_FIELD_DIGESTS = {
         "f5b459f6ff8fa7cbd7c83e220504b157cccd33dffbf58d63ebc70efd2bb038ad",
         "47160a6d9acf73cf29ff137dcb90c1af3036148530af2a1628162692078f1e24",
     ),
-    ("autopilot-note", ("default",)): (
-        "d53f04455ec719c1a10fe096e6c6a3a7d91b6bc1b48773819b624d7c9fff5e03",
-        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-    ),
     ("autopilot-refine", ("default",)): (
         "e94e06c314ace9bd06b4acb705811af9d179acaa331ef628138c1f2376d3c91b",
         "d39b4446e7c7fca7def4629560d9ee10a342b536fa644ffee8023c5f06326203",
@@ -61,7 +57,7 @@ def full_field_digest(value):
 class TestTopology(unittest.TestCase):
     def setUp(self): self.r = T.load_registry()
     def test_exact_coverage_and_digest(self):
-        result = T.validate_registry(self.r); self.assertEqual((10, 22), (result["capabilities"], result["recipes"])); self.assertEqual(T.registry_digest(self.r), T.registry_digest(json.loads(json.dumps(self.r, sort_keys=True))))
+        result = T.validate_registry(self.r); self.assertEqual((9, 21), (result["capabilities"], result["recipes"])); self.assertEqual(T.registry_digest(self.r), T.registry_digest(json.loads(json.dumps(self.r, sort_keys=True))))
     def test_missing_coverage(self):
         r=copy.deepcopy(self.r); r["recipes"].pop(); self.assertRaises(T.TopologyError, T.validate_registry, r)
     def test_cycle(self):
@@ -109,10 +105,10 @@ class TestTopology(unittest.TestCase):
         self.assertRaisesRegex(T.TopologyError,"enforced",T.validate_registry,r)
         r=copy.deepcopy(self.r); r["rollout"]["legacy_low_level_dispatch"]=True
         self.assertRaisesRegex(T.TopologyError,"retired",T.validate_registry,r)
-        for legacy in (2,3,4,5):
+        for legacy in (2,3,4,5,6):
             r=copy.deepcopy(self.r); r["schema_version"]=legacy
             self.assertRaisesRegex(T.TopologyError,"read-only",T.validate_registry,r)
-    def test_conditional_note_follow_up_coverage(self):
+    def test_conditional_artifact_sink_coverage(self):
         expected={
             ("autopilot-code",("audit","debug","dev")):("report","report","final_report.md"),
             ("autopilot-draft",("doc","paper","presentation")):("finalize","finalize","final-artifact"),
@@ -123,29 +119,30 @@ class TestTopology(unittest.TestCase):
         }
         observed={}
         for recipe in self.r["recipes"]:
-            rows=recipe.get("conditional_follow_ups",[])
+            rows=recipe.get("conditional_extensions",[])
             if not rows: continue
             self.assertEqual(len(rows),1)
             row=rows[0]; source=row["source_outputs"][0]
             observed[(recipe["capability"],tuple(recipe["modes"]))]=(
                 row["after"][0],source["node"],source["output"])
-            self.assertEqual(row["activation_condition"],"agent-note-db-connected")
+            self.assertEqual(row["activation_condition"],"artifact-sink-available")
+            self.assertEqual(row["extension"],"artifact-sink")
             self.assertEqual(row["on_unavailable"],"skip")
         self.assertEqual(observed,expected)
-    def test_conditional_follow_up_validation_fails_closed(self):
+    def test_conditional_extension_validation_fails_closed(self):
         def code_recipe(registry):
             return next(x for x in registry["recipes"] if x["capability"]=="autopilot-code")
-        r=copy.deepcopy(self.r); code_recipe(r)["conditional_follow_ups"][0]["activation_condition"]="mystery"
+        r=copy.deepcopy(self.r); code_recipe(r)["conditional_extensions"][0]["activation_condition"]="mystery"
         self.assertRaisesRegex(T.TopologyError,"unknown activation",T.validate_registry,r)
-        r=copy.deepcopy(self.r); code_recipe(r)["conditional_follow_ups"][0]["after"]=["execute"]
+        r=copy.deepcopy(self.r); code_recipe(r)["conditional_extensions"][0]["after"]=["execute"]
         self.assertRaisesRegex(T.TopologyError,"terminal nodes",T.validate_registry,r)
-        r=copy.deepcopy(self.r); code_recipe(r)["conditional_follow_ups"][0]["source_outputs"][0]["output"]="missing.md"
+        r=copy.deepcopy(self.r); code_recipe(r)["conditional_extensions"][0]["source_outputs"][0]["output"]="missing.md"
         self.assertRaisesRegex(T.TopologyError,"not declared",T.validate_registry,r)
-        r=copy.deepcopy(self.r); code_recipe(r)["conditional_follow_ups"][0]["capability"]="autopilot-code"
-        self.assertRaisesRegex(T.TopologyError,"non-self",T.validate_registry,r)
-        r=copy.deepcopy(self.r); code_recipe(r)["conditional_follow_ups"][0]["on_unavailable"]="fail"
+        r=copy.deepcopy(self.r); code_recipe(r)["conditional_extensions"][0]["extension"]="unknown-sink"
+        self.assertRaisesRegex(T.TopologyError,"must target artifact-sink",T.validate_registry,r)
+        r=copy.deepcopy(self.r); code_recipe(r)["conditional_extensions"][0]["on_unavailable"]="fail"
         self.assertRaisesRegex(T.TopologyError,"must be skip",T.validate_registry,r)
-        r=copy.deepcopy(self.r); r["activation_conditions"]["agent-note-db-connected"]["success_state"]="configured"
+        r=copy.deepcopy(self.r); r["activation_conditions"]["artifact-sink-available"]["success_state"]="configured"
         self.assertRaisesRegex(T.TopologyError,"activation contract mismatch",T.validate_registry,r)
     def test_unknown_unit_ref_fails_closed(self):
         r=copy.deepcopy(self.r); r["recipes"][0]["standard_plus"]["nodes"][0]["unit"]="dev/does-not-exist"
@@ -207,8 +204,6 @@ class TestTopology(unittest.TestCase):
             with self.subTest(capability=recipe["capability"],modes=recipe["modes"]):
                 self.assertNotIn("replications",recipe["standard_plus"])
                 self.assertEqual(standard_anchors,[expected] if expected else [])
-        note=next(x for x in self.r["recipes"] if x["capability"]=="autopilot-note")
-        self.assertEqual(note["standard_plus"].get("parallel_groups",[]),[])
     def test_parallel_group_validation_fails_closed(self):
         def broken(mutate,capability="autopilot-code"):
             r=copy.deepcopy(self.r)
@@ -254,7 +249,6 @@ class TestTopology(unittest.TestCase):
         expected = {
             ("autopilot-apply", ("default",)): ["handback"],
             ("autopilot-lab", ("eval",)): ["sync"],
-            ("autopilot-note", ("default",)): ["route-apply"],
             ("autopilot-refine", ("default",)): ["transaction"],
             ("autopilot-ship", ("default",)): ["release-setup"],
             ("autopilot-spec", ("api", "app", "cli", "library", "research", "update")): [

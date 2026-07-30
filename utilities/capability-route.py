@@ -319,9 +319,9 @@ def _realized_parallel_groups(nodes):
     return list(groups.values())
 
 
-def _realize_conditional_follow_ups(recipe, effective_intensity):
+def _realize_conditional_extensions(recipe, effective_intensity):
     """Seal owner postconditions without turning them into dispatch nodes."""
-    rows = json.loads(json.dumps(recipe.get("conditional_follow_ups", [])))
+    rows = json.loads(json.dumps(recipe.get("conditional_extensions", [])))
     terminal = "inline" if effective_intensity == "direct" else (
         "one-shot" if effective_intensity == "quick" else None
     )
@@ -487,7 +487,7 @@ def _compile_from_recipe(registry, recipe, capability, capability_mode, requeste
                    "escalation_basis":[{"signal":s,"source":"caller"} for s in signals],
                    "transport":transport,"transport_evidence":transport_evidence,"inline_reason":inline_reason},
       "nodes":nodes,"parallel_groups":_realized_parallel_groups(nodes),
-      "conditional_follow_ups":_realize_conditional_follow_ups(recipe, effective),
+      "conditional_extensions":_realize_conditional_extensions(recipe, effective),
       "completion_gates":gates,"human_gates":recipe["human_gates"],
       "resume_retry_boundaries":recipe["resume_retry_boundaries"],
       "dispatch_evidence":checked_dispatch,
@@ -539,14 +539,14 @@ def verify_route(route, expected_cwd=None):
         route_recipe=TOPO.resolve_recipe(
             registry, route.get("capability"), route.get("capability_mode")
         )
-    expected_follow_ups=_realize_conditional_follow_ups(
+    expected_extensions=_realize_conditional_extensions(
         route_recipe, route.get("effective_intensity")
     )
-    if route.get("conditional_follow_ups") != expected_follow_ups:
-        raise ValueError("route conditional follow-ups differ from the sealed recipe")
+    if route.get("conditional_extensions") != expected_extensions:
+        raise ValueError("route conditional extensions differ from the sealed recipe")
     route_node_ids={node.get("id") for node in route.get("nodes", [])}
-    if any(not set(row["after"]) <= route_node_ids for row in expected_follow_ups):
-        raise ValueError("route conditional follow-up anchor is not realized")
+    if any(not set(row["after"]) <= route_node_ids for row in expected_extensions):
+        raise ValueError("route conditional extension anchor is not realized")
     if route.get("owner_dispatch_depth") not in {0, 1} or route.get("max_dispatch_depth") not in {0, 1, 2}:
         raise ValueError("invalid qualified dispatch depth")
     if any(key in route for key in ("depth", "owner_depth", "max_depth")):

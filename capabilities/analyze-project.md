@@ -82,12 +82,13 @@ Artifact absence alone is not a trigger. New empirical evaluation belongs to
 implementation to `autopilot-code`, and inspection of completed work to
 `audit`. Apply those semantic primaries before this initial-analysis default.
 
-After persistent analysis becomes durable, apply the DB-gated follow-up policy
-from `WORKFLOW §0.2`. A connected remote note DB requires
-`autopilot-note --from <analysis-artifact>` as the final secondary step;
-unavailable state records `skipped/db-unavailable`. Because `analyze-project`
-is a pre-capability rather than an entry recipe, this obligation lives in this
-portable contract instead of `capabilities/topologies.json`.
+After persistent analysis becomes durable, evaluate the optional artifact-sink
+extension from `WORKFLOW §0.2`. When the sink is available, offer the canonical
+analysis artifact through the app-neutral receipt contract. When it is absent,
+record `skipped/extension-unavailable` without changing analysis completion.
+Because `analyze-project` is a pre-capability rather than an entry recipe, this
+extension point lives in this portable contract instead of
+`capabilities/topologies.json`.
 
 ## Adapter Realization
 

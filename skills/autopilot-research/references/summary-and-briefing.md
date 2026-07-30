@@ -23,4 +23,4 @@ Read `{artifact_dir}/00_briefing.md` and present:
 
 Do not hard-code a Korean or English closing sentence. Match the language and tone of the current user conversation.
 
-After `pipeline_summary` is durable, apply the route-sealed DB readiness condition from `WORKFLOW.md §0.2`. On `connected`, run the required final `follow-up note cycle` with `autopilot-note --from <research-artifact-path>`; on unavailable, record `skipped/db-unavailable` without invalidating the report.
+After `pipeline_summary` is durable, evaluate the route-sealed optional artifact-sink extension from `WORKFLOW.md §0.2`. When available, offer the canonical research artifact through the app-neutral receipt contract; on unavailable, record `skipped/extension-unavailable` without invalidating the report.

@@ -50,12 +50,11 @@ routes that work to `autopilot-lab` (or the owning execution capability) as
 primary, with refine as a secondary document pass over the finalized results.
 Blueprint or evaluation-policy changes belong to `autopilot-spec` update.
 
-After the confirmed transaction, hand off the canonical revised artifact—not
-the snapshot or diff preview—to the route-sealed note follow-up. When the
-remote DB readiness check is connected, `autopilot-note --from` upserts the
-same source note while preserving stable identity and user/DB-owned routing
-fields. When unavailable, record `skipped/db-unavailable` and leave refinement
-complete without creating a note.
+After the confirmed transaction, evaluate the route-sealed optional
+artifact-sink extension with the canonical revised artifact—not the snapshot or
+diff preview. When available, offer it through the app-neutral receipt
+contract. When unavailable, record `skipped/extension-unavailable` and leave
+refinement complete.
 
 ## Adapter Realization
 

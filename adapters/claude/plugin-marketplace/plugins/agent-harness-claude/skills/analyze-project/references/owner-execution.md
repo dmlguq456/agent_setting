@@ -124,7 +124,7 @@ fan-out analyses.
 
 ## Completion
 
-Once the selected mode's analysis directory and QA evidence are durable, apply the DB-gated `follow-up note cycle` policy from `WORKFLOW.md §0.2`. On `connected`, run `autopilot-note --from <analysis-project-output-path>` as the required final secondary step; on unavailable, record `skipped/db-unavailable`. This applies across code, paper, and doc modes without duplicating their mode procedures.
+Once the selected mode's analysis directory and QA evidence are durable, evaluate the optional artifact-sink extension from `WORKFLOW.md §0.2`. When available, offer the canonical analysis artifact through the app-neutral receipt contract; on unavailable, record `skipped/extension-unavailable`. This applies across code, paper, and doc modes without duplicating their mode procedures.
 
 ## Reference Index
 

@@ -34,7 +34,7 @@ need capabilities/autopilot-lab.md    '## Routing Boundary'      'autopilot-lab 
 need capabilities/autopilot-refine.md '## Routing Boundary'      'autopilot-refine Routing Boundary 존재'
 need capabilities/autopilot-refine.md 'autopilot-lab'            'autopilot-refine → lab primary 위임 절'
 need capabilities/autopilot-spec.md   'never substitutes'        'autopilot-spec spec-sync 비대체 절'
-need capabilities/autopilot-note.md   '## Routing Boundary'      'autopilot-note Routing Boundary 존재'
+need core/WORKFLOW.md                 '`artifact-sink` extension, always secondary' 'app-neutral artifact-sink extension 존재'
 need capabilities/analyze-project.md  'explicit analysis request defaults to persistent output' 'analyze-project 초기 분석 기본값 존재'
 need capabilities/analyze-project.md  'Artifact absence alone is not a trigger' '산출물 부재 단독 트리거 금지'
 

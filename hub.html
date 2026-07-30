@@ -449,9 +449,9 @@
   "manifest_version": "1.2.0",
   "topology_registry": {
     "source": "capabilities/topologies.json",
-    "digest": "sha256:06f3a8bf23649c1104afe59ecf529f70dc1ee8d1175a38e76e60c293df477140",
-    "capabilities": 10,
-    "recipes": 22
+    "digest": "sha256:14fbd096799a213d0bf281f7c5fcaa69578dc0da76785ee292a1e9622dd820c4",
+    "capabilities": 9,
+    "recipes": 21
   },
   "skills": [
     {
@@ -567,18 +567,6 @@
       "use_when": "Use when training setup, checkpoint evaluation, ablation, metric computation, or other new empirical output is required.",
       "not_for": "Not for ordinary production-code changes that create no new experiment or evaluation result.",
       "argument_hint": "<task description> [--mode setup|eval|auto] [--parent <slug>] [--ref <similar-model-path>] [--intensity direct|quick|standard|strong|thorough|adversarial] [--report] [--from spec|scaffold|run|eval|summary]"
-    },
-    {
-      "slug": "skill__autopilot-note",
-      "name": "autopilot-note",
-      "group": "entry",
-      "fam": "ops",
-      "modes": [],
-      "blurb": "Route and note artifacts, producing digests.",
-      "invocation_class": "entry-router",
-      "use_when": "Use when existing artifacts must be collected, digested, organized, or routed into a durable note workflow.",
-      "not_for": "Not for storing one scoped memory item or for performing the primary research, code, or document work.",
-      "argument_hint": "[--scope today|yesterday|since <date>|all] [--from <artifact-path>] [--target <notes-root>] [--dry-run] [--intensity direct|quick|standard|strong|thorough|adversarial] [--digest-only] [--source <list>]"
     },
     {
       "slug": "skill__autopilot-refine",

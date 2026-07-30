@@ -108,10 +108,10 @@ Field intelligence ends with recommendations for downstream work:
 - `technology`: hand off to `autopilot-spec` for stack/reference decisions or `autopilot-code` for implementation on a selected baseline;
 - `market`: hand off to `autopilot-draft` for business/report writing or `autopilot-spec` for reference-app/UX decisions.
 
-After claim verification closes the research result, apply the route-sealed
-DB readiness condition. Connected state requires the final
-`autopilot-note --from <report-artifact>` follow-up; unavailable state records
-`skipped/db-unavailable` without invalidating the research artifact.
+After claim verification closes the research result, evaluate the route-sealed
+optional artifact-sink extension. When available, offer the report artifact
+through the app-neutral receipt contract; unavailable state records
+`skipped/extension-unavailable` without invalidating the research artifact.
 
 ## Adapter Realization
 

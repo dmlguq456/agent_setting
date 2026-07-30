@@ -209,48 +209,48 @@ def _validate_gate_contracts(recipe, registry):
 
 def _validate_activation_conditions(registry):
     conditions = registry.get("activation_conditions")
-    if not isinstance(conditions, dict) or set(conditions) != {"agent-note-db-connected"}:
-        raise TopologyError("activation_conditions must declare agent-note-db-connected")
+    if not isinstance(conditions, dict) or set(conditions) != {"artifact-sink-available"}:
+        raise TopologyError("activation_conditions must declare artifact-sink-available")
     expected_keys = {
         "check", "probe_kind", "success_state", "unavailable_exit_code",
         "unavailable_reason",
     }
-    row = conditions["agent-note-db-connected"]
+    row = conditions["artifact-sink-available"]
     if not isinstance(row, dict) or set(row) != expected_keys:
-        raise TopologyError("agent-note-db-connected activation contract shape mismatch")
+        raise TopologyError("artifact-sink-available activation contract shape mismatch")
     if row != {
-        "check": "utilities/note-db-readiness.sh --check",
-        "probe_kind": "live-read-only",
-        "success_state": "connected",
+        "check": "utilities/artifact-sink.sh --check",
+        "probe_kind": "local-registration",
+        "success_state": "available",
         "unavailable_exit_code": 69,
-        "unavailable_reason": "db-unavailable",
+        "unavailable_reason": "extension-unavailable",
     }:
-        raise TopologyError("agent-note-db-connected activation contract mismatch")
+        raise TopologyError("artifact-sink-available activation contract mismatch")
 
 
-def _validate_conditional_follow_ups(recipe, registry, by_id, deps):
-    follow_ups = recipe.get("conditional_follow_ups", [])
-    if not isinstance(follow_ups, list):
-        raise TopologyError(f"{recipe['capability']}: conditional_follow_ups must be a list")
+def _validate_conditional_extensions(recipe, registry, by_id, deps):
+    extensions = recipe.get("conditional_extensions", [])
+    if not isinstance(extensions, list):
+        raise TopologyError(f"{recipe['capability']}: conditional_extensions must be a list")
     required = {
-        "id", "capability", "activation_condition", "after",
+        "id", "extension", "activation_condition", "after",
         "source_outputs", "on_unavailable",
     }
-    ids = [row.get("id") for row in follow_ups if isinstance(row, dict)]
-    if len(ids) != len(follow_ups) or len(ids) != len(set(ids)) or not all(ids):
-        raise TopologyError(f"{recipe['capability']}: duplicate/empty conditional follow-up id")
+    ids = [row.get("id") for row in extensions if isinstance(row, dict)]
+    if len(ids) != len(extensions) or len(ids) != len(set(ids)) or not all(ids):
+        raise TopologyError(f"{recipe['capability']}: duplicate/empty conditional extension id")
     node_ids = set(by_id)
     dependency_ids = {dep for node in by_id.values() for dep in node.get("depends_on", [])}
     terminal_ids = node_ids - dependency_ids
     known_conditions = set(registry["activation_conditions"])
-    for row in follow_ups:
+    for row in extensions:
         if set(row) != required:
             raise TopologyError(
-                f"{recipe['capability']}:{row.get('id')}: conditional follow-up requires exactly {sorted(required)}"
+                f"{recipe['capability']}:{row.get('id')}: conditional extension requires exactly {sorted(required)}"
             )
-        if row["capability"] != "autopilot-note" or row["capability"] == recipe["capability"]:
+        if row["extension"] != "artifact-sink":
             raise TopologyError(
-                f"{recipe['capability']}:{row['id']}: conditional follow-up must target non-self autopilot-note"
+                f"{recipe['capability']}:{row['id']}: conditional extension must target artifact-sink"
             )
         if row["activation_condition"] not in known_conditions:
             raise TopologyError(
@@ -540,13 +540,13 @@ def _validate_recipe(recipe, registry, standard_plus_owner_profile):
             if left["id"] in deps(right["id"]) or right["id"] in deps(left["id"]): continue
             if any(_overlap(a, b) for a in left["write_scope"] for b in right["write_scope"]):
                 raise TopologyError(f"{recipe['capability']}: concurrent scope overlap {left['id']}/{right['id']}")
-    _validate_conditional_follow_ups(recipe, registry, by_id, deps)
+    _validate_conditional_extensions(recipe, registry, by_id, deps)
     if not recipe["resume_retry_boundaries"] or not set(recipe["resume_retry_boundaries"]) <= set(ids):
         raise TopologyError(f"{recipe['capability']}: invalid retry boundaries")
 
 
 def validate_registry(registry, manifest=None):
-    if registry.get("schema_version") != 6:
+    if registry.get("schema_version") != 7:
         raise TopologyError("legacy topology registry is read-only")
     _validate_activation_conditions(registry)
     expected_profiles = {
