@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,15 @@ from typing import Any
 ATTEMPT = re.compile(r"att-[A-Za-z0-9._-]{1,240}\Z")
 DEFAULT_INTERVAL_SECONDS = 20
 DEFAULT_MAX_SECONDS = 21_600
+DEFAULT_ARM_WINDOW_SECONDS = 600
+MAXIMUM_CLOCK_SKEW_SECONDS = 60
+REGISTRY_OWNER_START = {
+    "worker_type": "owner",
+    "dispatch_depth": "1",
+    "parent_completion_delivery": "claude-parent-runtime",
+    "launch_claimed": "1",
+    "launch_started": "1",
+}
 
 
 @dataclass(frozen=True)
@@ -25,6 +35,7 @@ class Launch:
     attempt_id: str
     jobs: Path
     session_id: str
+    armed: str = "stdout"
 
 
 def _stdout(response: object) -> str:
@@ -49,9 +60,23 @@ def _single(fields: dict[str, list[str]], key: str) -> str | None:
     return values[0] if len(values) == 1 else None
 
 
-def parse_launch(payload: object) -> Launch | None:
-    """Accept only a successful exact depth-1 owner start from this session."""
+def _payload_session(payload: dict[str, Any]) -> str | None:
+    value = payload.get("session_id")
+    return value if isinstance(value, str) and value else None
 
+
+def _validated_jobs(raw: str | None) -> Path | None:
+    """Apply the one registry-path security boundary to every arming route."""
+
+    if not raw:
+        return None
+    jobs = Path(raw)
+    if not jobs.is_absolute() or jobs.is_symlink() or not jobs.is_file():
+        return None
+    return jobs
+
+
+def _owner_start_command(payload: object) -> tuple[dict[str, Any], str] | None:
     if not isinstance(payload, dict):
         return None
     if payload.get("hook_event_name") != "PostToolUse" or payload.get("tool_name") != "Bash":
@@ -62,6 +87,16 @@ def parse_launch(payload: object) -> Launch | None:
     command = tool_input.get("command")
     if not isinstance(command, str) or "dispatch-owner" not in command:
         return None
+    return payload, command
+
+
+def parse_launch(payload: object) -> Launch | None:
+    """Accept only a successful exact depth-1 owner start from this session."""
+
+    gate = _owner_start_command(payload)
+    if gate is None:
+        return None
+    payload, command = gate
     fields = _fields(_stdout(payload.get("tool_response")))
     required_memberships = {
         "check": "ok",
@@ -75,22 +110,121 @@ def parse_launch(payload: object) -> Launch | None:
     if any(expected not in fields.get(key, []) for key, expected in required_memberships.items()):
         return None
     attempt_id = _single(fields, "attempt_id")
-    jobs_raw = _single(fields, "job_registry")
     parent_session = _single(fields, "parent_session_id")
-    payload_session = payload.get("session_id")
+    payload_session = _payload_session(payload)
     if (
-        not isinstance(payload_session, str)
-        or not payload_session
+        payload_session is None
         or parent_session != payload_session
         or attempt_id is None
         or ATTEMPT.fullmatch(attempt_id) is None
-        or jobs_raw is None
     ):
         return None
-    jobs = Path(jobs_raw)
-    if not jobs.is_absolute() or jobs.is_symlink() or not jobs.is_file():
+    jobs = _validated_jobs(_single(fields, "job_registry"))
+    if jobs is None:
         return None
-    return Launch(attempt_id=attempt_id, jobs=jobs, session_id=payload_session)
+    return Launch(attempt_id=attempt_id, jobs=jobs, session_id=payload_session, armed="stdout")
+
+
+def _command_jobs(command: str) -> str | None:
+    """Read the inherited registry path the launch command itself declared."""
+
+    try:
+        parts = shlex.split(command)
+    except ValueError:
+        return None
+    for index, part in enumerate(parts):
+        if part == "--jobs" and index + 1 < len(parts):
+            return parts[index + 1]
+        if part.startswith("--jobs="):
+            return part[len("--jobs=") :]
+    return None
+
+
+def _registry_metadata(pipe: str) -> dict[str, str]:
+    """Tolerantly read the six-column registry pipe in comma or space dual form."""
+
+    def pairs(parts: list[str]) -> dict[str, str]:
+        result: dict[str, str] = {}
+        for part in parts:
+            key, separator, value = part.strip().partition("=")
+            if separator and key:
+                result[key] = value
+        return result
+
+    comma = pairs(pipe.split(","))
+    return comma if "attempt_id" in comma else pairs(pipe.replace(",", " ").split())
+
+
+def _row_age(stamp: str, now: float) -> float | None:
+    try:
+        moment = datetime.fromisoformat(stamp.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return now - moment.timestamp()
+
+
+def registry_launch(payload: object) -> Launch | None:
+    """Arm from the wrapper-written registry when stdout was filtered away.
+
+    A piped `dispatch-owner --start | tail` hands this hook a truncated stdout,
+    so the receipt fast path silently fails to arm.  The lock-written registry
+    row carries the same exactness — one open depth-1 owner attempt bound to
+    this Claude session, started inside the immediately preceding tool window —
+    and is harder to forge than tool output.  Zero or several candidates stay a
+    silent no-op: absence beats misattribution.
+    """
+
+    gate = _owner_start_command(payload)
+    if gate is None:
+        return None
+    payload, command = gate
+    if "--start" not in command:
+        return None
+    session = _payload_session(payload)
+    if session is None:
+        return None
+    fields = _fields(_stdout(payload.get("tool_response")))
+    jobs = (
+        _validated_jobs(_single(fields, "job_registry"))
+        or _validated_jobs(_command_jobs(command))
+        or _validated_jobs(os.environ.get("AGENT_DISPATCH_JOBS"))
+        or _validated_jobs(str(agent_home() / ".dispatch" / "jobs.log"))
+    )
+    if jobs is None:
+        return None
+    try:
+        lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    latest: dict[str, tuple[str, str, dict[str, str]]] = {}
+    for line in lines:
+        columns = line.split("\t")
+        if len(columns) != 6:
+            continue
+        metadata = _registry_metadata(columns[5])
+        attempt_id = metadata.get("attempt_id", "")
+        if ATTEMPT.fullmatch(attempt_id) is None:
+            continue
+        latest[attempt_id] = (columns[0], columns[1], metadata)
+    window = _bounded_number(
+        "AGENT_CLAUDE_REWAKE_ARM_WINDOW_SECONDS", DEFAULT_ARM_WINDOW_SECONDS, 30, 86_400
+    )
+    now = time.time()
+    candidates = []
+    for attempt_id, (stamp, status, metadata) in latest.items():
+        if status != "open" or metadata.get("parent_sid") != session:
+            continue
+        if any(metadata.get(key) != value for key, value in REGISTRY_OWNER_START.items()):
+            continue
+        age = _row_age(stamp, now)
+        if age is None or age > window or age < -MAXIMUM_CLOCK_SKEW_SECONDS:
+            continue
+        candidates.append(attempt_id)
+    if len(candidates) != 1:
+        return None
+    return Launch(attempt_id=candidates[0], jobs=jobs, session_id=session, armed="registry")
 
 
 def agent_home() -> Path:
@@ -155,7 +289,8 @@ def receipt(launch: Launch, state: str, reason: str, root: Path) -> str:
     )
     return (
         "Runtime owner completion receipt "
-        f"schema=1 state={state} attempt_id={launch.attempt_id} reason={reason}. "
+        f"schema=1 state={state} attempt_id={launch.attempt_id} armed={launch.armed} "
+        f"reason={reason}. "
         "Do not start or re-arm Background Bash, Monitor, liveness, or dispatch-wait. "
         "Use only the exact checked harvest command: "
         f"{shlex.quote(str(harvest))} harvest --attempt-id "
@@ -169,7 +304,7 @@ def main() -> int:
         payload: Any = json.load(sys.stdin)
     except (OSError, json.JSONDecodeError):
         return 0
-    launch = parse_launch(payload)
+    launch = parse_launch(payload) or registry_launch(payload)
     if launch is None:
         return 0
     root = agent_home()
