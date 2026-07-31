@@ -13,6 +13,8 @@
 
 <p align="center"><a href="README.md">English</a> · <strong>한국어</strong></p>
 
+<p align="center"><a href="https://dmlguq456.github.io/agent_setting/"><strong>랜딩 페이지 · 에이전트 맵 ↗</strong></a></p>
+
 > 이 문서는 유지보수 기준인 [README.md](README.md)의 한국어 번역입니다.
 > 명령, 경로, 식별자와 기계 판독 계약은 영문 원문을 기준으로 합니다.
 
