@@ -100,9 +100,6 @@ loops/drill/.oncall-run.log
 # loop 일시 hold 토글 (per-machine, 만료일 담긴 런타임 플래그)
 loops/.hold
 
-# Python 빌드 캐시
-__pycache__/
-
 # 분사 headless가 worktree에 남기는 nested agent-memory cruft 차단
 /.claude/
 
