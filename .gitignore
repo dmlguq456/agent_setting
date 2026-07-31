@@ -101,3 +101,6 @@ loops/.hold
 # worklog-board — submodule 일시 제거(2026-06-16), standalone repo 로 운영
 /worklog-board/
 /worklog-board-wt/
+
+# 렌더 검증 스크린샷 (QA 산출물, 로컬 전용)
+docs/.visual-harness/

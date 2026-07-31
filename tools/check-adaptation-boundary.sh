@@ -2967,7 +2967,8 @@ check_claude_tool_projection() {
 
   # Apply the three-class contract to tools files at every depth; directories
   # remain concrete containers for collapsed file symlinks.
-  for p in $(find tools -mindepth 1 ! -path '*/__pycache__' ! -path '*/__pycache__/*' -print); do
+  for p in $(find tools -mindepth 1 ! -path '*/__pycache__' ! -path '*/__pycache__/*' \
+      ! -path '*/node_modules' ! -path '*/node_modules/*' -print); do
     rel=${p#tools/}
     adapter_p=adapters/claude/tools/$rel
     case "$rel" in
