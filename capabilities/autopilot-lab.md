@@ -74,7 +74,7 @@ opening one session per stage:
 | media worker | `figures/`, audio segments, playback `report/*.html` | 5 |
 | report worker | `REPORT.md`, `STORY.md`, `summary.md` | 6 |
 | verification worker | read-only checks; verdict artifact only | 7 |
-| closing stage | `autopilot-spec` update when applicable, then offer the canonical experiment artifact to the optional app-neutral sink; unavailable records `skipped/extension-unavailable` | 8 |
+| closing stage | `autopilot-spec` update when applicable (a research-mode blueprint advances as a roadmap: close the step with its verdict and evidence, re-plan the tail), then offer the canonical experiment artifact to the optional app-neutral sink; unavailable records `skipped/extension-unavailable` | 8 |
 
 The main session or its dispatch-depth-1 conductor applies the `WORKFLOW §0.3`
 pre-execution gate before the checkpoint evaluation run, dispatches workers

@@ -14,7 +14,7 @@ At entry, check whether the request covers the irreversible decisions relevant t
 | `library` | Public library or package | Exported functions, classes, and types; usage; compatibility; versioning; module structure |
 | `api` | Backend service without a UI | Endpoints, bodies, errors, authentication, rate limits, and data model |
 | `cli` | Command-line tool | Commands, options, subcommands, input/output, and exit codes |
-| `research` | Reproducible research or experiment code | Train/eval entrypoints, configs, reproduction commands, expected metrics, and baseline comparison |
+| `research` | Experiment roadmap and reproducible research code | Step ladder with per-step decision criteria and evidence lineage, plus train/eval entrypoints, configs, reproduction commands, expected metrics, and baseline comparison |
 | `update` | Existing blueprint change | Canonical `prd.md` update with version and decision history |
 
 Combine modes naturally when one project has several public surfaces, such as `library,cli` or `research,cli`. Organize the PRD into shared requirements plus mode-specific sections.

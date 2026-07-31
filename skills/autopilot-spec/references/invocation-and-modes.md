@@ -9,7 +9,7 @@
 | `library` | Library spec — public API + usage examples + compatibility/versioning + module structure |
 | `api` | API service spec — endpoints + auth + data model |
 | `cli` | CLI spec — commands + options + input/output |
-| `research` | Research-code spec — entry points + configs + reproduction commands + expected metrics |
+| `research` | Experiment-roadmap spec — step ladder + decision protocols + evidence lineage, over a reproduction contract (entry points + configs + reproduction commands + expected metrics) |
 | Comma-separated values such as `app,library` | Multiple modes, each with an independent section in one PRD |
 
 ### Verification rigor (derived from intensity)
@@ -108,7 +108,7 @@ Update mode performs three operations as one transaction:
 2. **Before overwriting it**, snapshot the prior `prd.md` to `spec/_internal/versions/v{N}/prd.md`, mirroring autopilot-refine document versioning per [CONVENTIONS §5.4.3](../../../core/CONVENTIONS.md#5-skill-output-convention--t1t2t3). autopilot-spec owns the operation because the target is a spec.
 3. Record the change narrative in `pipeline_summary.md`. Synchronize affected adjacent files (`data_model.md`, `api_contract.md`, `ui_flow.md`, `stack.md`) and Architecture Diagrams in the same transaction using the Step 3.5 coupled-update logic.
 
-> Update mode is not a separate mode label. It activates automatically on re-entry when `pipeline_state.yaml` exists. The five modes (`app`, `library`, `api`, `cli`, `research`) describe the spec type; update describes an operation. They are orthogonal, so update the existing spec's original mode sections.
+> Update mode is not a separate mode label. It activates automatically on re-entry when `pipeline_state.yaml` exists. The five modes (`app`, `library`, `api`, `cli`, `research`) describe the spec type; update describes an operation. They are orthogonal, so update the existing spec's original mode sections. In `research` mode the typical update is a roadmap advance: close a step with its verdict and evidence links, then re-plan the remaining ladder in the same transaction.
 
 **Route post-run drift from WORKFLOW §7 or an adapter bootstrap here**:
 

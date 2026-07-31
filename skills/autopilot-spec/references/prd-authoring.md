@@ -172,11 +172,13 @@ Use the following PRD structure. Render descriptive prose in the user's communic
 ### Exit codes
 
 ## [research] (only when selected)
-### Entry points (train.py / eval.py / command examples)
-### Experiment configuration (`configs/*.yaml` structure)
-### Reproduction commands (train / evaluate / test)
-### Expected metrics (PSNR / accuracy / SI-SDR / ...)
-### Baseline comparison
+### Premises and measured constants (task context; empirical constants with source experiments)
+### Step ladder (Step N: status done/active/planned — objective, configuration, decision criteria, follow-on; a closed step keeps its verdict + evidence link)
+### Decision protocols (operating targets and judgment axes, with user-confirmation dates)
+### Execution order (resource-aware run order, such as GPU allocation)
+### Rejected tracks (rejection basis + revival cues; keep, never delete)
+### Completion criteria (per-step deliverables incl. `_RUNLOG` lineage)
+### Reproduction contract (entry points, `configs/*.yaml` structure, reproduction commands, expected metrics, baseline comparison)
 
 ## Architecture Diagrams
 

@@ -101,9 +101,37 @@ Additional spec-entry gates:
 | `library` | Public API, exports, examples, compatibility, versioning, module structure. |
 | `api` | Endpoints, request/response bodies, errors, auth, rate limiting, data model. |
 | `cli` | Commands, subcommands, options, input/output format, exit codes. |
-| `research` | Train/eval entry points, configs, seeds, reproduction commands, expected metrics, baselines. |
+| `research` | Experiment roadmap (staged ladder with per-step decision criteria; see below) plus the reproduction contract: train/eval entry points, configs, seeds, reproduction commands, expected metrics, baselines. |
 
 Composite modes are valid. Keep shared decisions in the common PRD section and each mode's contract in its own section.
+
+### Research-Mode Roadmap Semantics
+
+Contract modes (`app`, `library`, `api`, `cli`) describe a target state. A
+`research` blueprint is a progressive roadmap advanced step by step; results
+legitimately reshape the remaining ladder. Grounded in live usage
+(BC_ResNet_tf WWD blueprint v4, 2026-07), a research-mode `prd.md` requires:
+
+- **Step ladder**: ordered steps, each with status (done/active/planned),
+  objective, configuration, decision criteria, and follow-on work. A closed
+  step keeps its one-line verdict with evidence links.
+- **Decision protocols**: operating targets and judgment axes recorded with
+  their user-confirmation dates; changing a protocol is a blueprint change.
+- **Premises and measured constants**: task context and empirically measured
+  constants carried with their source experiment.
+- **Evidence lineage**: steps and verdicts cite experiment slugs and report
+  sections; `pipeline_state.yaml` records `source_analysis` (evidence read)
+  and `next` (the follow-on lab/code handoff).
+- **Rejected tracks**: rejected directions stay in the PRD with the rejection
+  basis and revival cues instead of being deleted.
+- **Execution order and completion criteria**: resource-aware run order and
+  per-step deliverables, including experiment `_RUNLOG` lineage.
+
+Update semantics follow: a research-mode update that closes a step records its
+evidence and re-plans the remaining ladder in the same transaction (snapshot
+rules unchanged). A result contradicting the plan is the roadmap's normal
+replanning trigger, not ambiguous drift; the drift-ambiguity guard above
+applies to contract modes.
 
 ## Routing Boundary
 

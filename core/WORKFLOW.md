@@ -336,7 +336,7 @@ the §0.2 semantic precedence.
 | `library` | Public npm, pip, or crate package | Packaging config and public API skeleton following reference exports |
 | `api` | Backend API without UI | Component and Deployment diagrams plus FastAPI or Express router skeleton |
 | `cli` | Command-line tool | argparse or typer entry plus command skeleton |
-| `research` | Research and reproducibility | train/eval/config and model skeleton plus Phase 1.5 checkpoint preflight |
+| `research` | Experiment roadmap (step ladder plus decision protocols) and reproducibility | train/eval/config and model skeleton plus Phase 1.5 checkpoint preflight |
 | composite or `auto` | Multiple aspects or inferred mode | Common contract plus independent sections per selected mode, with confirmation after inference |
 
 Reference priority is internal `similar_models` or `--ref`, then `research/<topic>/code_resources`, then generic scaffolds. Prepend conventions from `analysis_project/code/experiment_conventions.md`; fall back to `mem profile 07_coding_convention`, with project-local conventions winning conflicts.
