@@ -97,7 +97,7 @@ boundary; it is not an independent signature.
 To pin a version or disable scheduled checks:
 
 ```bash
-curl -fsSL https://github.com/dmlguq456/agent_setting/releases/download/v1.0.1/install.sh | sh -s -- --no-auto-update
+curl -fsSL https://github.com/dmlguq456/agent_setting/releases/download/v2.0.0/install.sh | sh -s -- --no-auto-update
 ```
 
 ## Choose a profile
@@ -109,9 +109,9 @@ profile.
 
 | Profile | Best for | Capabilities | Roles | Modes |
 |---|---|---:|---:|---:|
-| `starter` | A lightweight core code pipeline | 6 | 4 | 13 |
-| `builder` **default** | Software development, analysis, operations, and memory | 14 | 7 | 26 |
-| `full` | The complete research, documentation, and design harness | 27 | 8 | 26 |
+| `starter` | A lightweight core code pipeline | 6 | 5 | 11 |
+| `builder` **default** | Software development, analysis, operations, and memory | 13 | 7 | 19 |
+| `full` | The complete research, documentation, and design harness | 26 | 8 | 29 |
 
 ```bash
 harness runtime activate --runtime codex --mode linked --profile starter

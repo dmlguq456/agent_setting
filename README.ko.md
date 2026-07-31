@@ -91,7 +91,7 @@ Checksum sidecar는 전송 또는 asset 손상을 탐지합니다. Publisher 진
 Version 고정 또는 자동 확인 제외:
 
 ```bash
-curl -fsSL https://github.com/dmlguq456/agent_setting/releases/download/v1.0.1/install.sh | sh -s -- --no-auto-update
+curl -fsSL https://github.com/dmlguq456/agent_setting/releases/download/v2.0.0/install.sh | sh -s -- --no-auto-update
 ```
 
 ## 프로필 선택
@@ -102,9 +102,9 @@ curl -fsSL https://github.com/dmlguq456/agent_setting/releases/download/v1.0.1/i
 
 | 프로필 | 적합한 용도 | Capability | Role | Mode |
 |---|---|---:|---:|---:|
-| `starter` | 가벼운 핵심 코드 파이프라인 | 6 | 4 | 13 |
-| `builder` **기본값** | 소프트웨어 개발, 분석, 운영, 메모리 | 14 | 7 | 26 |
-| `full` | 조사, 문서, 디자인을 포함한 전체 harness | 27 | 8 | 26 |
+| `starter` | 가벼운 핵심 코드 파이프라인 | 6 | 5 | 11 |
+| `builder` **기본값** | 소프트웨어 개발, 분석, 운영, 메모리 | 13 | 7 | 19 |
+| `full` | 조사, 문서, 디자인을 포함한 전체 harness | 26 | 8 | 29 |
 
 ```bash
 harness runtime activate --runtime codex --mode linked --profile starter
