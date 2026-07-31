@@ -1,0 +1,4 @@
+capability=autopilot-code
+mode=dev
+intensity=direct
+cwd=/home/nas/user/Uihyeop/NN_Zoo/BC_ResNet_tf

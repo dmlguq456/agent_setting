@@ -49,9 +49,9 @@ Claude Code currently realizes the portable continuity layer through local paths
 
 | Portable name | Current Claude realization | Classification |
 |---|---|---|
-| `<agent-notes-root>` | `/home/nas/user/Uihyeop/notes/` | mutable continuity state |
-| `<worklog-board-app>` | `/home/Uihyeop/.claude/worklog-board/` | external/local app workspace |
-| `<worklog-board-app>-wt/` | `/home/Uihyeop/.claude/worklog-board-wt/` | app worktrees |
+| `<agent-notes-root>` | `<nas-or-home>/notes/` | mutable continuity state |
+| `<worklog-board-app>` | `~/.claude/worklog-board/` | external/local app workspace |
+| `<worklog-board-app>-wt/` | `~/.claude/worklog-board-wt/` | app worktrees |
 
 The Claude adapter keeps note semantics outside the portable harness. A note
 application may register the optional app-neutral `artifact-sink` extension;

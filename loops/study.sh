@@ -12,12 +12,13 @@ if [ -f "$LOOP_DIR/.hold" ]; then _h=$(cat "$LOOP_DIR/.hold" 2>/dev/null); _t=$(
   fi;
 fi
 
-mkdir -p /home/nas/user/Uihyeop/notes/study
+mkdir -p "$AGENT_NOTES_ROOT"/study
 
 {
   echo "=== study run $(date -Iseconds) ==="
-  cd /home/nas/user/Uihyeop || exit 1
-  run_claude_retry 2400 "$LOOP_DIR/study.md" \
+  cd "$AGENT_SCAN_ROOT" || exit 1
+  _prompt="$(render_prompt "$LOOP_DIR/study.md")"
+  run_claude_retry 2400 "$_prompt" \
     --allowedTools "Bash,Read,Glob,Grep,Write,WebSearch,WebFetch"
   echo "=== exit $? $(date -Iseconds) ==="
 } >> "$LOG"

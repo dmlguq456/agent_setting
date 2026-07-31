@@ -25,8 +25,8 @@ def _flatten(lines):
 
 # The real ghost, captured 2026-07-15 — the row F-26 exists to surface.
 GHOST = {
-    "pid": 1168514, "sessionId": "37abe594-b164-4924-9b2c-15997701e0c2",
-    "cwd": "/home/Uihyeop/agent_setting", "startedAt": 1784083189482,
+    "pid": 1168514, "sessionId": "00000000-0000-4000-8000-000000000003",
+    "cwd": "/home/alice/agent_setting", "startedAt": 1784083189482,
     "procStart": "3918896", "version": "2.1.210", "peerProtocol": 1,
     "kind": "interactive", "entrypoint": "cli", "name": "agent-setting-17",
     "nameSource": "derived", "status": "idle", "updatedAt": 1784083189601,
@@ -52,7 +52,7 @@ class RegistryReadTest(unittest.TestCase):
         self.assertEqual(d["name"], "agent-setting-17")
         s = Session(harness="claude", pid=1168514)
         claude_collector._apply_registry(s, d)
-        self.assertEqual(s.session_id, "37abe594-b164-4924-9b2c-15997701e0c2")
+        self.assertEqual(s.session_id, "00000000-0000-4000-8000-000000000003")
         self.assertEqual(s.registry_name, "agent-setting-17")
         self.assertEqual(s.slug, "agent-setting-17")      # no regression: slug still set
         self.assertEqual(s.status, "idle")
@@ -96,7 +96,7 @@ class GhostClassificationTest(unittest.TestCase):
         model.reset_state_tracker()
 
     def _ghost_session(self, **over):
-        s = Session(harness="claude", pid=1168514, cwd="/home/Uihyeop/agent_setting")
+        s = Session(harness="claude", pid=1168514, cwd="/home/alice/agent_setting")
         s.status = "idle"
         s.registry_name = "agent-setting-17"
         s.slug = "agent-setting-17"
@@ -221,7 +221,7 @@ class UnusedRowRenderTest(unittest.TestCase):
     """Row assembly — badge present, name intact, no width blowup."""
 
     def _row(self, name_width=None, **over):
-        s = Session(harness="claude", pid=1168514, cwd="/home/Uihyeop/agent_setting",
+        s = Session(harness="claude", pid=1168514, cwd="/home/alice/agent_setting",
                     slug="agent-setting-17", liveness="unused", elapsed_min=225)
         s.registry_name = "agent-setting-17"
         for k, v in over.items():
@@ -251,7 +251,7 @@ class UnusedRowRenderTest(unittest.TestCase):
         self.assertNotIn("unused", txt)
 
     def test_two_line_row_keeps_badge_parity(self):
-        s = Session(harness="claude", pid=1168514, cwd="/home/Uihyeop/agent_setting",
+        s = Session(harness="claude", pid=1168514, cwd="/home/alice/agent_setting",
                     slug="agent-setting-17", liveness="unused", elapsed_min=225)
         s.registry_name = "agent-setting-17"
         l1, _l2 = render._session_row_2line(s, term_width=120)
@@ -262,7 +262,7 @@ class UnusedRowRenderTest(unittest.TestCase):
 
     def test_narrow_row_drops_provenance_rather_than_starving_the_name(self):
         """A readable name outranks knowing who launched it."""
-        s = Session(harness="claude", pid=1168514, cwd="/home/Uihyeop/agent_setting",
+        s = Session(harness="claude", pid=1168514, cwd="/home/alice/agent_setting",
                     slug="agent-setting-17", liveness="unused", elapsed_min=225)
         s.registry_name = "agent-setting-17"
         s.provenance = "terminal"
@@ -280,7 +280,7 @@ class DegradationLadderTest(unittest.TestCase):
     """
 
     def _ghost(self, **over):
-        s = Session(harness="claude", pid=1168514, cwd="/home/Uihyeop/agent_setting",
+        s = Session(harness="claude", pid=1168514, cwd="/home/alice/agent_setting",
                     slug="agent-setting-17", liveness="unused", elapsed_min=225)
         s.registry_name = "agent-setting-17"
         s.provenance = "terminal"

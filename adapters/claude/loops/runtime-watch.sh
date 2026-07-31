@@ -16,7 +16,10 @@ esac
 
 AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/agent_setting}}"
 STATE_DIR="${RUNTIME_WATCH_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/agent-runtime-watch}"
-OUT_DIR="${RUNTIME_WATCH_OUT_DIR:-/home/nas/user/Uihyeop/notes/runtime-watch}"
+AGENT_LOOP_ENV="${AGENT_LOOP_ENV:-$HOME/.config/agent-harness/loops.env}"
+[ -f "$AGENT_LOOP_ENV" ] && . "$AGENT_LOOP_ENV"
+AGENT_NOTES_ROOT="${AGENT_NOTES_ROOT:-$HOME/agent-notes}"
+OUT_DIR="${RUNTIME_WATCH_OUT_DIR:-$AGENT_NOTES_ROOT/runtime-watch}"
 MAX_AGE_HOURS="${RUNTIME_WATCH_MAX_AGE_HOURS:-72}"
 FETCH_CMD="${RUNTIME_WATCH_FETCH_CMD:-}"
 LOCAL_PROBE_CMD="${RUNTIME_WATCH_LOCAL_PROBE_CMD:-}"

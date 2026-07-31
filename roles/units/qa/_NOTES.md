@@ -36,7 +36,7 @@ merge divergences. Sources: `roles/modes/qa/*.md` (EN), `adapters/claude/agent-m
 6. **security-review RE provenance pointer.**
    `adapters/claude/agent-modes/qa/security-review.md:7`: design source = on-prem port of
    the built-in `/security-review`; RE doc at
-   `nas_Uihyeop/claude-meta-spec/reverse_engineering/security-review.md`. Provenance
+   `<nas-archive>/claude-meta-spec/reverse_engineering/security-review.md`. Provenance
    only, not behavior — recorded here so the pointer is not lost when agent-modes die.
 
 7. **test Level-5 concrete literals.** `adapters/claude/agent-modes/qa/test.md:26`

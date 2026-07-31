@@ -108,7 +108,7 @@ class WorkProjectionTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             os.makedirs(os.path.join(tmp, "plans", "2026-07-22_exact-job", "test"))
             entity = DispatchJob(key="code", slug="exact-job", cwd=tmp,
-                                 route_id="rt-27f7bc9ff152ba13", route_file=REAL,
+                                 route_id="rt-9fa0fed86699b8f5", route_file=REAL,
                                  route_node="execute", liveness="working")
             projection.attach_projections([], [entity], artifact_root=tmp, now=100.0)
             self.assertEqual(entity.work_projection.source, "route-exact")

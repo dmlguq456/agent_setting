@@ -1106,8 +1106,8 @@ def _effective_parent_cwd(args):
     2. The parent Codex thread's own rollout ``session_meta.cwd``. Codex sessions
        routinely run harness utilities as `cd $AGENT_HOME && …`, so the wrapper's
        getcwd() records AGENT_HOME rather than where the session lives (observed:
-       managed-Codex thread 019fb067 living in /home/Uihyeop/agent-note recorded
-       parent_cwd=/home/Uihyeop/agent_setting and stayed orphan in Fleet whenever
+       a managed-Codex thread living in a sibling app repo recorded
+       parent_cwd=<agent-home> and stayed orphan in Fleet whenever
        the exact parent_sid match was unavailable, 2026-07-30). A non-Codex parent
        has no thread rollout, so this tier is a silent no-op for it.
     3. Launch getcwd(), back-mapped to the primary checkout when an orchestrator

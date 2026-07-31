@@ -165,7 +165,7 @@ PAGE_TEMPLATE = """<!doctype html>
   Verify:     python3 tools/render-hub.py --check
 -->
 <style>
-  /* ════ Design tokens — ported from agent-note app/globals.css (:root, .hub-root)
+  /* ════ Design tokens — ported from the companion worklog app app/globals.css (:root, .hub-root)
      light values default in :root; dark values re-defined under prefers-color-scheme.
      No raw hex/rgba outside this block — the rest of the file reads var(--…) only. ════ */
   :root {
@@ -176,14 +176,14 @@ PAGE_TEMPLATE = """<!doctype html>
                  "SF Pro Text", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
     --font-mono: "JetBrains Mono", "Pretendard Variable", Pretendard, ui-monospace,
                  "SF Mono", SFMono-Regular, Menlo, monospace;
-    /* hub-scope typography (agent-note .hub-root bumps the app scale by ~+1px) */
+    /* hub-scope typography (the companion worklog app .hub-root bumps the app scale by ~+1px) */
     --text-micro:      12px;
     --text-caption:    13.5px;
     --text-meta:       14px;
     --text-sm:         15px;
     --text-display-sm: 25px;
 
-    /* surfaces / borders / text (agent-note :root, light) */
+    /* surfaces / borders / text (the companion worklog app :root, light) */
     --surface:          #FFFFFF;
     --surface-2:        #EDEDF1;
     --surface-3:        #E6E6EB;
@@ -196,15 +196,15 @@ PAGE_TEMPLATE = """<!doctype html>
     --text-4:           #AEAEB2;
     --bg-grouped:       #FCFCFC;
 
-    /* radius / shadow (agent-note :root --r-card + .hub-root light --shadow-card) */
+    /* radius / shadow (the companion worklog app :root --r-card + .hub-root light --shadow-card) */
     --r-card:        19px;
     --shadow-card:   0 0 0 0.5px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.05), 0 8px 20px rgba(0,0,0,0.05);
     /* #detail-panel drawer shadow — was inline rgba() at the rule site (2 spots incl. the
        dark @media override); promoted to a token so color stays centralized in this block. */
     --shadow-drawer: -8px 0 32px rgba(0, 0, 0, 0.18);
 
-    /* hub accent palette (agent-note .hub-root, light).
-       --hub-divider is agent-note's color-mix(in srgb, --border-strong 50%, --text-3)
+    /* hub accent palette (the companion worklog app .hub-root, light).
+       --hub-divider is the companion worklog app's color-mix(in srgb, --border-strong 50%, --text-3)
        resolved to its flat sRGB average (#DCDCE0 + #86868B ÷ 2) — a plain hex here keeps
        the "no raw color outside this block" invariant without needing color-mix at the
        divider call sites. */
@@ -219,7 +219,7 @@ PAGE_TEMPLATE = """<!doctype html>
     --hub-track-mem:      #4040B8;
 
     /* track color_token palette — manifest tracks reference these directly
-       (agent-note globals.css catalog hue tokens, light) */
+       (the companion worklog app globals.css catalog hue tokens, light) */
     --cat-1: #7A4FC0;
     --cat-2: #3A6EE0;
     --cat-3: #46A35E;
@@ -246,7 +246,7 @@ PAGE_TEMPLATE = """<!doctype html>
       --shadow-card:   0 0 0 0.5px rgba(255,255,255,0.06), 0 1px 2px rgba(0,0,0,0.5);
       --shadow-drawer: -8px 0 32px rgba(0, 0, 0, 0.5);
 
-      /* dark --hub-divider = agent-note var(--hairline-strong) dark; kept as the
+      /* dark --hub-divider = the companion worklog app var(--hairline-strong) dark; kept as the
          --border-strong dark hex stand-in (unchanged this pass — reviewed OK). */
       --hub-divider:        #48484A;
       --hub-mem:            #A5A6F2;
@@ -598,7 +598,7 @@ __HUB_DATA_JSON__
   "use strict";
   var DATA = JSON.parse(document.getElementById("hub-data").textContent);
 
-  // fam -> accent token, restored to match agent-note's own FAM_COLORS (not the
+  // fam -> accent token, restored to match the companion worklog app's own FAM_COLORS (not the
   // groupSkillsByTrack track-membership mapping, which is a different axis):
   // code->research, doc->doc, app|design->app, ops->mem (indigo; distinct from the
   // governance/hooks amber accent). pre/sub have no AA-safe accent of their own in
@@ -624,7 +624,7 @@ __HUB_DATA_JSON__
     return /^(var\(|#|rgb)/.test(tok) ? tok : "var(" + tok + ")";
   }
   // manifest tracks[].color_token is a generic --cat-N hue (not AA-tuned for light
-  // mode: e.g. --cat-5 (library) label text on white is ~2.7:1, sub-AA). agent-note's own
+  // mode: e.g. --cat-5 (library) label text on white is ~2.7:1, sub-AA). the companion worklog app's own
   // HUB_TRACKS uses separate --hub-track-{doc,research,app,lib} tokens tuned darker
   // for light-mode AA. Map by track.id to those instead; manifest.json itself is
   // untouched and iteration order/steps/gates still come straight from it — only

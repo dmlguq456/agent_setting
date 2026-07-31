@@ -20,8 +20,8 @@
     }
   },
   "spec_touch": false,
-  "cwd": "/home/Uihyeop/agent_setting-wt/fleet-v10-process-view",
-  "artifact_root": "/home/Uihyeop/agent_setting/.agent_reports",
+  "cwd": "/home/alice/agent_setting-wt/fleet-v10-process-view",
+  "artifact_root": "/home/alice/agent_setting/.agent_reports",
   "source_commit": "79953fb440df5a3a15dfd4e750e8ebdef38cb30f",
   "registry_digest": "sha256:161b5539ad48dfd354aae3605daf27a9203ec3a676b450ba27b4856bfcea03c1",
   "selection": {
@@ -90,7 +90,7 @@
               "probe_source": "dispatch-broker ensure check=ok 2026-07-15 + fleet-v8/v9 live nested dispatch (claude -p conductor -> depth-2 stages, harvested)",
               "probe_time": "2026-07-15T14:22:33Z",
               "status": "supported",
-              "broker_root": "/home/Uihyeop/agent_setting/.dispatch/broker",
+              "broker_root": "/home/alice/agent_setting/.dispatch/broker",
               "broker_instance": "brk-ad5f1128b20748d0b8df155abbfd3456"
             },
             {
@@ -175,7 +175,7 @@
               "probe_source": "dispatch-broker ensure check=ok 2026-07-15 + fleet-v8/v9 live nested dispatch (claude -p conductor -> depth-2 stages, harvested)",
               "probe_time": "2026-07-15T14:22:33Z",
               "status": "supported",
-              "broker_root": "/home/Uihyeop/agent_setting/.dispatch/broker",
+              "broker_root": "/home/alice/agent_setting/.dispatch/broker",
               "broker_instance": "brk-ad5f1128b20748d0b8df155abbfd3456"
             },
             {
@@ -259,7 +259,7 @@
               "probe_source": "dispatch-broker ensure check=ok 2026-07-15 + fleet-v8/v9 live nested dispatch (claude -p conductor -> depth-2 stages, harvested)",
               "probe_time": "2026-07-15T14:22:33Z",
               "status": "supported",
-              "broker_root": "/home/Uihyeop/agent_setting/.dispatch/broker",
+              "broker_root": "/home/alice/agent_setting/.dispatch/broker",
               "broker_instance": "brk-ad5f1128b20748d0b8df155abbfd3456"
             },
             {
@@ -345,7 +345,7 @@
               "probe_source": "dispatch-broker ensure check=ok 2026-07-15 + fleet-v8/v9 live nested dispatch (claude -p conductor -> depth-2 stages, harvested)",
               "probe_time": "2026-07-15T14:22:33Z",
               "status": "supported",
-              "broker_root": "/home/Uihyeop/agent_setting/.dispatch/broker",
+              "broker_root": "/home/alice/agent_setting/.dispatch/broker",
               "broker_instance": "brk-ad5f1128b20748d0b8df155abbfd3456"
             },
             {
@@ -413,7 +413,7 @@
         "probe_source": "dispatch-broker ensure check=ok 2026-07-15 + fleet-v8/v9 live nested dispatch (claude -p conductor -> depth-2 stages, harvested)",
         "probe_time": "2026-07-15T14:22:33Z",
         "status": "supported",
-        "broker_root": "/home/Uihyeop/agent_setting/.dispatch/broker",
+        "broker_root": "/home/alice/agent_setting/.dispatch/broker",
         "broker_instance": "brk-ad5f1128b20748d0b8df155abbfd3456"
       },
       {

@@ -1,0 +1,4 @@
+capability=autopilot-spec
+mode=update
+intensity=quick
+cwd=/home/Uihyeop/agent-note

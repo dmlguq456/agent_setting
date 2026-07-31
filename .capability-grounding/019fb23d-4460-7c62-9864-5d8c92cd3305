@@ -1,0 +1,4 @@
+capability=autopilot-code
+mode=debug
+intensity=direct
+cwd=/home/Uihyeop/agent-note-wt/notes-meta-layout

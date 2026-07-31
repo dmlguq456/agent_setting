@@ -36,10 +36,10 @@ class WorktreeResidueTest(unittest.TestCase):
         subprocess.run(["git", "-C", str(self.repo), "config", "user.name", "Fixture"], check=True)
         (self.repo / ".gitignore").write_text("*.log\n", encoding="utf-8")
         (self.repo / "tracked.txt").write_text("tracked\n", encoding="utf-8")
-        stub_dir = self.repo / "agent-note/node_modules/dep"
+        stub_dir = self.repo / "sample-app/node_modules/dep"
         stub_dir.mkdir(parents=True)
         (self.repo / ".agent-build-residue").write_text(
-            "# webpack tracing stubs\nagent-note/node_modules/*\n", encoding="utf-8"
+            "# webpack tracing stubs\nsample-app/node_modules/*\n", encoding="utf-8"
         )
         subprocess.run(["git", "-C", str(self.repo), "add", "-A"], check=True)
         subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "init"], check=True)
@@ -59,8 +59,8 @@ class WorktreeResidueTest(unittest.TestCase):
         self.assertEqual(out["status"], "check")
         self.assertEqual(out["matched"], "1")
         self.assertEqual(out["removed"], "0")
-        self.assertIn("residue=agent-note/node_modules/dep/stub.js", result.stdout)
-        self.assertTrue((self.repo / "agent-note/node_modules/dep/stub.js").is_file())
+        self.assertIn("residue=sample-app/node_modules/dep/stub.js", result.stdout)
+        self.assertTrue((self.repo / "sample-app/node_modules/dep/stub.js").is_file())
         self.assertFalse(self.audit.exists())
 
     def test_clean_removes_only_matched_untracked_and_audits(self):
@@ -69,35 +69,35 @@ class WorktreeResidueTest(unittest.TestCase):
         out = fields(result.stdout)
         self.assertEqual(out["status"], "cleaned")
         self.assertEqual(out["removed"], "1")
-        self.assertFalse((self.repo / "agent-note/node_modules/dep/stub.js").exists())
+        self.assertFalse((self.repo / "sample-app/node_modules/dep/stub.js").exists())
         # empty stub dirs are pruned up to the worktree root
-        self.assertFalse((self.repo / "agent-note").exists())
+        self.assertFalse((self.repo / "sample-app").exists())
         self.assertTrue((self.repo / "keep.txt").is_file())
         self.assertTrue((self.repo / "ignored.log").is_file())
         self.assertTrue((self.repo / "tracked.txt").is_file())
         record = json.loads(self.audit.read_text(encoding="utf-8").splitlines()[-1])
-        self.assertEqual(record["removed"], ["agent-note/node_modules/dep/stub.js"])
+        self.assertEqual(record["removed"], ["sample-app/node_modules/dep/stub.js"])
         self.assertEqual(record["skipped_unsafe"], [])
         status = subprocess.run(
             ["git", "-C", str(self.repo), "status", "--porcelain"],
             capture_output=True, text=True, check=True,
         ).stdout
-        self.assertNotIn("agent-note", status)
+        self.assertNotIn("sample-app", status)
 
     def test_tracked_file_matching_pattern_is_untouchable(self):
-        tracked_stub = self.repo / "agent-note/node_modules/dep/tracked.js"
+        tracked_stub = self.repo / "sample-app/node_modules/dep/tracked.js"
         tracked_stub.write_text("tracked stub\n", encoding="utf-8")
         subprocess.run(["git", "-C", str(self.repo), "add", str(tracked_stub)], check=True)
         subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "tracked stub"], check=True)
         result = run_helper("--worktree", str(self.repo), "--clean", "--audit", str(self.audit))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue(tracked_stub.is_file())
-        self.assertFalse((self.repo / "agent-note/node_modules/dep/stub.js").exists())
+        self.assertFalse((self.repo / "sample-app/node_modules/dep/stub.js").exists())
 
     def test_symlink_is_unlinked_never_followed(self):
         outside = self.base / "outside.txt"
         outside.write_text("outside\n", encoding="utf-8")
-        link = self.repo / "agent-note/node_modules/evil"
+        link = self.repo / "sample-app/node_modules/evil"
         link.symlink_to(outside)
         result = run_helper("--worktree", str(self.repo), "--clean", "--audit", str(self.audit))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -120,7 +120,7 @@ class WorktreeResidueTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertFalse((self.repo / "dist.tmp").exists())
-        self.assertFalse((self.repo / "agent-note/node_modules/dep/stub.js").exists())
+        self.assertFalse((self.repo / "sample-app/node_modules/dep/stub.js").exists())
 
     def test_non_git_target_is_rejected(self):
         plain = self.base / "plain"

@@ -21,7 +21,7 @@ from fleet.model import DispatchJob         # noqa: E402
 
 _FIXDIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "route")
 _REAL_CLAUDE = os.path.join(_FIXDIR, "real_claude_staged.json")
-_REAL_RID = "rt-27f7bc9ff152ba13"
+_REAL_RID = "rt-9fa0fed86699b8f5"
 _LAB = os.path.join(_FIXDIR, "synth_parallel_lab.json")
 _COMPOSED = os.path.join(_FIXDIR, "synth_composed_survey.json")
 

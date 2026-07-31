@@ -40,7 +40,7 @@ silently.
    incident; date/paper/file pointers preserved here only.
 6. **claim-verify design provenance** (`agent-modes/research/claim-verify.md:7`):
    ported from the built-in deep-research 3-vote adversarial verify; RE doc at
-   `nas_Uihyeop/claude-meta-spec/reverse_engineering/deep-research.md`.
+   `<nas-archive>/claude-meta-spec/reverse_engineering/deep-research.md`.
    External path, not restated in the portable unit.
 7. **Team frontmatter runtime metadata** (`research-team.md:1-11`): tools
    list, adapter-configured model, color, `memory: project`. Harness runtime config

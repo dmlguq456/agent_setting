@@ -4,7 +4,7 @@ Do not modify any instruction or settings file. Produce exactly one proposal rep
 
 ## Procedure
 
-1. **Review prior study reports:** read the latest one or two files under `/home/nas/user/Uihyeop/notes/study/`. Do not repeat the same proposal. Update a previously declined item in one line only when it is worth reconsidering.
+1. **Review prior study reports:** read the latest one or two files under `{{AGENT_NOTES_ROOT}}/study/`. Do not repeat the same proposal. Update a previously declined item in one line only when it is worth reconsidering.
 2. **Research external developments** with web search and fetch tools:
    - **First priority—benchmark new built-in harness capabilities and internalize the useful invariant:** inspect changelogs and release notes for newly updated features in major harnesses such as Claude Code and Codex. Prioritize proposals that reproduce the useful behavior in this portable harness through Skills, agents, hooks, or loops. Ask which local friction it reduces and whether the behavior can remain cross-runtime rather than binding the harness to one product. One precedent is adapting a Claude Code design capability into the portable design role.
    - Official changelogs and engineering posts for the runtime adapter in use.
@@ -16,7 +16,7 @@ Do not modify any instruction or settings file. Produce exactly one proposal rep
 
 ## Proposal Report
 
-Write `/home/nas/user/Uihyeop/notes/study/<YYYY-MM-DD>.md` in the user's established communication language. For every proposal include:
+Write `{{AGENT_NOTES_ROOT}}/study/<YYYY-MM-DD>.md` in the user's established communication language. For every proposal include:
 
 - **what** should change;
 - **why**, with source links;

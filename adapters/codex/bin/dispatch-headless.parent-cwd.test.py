@@ -49,7 +49,7 @@ class EffectiveParentCwd(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.codex_home = self.root / "codex-home"
         self.sessions = self.codex_home / "sessions"
-        self.session_cwd = self.root / "agent-note"
+        self.session_cwd = self.root / "sample-note"
         self.session_cwd.mkdir(parents=True)
         self.launch_cwd = self.root / "agent-setting"
         self.launch_cwd.mkdir(parents=True)

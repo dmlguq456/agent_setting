@@ -14,12 +14,13 @@ if [ -f "$LOOP_DIR/.hold" ]; then _h=$(cat "$LOOP_DIR/.hold" 2>/dev/null); _t=$(
   fi;
 fi
 
-mkdir -p /home/nas/user/Uihyeop/notes/oncall
+mkdir -p "$AGENT_NOTES_ROOT"/oncall
 
 {
   echo "=== oncall run $(date -Iseconds) ==="
-  cd /home/nas/user/Uihyeop || exit 1
-  run_claude_retry 900 "$LOOP_DIR/oncall.md" \
+  cd "$AGENT_SCAN_ROOT" || exit 1
+  _prompt="$(render_prompt "$LOOP_DIR/oncall.md")"
+  run_claude_retry 900 "$_prompt" \
     --model sonnet \
     --allowedTools "Bash,Read,Glob,Grep,Write"
   echo "=== exit $? $(date -Iseconds) ==="

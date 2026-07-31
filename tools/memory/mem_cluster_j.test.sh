@@ -636,9 +636,9 @@ PY
   fi
 fi
 # Two distinct post-it source keys with the same normalized body yield one INSERT event;
-# the Fleet collector consumes that real producer row under an agent-note-like repo key.
+# the Fleet collector consumes that real producer row under an sample-note-like repo key.
 POST_STORE="$ABSORB_TMP/post-store"; POST_PROJECTS="$ABSORB_TMP/post-projects"
-POST_PROFILE="$ABSORB_TMP/post-profile"; POST_ROOT="$ABSORB_TMP/agent-note"
+POST_PROFILE="$ABSORB_TMP/post-profile"; POST_ROOT="$ABSORB_TMP/sample-note"
 POST_WRONG="$ABSORB_TMP/post-wrong"; mkdir -p "$POST_PROJECTS" "$POST_PROFILE" \
   "$POST_ROOT/.agent_reports" "$POST_WRONG"
 printf '%s\n' '## Decisions' \
@@ -680,14 +680,14 @@ if PYTHONPATH="$ROOT/tools" MEM_STORE="$POST_STORE" MEM_WRITE_EVENTS="$POST_JOUR
   python3 - <<'PY'
 from fleet.collectors.memory import collect
 result = collect()
-rows = result["by_repo"].get("agent-note", [])
+rows = result["by_repo"].get("sample-note", [])
 assert len(rows) == 1 and rows[0]["action"] == "add" and rows[0]["actor"] == "sync", result
-print("Fleet agent-note grouping assertions: 1")
+print("Fleet sample-note grouping assertions: 1")
 PY
 then
-  ok "post-it insert-only event groups in Fleet under agent-note"
+  ok "post-it insert-only event groups in Fleet under sample-note"
 else
-  bad "Fleet agent-note grouping assertion failed"
+  bad "Fleet sample-note grouping assertion failed"
 fi
 
 # Existing source plus a sentinel journal row proves prospective-only/no-backfill.

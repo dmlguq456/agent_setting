@@ -207,8 +207,8 @@ def project_of(cwd):
                                                                    loses to inner `-wt` component
                                                                    because of the two-pass order)
 
-    Known accepted edge: basename-only merge means `/home/Uihyeop` and
-    `/home/nas/user/Uihyeop` both project to `Uihyeop` (same human, different mount —
+    Known accepted edge: basename-only merge means `/home/alice` and
+    `/home/nas/user/alice` both project to `alice` (same human, different mount —
     treated as one group; acceptable, not a bug).
 
     Quirk (not a bug, a consequence of rule 1 being unable to distinguish a worktree

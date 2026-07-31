@@ -12,7 +12,7 @@ disclosure; everything else requires user discussion under D-25 and
 
 ## Checks
 
-1. **Git state:** find repositories with `.git` within depth 3 under `/home/nas/user/Uihyeop`, excluding backups, `node_modules`, and `_layer2*`. For each repository, inspect:
+1. **Git state:** find repositories with `.git` within depth 3 under `{{AGENT_SCAN_ROOT}}`, excluding backups, `node_modules`, and `_layer2*`. For each repository, inspect:
    - an active merge, rebase, or cherry-pick;
    - the dirty-file count;
    - DONE-BRANCH: the current branch is not the remote default branch but is zero commits ahead of it, which usually means the session remained on an already merged branch;
@@ -62,7 +62,7 @@ disclosure; everything else requires user discussion under D-25 and
    proposal, append evidence only and report the unchanged state.
 10. **Retired check:** do not scan post-it files with regex. The removed `post-it.md` model is obsolete. Session-end `mem sync` and `mem lifecycle --apply` own working-tier expiration, currently at `WORKING_TTL_DAYS=21`; durable consolidation candidates belong to memory lifecycle reporting rather than an on-call reimplementation.
 11. **Complete memory-store diagnosis under D-39:** run `python3 <agent-home>/tools/memory/mem.py doctor`. It performs nine read-only deterministic checks: integrity, FTS consistency, schema invariants, working-tier size, stale pending records, durable soft ceiling, graveyard consistency, dump freshness, and worker health. Say nothing on exit 0. Copy `[WARN]` or `[FAIL]` items into the report on exits 1 or 2. Do not take corrective action; deletion, consolidation, merge, and graduation remain owned by the session-end curator under D-18. This is distinct from the legacy file-index checker `tools/memory/index-check.sh`.
-12. **Runtime-watch freshness:** check syntax for `<agent-home>/loops/runtime-watch.sh` and the newest report time under `/home/nas/user/Uihyeop/notes/runtime-watch/`. If no report exists within seven days or a recent runtime-policy change is plausible, recommend `runtime-watch --run`. On-call must not itself run network probes, drills, headless sessions, or policy edits. Route interpretation of official primary sources and policy changes into a separate `autopilot-spec`/`autopilot-code` cycle.
+12. **Runtime-watch freshness:** check syntax for `<agent-home>/loops/runtime-watch.sh` and the newest report time under `{{AGENT_NOTES_ROOT}}/runtime-watch/`. If no report exists within seven days or a recent runtime-policy change is plausible, recommend `runtime-watch --run`. On-call must not itself run network probes, drills, headless sessions, or policy edits. Route interpretation of official primary sources and policy changes into a separate `autopilot-spec`/`autopilot-code` cycle.
 
 ## Drill-Promotion Tags
 
@@ -70,7 +70,7 @@ Tag a reproducible runtime-behavior violation—such as a commit during merge, w
 
 ## Report
 
-- Write a concise report to `/home/nas/user/Uihyeop/notes/oncall/<YYYY-MM-DD>.md` in the user's established communication language.
+- Write a concise report to `{{AGENT_NOTES_ROOT}}/oncall/<YYYY-MM-DD>.md` in the user's established communication language.
 - **One finding = one `## ` heading block** (worklog approvals contract, 2026-07-15): the approvals queue splits reports on exactly-two-hash headings and tracks each block's lifecycle via ✅/❌ markers written back onto the heading line. Findings outside a `## ` block never surface as actionable items. Format: `## <one-line finding — include repository path and branch>` followed by one or two body lines ending with one recommended action. Do not pre-mark headings; markers are written by the approval flow.
 - For each promoted incident, use one finding block whose heading includes the
   proposal ID. Its body reports state, `ingest_result` (`created` or

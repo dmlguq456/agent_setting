@@ -22,7 +22,7 @@ Fail-closed rules:
 Patterns come from repeated `--glob` flags plus an optional
 `<worktree>/.agent-build-residue` file (one fnmatch glob per line relative to
 the worktree root, `#` comments allowed).  fnmatch `*` crosses directory
-boundaries, so `agent-note/node_modules/*` matches the whole stub tree.
+boundaries, so `sample-app/node_modules/*` matches the whole stub tree.
 """
 
 from __future__ import annotations

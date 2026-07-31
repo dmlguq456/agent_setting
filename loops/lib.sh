@@ -5,6 +5,23 @@
 # Correct cron's restricted PATH so modern Node handles ESM and ``node:`` imports.
 export PATH="$HOME/.local/bin:$PATH"
 
+# Machine-local loop roots: personal paths live outside the repo.
+# Priority: existing env > ~/.config/agent-harness/loops.env > generic defaults.
+AGENT_LOOP_ENV="${AGENT_LOOP_ENV:-$HOME/.config/agent-harness/loops.env}"
+if [ -f "$AGENT_LOOP_ENV" ]; then . "$AGENT_LOOP_ENV"; fi
+AGENT_NOTES_ROOT="${AGENT_NOTES_ROOT:-$HOME/agent-notes}"
+AGENT_SCAN_ROOT="${AGENT_SCAN_ROOT:-$HOME}"
+export AGENT_NOTES_ROOT AGENT_SCAN_ROOT
+
+# Substitute {{AGENT_NOTES_ROOT}}/{{AGENT_SCAN_ROOT}} into a temp prompt copy.
+render_prompt() {
+  local _rp_src="$1" _rp_out
+  _rp_out="$(mktemp)"
+  sed -e "s|{{AGENT_NOTES_ROOT}}|$AGENT_NOTES_ROOT|g" \
+      -e "s|{{AGENT_SCAN_ROOT}}|$AGENT_SCAN_ROOT|g" "$_rp_src" > "$_rp_out"
+  printf '%s\n' "$_rp_out"
+}
+
 # Select the runtime adapter through LOOP_ADAPTER; Claude remains the compatibility default.
 # Codex and OpenCode use their own sandbox and permission contracts.
 LOOP_ADAPTER="${LOOP_ADAPTER:-claude}"

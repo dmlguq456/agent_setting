@@ -16,7 +16,7 @@ The fundamental purpose of `<agent-home>` is a work substrate that does not depe
 
 - **Value invariant:** even when one vendor currently offers a better built-in capability, do not remove the portable on-premises realization for that reason. Vendor advantage disappears on a model switch; a portable capability survives.
 - **Evaluation criterion:** do not measure a capability only against the current runtime. Ask whether GPT, Gemini, a local model, or another future engine could drive the process adequately. Zero daily usage is not sufficient reason to remove it; some components are model-switching insurance and substrate.
-- **Internalization:** reverse-engineer well-designed vendor pipelines into portable capabilities rather than depending on their invocation. Examples include deep research into claim verification, native security review into the QA security role, and public design rules into `_design_rules.md`. Preserve source work under `nas_Uihyeop/claude-meta-spec/`.
+- **Internalization:** reverse-engineer well-designed vendor pipelines into portable capabilities rather than depending on their invocation. Examples include deep research into claim verification, native security review into the QA security role, and public design rules into `_design_rules.md`. Preserve source work under `<nas-archive>/claude-meta-spec/`.
 
 When a structural decision conflicts with §0, this section wins.
 

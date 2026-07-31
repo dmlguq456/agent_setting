@@ -1,11 +1,11 @@
 # route/ fixtures (F-28a, plan §3.5)
 
 - `real_claude_staged.json` — verbatim copy of the real record compiled for THIS execute cycle
-  (`/home/Uihyeop/agent_setting/.dispatch/logs/fleet-v10-process-view.route.json`), route_id
-  `rt-27f7bc9ff152ba13`.
+  (`/home/alice/agent_setting/.dispatch/logs/fleet-v10-process-view.route.json`), route_id
+  `rt-9fa0fed86699b8f5`.
 - `real_codex_staged.json` — verbatim copy of a real codex-runtime record
-  (`/tmp/agent-note-d1-route.json`, since evicted — /tmp volatility is the point of the
-  fixture), route_id `rt-1120bb39a13c4191`.
+  (`/tmp/sample-note-d1-route.json`, since evicted — /tmp volatility is the point of the
+  fixture), route_id `rt-f942824768304759`.
 - `synth_broken_hash.json` — `real_claude_staged.json` with `capability` mutated by one
   character (`autopilot-code` → `autopilot-codf`), `route_hash`/`route_id` left untouched (now
   stale) — exercises `load()`'s hash-recheck rejection (T1-5).

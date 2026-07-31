@@ -41,7 +41,7 @@ bash loops/runtime-watch.sh --run
 ```
 
 Output:
-- Default report directory: `/home/nas/user/Uihyeop/notes/runtime-watch/`.
+- Default report directory: `{{AGENT_NOTES_ROOT}}/runtime-watch/`.
 - Override with `RUNTIME_WATCH_OUT_DIR`.
 - State directory: `${XDG_STATE_HOME:-$HOME/.local/state}/agent-runtime-watch`.
 - Provider overrides for scheduled environments: `RUNTIME_WATCH_FETCH_CMD` (executable receiving one URL) and `RUNTIME_WATCH_LOCAL_PROBE_CMD` (executable emitting stable local probe lines).

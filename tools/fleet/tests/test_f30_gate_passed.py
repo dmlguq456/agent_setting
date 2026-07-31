@@ -3,7 +3,7 @@
 
 The v10 cycle left `gate_passed` as an honest gap: no completion marker existed anywhere on
 disk (`plans/2026-07-15_fleet-v10-process-view/_internal/carryover.md` §1). stage-dispatch v13
-(SD-56) landed the first real ones, so `fixtures/completion/rt-5fd84b9bcf8a799c/` is a VERBATIM
+(SD-56) landed the first real ones, so `fixtures/completion/rt-4883b1e245310b16/` is a VERBATIM
 copy of that route's four markers, paired with `fixtures/route/real_sd13_staged.json` — the
 actual record they were written against. Every mismatch/garbage case is derived from those
 reals inside a tempdir, so the pass path is proven against production bytes and the no-claim
@@ -34,7 +34,7 @@ from fleet import render                    # noqa: E402
 
 _FIXDIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
 _ROUTE_FIX = os.path.join(_FIXDIR, "route", "real_sd13_staged.json")
-_MARKER_FIX = os.path.join(_FIXDIR, "completion", "rt-5fd84b9bcf8a799c")
+_MARKER_FIX = os.path.join(_FIXDIR, "completion", "rt-4883b1e245310b16")
 
 _NODES = ("plan", "execute", "test", "report")
 

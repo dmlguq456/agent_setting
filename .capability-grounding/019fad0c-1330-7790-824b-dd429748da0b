@@ -1,0 +1,4 @@
+capability=autopilot-code
+mode=audit
+intensity=quick
+cwd=/home/Uihyeop/agent_setting

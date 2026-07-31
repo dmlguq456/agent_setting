@@ -1,0 +1,4 @@
+capability=autopilot-spec
+mode=update
+intensity=standard
+cwd=/home/Uihyeop/agent_setting

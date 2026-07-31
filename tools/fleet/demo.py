@@ -20,7 +20,7 @@ from .model import Session, DispatchJob, SubAgent
 _ROUTE_FIXDIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                              "tests", "fixtures", "route")
 _DEMO_CARD_ROUTE = os.path.join(_ROUTE_FIXDIR, "demo_card.json")
-_DEMO_CARD_RID = "rt-2f5c79f591479409"   # fabricated content -> hash cannot collide with a real record
+_DEMO_CARD_RID = "rt-271492e352d13180"   # fabricated content -> hash cannot collide with a real record
 _LAB_ROUTE = os.path.join(_ROUTE_FIXDIR, "synth_parallel_lab.json")
 _LAB_RID = "rt-6f5423d05eaf3189"
 _COMPOSED_ROUTE = os.path.join(_ROUTE_FIXDIR, "synth_composed_survey.json")

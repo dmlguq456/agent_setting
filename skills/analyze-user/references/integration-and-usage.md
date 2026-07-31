@@ -30,7 +30,7 @@ Project memory holds contextual project knowledge. Profile records hold verified
 ## Examples
 
 ```text
-/analyze-user figure --source ~/nas/user/Uihyeop/doc/presentation/
+/analyze-user figure --source ~/docs/presentation/
 ```
 
 Analyze the figure aspect and include the presentation folder.

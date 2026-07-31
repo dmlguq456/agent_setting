@@ -1,0 +1,4 @@
+capability=autopilot-code
+mode=debug
+intensity=standard
+cwd=/home/Uihyeop/agent-note-wt/fix-board-project-live-reflect

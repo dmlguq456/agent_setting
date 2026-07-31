@@ -38,12 +38,12 @@ class RouteLoadTest(unittest.TestCase):
     def test_t1_1_load_real_claude(self):
         rec = route.load(_fx("real_claude_staged.json"))
         self.assertIsInstance(rec, dict)
-        self.assertEqual(rec["route_id"], "rt-27f7bc9ff152ba13")
+        self.assertEqual(rec["route_id"], "rt-9fa0fed86699b8f5")
 
     def test_t1_2_load_real_codex(self):
         rec = route.load(_fx("real_codex_staged.json"))
         self.assertIsInstance(rec, dict)
-        self.assertEqual(rec["route_id"], "rt-1120bb39a13c4191")
+        self.assertEqual(rec["route_id"], "rt-f942824768304759")
 
     def test_t1_3_load_missing_path_never_raises(self):
         rec = route.load("/no/such/path/route.json")
@@ -169,7 +169,7 @@ class CollectRouteFieldsTest(unittest.TestCase):
                 jobs = dispatch.collect(jobs_path=jobs_path)
             by_slug = {j.slug: j for j in jobs}
             self.assertIn("fleet-v10-plan", by_slug)
-            self.assertEqual(by_slug["fleet-v10-plan"].route_id, "rt-27f7bc9ff152ba13")
+            self.assertEqual(by_slug["fleet-v10-plan"].route_id, "rt-9fa0fed86699b8f5")
             self.assertEqual(by_slug["fleet-v10-plan"].route_node, "plan")
             # v94-note-db-steward-research: route_file points at a real-world path this
             # checkout cannot resolve — the job itself must still be alive (tolerant §3.3).
@@ -183,12 +183,12 @@ class CollectRouteFieldsTest(unittest.TestCase):
             with mock.patch.object(dispatch.procscan, "_ps_lines", return_value=[]):
                 dispatch.collect(jobs_path=jobs_path)
             nodes = dispatch.collect.last_route_nodes
-            self.assertIn("rt-27f7bc9ff152ba13", nodes)
+            self.assertIn("rt-9fa0fed86699b8f5", nodes)
             self.assertNotIn("plan", ())  # sanity no-op guard
             # Historical terminal rows remain diagnostic history, but cannot
             # authoritatively set current route-node state.
             report = nodes["rt-9ff8199b5372cfdb"]["report"]
-            test = nodes["rt-1120bb39a13c4191"]["test"]
+            test = nodes["rt-f942824768304759"]["test"]
             self.assertNotIn("status", report)
             self.assertNotIn("status", test)
             self.assertEqual(
@@ -200,7 +200,7 @@ class CollectRouteFieldsTest(unittest.TestCase):
 
     def test_t1_13b_terminal_only_route_still_resolves_to_a_record_not_heuristic(self):
         """code-test verification.md §10 — the exact defect: `v93-reading-face-d1-test-r6`
-        (rt-1120bb39a13c4191) is a DONE row in the fixture — `dispatch.collect()`'s returned
+        (rt-f942824768304759) is a DONE row in the fixture — `dispatch.collect()`'s returned
         `jobs` therefore carries NO live job for that route_id (the row never survives
         `_scan_jobs_log`'s terminal-row filter). Before the fix, `route.collect_views()` had no
         way to find `real_codex_staged.json` at all in that situation and produced a
@@ -227,10 +227,10 @@ class CollectRouteFieldsTest(unittest.TestCase):
             jobs_path = _write_jobs_route_log(td)
             with mock.patch.object(dispatch.procscan, "_ps_lines", return_value=[]):
                 jobs = dispatch.collect(jobs_path=jobs_path)
-            self.assertFalse(any(j.route_id == "rt-1120bb39a13c4191" for j in jobs),
+            self.assertFalse(any(j.route_id == "rt-f942824768304759" for j in jobs),
                              "fixture precondition: this route has no LIVE job at all")
             views = route.collect_views(jobs, dispatch.collect.last_route_nodes)
-        view = next(v for v in views if v["route_id"] == "rt-1120bb39a13c4191")
+        view = next(v for v in views if v["route_id"] == "rt-f942824768304759")
         self.assertNotEqual(view["source"], "unknown")
         self.assertTrue(view["nodes"], "the sealed record must resolve with real nodes")
 
