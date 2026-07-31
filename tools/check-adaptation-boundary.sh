@@ -2971,9 +2971,10 @@ check_claude_tool_projection() {
     rel=${p#tools/}
     adapter_p=adapters/claude/tools/$rel
     case "$rel" in
-      generate.py|harness_manifest.py|sync-skill-invocation-policy.py|sync-entry-skill-layer.py|entry-skill-layer.test.py|generated-projections.test.sh|sync-missing-projections.sh|sync-missing-projections.py|context-footprint-baseline.json|install/profile-activation.test.sh|release|release/*)
-        # Harness-development, profile acceptance, and repository release
-        # automation tools are intentionally not runtime projections.
+      generate.py|harness_manifest.py|sync-skill-invocation-policy.py|sync-entry-skill-layer.py|entry-skill-layer.test.py|generated-projections.test.sh|sync-missing-projections.sh|sync-missing-projections.py|context-footprint-baseline.json|install/profile-activation.test.sh|release|release/*|render-landing.py)
+        # Harness-development, profile acceptance, repository release, and
+        # GitHub Pages docs automation tools are intentionally not runtime
+        # projections.
         continue
         ;;
     esac
