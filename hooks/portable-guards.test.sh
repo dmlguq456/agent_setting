@@ -1451,10 +1451,10 @@ if "$CODEX" loop-info note >/tmp/codex_loop_note.out 2>/tmp/codex_loop_note.err 
   && grep -q '^loop=note$' /tmp/codex_loop_note.out \
   && grep -q '^status=unsupported$' /tmp/codex_loop_note.out \
   && grep -q '^runtime_surface=missing-native-loop$' /tmp/codex_loop_note.out \
-  && grep -q '^related_capability=autopilot-note$' /tmp/codex_loop_note.out \
-  && grep -q '^native_capability_surface=codex-native-skills$' /tmp/codex_loop_note.out \
-  && grep -q '^scheduler_surface=external-worklog-board$' /tmp/codex_loop_note.out \
-  && grep -q '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/codex_loop_note.out; then
+  && grep -q '^related_extension=artifact-sink$' /tmp/codex_loop_note.out \
+  && grep -q '^native_extension_surface=application-owned-plugin$' /tmp/codex_loop_note.out \
+  && grep -q '^scheduler_surface=external-application$' /tmp/codex_loop_note.out \
+  && grep -q '^fallback=extension-unavailable-or-application-scheduler$' /tmp/codex_loop_note.out; then
   ok "codex loop wrapper marks missing note loop unsupported"
 else
   bad "codex loop wrapper should mark missing note loop unsupported"
@@ -3547,10 +3547,10 @@ if "$OPENCODE" loop-info note >/tmp/opencode_loop_note.out 2>/tmp/opencode_loop_
   && grep -q '^loop=note$' /tmp/opencode_loop_note.out \
   && grep -q '^status=unsupported$' /tmp/opencode_loop_note.out \
   && grep -q '^runtime_surface=missing-native-loop$' /tmp/opencode_loop_note.out \
-  && grep -q '^related_capability=autopilot-note$' /tmp/opencode_loop_note.out \
-  && grep -q '^native_capability_surface=opencode-native-skill-command$' /tmp/opencode_loop_note.out \
-  && grep -q '^scheduler_surface=external-worklog-board$' /tmp/opencode_loop_note.out \
-  && grep -q '^fallback=worklog-board-or-manual-post-it-flow$' /tmp/opencode_loop_note.out; then
+  && grep -q '^related_extension=artifact-sink$' /tmp/opencode_loop_note.out \
+  && grep -q '^native_extension_surface=application-owned-plugin$' /tmp/opencode_loop_note.out \
+  && grep -q '^scheduler_surface=external-application$' /tmp/opencode_loop_note.out \
+  && grep -q '^fallback=extension-unavailable-or-application-scheduler$' /tmp/opencode_loop_note.out; then
   ok "opencode loop wrapper marks missing note loop unsupported"
 else
   bad "opencode loop wrapper should mark missing note loop unsupported"

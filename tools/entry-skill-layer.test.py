@@ -11,7 +11,7 @@ LIMIT, TOTAL_LIMIT = 4096, 53248
 manifest = json.loads((ROOT / "harness-manifest.json").read_text())
 entries = sorted(name for name, spec in manifest["capabilities"].items()
                  if spec["invocation"]["class"] == "entry-router")
-assert len(entries) == 13, f"expected exactly 13 entry routers, got {len(entries)}"
+assert len(entries) == 12, f"expected exactly 12 entry routers, got {len(entries)}"
 owner_row = re.compile(
     r"^\| Entry load phase \| `post-approval`; owner contract `capabilities/([^`]+)\.md` \|$",
     re.MULTILINE,
@@ -22,7 +22,7 @@ for capability in (ROOT / "capabilities").glob("*.md"):
     assert len(matches) <= 1, f"{capability.relative_to(ROOT)} has duplicate owner rows"
     if matches:
         declared_owners[capability.stem] = matches[0]
-assert sorted(declared_owners) == entries, "capability owner rows must match exactly the 13 entry routers"
+assert sorted(declared_owners) == entries, "capability owner rows must match exactly the 12 entry routers"
 assert all(name == target for name, target in declared_owners.items()), "capability owner row target mismatch"
 for document, phrases in {
     "core/DESIGN_PRINCIPLES.md": ("compact pre-approval router", "assigned stage worker"),
