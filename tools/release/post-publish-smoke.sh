@@ -17,16 +17,23 @@ printf '%s\n' '#!/bin/sh' 'echo codex-stub-ok' > "$SMOKE/bin/codex"
 chmod +x "$SMOKE/bin/codex"
 
 url="https://github.com/$REPOSITORY/releases/download/$VERSION"
-attempt=1
-while ! curl -fsSL "$url/install.sh" -o "$SMOKE/install.sh"; do
-  if [ "$attempt" -ge 6 ]; then
-    echo "post-publish smoke: install.sh not downloadable after $attempt tries" >&2
-    exit 1
-  fi
-  attempt=$((attempt + 1))
-  sleep 10
-done
-curl -fsSL "$url/install.sh.sha256" -o "$SMOKE/install.sh.sha256"
+
+# Release assets propagate lazily right after publish (v2.0.1: 404s for the
+# first minutes), so every asset fetch shares one ~5-minute retry envelope.
+fetch_asset() {
+  _attempt=1
+  while ! curl -fsSL "$1" -o "$2"; do
+    if [ "$_attempt" -ge 30 ]; then
+      echo "post-publish smoke: $1 not downloadable after $_attempt tries" >&2
+      exit 1
+    fi
+    _attempt=$((_attempt + 1))
+    sleep 10
+  done
+}
+
+fetch_asset "$url/install.sh" "$SMOKE/install.sh"
+fetch_asset "$url/install.sh.sha256" "$SMOKE/install.sh.sha256"
 (cd "$SMOKE" && sha256sum -c install.sh.sha256 >/dev/null)
 
 run_isolated() {
