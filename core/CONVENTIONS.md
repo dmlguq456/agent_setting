@@ -295,13 +295,15 @@ reads the current source checkout, `autopilot-code` mutates code there, and
 draft/research/refine read and write persistent inputs only below the canonical
 artifact root. Cross-project work changes cwd and uses another session.
 
-Artifact directories are normally gitignored. Add `.agent_reports/` to
-`.gitignore` on first creation in a tracked repository; treat legacy
-`.claude_reports/` similarly. The exception is `<agent-home>`, where artifact
-history is itself a repository asset and is committed. Git therefore checks
-that directory out into linked worktrees too, but those copies remain read-only
-shadow state; durable writes still target the primary checkout's canonical
-root. Transient locks and untracked markers remain ignored.
+Artifact directories are gitignored in every tracked repository, including
+`<agent-home>` (2026-07-31 policy change for the public v2.0 release: the
+former agent-home exception that committed artifact history is retired;
+pre-2.0 history remains reachable in git history). Add `.agent_reports/` to
+`.gitignore` on first creation; treat legacy `.claude_reports/` similarly.
+Runtime grounding state (`.capability-grounding/`, `.route-grounding/`,
+`.spec-grounding/`, `.core-grounding/`) is likewise never tracked. Linked
+worktrees resolve the primary checkout's canonical root; durable writes still
+target it. Transient locks and untracked markers remain ignored.
 
 Inputs come from persistent project artifacts. External raw material is first normalized through `analyze-project --mode paper|doc`; the family has no flag for arbitrary external artifact directories.
 

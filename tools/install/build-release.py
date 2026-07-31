@@ -135,6 +135,8 @@ def build(
                 ".",
                 ":(exclude).agent_reports",
                 ":(exclude).claude_reports",
+                ":(exclude).capability-grounding",
+                ":(exclude).route-grounding",
                 stdout=handle,
             )
         marker = tarfile.TarInfo("agent-harness/RELEASE_VERSION")

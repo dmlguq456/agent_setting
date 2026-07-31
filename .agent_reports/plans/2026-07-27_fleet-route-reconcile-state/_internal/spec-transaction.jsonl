@@ -1,9 +1,0 @@
-{"action": "latest-reread", "next_version": 24, "route_id": "rt-555c4280920e4d1d", "status": "acquired", "waited": false}
-{"result": 0, "route_id": "rt-555c4280920e4d1d", "status": "released", "version": 24}
-{"detail": "expected=91bc1e092683b4cd708fcd84253971c2d25d5e40 observed=8212b047e65d0fce4eeeee7f37c24f2885a01ca8", "reason": "route-source-commit-mismatch", "route_file": "/home/Uihyeop/agent_setting/.agent_reports/plans/2026-07-27_fleet-route-reconcile-state/_internal/spec-route.json", "route_id": "rt-555c4280920e4d1d", "status": "blocked"}
-{"action": "latest-reread", "next_version": 25, "route_id": "rt-412d1b3a0c4b65bc", "status": "acquired", "waited": false}
-{"result": 1, "route_id": "rt-412d1b3a0c4b65bc", "status": "released", "version": 25}
-{"action": "latest-reread", "next_version": 25, "route_id": "rt-412d1b3a0c4b65bc", "status": "acquired", "waited": false}
-{"result": 1, "route_id": "rt-412d1b3a0c4b65bc", "status": "released", "version": 25}
-{"action": "latest-reread", "next_version": 25, "route_id": "rt-412d1b3a0c4b65bc", "status": "acquired", "waited": false}
-{"result": 0, "route_id": "rt-412d1b3a0c4b65bc", "status": "released", "version": 25}

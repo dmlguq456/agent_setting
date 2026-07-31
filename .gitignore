@@ -84,18 +84,13 @@ jobs/
 
 # Drill/oncall transient run log
 loops/drill/.oncall-run.log
-.agent_reports/.pipeline-lock
-.agent_reports/.runtime/
-.agent_reports/plans/**/_internal/dispatch_logs/
-.agent_reports/plans/**/_internal/dispatch_prompts/
-.agent_reports/plans/**/_internal/jobs.log*
-.agent_reports/plans/**/_internal/model-worker-governor/
-.claude_reports/.pipeline-lock
-.claude_reports/.runtime/
-.claude_reports/plans/**/_internal/dispatch_logs/
-.claude_reports/plans/**/_internal/dispatch_prompts/
-.claude_reports/plans/**/_internal/jobs.log*
-.claude_reports/plans/**/_internal/model-worker-governor/
+# v2.0 (2026-07-31): artifact history and runtime grounding state are
+# local-only — the former agent-home commit exception is retired
+# (CONVENTIONS §5.1). Pre-2.0 history stays in git history.
+/.agent_reports/
+/.claude_reports/
+/.capability-grounding/
+/.route-grounding/
 
 # loop 일시 hold 토글 (per-machine, 만료일 담긴 런타임 플래그)
 loops/.hold

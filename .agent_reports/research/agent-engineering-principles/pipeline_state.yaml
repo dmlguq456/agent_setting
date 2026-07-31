@@ -1,8 +1,0 @@
-pipeline: autopilot-research
-query: "에이전트 엔지니어링 원칙·패턴 종합 조사 (2025-2026) — 세대 구분(prompt→context→harness→loop engineering), 실무 패턴(plan-then-execute, maker/verifier, 서브에이전트 분업, 파이프라인 세분화, golden set, 오답노트, 상태 파일, worktree 격리, headless/cron, 컨텍스트 절약), 사용자 매뉴얼 1부 '원칙의 세대사' 근거 자료"
-mode: technology
-depth: medium
-qa_level: standard
-clarified_intent: "다운스트림 autopilot-draft --mode doc (사용자 매뉴얼) 인용용 카드·챕터 구조 산출"
-last_completed_stage: report
-artifact_dir: /home/nas/user/Uihyeop/.agent_reports/research/agent-engineering-principles

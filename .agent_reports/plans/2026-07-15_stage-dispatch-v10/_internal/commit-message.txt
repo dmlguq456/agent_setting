@@ -1,5 +1,0 @@
-feat(dispatch): implement stage-dispatch v10 guards
-
-Implement SD-44 through SD-47 with tracking separation, route-consumer workers, topology guard validation, and serialized spec transactions.
-
-Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
