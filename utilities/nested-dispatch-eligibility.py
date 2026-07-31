@@ -17,6 +17,30 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import CANONICAL_PARENT_TRANSPORTS  # noqa: E402
 
+# Canonical parent-sandbox labels each adapter wrapper actually exports as
+# AGENT_DISPATCH_CURRENT_SANDBOX. A sealed tuple whose parent_sandbox is not
+# the launching wrapper's real label only fails much later, at depth-2 launch
+# (dispatch-evidence-parent-runtime-mismatch), so reject it at probe time
+# instead (2026-07-31 v2-audit incident: a route sealed with parent_sandbox=
+# none blocked a whole standard owner cycle). The first label is the value
+# `auto` resolves to.
+WRAPPER_PARENT_SANDBOXES = {
+    "claude": ("adapter-default",),
+    "opencode": ("adapter-default",),
+    "codex": ("workspace-write", "danger-full-access", "read-only"),
+}
+
+
+def resolve_parent_sandbox(parent_harness: str, requested: str) -> tuple[str, str]:
+    """Return (resolved_label, failure_class) for the requested parent sandbox."""
+
+    labels = WRAPPER_PARENT_SANDBOXES[parent_harness]
+    if requested == "auto":
+        return labels[0], ""
+    if requested in labels:
+        return requested, ""
+    return requested, "parent-sandbox-label-unknown"
+
 
 def codex_login_status(output: str) -> bool:
     """Accept a valid status line without letting unrelated warnings reorder it."""
@@ -108,7 +132,12 @@ def preflight_failure_reason(output: str) -> str:
 
 
 def evaluate(args: argparse.Namespace) -> dict[str, str]:
-    if args.launch_authority == "ancestor-broker":
+    args.parent_sandbox, sandbox_failure = resolve_parent_sandbox(
+        args.parent_harness, args.parent_sandbox
+    )
+    if sandbox_failure:
+        status, source, failure = "unsupported", "parent-sandbox-vocabulary", sandbox_failure
+    elif args.launch_authority == "ancestor-broker":
         status, source, failure = "unsupported", "dispatch-contract-v3", "launch-broker-retired"
     elif args.parent_transport not in CANONICAL_PARENT_TRANSPORTS:
         status, source, failure = (

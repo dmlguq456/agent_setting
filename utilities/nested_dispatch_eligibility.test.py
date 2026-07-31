@@ -135,6 +135,40 @@ class NestedEligibilityTest(unittest.TestCase):
         )
         checked.assert_not_called()
 
+    def test_unknown_parent_sandbox_label_fails_before_runtime_probe(self):
+        with tempfile.TemporaryDirectory() as worktree, \
+             mock.patch.object(N, "command_check") as checked:
+            args = self.args(worktree)
+            args.parent_harness = "claude"
+            args.parent_sandbox = "none"
+            row = N.evaluate(args)
+        self.assertEqual(row["status"], "unsupported")
+        self.assertEqual(row["probe_source"], "parent-sandbox-vocabulary")
+        self.assertEqual(row["failure_class"], "parent-sandbox-label-unknown")
+        checked.assert_not_called()
+
+    def test_auto_parent_sandbox_resolves_the_wrapper_export(self):
+        with tempfile.TemporaryDirectory() as worktree, \
+             mock.patch.object(
+                 N, "command_check",
+                 return_value=("supported", "direct-command-check", ""),
+             ):
+            args = self.args(worktree)
+            args.parent_harness = "claude"
+            args.parent_sandbox = "auto"
+            row = N.evaluate(args)
+        self.assertEqual(row["status"], "supported")
+        self.assertEqual(row["parent_sandbox"], "adapter-default")
+
+    def test_codex_dynamic_sandbox_labels_stay_accepted(self):
+        for label in ("workspace-write", "danger-full-access", "read-only"):
+            self.assertEqual(
+                N.resolve_parent_sandbox("codex", label), (label, "")
+            )
+        self.assertEqual(
+            N.resolve_parent_sandbox("codex", "auto"), ("workspace-write", "")
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

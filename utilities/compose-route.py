@@ -338,7 +338,11 @@ def main() -> int:
     parser.add_argument("--native-evidence", help="native_subagent evidence JSON list (probe path only)")
     parser.add_argument("--probe-parent-harness", default="claude", choices=("claude", "codex", "opencode"))
     parser.add_argument("--probe-parent-transport", default="headless")
-    parser.add_argument("--probe-parent-sandbox", default="workspace-write")
+    # `auto` lets the probe resolve the launching wrapper's canonical
+    # AGENT_DISPATCH_CURRENT_SANDBOX label for the parent harness; the old
+    # hardcoded workspace-write default was the Codex label and sealed
+    # launch-time-mismatching evidence for Claude/OpenCode parents.
+    parser.add_argument("--probe-parent-sandbox", default="auto")
     parser.add_argument("--probe-child", action="append", default=[], choices=("claude", "codex", "opencode"))
     parser.add_argument("--probe-worktree")
     parser.add_argument("--launch-authority", default="conductor", choices=("conductor", "ancestor-broker"))
