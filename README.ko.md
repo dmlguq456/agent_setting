@@ -219,3 +219,7 @@ Marketplace bundle 생성은 이 경로에 포함되지 않습니다. 루트 REA
 | Git, worktree, dispatch | [core/OPERATIONS.md](core/OPERATIONS.md) |
 | Memory와 recall | [core/MEMORY.md](core/MEMORY.md) |
 | Hook과 design principle | [core/HOOKS.md](core/HOOKS.md), [core/DESIGN_PRINCIPLES.md](core/DESIGN_PRINCIPLES.md) |
+
+## 라이선스
+
+[MIT](LICENSE)

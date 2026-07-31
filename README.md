@@ -228,3 +228,7 @@ projections are generated.
 | Git, worktrees, and dispatch | [core/OPERATIONS.md](core/OPERATIONS.md) |
 | Memory and recall | [core/MEMORY.md](core/MEMORY.md) |
 | Hooks and design principles | [core/HOOKS.md](core/HOOKS.md), [core/DESIGN_PRINCIPLES.md](core/DESIGN_PRINCIPLES.md) |
+
+## License
+
+[MIT](LICENSE)
