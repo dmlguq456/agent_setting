@@ -27,6 +27,9 @@ jobs:
       - name: Verify generated projections
         run: python3 tools/generate.py --check
 
+      - name: Verify the published landing surface
+        run: python3 tools/render-landing.py --check
+
       - name: Verify adaptation boundary
         run: ./tools/check-adaptation-boundary.sh
 

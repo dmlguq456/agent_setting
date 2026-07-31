@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 """Render the public GitHub Pages surface: docs/index.html + docs/map.html.
 
-Sources: manifest.json (resolved profile counts/membership) and
+The landing page is an app shell: a scrolling narrative sidebar on the left and
+a full-bleed diagram canvas on the right that carries the agent map — the same
+layered structure the internal operator hub (root hub.html) shows, re-cut for a
+public audience so the flagship subsystems are visible: sealed N-way dispatch,
+the Fleet view over it, per-role model tiers, the fixed artifact system, the
+persistent memory store, and the loops that keep the harness honest.
+
+Sources: manifest.json (profile closure, tracks, hooks, loops) and
 harness-manifest.json (capability census, summaries, taxonomy). Both pages are
-self-contained (no CDN/network), share one design system, and support
-light/dark. The internal operator hub (root hub.html) is intentionally NOT
-published here.
+self-contained (no CDN/network), share one design system, and are dark-first
+with a light override. The internal operator hub is intentionally NOT published.
 
 Usage:
   python3 tools/render-landing.py          # write docs/index.html + docs/map.html
@@ -32,6 +38,7 @@ def load_data() -> dict:
     harness = json.loads((ROOT / "harness-manifest.json").read_text(encoding="utf-8"))
     resolved = manifest["resolved_profiles"]
     caps = harness["capabilities"]
+    units = harness["units"]
     entries = sorted(
         name for name, spec in caps.items()
         if spec["invocation"]["class"] == "entry-router"
@@ -43,13 +50,24 @@ def load_data() -> dict:
         ]
         for name in caps
     }
+    hard_hooks = [h for h in manifest["hooks"] if h.get("hard_block")]
+    roles = sorted({spec["role"] for spec in units.values()})
     return {
         "caps": caps,
+        "units": units,
+        "roles": roles,
         "entries": entries,
         "membership": membership,
+        "tracks": manifest["tracks"],
+        "hard_hooks": hard_hooks,
+        "loops": manifest["loops"],
         "cap_total": len(caps),
         "entry_total": len(entries),
         "unit_total": resolved["full"]["counts"]["units"],
+        "role_total": len(roles),
+        "hook_total": len(manifest["hooks"]),
+        "hard_total": len(hard_hooks),
+        "loop_total": len(manifest["loops"]),
         "starter_caps": resolved["starter"]["counts"]["capabilities"],
         "builder_caps": resolved["builder"]["counts"]["capabilities"],
         "full_caps": resolved["full"]["counts"]["capabilities"],
@@ -60,516 +78,1420 @@ def load_data() -> dict:
 
 CSS = r"""
   :root {
-    color-scheme: light dark;
+    color-scheme: dark light;
     --font-ui: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
                "SF Pro Text", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
 
-    --surface: #FCFCFD;
-    --surface-2: #F5F5F7;
-    --surface-3: #EDEDF1;
-    --panel: #FFFFFF;
-    --border: #E7E7EC;
-    --border-strong: #D8D8DF;
-    --text: #17171B;
-    --text-2: #55555E;
-    --text-3: #8A8A93;
+    --bg: #08080B;
+    --bg-2: #0B0B10;
+    --panel: rgba(255,255,255,.030);
+    --panel-2: rgba(255,255,255,.058);
+    --solid: #101016;
+    --border: rgba(255,255,255,.085);
+    --border-2: rgba(255,255,255,.16);
+    --text: #ECECF2;
+    --text-2: #9E9EAE;
+    --text-3: #6B6B7B;
 
-    --g1: #5B5BD6; --g2: #8B5CF6; --g3: #2AA9C9;
-    --accent: var(--g1);
-    --accent-soft: #EEEEFC;
-    --accent-text: #4747C2;
+    --g1: #6D6DF6; --g2: #A855F7; --g3: #22D3EE;
+    --accent: #8B8BFA;
+    --accent-soft: rgba(109,109,246,.15);
+    --ok: #34D399; --warn: #FBBF24; --danger: #FB7185; --info: #60A5FA;
 
-    --r-lg: 20px; --r-md: 14px; --r-sm: 10px;
-    --shadow-1: 0 1px 2px rgba(20,20,40,.05), 0 8px 24px rgba(20,20,40,.06);
-    --shadow-2: 0 2px 4px rgba(20,20,40,.06), 0 16px 40px rgba(20,20,40,.10);
-    --nav-bg: rgba(252,252,253,.8);
-    --blob-a: rgba(91,91,214,.16); --blob-b: rgba(42,169,201,.12);
+    --term-bg: #08080D; --term-br: rgba(255,255,255,.13); --term-tx: #C9C9D6;
+
+    --grid-line: rgba(255,255,255,.035);
+    --wire: rgba(150,150,255,.34);
+    --glow-a: rgba(109,109,246,.20);
+    --glow-b: rgba(34,211,238,.11);
+    --shadow: 0 1px 2px rgba(0,0,0,.5), 0 12px 34px rgba(0,0,0,.42);
+    --r-lg: 18px; --r-md: 12px; --r-sm: 8px;
   }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: light) {
     :root {
-      --surface: #101014;
-      --surface-2: #17171D;
-      --surface-3: #1F1F27;
-      --panel: #16161C;
-      --border: #26262F;
-      --border-strong: #34343F;
-      --text: #F1F1F4;
-      --text-2: #B4B4BE;
-      --text-3: #7C7C87;
-      --accent: #9C9CF2;
-      --accent-soft: #23233F;
-      --accent-text: #B9B9F7;
-      --shadow-1: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
-      --shadow-2: 0 2px 6px rgba(0,0,0,.5), 0 20px 50px rgba(0,0,0,.5);
-      --nav-bg: rgba(16,16,20,.75);
-      --blob-a: rgba(101,101,235,.22); --blob-b: rgba(45,180,214,.14);
+      --bg: #FBFBFD;
+      --bg-2: #F4F4F8;
+      --panel: rgba(20,20,45,.028);
+      --panel-2: rgba(20,20,45,.055);
+      --solid: #FFFFFF;
+      --border: rgba(20,20,45,.10);
+      --border-2: rgba(20,20,45,.18);
+      --text: #16161C;
+      --text-2: #55555F;
+      --text-3: #86868F;
+      --accent: #4F4FD4;
+      --accent-soft: rgba(109,109,246,.10);
+      --grid-line: rgba(20,20,60,.045);
+      --wire: rgba(90,90,190,.34);
+      --glow-a: rgba(109,109,246,.14);
+      --glow-b: rgba(34,180,238,.10);
+      --shadow: 0 1px 2px rgba(20,20,45,.05), 0 10px 28px rgba(20,20,45,.07);
+      --term-br: rgba(255,255,255,.09);
     }
   }
 
   * { box-sizing: border-box; margin: 0; }
-  html { scroll-behavior: smooth; }
+  html, body { height: 100%; }
   body {
-    font-family: var(--font-ui); background: var(--surface); color: var(--text);
-    line-height: 1.62; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    font-family: var(--font-ui); background: var(--bg); color: var(--text);
+    line-height: 1.6; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    font-size: 15px;
   }
-  a { color: var(--accent-text); text-decoration: none; }
-  a:hover { text-decoration: underline; text-underline-offset: 3px; }
-  code, .mono { font-family: var(--font-mono); }
-  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+  a { color: inherit; text-decoration: none; }
+  code, .mono { font-family: var(--font-mono); font-variant-ligatures: none; }
+  ::selection { background: rgba(109,109,246,.32); }
 
-  /* ── nav ─────────────────────────────────────────────── */
-  .nav-shell {
-    position: sticky; top: 0; z-index: 40;
-    background: var(--nav-bg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-    border-bottom: 1px solid var(--border);
+  /* ── app shell ───────────────────────────────────────── */
+  .shell { display: flex; height: 100vh; overflow: hidden; }
+  .side {
+    width: 396px; flex: none; height: 100vh; overflow-y: auto; overscroll-behavior: contain;
+    border-right: 1px solid var(--border); background: var(--bg-2);
+    position: relative; scrollbar-width: thin;
   }
-  nav { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; gap: 16px; }
-  .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; font-size: 16.5px; letter-spacing: -.01em; color: var(--text); }
-  .brand:hover { text-decoration: none; }
+  .side::-webkit-scrollbar { width: 8px; }
+  .side::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 8px; }
+  .side::before {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 420px; pointer-events: none;
+    background:
+      radial-gradient(520px 300px at 15% -8%, var(--glow-a), transparent 70%),
+      radial-gradient(420px 260px at 95% 2%, var(--glow-b), transparent 72%);
+  }
+  .side-in { position: relative; padding: 26px 28px 60px; }
+
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 750; letter-spacing: -.02em; font-size: 16px; }
   .brand svg { display: block; }
-  .nav-links { display: flex; gap: 6px; font-size: 14px; flex-wrap: wrap; align-items: center; }
-  .nav-links a { color: var(--text-2); padding: 7px 12px; border-radius: 999px; }
-  .nav-links a:hover { background: var(--surface-3); color: var(--text); text-decoration: none; }
-  .nav-links a.cta {
-    color: #fff; background: linear-gradient(120deg, var(--g1), var(--g2));
-    font-weight: 600;
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+  .badge {
+    font-size: 11.5px; font-weight: 600; color: var(--text-2);
+    border: 1px solid var(--border); background: var(--panel); border-radius: 999px; padding: 3px 10px;
   }
-  .nav-links a.cta:hover { filter: brightness(1.08); }
+  .badge.hot { color: #fff; border-color: transparent; background: linear-gradient(115deg, var(--g1), var(--g2)); }
 
-  /* ── hero ────────────────────────────────────────────── */
-  .hero-shell { position: relative; overflow: hidden; }
-  .hero-shell::before, .hero-shell::after {
-    content: ""; position: absolute; border-radius: 50%; filter: blur(90px); pointer-events: none;
-  }
-  .hero-shell::before {
-    width: 640px; height: 640px; left: 50%; top: -320px; transform: translateX(-78%);
-    background: radial-gradient(circle at center, var(--blob-a), transparent 65%);
-  }
-  .hero-shell::after {
-    width: 560px; height: 560px; left: 50%; top: -220px; transform: translateX(6%);
-    background: radial-gradient(circle at center, var(--blob-b), transparent 65%);
-  }
-  header.hero { position: relative; padding: 92px 0 74px; text-align: center; }
-  .hero-badge {
-    display: inline-flex; align-items: center; gap: 8px;
-    font-size: 13px; font-weight: 600; color: var(--accent-text);
-    background: var(--accent-soft); border: 1px solid transparent;
-    padding: 6px 14px; border-radius: 999px; margin-bottom: 26px;
-  }
-  .hero-badge .sep { color: var(--text-3); font-weight: 400; }
-  .hero h1 {
-    font-size: clamp(38px, 6.2vw, 64px); line-height: 1.06; letter-spacing: -.035em; font-weight: 800;
-  }
+  .side h1 { margin-top: 20px; font-size: 30px; line-height: 1.12; letter-spacing: -.035em; font-weight: 780; }
   .grad {
-    background: linear-gradient(105deg, var(--g1) 10%, var(--g2) 55%, var(--g3) 100%);
+    background: linear-gradient(102deg, var(--g1) 4%, var(--g2) 52%, var(--g3) 100%);
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
-  .hero p.sub { margin: 22px auto 0; max-width: 620px; font-size: 18.5px; color: var(--text-2); }
-  .runtimes { margin-top: 20px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; font-size: 13.5px; color: var(--text-2); }
+  .side .sub { margin-top: 14px; color: var(--text-2); font-size: 15px; }
+  .runtimes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
   .runtimes span {
-    display: inline-flex; align-items: center; gap: 7px;
-    border: 1px solid var(--border); border-radius: 999px; padding: 5px 13px; background: var(--panel);
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-2);
+    border: 1px solid var(--border); border-radius: 999px; padding: 4px 11px; background: var(--panel);
   }
-  .runtimes .dot { width: 7px; height: 7px; border-radius: 50%; background: linear-gradient(120deg, var(--g1), var(--g3)); }
+  .runtimes i { width: 6px; height: 6px; border-radius: 50%; background: linear-gradient(120deg, var(--g1), var(--g3)); }
+
   .install {
-    margin: 36px auto 0; max-width: 730px; display: flex; align-items: stretch;
-    border: 1px solid var(--border-strong); border-radius: 14px; overflow: hidden;
-    background: var(--panel); box-shadow: var(--shadow-2); text-align: left;
+    margin-top: 20px; display: flex; align-items: stretch; overflow: hidden;
+    border: 1px solid var(--border-2); border-radius: var(--r-md);
+    background: var(--solid); box-shadow: var(--shadow);
   }
-  .install .prompt { display: flex; align-items: center; padding: 0 0 0 18px; color: var(--g2); font-family: var(--font-mono); font-size: 14px; user-select: none; }
-  .install code { flex: 1; font-size: 13.5px; padding: 16px 14px; overflow-x: auto; white-space: nowrap; color: var(--text); scrollbar-width: none; }
+  .install .p { display: flex; align-items: center; padding-left: 13px; color: var(--g2); font-family: var(--font-mono); font-size: 13px; }
+  .install code {
+    flex: 1; min-width: 0; font-size: 11.5px; padding: 12px 10px; color: var(--text);
+    overflow-x: auto; white-space: nowrap; scrollbar-width: none;
+  }
   .install code::-webkit-scrollbar { display: none; }
   .install button {
-    border: 0; border-left: 1px solid var(--border); background: var(--surface-2);
-    color: var(--text-2); font-family: var(--font-ui); font-size: 13px; font-weight: 600;
-    padding: 0 20px; cursor: pointer; transition: color .15s, background .15s; white-space: nowrap;
+    border: 0; border-left: 1px solid var(--border); background: var(--panel);
+    color: var(--text-2); font-family: var(--font-ui); font-size: 12px; font-weight: 600;
+    padding: 0 14px; cursor: pointer; white-space: nowrap; transition: color .15s, background .15s;
   }
-  .install button:hover { color: var(--text); background: var(--surface-3); }
-  .hero .fineprint { margin-top: 15px; font-size: 13px; color: var(--text-3); }
+  .install button:hover { color: var(--text); background: var(--panel-2); }
+  .fine { margin-top: 10px; font-size: 12px; color: var(--text-3); }
+  .fine a { color: var(--text-2); text-decoration: underline; text-underline-offset: 3px; }
 
-  /* ── sections ────────────────────────────────────────── */
-  section { padding: 72px 0; }
-  section + section { border-top: 1px solid var(--border); }
-  .kicker {
-    font-size: 12.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
-    color: var(--accent-text); margin-bottom: 10px;
+  .sblock { margin-top: 34px; }
+  .skick {
+    font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--text-3); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
   }
-  h2 { font-size: clamp(24px, 3.4vw, 32px); letter-spacing: -.025em; margin-bottom: 10px; line-height: 1.25; }
-  p.lede { color: var(--text-2); max-width: 660px; margin-bottom: 36px; font-size: 16px; }
-  p.lede .mono { font-size: .9em; color: var(--text); }
+  .skick::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .sblock > p { font-size: 13.5px; color: var(--text-2); }
 
-  .grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-  .card {
-    border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--panel);
-    padding: 24px; box-shadow: var(--shadow-1);
-    transition: transform .18s ease, box-shadow .18s ease;
+  .jump { display: flex; flex-direction: column; gap: 2px; }
+  .jump a {
+    display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--r-sm);
+    font-size: 13.5px; color: var(--text-2); transition: background .15s, color .15s;
   }
-  .card:hover { transform: translateY(-3px); box-shadow: var(--shadow-2); }
-  .card .icon {
-    width: 38px; height: 38px; border-radius: 11px; display: flex; align-items: center; justify-content: center;
-    background: var(--accent-soft); color: var(--accent-text); margin-bottom: 14px;
+  .jump a:hover, .jump a.on { background: var(--panel); color: var(--text); }
+  .jump .n {
+    font-family: var(--font-mono); font-size: 10.5px; color: var(--text-3);
+    border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; flex: none;
   }
-  .card h3 { font-size: 16.5px; margin-bottom: 6px; letter-spacing: -.01em; }
-  .card p { font-size: 14px; color: var(--text-2); }
+  .jump a.on .n { color: var(--accent); border-color: var(--accent); }
 
-  /* pipeline strip */
-  .pipeline {
-    display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px;
-    border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2);
-    padding: 22px 18px; margin-top: 34px; font-family: var(--font-mono); font-size: 13.5px;
+  .flag {
+    border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px 15px;
+    background: linear-gradient(150deg, var(--accent-soft), transparent 62%), var(--panel);
+    margin-bottom: 9px;
   }
-  .pipeline .stage {
-    background: var(--panel); border: 1px solid var(--border-strong); border-radius: 999px;
-    padding: 7px 16px; color: var(--text); box-shadow: var(--shadow-1);
+  .flag h3 { font-size: 14px; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; }
+  .flag h3 .dot { width: 7px; height: 7px; border-radius: 50%; background: linear-gradient(120deg, var(--g1), var(--g3)); flex: none; }
+  .flag ul { margin: 9px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+  .flag li { font-size: 12.5px; color: var(--text-2); padding-left: 15px; position: relative; }
+  .flag li::before {
+    content: ""; position: absolute; left: 3px; top: 8px; width: 4px; height: 4px;
+    border-radius: 50%; background: var(--accent);
   }
-  .pipeline .stage.hot { border-color: transparent; color: #fff; background: linear-gradient(120deg, var(--g1), var(--g2)); }
-  .pipeline .arrow { color: var(--text-3); user-select: none; }
+  .flag li b { color: var(--text); font-weight: 620; }
 
-  /* architecture */
-  .arch { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-  .layer {
-    border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--panel);
-    padding: 22px; box-shadow: var(--shadow-1);
+  .profs { display: flex; flex-direction: column; gap: 8px; }
+  .prof {
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+    border: 1px solid var(--border); border-radius: var(--r-md); background: var(--panel);
+    cursor: pointer; transition: border-color .15s, background .15s; text-align: left; font: inherit; color: inherit;
   }
-  .layer h4 {
-    font-size: 12px; text-transform: uppercase; letter-spacing: .09em; color: var(--text-3);
-    margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
-  }
-  .layer h4 .pip { width: 8px; height: 8px; border-radius: 3px; background: linear-gradient(120deg, var(--g1), var(--g3)); }
-  .layer ul { list-style: none; padding: 0; font-size: 14px; }
-  .layer li { padding: 7px 0; border-top: 1px solid var(--border); color: var(--text-2); }
-  .layer li:first-child { border-top: 0; }
-  .layer li .mono { font-size: 12.5px; color: var(--text); }
-  .maplink-card {
-    margin-top: 22px; display: flex; align-items: center; justify-content: space-between; gap: 14px;
-    border: 1px solid var(--border); border-radius: var(--r-lg); padding: 20px 24px;
-    background: linear-gradient(115deg, var(--accent-soft), transparent 70%), var(--panel);
-    box-shadow: var(--shadow-1); flex-wrap: wrap;
-  }
-  .maplink-card strong { letter-spacing: -.01em; }
-  .maplink-card .go {
-    color: #fff; background: linear-gradient(120deg, var(--g1), var(--g2));
-    border-radius: 999px; padding: 9px 18px; font-size: 14px; font-weight: 600; white-space: nowrap;
-  }
-  .maplink-card .go:hover { text-decoration: none; filter: brightness(1.08); }
-
-  /* profiles */
-  .profiles { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-  .profile {
-    position: relative; border: 1px solid var(--border); border-radius: var(--r-lg);
-    padding: 26px; background: var(--panel); box-shadow: var(--shadow-1);
-  }
-  .profile.featured { border-color: transparent; }
-  .profile.featured::before {
-    content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1.5px;
-    background: linear-gradient(135deg, var(--g1), var(--g2), var(--g3));
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
-  }
-  .profile .tag {
-    position: absolute; top: -11px; right: 20px; font-size: 11.5px; font-weight: 700;
-    color: #fff; background: linear-gradient(120deg, var(--g1), var(--g2));
-    border-radius: 999px; padding: 3px 11px; letter-spacing: .03em;
-  }
-  .profile h3 { font-size: 17px; font-family: var(--font-mono); }
-  .profile .count { font-size: 38px; font-weight: 800; letter-spacing: -.03em; margin: 10px 0 2px; }
-  .profile .count small { font-size: 13.5px; font-weight: 500; color: var(--text-3); letter-spacing: 0; }
-  .profile p { font-size: 14px; color: var(--text-2); min-height: 3.2em; }
-  .profile code {
-    display: block; margin-top: 16px; font-size: 12.5px;
-    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm);
-    padding: 11px 13px; overflow-x: auto; white-space: nowrap;
+  .prof:hover { border-color: var(--border-2); background: var(--panel-2); }
+  .prof.on { border-color: var(--accent); background: var(--accent-soft); }
+  .prof .cnt { font-size: 20px; font-weight: 750; letter-spacing: -.02em; min-width: 30px; }
+  .prof .nm { font-family: var(--font-mono); font-size: 13px; font-weight: 600; }
+  .prof .ds { font-size: 12px; color: var(--text-3); }
+  .prof .tag {
+    margin-left: auto; font-size: 10px; font-weight: 700; letter-spacing: .05em; color: #fff;
+    background: linear-gradient(120deg, var(--g1), var(--g2)); border-radius: 999px; padding: 2px 8px;
   }
 
-  /* quickstart */
-  ol.steps { counter-reset: s; list-style: none; padding: 0; max-width: 760px; }
-  ol.steps li { display: flex; gap: 18px; padding: 18px 0; border-top: 1px solid var(--border); }
-  ol.steps li:first-child { border-top: 0; }
+  ol.steps { list-style: none; padding: 0; counter-reset: s; display: flex; flex-direction: column; gap: 13px; }
+  ol.steps li { display: flex; gap: 12px; font-size: 13.5px; color: var(--text-2); }
   ol.steps .n {
-    counter-increment: s; flex: none; width: 30px; height: 30px; border-radius: 50%;
-    background: var(--accent-soft); color: var(--accent-text); font-weight: 700; font-size: 14px;
-    display: flex; align-items: center; justify-content: center; margin-top: 2px;
+    counter-increment: s; flex: none; width: 22px; height: 22px; border-radius: 50%; margin-top: 1px;
+    background: var(--panel-2); color: var(--text); font-size: 11.5px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
   }
   ol.steps .n::before { content: counter(s); }
-  ol.steps .body { font-size: 15px; color: var(--text-2); }
-  ol.steps .body b { color: var(--text); font-weight: 650; }
-  ol.steps code {
-    font-size: 13px; background: var(--surface-2); border: 1px solid var(--border);
-    border-radius: 7px; padding: 2px 8px;
+  ol.steps b { color: var(--text); font-weight: 620; }
+  ol.steps code, .flag code {
+    font-size: 11.5px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; color: var(--text);
   }
 
-  footer { border-top: 1px solid var(--border); padding: 36px 0 52px; font-size: 13.5px; color: var(--text-3); }
-  .foot { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; align-items: center; }
-  .foot a { color: var(--text-2); }
-
-  /* ── map page ────────────────────────────────────────── */
-  .map-hero { padding: 64px 0 40px; position: relative; }
-  .map-hero h1 { font-size: clamp(30px, 4.6vw, 44px); letter-spacing: -.03em; }
-  .map-hero p { margin-top: 14px; max-width: 640px; color: var(--text-2); font-size: 16.5px; }
-  .stats { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 26px; }
-  .stat {
-    border: 1px solid var(--border); border-radius: var(--r-md); background: var(--panel);
-    padding: 12px 18px; box-shadow: var(--shadow-1); min-width: 108px;
+  .slinks { display: flex; flex-wrap: wrap; gap: 7px; }
+  .slinks a {
+    font-size: 12.5px; color: var(--text-2); border: 1px solid var(--border);
+    border-radius: 999px; padding: 5px 12px; background: var(--panel); transition: all .15s;
   }
-  .stat b { display: block; font-size: 22px; letter-spacing: -.02em; }
-  .stat span { font-size: 12.5px; color: var(--text-3); }
+  .slinks a:hover { color: var(--text); border-color: var(--border-2); }
+  .sfoot { margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-3); }
 
-  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 26px; }
+  /* ── stage / canvas ──────────────────────────────────── */
+  .stage { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; position: relative; }
+  .bar {
+    flex: none; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 12px 22px; border-bottom: 1px solid var(--border); background: var(--bg-2); z-index: 5;
+  }
+  .bar .ttl { font-size: 13px; font-weight: 650; letter-spacing: -.01em; }
+  .bar .ttl span { color: var(--text-3); font-weight: 400; }
+  .filters { display: flex; gap: 4px; margin-left: auto; align-items: center; }
+  .filters .lab { font-size: 11.5px; color: var(--text-3); margin-right: 4px; }
   .filters button {
-    font-family: var(--font-ui); font-size: 13px; font-weight: 600; cursor: pointer;
-    border: 1px solid var(--border); border-radius: 999px; padding: 7px 15px;
+    font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--border); border-radius: 999px; padding: 4px 11px;
     background: var(--panel); color: var(--text-2); transition: all .15s;
   }
   .filters button:hover { color: var(--text); }
-  .filters button.on {
-    color: #fff; border-color: transparent;
-    background: linear-gradient(120deg, var(--g1), var(--g2));
+  .filters button.on { color: #fff; border-color: transparent; background: linear-gradient(120deg, var(--g1), var(--g2)); }
+  .legend { display: flex; gap: 12px; align-items: center; font-size: 11.5px; color: var(--text-3); }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .legend .e { background: linear-gradient(120deg, var(--g1), var(--g2)); }
+  .legend .s { background: var(--panel-2); border: 1px solid var(--border-2); }
+  .legend .g { background: var(--warn); }
+
+  .canvas {
+    flex: 1; overflow: auto; position: relative; padding: 30px 26px 44px;
+    background:
+      radial-gradient(760px 420px at 22% -6%, var(--glow-a), transparent 68%),
+      radial-gradient(620px 380px at 88% 6%, var(--glow-b), transparent 70%),
+      linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0 / 100% 34px,
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0 / 34px 100%,
+      var(--bg);
   }
-  .cap-group { margin-bottom: 40px; }
-  .cap-group h3 { font-size: 18px; letter-spacing: -.015em; margin-bottom: 4px; }
-  .cap-group .desc { font-size: 14px; color: var(--text-3); margin-bottom: 16px; }
-  .cap-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); }
-  .cap {
-    border: 1px solid var(--border); border-radius: var(--r-md); background: var(--panel);
-    padding: 15px 17px; box-shadow: var(--shadow-1); transition: transform .15s, box-shadow .15s, opacity .2s;
+  .diagram { position: relative; min-width: 1020px; max-width: 1400px; margin: 0 auto; }
+  #wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; overflow: visible; }
+  .rows { position: relative; z-index: 1; display: grid; grid-template-columns: 214px minmax(0,1fr) 214px; gap: 18px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 22px; }
+  .col.main { gap: 40px; }
+
+  .node {
+    border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--panel);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    padding: 16px 18px; box-shadow: var(--shadow); position: relative;
   }
-  .cap:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
-  .cap.dim { opacity: .28; }
+  .node.solid { background: linear-gradient(165deg, var(--panel-2), var(--panel)); }
+  .node > .head { display: flex; align-items: baseline; gap: 9px; margin-bottom: 13px; flex-wrap: wrap; }
+  .node > .head .lv {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+    color: var(--accent); border: 1px solid var(--accent); border-radius: 5px; padding: 1px 6px;
+  }
+  .node > .head h3 { font-size: 14.5px; letter-spacing: -.015em; font-weight: 700; }
+  .node > .head .note { font-size: 12px; color: var(--text-3); margin-left: auto; }
+  .node > .head button.note { border: 0; background: none; cursor: pointer; font: inherit; font-size: 12px; color: var(--text-3); }
+  .node > .head button.note:hover { color: var(--text-2); }
+
+  .utter { display: flex; align-items: center; gap: 14px; }
+  .utter .av {
+    width: 30px; height: 30px; border-radius: 50%; flex: none; display: grid; place-items: center;
+    border: 1px solid var(--border-2); background: var(--panel-2); font-size: 11px; color: var(--accent);
+  }
+  .utter .say { font-size: 14.5px; }
+  .utter .say em { font-style: normal; color: var(--text-3); }
+  .utter .tail { margin-left: auto; font-size: 11px; color: var(--text-3); font-family: var(--font-mono); text-align: right; line-height: 1.5; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font-family: var(--font-mono); font-size: 11.5px; color: var(--text-2);
+    border: 1px solid var(--border); border-radius: 6px; padding: 4px 9px; background: var(--panel);
+    white-space: nowrap; transition: all .14s;
+  }
+  button.chip { cursor: pointer; font-family: var(--font-mono); }
+  button.chip:hover { color: var(--text); border-color: var(--border-2); background: var(--panel-2); transform: translateY(-1px); }
+  .chip.entry { color: var(--text); border-color: var(--border-2); background: var(--panel-2); font-weight: 600; }
+  .chip.gate { color: var(--warn); border-color: rgba(251,191,36,.34); background: rgba(251,191,36,.07); }
+  .chip.dim { opacity: .22; }
+
+  .contract { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .sub { border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 13px; background: var(--panel); }
+  .sub .t {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--text-3); margin-bottom: 9px;
+  }
+  .ladder { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+  .ladder .st {
+    font-family: var(--font-mono); font-size: 10.5px; padding: 3px 7px; border-radius: 5px; cursor: pointer;
+    border: 1px solid var(--border); color: var(--text-3); background: var(--panel);
+  }
+  .ladder .st.on { color: var(--text); border-color: var(--border-2); background: var(--panel-2); }
+  .ladder .st.top { color: var(--danger); border-color: rgba(251,113,133,.36); background: rgba(251,113,133,.08); }
+  .seal { font-family: var(--font-mono); font-size: 11px; color: var(--text-2); line-height: 1.85; }
+  .seal b { color: var(--accent); font-weight: 600; }
+  .seal .k { color: var(--text-3); }
+
+  .tracks { display: flex; flex-direction: column; gap: 8px; }
+  .track {
+    display: flex; align-items: stretch; border-radius: 9px; overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--tc) 26%, transparent);
+    background: color-mix(in srgb, var(--tc) 7%, transparent);
+  }
+  .track .lab {
+    width: 116px; flex: none; display: flex; align-items: center; padding: 9px 12px;
+    font-size: 12px; font-weight: 650; color: var(--tc); letter-spacing: -.01em;
+    border-right: 1px solid color-mix(in srgb, var(--tc) 22%, transparent);
+  }
+  .track .flow { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 9px 12px; }
+  .track .arw { color: var(--text-3); font-size: 11px; }
+
+  /* dispatch fabric */
+  .fabric { display: grid; grid-template-columns: 1.15fr 1fr; gap: 16px; }
+  .tree { display: flex; flex-direction: column; gap: 9px; }
+  .tier { display: flex; align-items: center; gap: 10px; }
+  .tier .d {
+    font-family: var(--font-mono); font-size: 10px; font-weight: 700; color: var(--text-3);
+    border: 1px solid var(--border); border-radius: 5px; padding: 2px 6px; flex: none; letter-spacing: .04em;
+  }
+  .tier .box {
+    flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: 9px; padding: 8px 11px;
+    background: var(--panel); font-size: 12.5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    cursor: pointer; text-align: left; color: inherit; font-family: inherit; transition: all .14s;
+  }
+  .tier .box:hover { border-color: var(--border-2); background: var(--panel-2); }
+  .tier .box b { font-weight: 650; }
+  .tier .box .m { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-3); margin-left: auto; }
+  .tier.w2 .box { border-color: var(--border-2); background: var(--panel-2); }
+  .nway { padding-left: 34px; }
+  .nway .nh { font-size: 10.5px; color: var(--text-3); font-family: var(--font-mono); margin-bottom: 6px; letter-spacing: .04em; }
+  .legs { display: flex; gap: 7px; }
+  .leg {
+    flex: 1; border: 1px dashed var(--border-2); border-radius: 8px; padding: 7px 8px;
+    font-family: var(--font-mono); font-size: 10.5px; color: var(--text-2); background: var(--panel);
+    text-align: center; cursor: pointer; transition: all .14s;
+  }
+  .leg:hover { border-style: solid; background: var(--panel-2); color: var(--text); }
+  .leg span { display: block; font-size: 9.5px; color: var(--text-3); margin-top: 2px; }
+  .fall { display: flex; flex-direction: column; gap: 6px; }
+  .fall .hop {
+    display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-2); border: 1px solid var(--border); border-radius: 7px; padding: 6px 9px;
+    background: var(--panel); cursor: pointer; width: 100%; text-align: left; transition: all .14s;
+  }
+  .fall .hop:hover { border-color: var(--border-2); background: var(--panel-2); }
+  .fall .hop .i { width: 5px; height: 5px; border-radius: 50%; background: var(--ok); flex: none; }
+  .fall .hop.last .i { background: var(--text-3); }
+  .fall .hop .x { margin-left: auto; color: var(--text-3); font-size: 10px; }
+  .metrics { display: flex; gap: 8px; margin-top: 13px; flex-wrap: wrap; }
+  .metric { border: 1px solid var(--border); border-radius: 9px; padding: 8px 12px; background: var(--panel); flex: 1; min-width: 112px; }
+  .metric b { display: block; font-size: 15px; letter-spacing: -.02em; }
+  .metric span { font-size: 11px; color: var(--text-3); }
+
+  /* fleet terminal mockup */
+  .term {
+    border: 1px solid var(--term-br); border-radius: 11px; background: var(--term-bg);
+    overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,.4); margin-top: 14px;
+  }
+  .term .tb {
+    display: flex; align-items: center; gap: 7px; padding: 8px 12px;
+    border-bottom: 1px solid var(--term-br); background: rgba(255,255,255,.025);
+  }
+  .term .tb i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.14); }
+  .term .tb .nm { font-family: var(--font-mono); font-size: 10.5px; color: #8A8A9A; margin-left: 5px; }
+  .term .tb .live { margin-left: auto; font-family: var(--font-mono); font-size: 9.5px; color: var(--ok); display: flex; align-items: center; gap: 5px; }
+  .term .tb .live i { width: 5px; height: 5px; background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .term .body { padding: 10px 13px 12px; font-family: var(--font-mono); font-size: 11px; color: var(--term-tx); line-height: 1.85; }
+  .term .r { display: flex; align-items: center; gap: 9px; white-space: nowrap; }
+  .term .r .s { width: 9px; flex: none; }
+  .term .r .nmx { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .term .r .tag { color: #6E6E80; }
+  .term .r .t { color: #55556A; width: 36px; text-align: right; }
+  .term .r.child .nmx { color: #9C9CB0; }
+  .term .r.child .nmx::before { content: "↳ "; color: #55556A; }
+  .term .w { color: var(--ok); } .term .i2 { color: #6E6E80; }
+  .term .b2 { color: var(--warn); } .term .dn { color: var(--info); }
+  .term .hd { color: #55556A; border-bottom: 1px dashed rgba(255,255,255,.08); padding-bottom: 4px; margin-bottom: 5px; display: block; }
+  .term .ft { color: #55556A; border-top: 1px dashed rgba(255,255,255,.08); padding-top: 5px; margin-top: 5px; display: block; }
+
+  /* model tier matrix */
+  .tiers { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .prof-row { display: flex; flex-direction: column; gap: 7px; }
+  .pcard {
+    display: block; border: 1px solid var(--border); border-radius: 9px;
+    padding: 9px 11px; background: var(--panel); cursor: pointer; text-align: left; color: inherit;
+    font-family: inherit; transition: all .14s; width: 100%;
+  }
+  .pcard:hover { border-color: var(--border-2); background: var(--panel-2); }
+  .pcard .ptop { display: flex; align-items: center; gap: 8px; }
+  .pcard .pn { font-family: var(--font-mono); font-size: 12px; font-weight: 650; }
+  .pcard .pd { display: block; font-size: 11px; color: var(--text-3); margin-top: 2px; line-height: 1.45; }
+  .pcard .pe {
+    margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--text-3);
+    border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; white-space: nowrap;
+  }
+  .pcard.deep .pn { color: var(--g2); }
+  .pcard.bal .pn { color: var(--accent); }
+  .pcard.light .pn { color: var(--g3); }
+  .pcard.mini .pn { color: var(--text-3); }
+  .pcard.mini { opacity: .7; }
+  .maptab { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  .maptab th {
+    text-align: left; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--text-3); padding: 0 8px 7px 0; border-bottom: 1px solid var(--border);
+  }
+  .maptab td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--border); color: var(--text-2); }
+  .maptab td:first-child { font-family: var(--font-mono); font-size: 11px; color: var(--text); }
+  .maptab td .pp { font-family: var(--font-mono); font-size: 10.5px; color: var(--accent); }
+  .maptab tr:last-child td { border-bottom: 0; }
+
+  /* artifact system */
+  .flowline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 13px; }
+  .flowline .fx {
+    font-family: var(--font-mono); font-size: 11.5px; border: 1px solid var(--border-2); border-radius: 7px;
+    padding: 5px 11px; background: var(--panel-2); color: var(--text); cursor: pointer;
+  }
+  .flowline .fx:hover { border-color: var(--accent); }
+  .flowline .fa { color: var(--text-3); font-size: 12px; }
+  .flowline .fn { font-size: 11.5px; color: var(--text-3); margin-left: 6px; }
+  .buckets { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .bucket { border: 1px solid var(--border); border-radius: 9px; padding: 10px 9px; background: var(--panel); text-align: center; }
+  .bucket b { display: block; font-family: var(--font-mono); font-size: 11px; color: var(--text); }
+  .bucket span { font-size: 10.5px; color: var(--text-3); }
+  .bucket .ow { display: block; font-size: 9.5px; color: var(--accent); font-family: var(--font-mono); margin-top: 3px; }
+  .bucket.hi { border-color: var(--border-2); background: var(--panel-2); }
+  .rules { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 12px; }
+  .rule {
+    font-size: 11px; color: var(--text-2); border: 1px solid var(--border); border-radius: 7px;
+    padding: 5px 10px; background: var(--panel); display: flex; align-items: center; gap: 6px;
+  }
+  .rule::before { content: "✓"; color: var(--ok); font-size: 10px; }
+
+  /* side rails */
+  .rail { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--panel); padding: 14px 15px; box-shadow: var(--shadow); }
+  .rail .rh { display: flex; align-items: baseline; gap: 7px; margin-bottom: 4px; }
+  .rail .rh h4 { font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
+  .rail .rh .tag { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-3); letter-spacing: .05em; }
+  .rail .rd { font-size: 11.5px; color: var(--text-3); margin-bottom: 12px; line-height: 1.5; }
+  .rail .items { display: flex; flex-direction: column; gap: 6px; }
+  .ritem {
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--panel);
+    transition: all .14s; cursor: pointer; width: 100%; text-align: left; color: inherit; font-family: inherit;
+  }
+  .ritem:hover { border-color: var(--border-2); background: var(--panel-2); }
+  .ritem .n { font-family: var(--font-mono); font-size: 11px; color: var(--text); display: flex; align-items: center; gap: 6px; }
+  .ritem .n .hard {
+    font-size: 8.5px; font-weight: 700; letter-spacing: .06em; color: var(--danger);
+    border: 1px solid rgba(251,113,133,.4); border-radius: 4px; padding: 0 4px; margin-left: auto;
+  }
+  .ritem .b { font-size: 10.5px; color: var(--text-3); margin-top: 3px; line-height: 1.45; }
+  .rfoot { margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-3); }
+
+  .spine { display: flex; flex-direction: column; }
+  .step { position: relative; padding-left: 20px; padding-bottom: 13px; }
+  .step:last-child { padding-bottom: 0; }
+  .step::before {
+    content: ""; position: absolute; left: 4px; top: 5px; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--bg-2); border: 1.5px solid var(--accent);
+  }
+  .step:not(:last-child)::after {
+    content: ""; position: absolute; left: 7.5px; top: 15px; bottom: 2px; width: 1px;
+    background: linear-gradient(180deg, var(--accent), var(--border));
+  }
+  .step .sn { font-size: 12px; font-weight: 650; color: var(--text); }
+  .step .sb { font-size: 10.5px; color: var(--text-3); line-height: 1.5; margin-top: 2px; }
+  .step .sb code { font-size: 10px; color: var(--text-2); }
+
+  /* loops strip */
+  .loops { position: relative; z-index: 1; margin-top: 28px; }
+  .loops-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .loops-head .ln {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+    color: var(--accent); border: 1px solid var(--accent); border-radius: 5px; padding: 1px 6px;
+  }
+  .loops-head h3 { font-size: 14px; font-weight: 700; }
+  .loops-head .d { font-size: 12px; color: var(--text-3); }
+  .loops-head::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .loop-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 9px; }
+  .loop {
+    border: 1px dashed var(--border-2); border-radius: var(--r-md); padding: 11px 12px; background: var(--panel);
+    transition: all .14s; cursor: pointer; text-align: left; color: inherit; font-family: inherit; width: 100%;
+  }
+  .loop:hover { border-style: solid; background: var(--panel-2); }
+  .loop .n { font-size: 12.5px; font-weight: 650; display: flex; align-items: center; gap: 6px; }
+  .loop .n .k { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-3); margin-left: auto; }
+  .loop .b { font-size: 10.5px; color: var(--text-3); margin-top: 4px; line-height: 1.45;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+  /* inspector */
+  .inspector {
+    position: absolute; right: 22px; bottom: 20px; width: 344px; z-index: 20;
+    border: 1px solid var(--border-2); border-radius: var(--r-lg); background: var(--solid);
+    box-shadow: 0 8px 40px rgba(0,0,0,.45); padding: 15px 17px;
+    opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity .18s, transform .18s;
+  }
+  .inspector.on { opacity: 1; transform: none; pointer-events: auto; }
+  .inspector .ih { display: flex; align-items: center; gap: 8px; }
+  .inspector .ih .k {
+    font-size: 9.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+    color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 1px 5px; white-space: nowrap;
+  }
+  .inspector .ih .t { font-family: var(--font-mono); font-size: 13px; font-weight: 650; }
+  .inspector .ih button {
+    margin-left: auto; border: 0; background: transparent; color: var(--text-3);
+    font-size: 15px; cursor: pointer; line-height: 1; padding: 0 2px;
+  }
+  .inspector .ib { font-size: 12.5px; color: var(--text-2); margin-top: 9px; line-height: 1.55; }
+  .inspector .im { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-3); margin-top: 9px; }
+
+  /* ── map page ────────────────────────────────────────── */
+  .page, .page .shell { height: auto; overflow: visible; }
+  .page .stage { height: auto; }
+  .page .canvas { overflow: visible; }
+  .mapwrap { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; }
+  .maphead { margin-bottom: 26px; }
+  .maphead h1 { font-size: clamp(26px, 3.6vw, 38px); letter-spacing: -.03em; line-height: 1.12; }
+  .maphead p { margin-top: 12px; color: var(--text-2); max-width: 620px; font-size: 15px; }
+  .stats { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+  .stat { border: 1px solid var(--border); border-radius: var(--r-md); background: var(--panel); padding: 10px 16px; min-width: 100px; }
+  .stat b { display: block; font-size: 20px; letter-spacing: -.02em; }
+  .stat span { font-size: 11.5px; color: var(--text-3); }
+  .cap-group { margin-bottom: 30px; }
+  .cap-group h3 { font-size: 15px; letter-spacing: -.015em; }
+  .cap-group .desc { font-size: 12.5px; color: var(--text-3); margin: 3px 0 13px; }
+  .cap-grid { display: grid; gap: 9px; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); }
+  .cap { border: 1px solid var(--border); border-radius: var(--r-md); background: var(--panel); padding: 13px 15px; transition: all .15s; }
+  .cap:hover { border-color: var(--border-2); background: var(--panel-2); }
+  .cap.dim { opacity: .26; }
   .cap .name { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
-  .cap .name .mono { font-size: 13.5px; font-weight: 650; color: var(--text); }
+  .cap .name .mono { font-size: 12.5px; font-weight: 650; color: var(--text); }
   .cap .pill {
-    font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
-    border-radius: 999px; padding: 2px 8px; color: var(--accent-text); background: var(--accent-soft);
+    flex: none; font-size: 9.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+    border-radius: 999px; padding: 2px 7px; color: #fff; background: linear-gradient(120deg, var(--g1), var(--g2));
     white-space: nowrap;
   }
-  .cap .pill.stage { color: var(--text-3); background: var(--surface-3); }
-  .cap p { font-size: 13px; color: var(--text-2); margin-top: 7px;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .cap .pill.stage { color: var(--text-3); background: var(--panel-2); border: 1px solid var(--border); }
+  .cap p { font-size: 12px; color: var(--text-2); margin-top: 6px;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .backhome {
+    display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text-2);
+    border: 1px solid var(--border); border-radius: 999px; padding: 7px 15px; background: var(--panel); margin-bottom: 22px;
+  }
+  .backhome:hover { color: var(--text); border-color: var(--border-2); }
 
-  @media (max-width: 640px) {
-    header.hero { padding: 64px 0 52px; }
-    section { padding: 52px 0; }
-    .install .prompt { display: none; }
-    .nav-links a:not(.cta):not(.keep) { display: none; }
+  /* ── responsive ──────────────────────────────────────── */
+  @media (max-width: 1240px) {
+    .side { width: 344px; }
+    .fabric, .contract, .tiers { grid-template-columns: 1fr; }
+    .buckets { grid-template-columns: repeat(3, 1fr); }
+    .loop-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 980px) {
+    html, body { height: auto; }
+    .shell { flex-direction: column; height: auto; overflow: visible; }
+    .side { width: 100%; height: auto; overflow: visible; border-right: 0; border-bottom: 1px solid var(--border); }
+    .stage { height: auto; }
+    .canvas { overflow-x: auto; padding: 22px 16px 32px; }
+    .diagram { min-width: 900px; }
+    .inspector { position: fixed; left: 16px; right: 16px; bottom: 16px; width: auto; }
+    .side-in { padding: 22px 20px 40px; }
+    .side h1 { font-size: 29px; }
   }
 """
 
 LOGO = (
     '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">'
     '<defs><linearGradient id="lg" x1="0" y1="0" x2="24" y2="24">'
-    '<stop offset="0" stop-color="#5B5BD6"/><stop offset=".55" stop-color="#8B5CF6"/>'
-    '<stop offset="1" stop-color="#2AA9C9"/></linearGradient></defs>'
+    '<stop offset="0" stop-color="#6D6DF6"/><stop offset=".55" stop-color="#A855F7"/>'
+    '<stop offset="1" stop-color="#22D3EE"/></linearGradient></defs>'
     '<path d="M12 2 21 7v2L12 14 3 9V7l9-5Z" fill="url(#lg)"/>'
-    '<path d="M3 12.5 12 17.5 21 12.5V15L12 20 3 15v-2.5Z" fill="url(#lg)" opacity=".55"/>'
-    "</svg>"
+    '<path d="M3 12.5 12 17.5 21 12.5V15L12 20 3 15v-2.5Z" fill="url(#lg)" opacity=".55"/></svg>'
 )
-
-ICONS = {
-    "route": '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M12 19h4.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H12"/></svg>',
-    "net": '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="2.6"/><circle cx="5" cy="19" r="2.6"/><circle cx="19" cy="19" r="2.6"/><path d="M12 7.6 6 16.5m6-8.9 6 8.9M7.6 19h8.8"/></svg>',
-    "shield": '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4.7 3 8.6 7 10 4-1.4 7-5.3 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>',
-    "db": '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="5.5" rx="7" ry="2.8"/><path d="M5 5.5v13c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8v-13"/><path d="M5 12c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8"/></svg>',
-    "blueprint": '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Z"/><path d="M14 3v6h6M9 13h6M9 17h4"/></svg>',
-    "units": '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>',
-}
-
-
-def nav(active: str) -> str:
-    map_extra = "keep" if active == "map" else ""
-    return f"""
-  <div class="nav-shell"><div class="wrap"><nav>
-    <a class="brand" href="index.html">{LOGO}<span>Agent&nbsp;Harness</span></a>
-    <div class="nav-links">
-      <a href="index.html#features">Features</a>
-      <a href="index.html#how">How it works</a>
-      <a href="index.html#profiles">Profiles</a>
-      <a href="map.html" class="{map_extra}">Agent map</a>
-      <a href="{REPO_URL}">GitHub</a>
-      <a href="index.html#install" class="cta keep">Install</a>
-    </div>
-  </nav></div></div>"""
-
 
 COPY_JS = (
     "navigator.clipboard.writeText(document.getElementById('cmd').textContent)"
-    ".then(()=>{this.textContent='Copied ✓';setTimeout(()=>this.textContent='Copy',1400)})"
+    ".then(()=>{this.textContent='Copied';setTimeout(()=>this.textContent='Copy',1400)})"
 )
 
-FOOTER = f"""
-<footer><div class="wrap"><div class="foot">
-  <div style="display:flex;align-items:center;gap:9px">{LOGO}<span>Agent Harness — a portable operating layer for coding agents. MIT licensed.</span></div>
-  <div>
-    <a href="{REPO_URL}">GitHub</a> ·
-    <a href="{REPO_URL}/releases">Releases</a> ·
-    <a href="map.html">Agent map</a>
-  </div>
-</div></div></footer>"""
+TRACK_COLOR = {
+    "--cat-1": "#A47AE0", "--cat-2": "#6B96F0", "--cat-3": "#5FC684",
+    "--cat-4": "#C07FE0", "--cat-5": "#D9A93C", "--cat-6": "#85AEFF",
+    "--cat-7": "#F87171", "--cat-8": "#D1D5DB",
+}
+
+ARTIFACT_BUCKETS = [
+    ("research/", "external evidence", "autopilot-research", False),
+    ("analysis_project/", "source analysis", "analyze-project", False),
+    ("spec/", "current blueprint", "autopilot-spec", True),
+    ("plans/", "code cycles", "autopilot-code", True),
+    ("documents/", "drafts", "draft / refine", False),
+    ("experiments/", "runs &amp; logs", "autopilot-lab", False),
+]
+
+ARTIFACT_RULES = [
+    "one root per project",
+    "the owning capability updates it",
+    "spec revisions snapshot the prior version",
+    "worktree snapshot writes fail closed",
+    "no code without a spec",
+]
+
+# What each hard guard denies, read from the hook scripts' own header contracts.
+GUARD_NOTE = {
+    "artifact-guard": "writes outside the canonical artifact root",
+    "builtin-memory-guard": "direct writes to built-in file memory",
+    "core-first-guard": "adapter edits before the core contract is read",
+    "git-state-guard": "edits during a merge, rebase, or cherry-pick",
+    "spec-skill-gate": "a spec-changing Skill with no current spec read",
+}
+
+MEMORY_STEPS = [
+    ("Capsule probe", "Every eligible main prompt runs <code>mem candidates</code> over the "
+     "active capsule index — at most 3 headline+ID hits in 1,200 bytes, bodies untouched."),
+    ("Opportunity receipt", "The probe writes a same-turn receipt even on zero hits. Material "
+     "main-session mutation is gated on it, so retrieval can't be silently skipped."),
+    ("Agent-owned recall", "No score threshold adopts a hit. The agent reads the full record by "
+     "ID, then cross-checks it against live code."),
+    ("Session distillation", "SessionEnd dispatches a no-tools distiller. Automatic writes declare "
+     "one purpose: decision, user-correction, unresolved-obligation, or artifact-pointer."),
+    ("Supersede, never delete", "Changed decisions are superseded — one active canonical path, "
+     "full history auditable, deleted rows recoverable from the graveyard."),
+    ("Pending protection", "Handoffs stay <code>pending</code> until an explicit consume; prune, "
+     "merge, and delete fail closed against them."),
+]
+
+MODEL_PROFILES = [
+    ("deep", "deep", "highest-confidence convergence, failure-mode and security judgment", "deep · xhigh"),
+    ("balanced-deep", "bal", "deep-model judgment at a lower coordination budget", "deep · medium"),
+    ("light", "light", "low-latency production, structured checking, broad exploration", "light · medium"),
+    ("mini", "mini", "lifecycle and classification only — refused for substantive nodes", "mini · medium"),
+]
+
+STAGE_MODEL_MAP = [
+    ("owner (standard+)", "deep orchestrator", "deep"),
+    ("frame · plan", "deep maker", "balanced-deep"),
+    ("plan (strong+)", "deep maker", "deep"),
+    ("execute", "fast implementer", "light"),
+    ("impl-review", "fast reviewer", "light"),
+    ("failure-mode", "deep reviewer", "deep"),
+    ("adversary leg", "external adversary", "deep"),
+    ("test · report", "fast reviewer / writer", "light"),
+]
+
+FLEET_ROWS = [
+    ("w", "●", "agent_setting", "claude · owner d1", "working", "12m", False),
+    ("w", "│", "code-execute", "claude · light", "working", "4m", True),
+    ("dn", "│", "impl-review", "codex · light", "done", "2m", True),
+    ("b2", "│", "failure-mode", "codex · deep", "blocked", "1m", True),
+    ("i2", "○", "sr_corrnet_runtime", "interactive", "idle", "38m", False),
+]
+
+
+def _mono(slug: str) -> str:
+    return slug.split("__", 1)[-1] if "__" in slug else slug
+
+
+def build_info(d: dict) -> dict:
+    """Inspector payload keyed by node id — capability summaries, guards, loops, concepts."""
+    info: dict[str, dict] = {}
+    for name, spec in d["caps"].items():
+        entry = spec["invocation"]["class"] == "entry-router"
+        info[f"cap:{name}"] = {
+            "kind": "entry router" if entry else "stage",
+            "title": name,
+            "body": str(spec.get("summary", "")).strip(),
+            "meta": "profiles: " + (" · ".join(d["membership"].get(name, [])) or "full only"),
+        }
+    for hook in d["hard_hooks"]:
+        info[f"hook:{hook['mono']}"] = {
+            "kind": "hard guard",
+            "title": hook["mono"],
+            "body": f"Denies {GUARD_NOTE.get(hook['mono'], 'the unsafe call')} — on {hook['event']}, "
+                    f"before the tool runs rather than in review. The model judges; this code enforces.",
+            "meta": hook["event"],
+        }
+    for loop in d["loops"]:
+        info[f"loop:{loop['mono']}"] = {
+            "kind": "loop",
+            "title": loop["mono"],
+            "body": loop["blurb"],
+            "meta": loop["schedule"],
+        }
+    concepts = [
+        ("fx:main", "main session", "dispatch depth 0",
+         "Context owner, router, and final integrator — not the default executor. It recovers memory and "
+         "artifacts, proposes the route card, dispatches, harvests, and integrates.",
+         "never runs separable standard+ stages inline"),
+        ("fx:owner", "capability owner", "dispatch depth 1",
+         "A thin conductor bound to one sealed route. It reads stage verdict metadata rather than stage "
+         "bodies and passes context between stages only through files.",
+         "quick = exactly one owner, no depth 2"),
+        ("fx:stage", "stage workers", "dispatch depth 2",
+         "plan · plan-check · execute · impl-review · test · report. Each is a separately launched headless "
+         "session with a sealed role, model profile, and disjoint write scope. Only execute mutates source.",
+         "depth 3 is forbidden"),
+        ("fx:nway", "N-way parallel group", "dispatch",
+         "2–4 route-declared siblings started in exactly one dispatch-batch transaction. Width, leg indexes, "
+         "disjoint scopes, sealed profiles, and harness evidence are verified before any process starts — a "
+         "capacity shortage creates zero rows and zero model processes.",
+         "standard 2 · strong 3 · thorough 4"),
+        ("fx:family", "cross-family diversity", "dispatch",
+         "Legs spread across model families by default: a checker lands on a different family than its maker, "
+         "and consecutive nodes don't home to the conductor's own harness. Routing everything to one harness "
+         "is the exception that carries a recorded reason.",
+         "cross-harness = ≥2 families"),
+        ("fx:fallback", "checked fallback chain", "dispatch",
+         "same-harness-headless → cross-harness-headless → native-subagent → inline. Every hop keeps the same "
+         "route id, write scope, completion gate, and attempt identity; degradation is recorded with its "
+         "failure class, never silent.",
+         "SD-50"),
+        ("fx:registry", "attempt registry", "dispatch",
+         "One canonical jobs.log for every runtime. A start writes a registered row first, then atomically "
+         "claims its fenced PID/start identity. A duplicate or already-started claim spawns zero children.",
+         ".dispatch/jobs.log"),
+        ("fx:liveness", "liveness classification", "dispatch",
+         "ALIVE · SUSPECT · DEAD · EXITED, derived from exact recorded PID plus start time — never an "
+         "indefinite wait and never a path-based guess. Exit 3 means something is unharvested.",
+         "utilities/dispatch-liveness.sh"),
+        ("fx:fleet", "Fleet", "live view",
+         "The cross-harness dashboard over that same registry: interactive sessions and dispatched workers in "
+         "one tree, each with state, harness, sealed model profile, context gauge, and token accounting. "
+         "Orphaned rows are surfaced rather than dropped.",
+         "part of the harness, not a separate product"),
+        ("rt:card", "route card", "contract",
+         "Before material work the agent proposes task, reason, route, scope, and completion in five fields. "
+         "You approve a filled-in proposal instead of recalling capability names or flags.",
+         "WORKFLOW §0.4"),
+        ("rt:seal", "sealed route", "contract",
+         "The compiler binds capability, intensity, topology, node write scopes, and model profiles to the "
+         "registry digest, source commit, and physical cwd. A worker cannot renegotiate it, and a caller cannot "
+         "swap a sealed profile for a trailing model flag.",
+         "route_hash · registry_digest"),
+        ("rt:intensity", "intensity ladder", "contract",
+         "direct → quick → standard → strong → thorough → adversarial. Intensity selects the stage graph and "
+         "dispatch depth; verification rigor is derived from it rather than set on a separate axis. Token "
+         "pressure can never downshift it.",
+         "CONVENTIONS §1.1"),
+        ("rt:gate", "artifact order gates", "contract",
+         "No code without a spec; no spec without prior evidence. Writes outside the canonical artifact root, "
+         "or a source edit with no route record for this cwd, fail closed before the edit — not in review.",
+         "artifact-guard · material-route-guard"),
+        ("rt:compose", "compose-on-demand", "contract",
+         "Curated recipes are fast paths, not a ceiling. For a request no recipe enumerates, the entry composes "
+         "a node graph from the same unit catalog; the composed route passes the same validator, is hash-sealed "
+         "exactly like a recipe, and still requires the route card.",
+         "composed: true"),
+        ("md:role", "portable model roles", "model tiers",
+         "Shared contracts name behavior, never a vendor model. Every unit in the catalog binds exactly one "
+         "role and a route node's role must equal its unit's declared role; the shared vocabulary also covers "
+         "conductor and adversarial nodes as deep orchestrator and external adversary.",
+         f"{d['role_total']} roles · {d['unit_total']} units"),
+        ("md:profile", "execution profiles", "model tiers",
+         "Role and budget are separate axes. deep, balanced-deep, light, and mini are distinct operating points; "
+         "adapters map them to concrete models, and an adapter without a verified effort axis must report "
+         "reduced granularity instead of claiming parity.",
+         "CONVENTIONS §2.2"),
+        ("md:map", "per-node selection", "model tiers",
+         "Node meaning and risk select the profile — not dispatch depth or role wording. Route compilation seals "
+         "owner_model_profile and every node and parallel-leg profile; capacity failover may substitute a checked "
+         "model while preserving and reporting the profile intent.",
+         "sealed at compile time"),
+        ("ev:root", "one artifact root", "artifacts",
+         "Every capability writes to one project-wide root, resolved from the primary checkout. Linked task "
+         "worktrees are source-only: writes to their artifact snapshot fail closed, so evidence never forks.",
+         ".agent_reports/"),
+        ("ev:order", "fixed artifact order", "artifacts",
+         "research / analyze-project → spec → plans for code, and research → draft → refine for documents. "
+         "The folder set is fixed, each artifact has exactly one owning capability, and spec revisions snapshot "
+         "the prior version instead of overwriting it.",
+         "WORKFLOW §0.1 · §6"),
+        ("lp:self", "loops that report, never apply", "self-improvement",
+         "Drill replays behavioral fixtures and scores them after instruction changes. On-call corroborates "
+         "memory-backed incidents against live evidence before filing a proposal. Runtime-watch fingerprints "
+         "the vendors' own docs and probes local CLIs. Every one of them proposes; none edits policy.",
+         f"{d['loop_total']} loops"),
+    ]
+    for key, title, kind, body, meta in concepts:
+        info[key] = {"kind": kind, "title": title, "body": body, "meta": meta}
+    return info
+
+
+# ------------------------------------------------------------------ canvas
+
+def build_canvas(d: dict) -> str:
+    caps = d["caps"]
+    membership = d["membership"]
+
+    def cap_chip(name: str) -> str:
+        spec = caps.get(name)
+        if spec is None:
+            return ""
+        entry = spec["invocation"]["class"] == "entry-router"
+        cls = "chip" + (" entry" if entry else "")
+        profiles = " ".join(membership.get(name, []))
+        return (f'<button class="{cls}" data-profiles="{profiles}" '
+                f'data-info="cap:{name}">{html.escape(name)}</button>')
+
+    tracks_html = []
+    for track in d["tracks"]:
+        color = TRACK_COLOR.get(track["color_token"], "#8B8BFA")
+        flow = []
+        for i, slug in enumerate(track["steps"]):
+            if i:
+                flow.append('<span class="arw">&rarr;</span>')
+            flow.append(cap_chip(_mono(slug)))
+        for gate in track.get("gates", []):
+            flow.append(f'<span class="chip gate">&#9679; {html.escape(gate)}</span>')
+        tracks_html.append(
+            f'<div class="track" style="--tc:{color}">'
+            f'<div class="lab">{html.escape(track["label"])}</div>'
+            f'<div class="flow">{"".join(flow)}</div></div>'
+        )
+
+    guards = "".join(
+        f'<button class="ritem" data-info="hook:{h["mono"]}">'
+        f'<div class="n">{html.escape(h["mono"])}<span class="hard">HARD</span></div>'
+        f'<div class="b">{GUARD_NOTE.get(h["mono"], html.escape(h["event"]))}</div></button>'
+        for h in d["hard_hooks"]
+    )
+
+    memory = "".join(
+        f'<div class="step"><div class="sn">{title}</div><div class="sb">{body}</div></div>'
+        for title, body in MEMORY_STEPS
+    )
+
+    buckets = "".join(
+        f'<div class="bucket{" hi" if hi else ""}"><b>{name}</b><span>{desc}</span>'
+        f'<span class="ow">{owner}</span></div>'
+        for name, desc, owner, hi in ARTIFACT_BUCKETS
+    )
+
+    rules = "".join(f'<span class="rule">{r}</span>' for r in ARTIFACT_RULES)
+
+    loops = "".join(
+        f'<button class="loop" data-info="loop:{l["mono"]}">'
+        f'<div class="n">{html.escape(l["name"])}<span class="k">{l["type"]}</span></div>'
+        f'<div class="b">{html.escape(l["blurb"])}</div></button>'
+        for l in d["loops"]
+    )
+
+    stage_chips = "".join(
+        f'<span class="chip">{s}</span>' for s in
+        ("code-plan", "plan-check", "code-execute", "impl-review", "code-test", "code-report")
+    )
+
+    profile_cards = "".join(
+        f'<button class="pcard {css}" data-info="md:profile">'
+        f'<span class="ptop"><span class="pn">{name}</span><span class="pe">{effort}</span></span>'
+        f'<span class="pd">{desc}</span></button>'
+        for name, css, desc, effort in MODEL_PROFILES
+    )
+
+    stage_rows = "".join(
+        f'<tr><td>{stage}</td><td>{role}</td><td><span class="pp">{profile}</span></td></tr>'
+        for stage, role, profile in STAGE_MODEL_MAP
+    )
+
+    role_chips = "".join(
+        f'<button class="chip" data-info="md:role">{html.escape(r)}</button>' for r in d["roles"]
+    )
+
+    fleet_rows = "".join(
+        f'<div class="r{" child" if child else ""}"><span class="s {cls}">{dot}</span>'
+        f'<span class="nmx">{name}</span><span class="tag">{tag}</span>'
+        f'<span class="{cls}">{state}</span><span class="t">{age}</span></div>'
+        for cls, dot, name, tag, state, age, child in FLEET_ROWS
+    )
+
+    return f"""
+    <div class="diagram" id="diagram">
+      <svg id="wires" aria-hidden="true">
+        <defs>
+          <linearGradient id="wg" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="1200">
+            <stop offset="0" stop-color="#6D6DF6" stop-opacity=".95"/>
+            <stop offset="1" stop-color="#22D3EE" stop-opacity=".8"/>
+          </linearGradient>
+          <marker id="arrow" viewBox="0 0 8 8" refX="6.4" refY="4"
+                  markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0 1 L7 4 L0 7 z" fill="#22D3EE" fill-opacity=".85"/>
+          </marker>
+        </defs>
+      </svg>
+
+      <div class="rows">
+        <div class="col">
+          <div class="rail" id="n-mem">
+            <div class="rh"><h4>Memory</h4><span class="tag">SQLITE · FTS5</span></div>
+            <div class="rd">Runs alongside every layer to the right. One store across every
+            session, project, and runtime — the agent decides what matters, the code owns
+            the mechanics.</div>
+            <div class="spine">{memory}</div>
+            <div class="rfoot">Workers are exempt: no probe, no inject, no distill, no sync.</div>
+          </div>
+        </div>
+
+        <div class="col main">
+          <div class="node solid" id="n-utter">
+            <div class="utter">
+              <div class="av">&#9679;</div>
+              <div class="say">&ldquo;Implement and test the login API, <em>then leave a change report.&rdquo;</em></div>
+              <div class="tail">L0<br />one sentence in</div>
+            </div>
+          </div>
+
+          <div class="node" id="n-route">
+            <div class="head"><span class="lv">L1</span><h3>Routing contract</h3>
+              <span class="note">core/ decides the route before a file is touched</span></div>
+            <div class="contract">
+              <div class="sub"><div class="t">Route handshake</div>
+                <div class="chips">
+                  <button class="chip entry" data-info="rt:card">route card</button>
+                  <button class="chip" data-info="rt:gate">spec gate</button>
+                  <button class="chip" data-info="rt:gate">artifact order</button>
+                  <button class="chip entry" data-info="rt:seal">sealed route</button>
+                  <button class="chip" data-info="rt:compose">compose-on-demand</button>
+                </div>
+                <div class="seal" style="margin-top:11px">
+                  <span class="k">route_hash</span> <b>rt-35552ff2&hellip;</b><br />
+                  <span class="k">write_scope</span> source-scoped, plans/&lt;cycle&gt;/**<br />
+                  <span class="k">bound to</span> registry digest &middot; commit &middot; cwd
+                </div>
+              </div>
+              <div class="sub"><div class="t">Intensity ladder</div>
+                <div class="ladder">
+                  <button class="st on" data-info="rt:intensity">direct</button>
+                  <button class="st on" data-info="rt:intensity">quick</button>
+                  <button class="st on" data-info="rt:intensity">standard</button>
+                  <button class="st on" data-info="rt:intensity">strong</button>
+                  <button class="st on" data-info="rt:intensity">thorough</button>
+                  <button class="st top" data-info="rt:intensity">adversarial</button>
+                </div>
+                <div class="t" style="margin-top:14px">Governance</div>
+                <div class="chips">
+                  <span class="chip">CORE</span><span class="chip">WORKFLOW</span>
+                  <span class="chip">CONVENTIONS</span><span class="chip">OPERATIONS</span>
+                  <span class="chip">MEMORY</span><span class="chip">DESIGN_PRINCIPLES</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="node" id="n-tracks">
+            <div class="head"><span class="lv">L2</span><h3>Pipelines</h3>
+              <span class="note">{d['entry_total']} entry routers &middot; {d['cap_total']} capabilities</span></div>
+            <div class="tracks">{"".join(tracks_html)}</div>
+          </div>
+
+          <div class="node solid" id="n-fabric">
+            <div class="head"><span class="lv">L3</span><h3>Dispatch fabric</h3>
+              <span class="note">the owner conducts &middot; workers never route</span></div>
+            <div class="fabric">
+              <div class="tree">
+                <div class="tier"><span class="d">d0</span>
+                  <button class="box" data-info="fx:main"><b>main session</b> router &middot; integrator
+                    <span class="m">context owner</span></button></div>
+                <div class="tier w2"><span class="d">d1</span>
+                  <button class="box" data-info="fx:owner"><b>capability owner</b> sealed route, thin conductor
+                    <span class="m">deep orchestrator</span></button></div>
+                <div class="tier"><span class="d">d2</span>
+                  <button class="box" data-info="fx:stage"><b>stage workers</b> file-only handoff
+                    <span class="m">3-line verdict</span></button></div>
+                <div class="chips" style="padding-left:34px">{stage_chips}</div>
+                <div class="nway">
+                  <div class="nh">N-way group &middot; one transaction &middot; 2&ndash;4 legs</div>
+                  <div class="legs">
+                    <button class="leg" data-info="fx:nway">maker<span>family A</span></button>
+                    <button class="leg" data-info="fx:family">checker<span>family B</span></button>
+                    <button class="leg" data-info="fx:family">adversary<span>family C</span></button>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div class="sub" style="margin-bottom:12px"><div class="t">Checked fallback</div>
+                  <div class="fall">
+                    <button class="hop" data-info="fx:fallback"><i class="i"></i>same-harness headless<span class="x">1</span></button>
+                    <button class="hop" data-info="fx:fallback"><i class="i"></i>cross-harness headless<span class="x">2</span></button>
+                    <button class="hop" data-info="fx:fallback"><i class="i"></i>native subagent<span class="x">3</span></button>
+                    <button class="hop last" data-info="fx:fallback"><i class="i"></i>inline, reason recorded<span class="x">4</span></button>
+                  </div>
+                </div>
+                <div class="sub"><div class="t">Accounting</div>
+                  <div class="chips">
+                    <button class="chip" data-info="fx:registry">jobs.log</button>
+                    <button class="chip" data-info="fx:liveness">liveness</button>
+                    <button class="chip entry" data-info="fx:fleet">Fleet</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="term" id="n-fleet">
+              <div class="tb"><i></i><i></i><i></i><span class="nm">fleet &mdash; live cross-harness view</span>
+                <span class="live"><i></i>LIVE</span></div>
+              <div class="body">
+                <span class="hd">session / node&nbsp;&nbsp;&middot;&nbsp;&nbsp;harness &middot; profile&nbsp;&nbsp;&middot;&nbsp;&nbsp;state</span>
+                {fleet_rows}
+                <span class="ft">orphan rows surfaced &middot; context gauge &middot; token accounting per session</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="node" id="n-tiers">
+            <div class="head"><span class="lv">L4</span><h3>Model tier per role</h3>
+              <button class="note" data-info="md:map">role and budget are separate axes &mdash; both sealed</button></div>
+            <div class="tiers">
+              <div>
+                <div class="sub" style="margin-bottom:12px"><div class="t">Execution profiles</div>
+                  <div class="prof-row">{profile_cards}</div>
+                </div>
+                <div class="sub"><div class="t">Roles in the unit catalog &mdash; {d['role_total']}</div>
+                  <div class="chips">{role_chips}</div>
+                </div>
+              </div>
+              <div class="sub">
+                <div class="t">Selection, per node</div>
+                <table class="maptab">
+                  <tr><th>node</th><th>role</th><th>profile</th></tr>
+                  {stage_rows}
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="node" id="n-art">
+            <div class="head"><span class="lv">L5</span><h3>Fixed artifact system</h3>
+              <button class="note" data-info="ev:root">.agent_reports/ &mdash; one root per project</button></div>
+            <div class="flowline">
+              <button class="fx" data-info="ev:order">research</button><span class="fa">&rarr;</span>
+              <button class="fx" data-info="ev:order">spec</button><span class="fa">&rarr;</span>
+              <button class="fx" data-info="ev:order">plans</button>
+              <span class="fn">one direction &mdash; a later stage never invents its own evidence</span>
+            </div>
+            <div class="buckets">{buckets}</div>
+            <div class="rules">{rules}</div>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="rail" id="n-guards">
+            <div class="rh"><h4>Guards</h4><span class="tag">FAIL-CLOSED</span></div>
+            <div class="rd">Wrap every layer to the left. Deterministic hooks run before the
+            tool call — the model judges, the code enforces.</div>
+            <div class="items">{guards}</div>
+            <div class="rfoot">{d['hard_total']} hard blocks of {d['hook_total']} hooks &middot;
+            write scope, spec read, artifact root, git state, memory path</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="loops" id="n-loops">
+        <div class="loops-head"><span class="ln">L6</span><h3>The harness watches itself</h3>
+          <button class="d" data-info="lp:self" style="border:0;background:none;cursor:pointer;font:inherit;font-size:12px;color:var(--text-3)">{d['loop_total']} loops that test, corroborate, and propose &mdash; none of them edits policy</button></div>
+        <div class="loop-grid">{loops}</div>
+      </div>
+    </div>"""
+
+
+CANVAS_JS = r"""
+(function () {
+  "use strict";
+  var INFO = JSON.parse(document.getElementById("info-data").textContent);
+
+  /* ── wires: measured from real element boxes, so any reflow stays correct ── */
+  var EDGES = [
+    ["n-utter", "n-route"],
+    ["n-route", "n-tracks"],
+    ["n-tracks", "n-fabric"],
+    ["n-fabric", "n-tiers"],
+    ["n-tiers", "n-art"]
+  ];
+  // The rails flank every layer, so a literal edge to one of them would misread as
+  // "only this layer". Their relationship is carried by position and copy instead.
+  var SIDE = [];
+
+  function draw() {
+    var svg = document.getElementById("wires");
+    var host = document.getElementById("diagram");
+    if (!svg || !host) return;
+    while (svg.lastChild && svg.lastChild.nodeName !== "defs") svg.removeChild(svg.lastChild);
+    var base = host.getBoundingClientRect();
+    var ns = "http://www.w3.org/2000/svg";
+    // userSpaceOnUse: a bounding-box gradient collapses on a zero-width vertical path.
+    var grad = document.getElementById("wg");
+    if (grad) grad.setAttribute("y2", String(Math.max(400, host.scrollHeight)));
+
+    function box(id) {
+      var el = document.getElementById(id);
+      if (!el) return null;
+      var r = el.getBoundingClientRect();
+      return { l: r.left - base.left, t: r.top - base.top, w: r.width, h: r.height };
+    }
+    function path(dAttr, dashed) {
+      if (!dashed) {
+        // Soft halo behind the wire. An SVG filter can't do this here: a zero-width
+        // vertical path gives an objectBoundingBox filter a zero-sized region.
+        var halo = document.createElementNS(ns, "path");
+        halo.setAttribute("d", dAttr);
+        halo.setAttribute("fill", "none");
+        halo.setAttribute("stroke", "#6D6DF6");
+        halo.setAttribute("stroke-width", "7");
+        halo.setAttribute("stroke-linecap", "round");
+        halo.setAttribute("opacity", ".16");
+        svg.appendChild(halo);
+      }
+      var p = document.createElementNS(ns, "path");
+      p.setAttribute("d", dAttr);
+      p.setAttribute("fill", "none");
+      p.setAttribute("stroke", dashed ? "var(--wire)" : "url(#wg)");
+      p.setAttribute("stroke-width", dashed ? "1.1" : "2");
+      p.setAttribute("stroke-linecap", "round");
+      if (dashed) { p.setAttribute("stroke-dasharray", "3 5"); p.setAttribute("opacity", ".7"); }
+      else { p.setAttribute("marker-end", "url(#arrow)"); }
+      svg.appendChild(p);
+    }
+    function dot(x, y) {
+      var c = document.createElementNS(ns, "circle");
+      c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", "3");
+      c.setAttribute("fill", "var(--wire)");
+      svg.appendChild(c);
+    }
+
+    EDGES.forEach(function (e) {
+      var a = box(e[0]), b = box(e[1]);
+      if (!a || !b) return;
+      var x = a.l + a.w / 2, y1 = a.t + a.h + 3, y2 = b.t - 3;
+      var mid = (y1 + y2) / 2;
+      path("M" + x + " " + y1 + " C " + x + " " + mid + ", " + x + " " + mid + ", " + x + " " + y2, false);
+      dot(x, y1);
+    });
+
+    SIDE.forEach(function (e) {
+      var a = box(e[0]), b = box(e[1]);
+      if (!a || !b) return;
+      var fromRight = e[2] === "right";
+      var x1 = fromRight ? a.l + a.w : a.l;
+      var x2 = fromRight ? b.l : b.l + b.w;
+      var y1 = a.t + Math.min(a.h * 0.4, 150);
+      var y2 = b.t + Math.min(b.h / 2, 90);
+      var cx = (x1 + x2) / 2;
+      path("M" + x1 + " " + y1 + " C " + cx + " " + y1 + ", " + cx + " " + y2 + ", " + x2 + " " + y2, true);
+    });
+  }
+
+  /* ── inspector ── */
+  var panel = document.getElementById("inspector");
+  function show(key) {
+    var item = INFO[key];
+    if (!item || !panel) return;
+    panel.querySelector(".k").textContent = item.kind;
+    panel.querySelector(".t").textContent = item.title;
+    panel.querySelector(".ib").textContent = item.body;
+    panel.querySelector(".im").textContent = item.meta || "";
+    panel.classList.add("on");
+  }
+  document.addEventListener("click", function (ev) {
+    var host = ev.target.closest ? ev.target.closest("[data-info]") : null;
+    if (host) { show(host.getAttribute("data-info")); return; }
+    if (panel && !(ev.target.closest && ev.target.closest(".inspector"))) panel.classList.remove("on");
+  });
+  var close = document.getElementById("insp-close");
+  if (close) close.addEventListener("click", function () { panel.classList.remove("on"); });
+
+  /* ── profile filter (toolbar + sidebar cards stay in sync) ── */
+  var filters = Array.prototype.slice.call(document.querySelectorAll("[data-p]"));
+  function applyProfile(p) {
+    filters.forEach(function (b) { b.classList.toggle("on", b.dataset.p === p); });
+    document.querySelectorAll("[data-profiles]").forEach(function (el) {
+      var set = (el.dataset.profiles || "").split(/\s+/);
+      el.classList.toggle("dim", p !== "all" && set.indexOf(p) === -1);
+    });
+    requestAnimationFrame(draw);
+  }
+  filters.forEach(function (b) {
+    b.addEventListener("click", function () {
+      applyProfile(b.classList.contains("on") && b.dataset.p !== "all" ? "all" : b.dataset.p);
+    });
+  });
+
+  /* ── jump list follows the canvas ── */
+  var canvas = document.querySelector(".canvas");
+  var links = Array.prototype.slice.call(document.querySelectorAll(".jump a[data-target]"));
+  links.forEach(function (a) {
+    a.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      var el = document.getElementById(a.dataset.target);
+      if (!el) return;
+      // Desktop: the canvas is the scroller. Stacked mobile: the page is.
+      if (canvas && canvas.scrollHeight > canvas.clientHeight + 4) {
+        canvas.scrollTo({ top: el.offsetTop - 34, behavior: "smooth" });
+      } else {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  });
+  if (canvas && links.length) {
+    canvas.addEventListener("scroll", function () {
+      var y = canvas.scrollTop + 110, cur = links[0];
+      links.forEach(function (a) {
+        var el = document.getElementById(a.dataset.target);
+        if (el && el.offsetTop <= y) cur = a;
+      });
+      links.forEach(function (a) { a.classList.toggle("on", a === cur); });
+    }, { passive: true });
+  }
+
+  draw();
+  window.addEventListener("resize", draw);
+  if (window.ResizeObserver) {
+    var host = document.getElementById("diagram");
+    if (host) new ResizeObserver(function () { draw(); }).observe(host);
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+})();
+"""
 
 
 def render_index(d: dict) -> str:
+    info_json = json.dumps(build_info(d), ensure_ascii=False).replace("</", "<\\/")
     return f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Agent Harness — one agent workflow, three harnesses</title>
-<meta name="description" content="A portable, deterministic operating layer for Claude Code, Codex, and OpenCode: routed capabilities, sealed dispatch, durable artifacts, persistent memory." />
+<meta name="description" content="A portable, deterministic operating layer for Claude Code, Codex, and OpenCode: routed capabilities, sealed N-way cross-harness dispatch, a live Fleet view, per-role model tiers, a fixed artifact system, and one persistent memory store." />
 <!-- GENERATED by tools/render-landing.py — DO NOT EDIT BY HAND. -->
 <style>{CSS}</style>
 </head>
 <body>
-{nav('home')}
+<div class="shell">
 
-<div class="hero-shell"><div class="wrap">
-  <header class="hero" id="install">
-    <div class="hero-badge">v2.0 released <span class="sep">·</span> MIT licensed <span class="sep">·</span> {d['cap_total']} capabilities</div>
-    <h1>One agent workflow.<br /><span class="grad">Three harnesses.</span></h1>
-    <p class="sub">A portable, deterministic operating layer for coding agents —
-    routed capabilities, sealed cross-harness dispatch, durable artifacts, and
-    persistent memory. Write the contract once; run it everywhere.</p>
-    <div class="runtimes">
-      <span><i class="dot"></i>Claude Code</span>
-      <span><i class="dot"></i>Codex CLI</span>
-      <span><i class="dot"></i>OpenCode</span>
+  <aside class="side"><div class="side-in">
+    <a class="brand" href="index.html">{LOGO}<span>Agent&nbsp;Harness</span></a>
+    <div class="badges">
+      <span class="badge hot">v2.0</span>
+      <span class="badge">MIT</span>
+      <span class="badge">{d['cap_total']} capabilities</span>
+      <span class="badge">{d['unit_total']} role units</span>
+      <span class="badge">{d['hook_total']} hooks</span>
     </div>
-    <div class="install">
-      <span class="prompt">$</span>
+
+    <h1>One agent workflow.<br /><span class="grad">Three harnesses.</span></h1>
+    <p class="sub">A portable, deterministic operating layer for coding agents. Describe the
+    outcome once — routing, cross-harness dispatch, model selection, verification, and evidence
+    are the harness's job, not yours.</p>
+    <div class="runtimes">
+      <span><i></i>Claude Code</span><span><i></i>Codex CLI</span><span><i></i>OpenCode</span>
+    </div>
+
+    <div class="install" id="install">
+      <span class="p">$</span>
       <code id="cmd">{INSTALL_CMD}</code>
       <button onclick="{html.escape(COPY_JS, quote=True)}">Copy</button>
     </div>
-    <p class="fineprint">SHA-256 checksummed release · <a href="{REPO_URL}/releases">release notes ↗</a></p>
-  </header>
-</div></div>
+    <p class="fine">SHA-256 checksummed release &middot;
+      <a href="{REPO_URL}/releases">release notes</a></p>
 
-<div class="wrap">
-  <section id="features">
-    <div class="kicker">Why a harness layer</div>
-    <h2>Vendor CLIs disagree on everything.<br />Your workflow shouldn't.</h2>
-    <p class="lede">The harness keeps one portable semantic core —
-    <span class="mono">core → capabilities/roles → adapters</span> — and projects it
-    into each runtime's native skills, hooks, agents, and commands.</p>
-    <div class="grid">
-      <div class="card"><div class="icon">{ICONS['route']}</div>
-        <h3>Routed capabilities</h3>
-        <p>{d['entry_total']} entry routers behind one routing contract: every material task
-        gets an explicit route card, a sealed intensity, and a five-field completion report.</p></div>
-      <div class="card"><div class="icon">{ICONS['net']}</div>
-        <h3>Cross-harness orchestration</h3>
-        <p>Standard+ work compiles an immutable route and dispatches registered headless
-        workers across model families — reviews land as files, watched live on the Fleet dashboard.</p></div>
-      <div class="card"><div class="icon">{ICONS['shield']}</div>
-        <h3>Guards, not vibes</h3>
-        <p>Write scopes, spec-read gates, artifact ordering, and route participation are
-        enforced by hooks and scripts. The model judges; the code enforces.</p></div>
-      <div class="card"><div class="icon">{ICONS['db']}</div>
-        <h3>Memory that survives sessions</h3>
-        <p>One SQLite store with tiered records, capsule-index recall on every prompt, and
-        automatic session distillation — no manual “remember this”.</p></div>
-      <div class="card"><div class="icon">{ICONS['blueprint']}</div>
-        <h3>Blueprint-governed pipelines</h3>
-        <p>Research → spec → code → experiment, with PRD updates versioned and drift
-        surfaced instead of silently absorbed.</p></div>
-      <div class="card"><div class="icon">{ICONS['units']}</div>
-        <h3>Roles as a catalog</h3>
-        <p>{d['unit_total']} portable units — planner, reviewer, implementer, and material personas —
-        each worker runs a sealed role, model profile, and write scope.</p></div>
-    </div>
-  </section>
-
-  <section id="how">
-    <div class="kicker">How it works</div>
-    <h2>Describe the outcome. The harness closes the loop.</h2>
-    <p class="lede">“Implement and test the login API, then leave a change report” is a
-    complete instruction — routing, staging, verification, and evidence are the harness's job.</p>
-    <div class="pipeline">
-      <span class="stage">route card</span><span class="arrow">→</span>
-      <span class="stage hot">plan</span><span class="arrow">→</span>
-      <span class="stage hot">execute</span><span class="arrow">→</span>
-      <span class="stage hot">test</span><span class="arrow">→</span>
-      <span class="stage hot">report</span><span class="arrow">→</span>
-      <span class="stage">durable evidence</span>
+    <div class="sblock">
+      <div class="skick">The map</div>
+      <div class="jump">
+        <a href="#n-utter" data-target="n-utter" class="on"><span class="n">L0</span>One sentence in</a>
+        <a href="#n-route" data-target="n-route"><span class="n">L1</span>Routing contract</a>
+        <a href="#n-tracks" data-target="n-tracks"><span class="n">L2</span>Pipelines</a>
+        <a href="#n-fabric" data-target="n-fabric"><span class="n">L3</span>Dispatch fabric &amp; Fleet</a>
+        <a href="#n-tiers" data-target="n-tiers"><span class="n">L4</span>Model tier per role</a>
+        <a href="#n-art" data-target="n-art"><span class="n">L5</span>Fixed artifact system</a>
+        <a href="#n-loops" data-target="n-loops"><span class="n">L6</span>Self-watching loops</a>
+      </div>
     </div>
 
-    <div class="arch" style="margin-top:44px">
-      <div class="layer">
-        <h4><span class="pip"></span>Core contracts</h4>
+    <div class="sblock">
+      <div class="skick">What makes it different</div>
+
+      <div class="flag">
+        <h3><span class="dot"></span>Sealed N-way dispatch</h3>
         <ul>
-          <li><span class="mono">core/WORKFLOW.md</span> — routing</li>
-          <li><span class="mono">core/CONVENTIONS.md</span> — QA &amp; roles</li>
-          <li><span class="mono">core/OPERATIONS.md</span> — dispatch</li>
-          <li><span class="mono">core/MEMORY.md</span> — memory</li>
+          <li><b>Bounded depth</b> — d0 main, d1 owner, d2 stages. Depth 3 is forbidden and
+          workers never route.</li>
+          <li><b>N-way groups</b> — 2–4 declared legs start in one transaction. A capacity
+          shortage creates zero rows, not a half-started group.</li>
+          <li><b>Different families by default</b> — a checker lands on a different model family
+          than its maker; one-harness routing is the exception with a recorded reason.</li>
+          <li><b>Recorded degradation</b> — same-harness → cross-harness → native → inline, each
+          hop keeping the same route id, scope, and attempt identity.</li>
         </ul>
       </div>
-      <div class="layer">
-        <h4><span class="pip"></span>Portable catalog</h4>
+
+      <div class="flag">
+        <h3><span class="dot"></span>Fleet, over the same registry</h3>
         <ul>
-          <li>{d['cap_total']} capabilities · {d['entry_total']} entry routers</li>
-          <li>{d['unit_total']} role units with sealed profiles</li>
-          <li>Topology registry &amp; sealed routes</li>
-          <li>Memory store + recall bridge</li>
+          <li><b>One attempt registry</b> — a start writes its row before it claims a fenced PID,
+          so a duplicate claim spawns zero children.</li>
+          <li><b>PID-exact liveness</b> — ALIVE · SUSPECT · DEAD · EXITED instead of waiting on a
+          notification that may never arrive.</li>
+          <li><b>Nothing is dropped</b> — orphaned rows are surfaced, not hidden, next to context
+          gauge and per-session token accounting.</li>
         </ul>
       </div>
-      <div class="layer">
-        <h4><span class="pip"></span>Runtime adapters</h4>
+
+      <div class="flag">
+        <h3><span class="dot"></span>Model tier chosen per role</h3>
         <ul>
-          <li>Claude Code — hooks · skills · fleet</li>
-          <li>Codex CLI — preflight · managed entry</li>
-          <li>OpenCode — plugin · commands</li>
+          <li><b>Two axes, never merged</b> — {d['role_total']} portable roles say what a node does;
+          <code>deep</code> / <code>balanced-deep</code> / <code>light</code> / <code>mini</code>
+          say what it may spend.</li>
+          <li><b>Sealed at compile time</b> — a caller can't swap a sealed profile for a trailing
+          model flag, and <code>mini</code> is refused for substantive nodes.</li>
+          <li><b>Intent survives failover</b> — a capacity substitute preserves and reports the
+          profile it stood in for.</li>
+        </ul>
+      </div>
+
+      <div class="flag">
+        <h3><span class="dot"></span>A fixed artifact system</h3>
+        <ul>
+          <li><b>One root per project</b> — <code>.agent_reports/</code>, resolved from the primary
+          checkout; worktree snapshot writes fail closed.</li>
+          <li><b>Fixed order</b> — research → spec → plans. No code without a spec, no spec without
+          prior evidence.</li>
+          <li><b>One owner per artifact</b> — and spec revisions snapshot the prior version instead
+          of overwriting it.</li>
+        </ul>
+      </div>
+
+      <div class="flag">
+        <h3><span class="dot"></span>Memory that survives the session</h3>
+        <ul>
+          <li><b>Recall can't be skipped</b> — each prompt runs a bounded capsule probe and writes a
+          receipt that material work is gated on.</li>
+          <li><b>No classifier decides for you</b> — code owns scope fences and limits; the agent
+          reads the full record and judges relevance.</li>
+          <li><b>Sessions distill themselves</b> — a no-tools distiller writes purpose-labelled
+          records at session end. No manual “remember this”.</li>
+          <li><b>History is never lost</b> — supersede over delete, a graveyard for restores, and
+          pending handoffs that fail closed until consumed.</li>
+        </ul>
+      </div>
+
+      <div class="flag">
+        <h3><span class="dot"></span>Guards instead of good intentions</h3>
+        <ul>
+          <li><b>{d['hard_total']} hard blocks</b> of {d['hook_total']} hooks — write scope, spec read,
+          artifact root, git state, and memory path are denied before the tool call, not flagged after.</li>
+          <li><b>Route participation is required</b> — a source edit with no compiled route for this
+          working directory is refused, hotfix included.</li>
+          <li><b>Behavior is regression-tested</b> — the drill loop replays fixtures and scores them
+          after instruction changes, then drafts a diagnosis without applying it.</li>
         </ul>
       </div>
     </div>
-    <div class="maplink-card">
-      <div><strong>Explore the full agent map</strong><br />
-        <span style="font-size:14px;color:var(--text-2)">Every capability, pipeline stage, and profile — visualized.</span></div>
-      <a class="go" href="map.html">Open the map →</a>
-    </div>
-  </section>
 
-  <section id="profiles">
-    <div class="kicker">Profiles</div>
-    <h2>Start small. Grow without forking.</h2>
-    <p class="lede">Profiles are manifest-computed; dependency closure is automatic and
-    switching later is one command.</p>
-    <div class="profiles">
-      <div class="profile">
-        <h3>starter</h3>
-        <div class="count">{d['starter_caps']}<small> capabilities</small></div>
-        <p>Everyday essentials: the code pipeline, analysis, memory, and reports.</p>
-        <code>harness install claude --profile starter</code>
-      </div>
-      <div class="profile featured">
-        <span class="tag">DEFAULT</span>
-        <h3>builder</h3>
-        <div class="count">{d['builder_caps']}<small> capabilities</small></div>
-        <p>Analyze, specify, implement, verify, and ship software with project memory.</p>
-        <code>harness install claude --profile builder</code>
-      </div>
-      <div class="profile">
-        <h3>full</h3>
-        <div class="count">{d['full_caps']}<small> capabilities</small></div>
-        <p>Everything — research writing, the design pipeline, experiments, operations.</p>
-        <code>harness install claude --profile full</code>
+    <div class="sblock">
+      <div class="skick">Profiles</div>
+      <p style="margin-bottom:12px">Manifest-computed with automatic dependency closure. Tap one to
+      filter the map to exactly what that install exposes.</p>
+      <div class="profs">
+        <button class="prof" data-p="starter"><span class="cnt">{d['starter_caps']}</span>
+          <span><span class="nm">starter</span><br /><span class="ds">the code pipeline, analysis, memory</span></span></button>
+        <button class="prof" data-p="builder"><span class="cnt">{d['builder_caps']}</span>
+          <span><span class="nm">builder</span><br /><span class="ds">analyze → spec → implement → ship</span></span>
+          <span class="tag">DEFAULT</span></button>
+        <button class="prof" data-p="full"><span class="cnt">{d['full_caps']}</span>
+          <span><span class="nm">full</span><br /><span class="ds">research, documents, design, experiments</span></span></button>
       </div>
     </div>
-  </section>
 
-  <section id="quickstart">
-    <div class="kicker">Quickstart</div>
-    <h2>Three steps to a routed workflow.</h2>
-    <ol class="steps" style="margin-top:28px">
-      <li><span class="n"></span><div class="body"><b>Install the verified release.</b><br />
-        <code style="display:block;margin-top:8px;padding:10px 13px;border-radius:10px;overflow-x:auto;white-space:nowrap">{INSTALL_CMD}</code></div></li>
-      <li><span class="n"></span><div class="body"><b>Activate a profile per runtime.</b><br />
-        <code>harness install claude --profile builder</code> — repeat with
-        <code>codex</code> / <code>opencode</code>, then <code>harness verify</code>.</div></li>
-      <li><span class="n"></span><div class="body"><b>Describe the outcome in your agent CLI.</b><br />
-        “Implement and test the login API, then leave a change report.” The harness
-        proposes the route card and closes the loop with durable evidence.</div></li>
-    </ol>
-  </section>
+    <div class="sblock">
+      <div class="skick">Quickstart</div>
+      <ol class="steps">
+        <li><span class="n"></span><div><b>Install the verified release.</b> One line, SHA-256
+          checksummed, no clone — and <code>verify</code> / <code>update</code> /
+          <code>uninstall</code> stay reversible.</div></li>
+        <li><span class="n"></span><div><b>Activate a profile per runtime.</b>
+          <code>harness install claude --profile builder</code>, repeat for
+          <code>codex</code> / <code>opencode</code>, then <code>harness verify</code>.</div></li>
+        <li><span class="n"></span><div><b>Describe the outcome.</b> The harness proposes the route
+          card and closes the loop with durable evidence.</div></li>
+      </ol>
+    </div>
+
+    <div class="sblock">
+      <div class="skick">Go deeper</div>
+      <div class="slinks">
+        <a href="map.html">Capability catalog</a>
+        <a href="{REPO_URL}">GitHub</a>
+        <a href="{REPO_URL}/releases">Releases</a>
+        <a href="{REPO_URL}/blob/main/MANUAL.md">Manual</a>
+      </div>
+    </div>
+
+    <div class="sfoot">Agent Harness — a portable operating layer for coding agents. MIT licensed.</div>
+  </div></aside>
+
+  <main class="stage">
+    <div class="bar">
+      <div class="ttl">Agent map <span>&mdash; the whole harness, one canvas</span></div>
+      <div class="legend">
+        <span><i class="e"></i>entry router</span>
+        <span><i class="s"></i>stage</span>
+        <span><i class="g"></i>gate</span>
+      </div>
+      <div class="filters">
+        <span class="lab">profile</span>
+        <button class="on" data-p="all">all</button>
+        <button data-p="starter">starter</button>
+        <button data-p="builder">builder</button>
+        <button data-p="full">full</button>
+      </div>
+    </div>
+
+    <div class="canvas">{build_canvas(d)}</div>
+
+    <div class="inspector" id="inspector">
+      <div class="ih"><span class="k"></span><span class="t"></span>
+        <button id="insp-close" aria-label="close">&times;</button></div>
+      <div class="ib"></div>
+      <div class="im"></div>
+    </div>
+  </main>
+
 </div>
-{FOOTER}
+<script type="application/json" id="info-data">{info_json}</script>
+<script>{CANVAS_JS}</script>
 </body>
 </html>
 """
@@ -580,7 +1502,7 @@ def render_index(d: dict) -> str:
 MAP_GROUP_ORDER = [
     ("research", "Research first", "Ground new intent in evidence before building.",
      ["autopilot-research", "analyze-project"]),
-    ("code", "Code & experiments", "Spec-governed implementation and rapid experiment loops.",
+    ("code", "Code &amp; experiments", "Spec-governed implementation and rapid experiment loops.",
      ["autopilot-spec", "autopilot-code", "autopilot-lab", "autopilot-ship",
       "code-plan", "code-execute", "code-refine", "code-test", "code-report"]),
     ("docs", "Documents", "Papers, reports, proposals — drafted, refined, applied.",
@@ -589,9 +1511,23 @@ MAP_GROUP_ORDER = [
     ("design", "Design", "Reference-grounded visual design with token contracts.",
      ["autopilot-design", "design-init", "design-refs", "design-tokens",
       "design-components", "design-review", "design-handoff"]),
-    ("ops", "Cross-project & operations", "Continuity, inspection, and the user profile.",
+    ("ops", "Cross-project &amp; operations", "Continuity, inspection, and the user profile.",
      ["analyze-user", "audit", "post-it"]),
 ]
+
+MAP_JS = r"""
+  var buttons = document.querySelectorAll('#filters button');
+  buttons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      buttons.forEach(function (b) { b.classList.toggle('on', b === btn); });
+      var p = btn.dataset.p;
+      document.querySelectorAll('.cap').forEach(function (card) {
+        var set = (card.dataset.profiles || '').split(/\s+/);
+        card.classList.toggle('dim', p !== 'all' && set.indexOf(p) === -1);
+      });
+    });
+  });
+"""
 
 
 def render_map(d: dict) -> str:
@@ -639,62 +1575,50 @@ def render_map(d: dict) -> str:
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Agent map — Agent Harness</title>
-<meta name="description" content="Every Agent Harness capability, pipeline stage, and profile — visualized." />
+<title>Capability catalog — Agent Harness</title>
+<meta name="description" content="Every Agent Harness capability, pipeline stage, and profile membership." />
 <!-- GENERATED by tools/render-landing.py — DO NOT EDIT BY HAND. -->
 <style>{CSS}</style>
 </head>
-<body>
-{nav('map')}
-
-<div class="hero-shell"><div class="wrap">
-  <header class="map-hero">
-    <div class="kicker">Agent map</div>
-    <h1>The whole harness, <span class="grad">at a glance.</span></h1>
-    <p>One portable catalog projected into three runtimes. Entry routers own whole
-    pipelines; stages are the sealed workers they dispatch. Filter by profile to see
-    exactly what an installation exposes.</p>
-    <div class="stats">
-      <div class="stat"><b>{d['cap_total']}</b><span>capabilities</span></div>
-      <div class="stat"><b>{d['entry_total']}</b><span>entry routers</span></div>
-      <div class="stat"><b>{d['unit_total']}</b><span>role units</span></div>
-      <div class="stat"><b>3</b><span>runtimes</span></div>
+<body class="page">
+<div class="shell">
+  <main class="stage">
+    <div class="bar">
+      <a class="ttl" href="index.html" style="display:flex;align-items:center;gap:9px">{LOGO}
+        <span style="color:var(--text);font-weight:650">Agent Harness</span></a>
+      <div class="filters">
+        <span class="lab">profile</span>
+        <span id="filters" style="display:flex;gap:4px">
+          <button class="on" data-p="all">all</button>
+          <button data-p="starter">starter &middot; {d['starter_caps']}</button>
+          <button data-p="builder">builder &middot; {d['builder_caps']}</button>
+          <button data-p="full">full &middot; {d['full_caps']}</button>
+        </span>
+      </div>
     </div>
-  </header>
-</div></div>
 
-<div class="wrap">
-  <section style="padding-top:40px">
-    <div class="filters" id="filters">
-      <button class="on" data-p="all">All</button>
-      <button data-p="starter">starter · {d['starter_caps']}</button>
-      <button data-p="builder">builder · {d['builder_caps']}</button>
-      <button data-p="full">full · {d['full_caps']}</button>
+    <div class="canvas">
+      <div class="mapwrap">
+        <a class="backhome" href="index.html">&larr; Back to the map</a>
+        <div class="maphead">
+          <h1>Every capability, <span class="grad">one catalog.</span></h1>
+          <p>One portable catalog projected into three runtimes. Entry routers own whole
+          pipelines; stages are the sealed workers they dispatch. Filter by profile to see
+          exactly what an installation exposes.</p>
+          <div class="stats">
+            <div class="stat"><b>{d['cap_total']}</b><span>capabilities</span></div>
+            <div class="stat"><b>{d['entry_total']}</b><span>entry routers</span></div>
+            <div class="stat"><b>{d['unit_total']}</b><span>role units</span></div>
+            <div class="stat"><b>{d['role_total']}</b><span>model roles</span></div>
+            <div class="stat"><b>3</b><span>runtimes</span></div>
+          </div>
+        </div>
+        {"".join(groups_html)}
+      </div>
     </div>
-    {"".join(groups_html)}
-  </section>
-
-  <section>
-    <div class="maplink-card">
-      <div><strong>Ready to run it?</strong><br />
-        <span style="font-size:14px;color:var(--text-2)">One line installs the checksummed release for every runtime.</span></div>
-      <a class="go" href="index.html#install">Install Agent Harness →</a>
-    </div>
-  </section>
+  </main>
 </div>
-{FOOTER}
-
-<script>
-  const buttons = document.querySelectorAll('#filters button');
-  buttons.forEach(btn => btn.addEventListener('click', () => {{
-    buttons.forEach(b => b.classList.toggle('on', b === btn));
-    const p = btn.dataset.p;
-    document.querySelectorAll('.cap').forEach(card => {{
-      const set = (card.dataset.profiles || '').split(/\\s+/);
-      card.classList.toggle('dim', p !== 'all' && !set.includes(p));
-    }});
-  }}));
-</script>
+<script>{MAP_JS}</script>
 </body>
 </html>
 """
