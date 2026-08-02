@@ -78,6 +78,48 @@ else
   bad "route-approved spec_touch write should pass with no upstream research"
 fi
 
+printf '{"route_id":"rt-fixture","spec_touch":false,"nodes":[{"id":"plan","write_scope":["plan/**"]}]}\n' > "$TMP/route-plan.json"
+mkdir -p "$TMP/proj/.agent_reports/plans/2026-08-03_fixture/plan" "$TMP/proj/.agent_reports/test_logs" "$TMP/proj/.agent_reports/.runtime"
+if AGENT_ROUTE_FILE="$TMP/route-plan.json" AGENT_ROUTE_ID=rt-fixture AGENT_ROUTE_NODE=plan \
+  "$ART" --file "$TMP/proj/.agent_reports/plans/2026-08-03_fixture/plan/plan.md" >/tmp/art_scope_in.out 2>/tmp/art_scope_in.err; then
+  ok "artifact write inside the declared node scope passes"
+else
+  bad "artifact write inside the declared node scope should pass"
+fi
+if AGENT_ROUTE_FILE="$TMP/route-plan.json" AGENT_ROUTE_ID=rt-fixture AGENT_ROUTE_NODE=plan \
+  "$ART" --file "$TMP/proj/.agent_reports/test_logs/run.log" >/tmp/art_scope_out.out 2>/tmp/art_scope_out.err; then
+  bad "artifact write outside the declared node scope should fail"
+else
+  [ "$?" -eq 2 ] && grep -q 'artifact-write-outside-node-scope' /tmp/art_scope_out.err \
+    && grep -q 'rt-fixture' /tmp/art_scope_out.err && ok "out-of-scope artifact write is a route-addressed structured failure" \
+    || bad "out-of-scope artifact write missing structured route failure"
+fi
+if "$ART" --file "$TMP/proj/.agent_reports/test_logs/run.log" >/tmp/art_scope_noroute.out 2>/tmp/art_scope_noroute.err; then
+  ok "artifact write with no route declared stays unbound"
+else
+  bad "artifact write with no route declared should stay unbound"
+fi
+if AGENT_ROUTE_FILE="$TMP/route-plan.json" AGENT_ROUTE_ID=rt-fixture AGENT_ROUTE_NODE=plan \
+  "$ART" --file "$TMP/proj/.agent_reports/.runtime/state.json" >/tmp/art_scope_dot.out 2>/tmp/art_scope_dot.err; then
+  ok "dot-prefixed runtime state is exempt from node scope binding"
+else
+  bad "dot-prefixed runtime state should be exempt from node scope binding"
+fi
+printf '{"route_id":"rt-fixture","spec_touch":false,"nodes":[{"id":"inline","write_scope":["source-scoped","plans/<cycle>/**"]}]}\n' > "$TMP/route-owner.json"
+if AGENT_ROUTE_FILE="$TMP/route-owner.json" AGENT_ROUTE_ID=rt-fixture AGENT_ROUTE_NODE=inline \
+  "$ART" --file "$TMP/proj/.agent_reports/plans/2026-08-03_fixture/plan/plan.md" >/tmp/art_cycle_in.out 2>/tmp/art_cycle_in.err; then
+  ok "a <cycle> placeholder scope binds one path segment"
+else
+  bad "a <cycle> placeholder scope should bind one path segment"
+fi
+if AGENT_ROUTE_FILE="$TMP/route-owner.json" AGENT_ROUTE_ID=rt-fixture AGENT_ROUTE_NODE=inline \
+  "$ART" --file "$TMP/proj/.agent_reports/test_logs/run.log" >/tmp/art_cycle_out.out 2>/tmp/art_cycle_out.err; then
+  bad "a worktree-only scope should not authorize an unrelated artifact write"
+else
+  [ "$?" -eq 2 ] && ok "a worktree-only scope does not authorize an unrelated artifact write" \
+    || bad "worktree-only scope violation wrong exit"
+fi
+
 echo "== source-only worktree artifact guard =="
 mkdir -p "$TMP/artrepo/.agent_reports/_internal" "$TMP/artrepo-wt"
 (

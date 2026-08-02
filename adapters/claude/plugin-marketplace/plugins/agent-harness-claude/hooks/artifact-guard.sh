@@ -130,6 +130,47 @@ PY
     fi ;;
 esac
 
+# A route-backed artifact write must land inside the active node's declared
+# write scope. Declaring a scope and then writing outside it was unchecked at
+# every layer: only `spec/` was bound, so a worker could emit any other
+# artifact its node never claimed. Node scopes are cycle-relative vocabulary
+# (`plan/**`, `dev_logs/**`, `plans/<cycle>/**`) and the route record carries no
+# resolved cycle, so a scope matches at any depth beneath the artifact root and
+# `<cycle>`/`<topic>` are single-segment wildcards. Only worker-authored regions
+# are bound: artifact-root files and dot-prefixed machine state belong to the
+# runtime, and `_internal/` already exited above.
+case "$fp" in
+  "$cr"/*/*)
+    if [ -n "$route_file" ]; then
+      if ! python3 - "$route_file" "$route_id" "$route_node" "$cr" "$fp" <<'PY'
+import fnmatch,json,sys
+from pathlib import Path
+WORKTREE_ONLY={"source-scoped","target-artifact"}
+def pattern(scope):
+    root=scope[:-3] if scope.endswith("/**") else scope
+    if scope in WORKTREE_ONLY or root=="source" or root.startswith("source/"): return None
+    return scope.replace("<cycle>","*").replace("<topic>","*").replace("/**","/*")
+def bound(rel,pat):
+    segments=rel.split("/")
+    return any(fnmatch.fnmatch("/".join(segments[i:]),pat) for i in range(len(segments)))
+try:
+    route=json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+    if route.get("route_id")!=sys.argv[2]: raise ValueError("route id mismatch")
+    node=next(row for row in route["nodes"] if row["id"]==sys.argv[3])
+    rel=Path(sys.argv[5]).relative_to(Path(sys.argv[4])).as_posix()
+    ok=any(part.startswith(".") for part in rel.split("/")) or any(
+        bound(rel,pat) for pat in filter(None,map(pattern,node["write_scope"])))
+except Exception:
+    ok=False
+raise SystemExit(0 if ok else 1)
+PY
+      then
+        route_failure "artifact-write-outside-node-scope"
+        exit 2
+      fi
+    fi ;;
+esac
+
 # Source-code and artifact edits are not blocked here. UserPromptSubmit
 # routing and convention steer them through autopilot-code.
 exit 0
