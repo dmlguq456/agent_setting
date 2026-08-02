@@ -66,4 +66,4 @@ At evaluation completion, emit the `run.json best` result plus its delta from th
 - Lab continues to generate its existing audio/media playback page at `report/report.html`, including separated audio, spectrograms, `<audio>`, and `<img>` embeds.
 - `autopilot-draft` or design produces rich prose HTML. Lab does not generate prose HTML itself.
 
-The statement that draft/design owns `report/` applies only to prose reports; it does not prohibit lab's audio HTML. These may coexist with `REPORT.md`: lab Markdown, lab audio/media HTML, and draft/design prose HTML.
+The statement that draft/design owns `report/` applies only to prose reports; it does not prohibit lab's audio HTML. These may coexist with `REPORT.md`: lab Markdown, lab audio/media HTML, and draft/design prose HTML. Coexistence is not equivalence: each is a distinct representation with its own `roles` in the manifest `bundle`, and only an explicit `bundle.equivalence_groups` entry declares two of them equivalent.

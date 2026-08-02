@@ -63,9 +63,9 @@ Embed every generated figure in `REPORT.md` with `![<caption>](figures/<plot>.pn
 **E3-5. Optional formal report** for `--report`, `보고서 써줘`, `공유용`, or high-stakes publication:
 
 - **General prose report:** hand off to `autopilot-draft --mode doc` with `summary.md`, `STORY.md`, `figures/`, and run metrics. Draft owns prose generation and produces `documents/{date}_{slug}/`; eval only requests the handoff.
-- **Playback HTML for audio/media experiments:** have the `material/figure-gen` unit generate separated audio, spectrogram segments, and embedded `<audio>`/`<img>` in `experiments/{date}_{slug}/report/report.html`. Markdown previews block `<audio>`, so audio domains default to HTML. Split long audio into pages of bounded segments. When necessary, serve locally through `python -m http.server --bind 0.0.0.0 <port>` and provide the URL.
+- **Playback HTML for audio/media experiments:** have the `material/figure-gen` unit generate separated audio, spectrogram segments, and embedded `<audio>`/`<img>` in `experiments/{date}_{slug}/report/report.html`. Markdown previews block `<audio>`, so an audio domain makes this HTML the primary `interactive` playback representation and `REPORT.md` its `summary`/`navigation` companion; they are not interchangeable equivalent formats. Declare both in the manifest `bundle` with one shared `title` and `primary_representation_id`. Split long audio into pages of bounded segments. When necessary, serve locally through `python -m http.server --bind 0.0.0.0 <port>` and provide the URL.
 
-`REPORT.md` remains the default self-contained deliverable. Prose-pipeline output and playback HTML are optional layers; when both exist, let prose link relatively to the HTML comparison.
+`REPORT.md` remains the default self-contained deliverable. Prose-pipeline output and playback HTML are optional layers; when both exist, let prose link relatively to the HTML comparison. Coexistence is not equivalence: declare it in `bundle.equivalence_groups` with the shared title and declared ordered section identity, or leave it undeclared.
 
 **E3-4. Save and finalize:**
 
