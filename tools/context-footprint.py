@@ -98,8 +98,11 @@ def entry_routers(root: Path) -> list[str]:
     manifest = json.loads((root / "harness-manifest.json").read_text(encoding="utf-8"))
     entries = sorted(name for name, spec in manifest["capabilities"].items()
                      if spec["invocation"]["class"] == "entry-router")
-    if len(entries) != 13:
-        raise ValueError(f"expected exactly 13 entry routers, got {len(entries)}")
+    # Count-bound on purpose: an unnoticed entry-router gain or loss silently
+    # reshapes this report. Update it in the same commit that adds or retires a
+    # router — 7283cd48 retired `autopilot-note` and left this at 13.
+    if len(entries) != 12:
+        raise ValueError(f"expected exactly 12 entry routers, got {len(entries)}")
     return entries
 
 
