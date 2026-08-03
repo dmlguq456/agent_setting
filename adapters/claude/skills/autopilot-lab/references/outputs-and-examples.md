@@ -6,6 +6,7 @@
 ├── {date}_{slug}/                  One experiment per directory
 │   ├── pipeline_state.yaml         [T1] Resume state for --from: mode, parent, and phases
 │   ├── run.json                    [T1] Machine-readable run manifest: born running, then done+best; parent is lineage SoT
+│   ├── _internal/configs/          Exact sealed config snapshots and provenance manifests
 │   ├── metrics.jsonl               [T1] Append-only per-step chart stream: {step,split,name,value,ts}
 │   ├── REPORT.md                   [T1] Self-contained final evaluation report with figures inline
 │   ├── STORY.md                    [T1] Accumulated narrative: motivation, parent, attempt, result
@@ -77,7 +78,7 @@ Once a lab prototype works:
 - For library or publication-code cleanup, run `/autopilot-code "X 라이브러리화"`.
 - For PRD consolidation, run `/autopilot-spec --mode research,cli`.
 
-Lab keeps each experiment's summary within one screen, but once the intent becomes productization or library work, graduate it to autopilot-code.
+Lab keeps each experiment's summary within one screen, but once the intent becomes productization or library work, graduate it to autopilot-code. A winning config is handed off for user-approved promotion to `configs/`; lab never overwrites the canonical root automatically.
 
 ## Memory candidates
 

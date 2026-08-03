@@ -21,7 +21,7 @@ Do not let stages write the same file concurrently without the OPERATIONS §5.8 
 
 ### E1 — One-screen eval specification
 
-**E1-1. Resolve the target.** Use `--from`, the latest pending `_RUNLOG` row, or `--parent` to select the experiment and checkpoint. Infer evaluation data and metrics from the existing test set or new-data request.
+**E1-1. Resolve the target.** Use `--from`, the latest pending `_RUNLOG` row, or `--parent` to select the experiment and checkpoint. Prefer the execution-time config snapshot and provenance manifest; never infer the current config from a checkpoint directory name. Historical compatibility requires an explicit migration map or provenance manifest. Infer evaluation data and metrics from the existing test set or new-data request.
 
 **E1-2. Confirm in one screen**, localized to the user's communication language:
 
@@ -37,7 +37,7 @@ Comparison:     <sibling, parent, or paper baseline>
 Proceed? (continue / revise / stop)
 ```
 
-**E1-3. Create `run.json` only for direct eval-only entry.** If `experiments/<id>/run.json` does not exist, create it here; never recreate or overwrite the file born in setup S3-2. For `eval --parent`, write `status: "running"`, `skill_mode: "eval"` from `pipeline_state.mode`, parent slug, current ISO 8601 `started_at`, parent config path or null `config_ref`, and the evaluated parent checkpoint path. Omit `best`. E3-4 updates it to done with `best` and `ended_at`.
+**E1-3. Create `run.json` only for direct eval-only entry.** If `experiments/<id>/run.json` does not exist, create it here; never recreate or overwrite the file born in setup S3-2. For `eval --parent`, write `status: "running"`, `skill_mode: "eval"` from `pipeline_state.mode`, parent slug, current ISO 8601 `started_at`, parent config path or null `config_ref`, and the evaluated parent checkpoint path. Prefer the sealed snapshot/manifest and do not infer config from checkpoint directory names. Omit `best`. E3-4 updates it to done with `best` and `ended_at`.
 
 ### E2 — Execution guidance
 

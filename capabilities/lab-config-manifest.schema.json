@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lab-config-manifest.schema.json",
+  "title": "Lab config provenance manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "config_ref", "run_id", "source_path",
+    "source_sha256", "source_commit", "source_dirty", "snapshot_path",
+    "snapshot_sha256", "config_layout"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "config_ref": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "source_path": {"type": "string", "minLength": 1},
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_commit": {"type": "string"},
+    "source_dirty": {"type": "boolean"},
+    "snapshot_path": {"type": "string", "minLength": 1},
+    "snapshot_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "config_layout": {"type": "string", "minLength": 1}
+  }
+}

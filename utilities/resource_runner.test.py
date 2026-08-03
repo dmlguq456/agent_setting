@@ -13,6 +13,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+CLEAN_ENV = {k: v for k, v in os.environ.items() if k != "AGENT_ARTIFACT_ROOT"}
 RUNNER = ROOT / "utilities" / "resource-runner.py"
 ROUTER = ROOT / "utilities" / "capability-route.py"
 SMOKE = ROOT / "tools" / "smoke-attestation.py"
@@ -73,11 +74,30 @@ class TestRunner(unittest.TestCase):
             sys.executable, str(RUNNER), "--registry", str(self.registry), *args,
         ], cwd=cwd, text=True, capture_output=True)
 
-    def start_args(self, route=None, node="full-run", smoke=None):
-        return ("start", "--run-id", "case", "--cwd", str(self.repo), "--log", str(self.log),
+    def start_args(self, route=None, node="full-run", smoke=None, run_id="case", config_manifest=None):
+        return ("start", "--run-id", run_id, "--cwd", str(self.repo), "--log", str(self.log),
                 "--route", str(route or self.route), "--node", node,
                 *(('--smoke-attestation', str(smoke)) if smoke is not None else ()),
+                *(('--config-manifest', str(config_manifest)) if config_manifest is not None else ()),
                 "--", sys.executable, "-c", f"from pathlib import Path; import time; Path({str(self.launch)!r}).write_text('launched'); time.sleep(30)")
+
+    def seal_config_manifest(self, run_id):
+        PROV = ROOT / "tools" / "lab-config-provenance.py"
+        out = self.base / f"configs-out-{run_id}"
+        subprocess.run([
+            sys.executable, str(PROV), "seal", "--repo", str(self.repo), "--config", "./config",
+            "--slug", "demo", "--run-id", run_id, "--out", str(out),
+        ], check=True, capture_output=True, text=True, env=CLEAN_ENV)
+        return out / f"{run_id}.manifest.json"
+
+    def attest_with_config_manifest(self, manifest_path, name):
+        attestation = self.base / f"{name}.json"
+        subprocess.run([
+            sys.executable, str(SMOKE), "attest", "--input", str(self.repo / "config"),
+            "--config-manifest", str(manifest_path), "--cwd", str(self.repo),
+            "--output", str(attestation), "--", sys.executable, "-c", "pass",
+        ], check=True, stdout=subprocess.DEVNULL, env=CLEAN_ENV)
+        return attestation
 
     def assert_rejected_before_side_effects(self, *args, cli_cwd=None):
         result = self.cli(*args, cwd=cli_cwd)
@@ -155,6 +175,97 @@ class TestRunner(unittest.TestCase):
             time.sleep(0.02)
         self.assertFalse(R.proc_identity(run["pid"]))
         self.assertEqual(os.getpgid(run["pid"]) if Path(f"/proc/{run['pid']}").exists() else None, None)
+
+    def _legacy_row(self, run_id):
+        identity = R.proc_identity(os.getpid())
+        return {**identity, "run_id": run_id, "process_group": os.getpgid(os.getpid()),
+                "cwd": str(self.repo), "log": str(self.log), "command": ["true"],
+                "route": str(self.route), "node": "full-run", "status": "running"}
+
+    # T7 -- a running legacy process (registry row predating the config
+    # fields) must keep the same status/alive() judgment under the new code.
+    def test_legacy_run_row_without_config_fields_is_unaffected(self):
+        legacy_run = self._legacy_row("legacy")
+        R.locked_update(self.registry, lambda data: data["runs"].update(legacy=legacy_run))
+        self.assertTrue(R.alive(legacy_run))
+        result = self.cli("status", "--run-id", "legacy")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        row = json.loads(result.stdout)
+        self.assertEqual(row["run_id"], "legacy")
+        self.assertEqual(row["status"], "running")
+        self.assertNotIn("config_ref", row)
+        self.assertNotIn("config_sha256", row)
+
+    # T13 -- an existing_run_exception recorded in run.json (a surface the
+    # harness never writes) must not cause the registry row to be rewritten,
+    # and the original worktree/command/config path/run ID stay intact.
+    def test_existing_run_exception_in_run_json_does_not_trigger_a_registry_rewrite(self):
+        legacy_run = self._legacy_row("legacy")
+        R.locked_update(self.registry, lambda data: data["runs"].update(legacy=legacy_run))
+        registry_before = self.registry.read_bytes()
+        run_json = self.base / "run.json"
+        run_json.write_text(json.dumps({
+            "worktree": str(self.repo), "command": ["true"], "config_path": "config",
+            "run_id": "legacy",
+            "existing_run_exception": {
+                "reason": "policy predates this run", "policy_version": "2026-08-03",
+                "applies_from": "2026-08-04",
+            },
+        }, indent=2))
+        run_json_before = run_json.read_bytes()
+        status = self.cli("status", "--run-id", "legacy")
+        self.assertEqual(status.returncode, 0, status.stderr)
+        self.assertEqual(self.registry.read_bytes(), registry_before)
+        self.assertEqual(run_json.read_bytes(), run_json_before)
+        row = json.loads(status.stdout)
+        self.assertEqual(row["cwd"], str(self.repo))
+        self.assertEqual(row["command"], ["true"])
+        self.assertEqual(row["run_id"], "legacy")
+
+    # T14 -- adding the new provenance fields must not make Fleet mistake an
+    # ordinary process for a separate training run: the registry gains
+    # exactly one row per start, never a phantom second one.
+    def test_ordinary_start_creates_exactly_one_registry_row(self):
+        result = self.cli(*self.start_args(smoke=self.attestation))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(self.registry.read_text())
+        self.assertEqual(len(data["runs"]), 1)
+        self.assertNotIn("config_ref", data["runs"]["case"])
+
+    # B3 regression -- a config manifest whose run_id disagrees with --run-id
+    # (and isn't a valid --attempt suffix of it) is rejected before Popen.
+    def test_config_manifest_run_id_mismatch_is_rejected_before_side_effects(self):
+        manifest = self.seal_config_manifest("sealed-run")
+        attestation = self.attest_with_config_manifest(manifest, "config-smoke-mismatch")
+        self.assert_rejected_before_side_effects(
+            *self.start_args(smoke=attestation, run_id="mismatched-run-id", config_manifest=manifest))
+
+    # B3 regression -- on a match, the registry key and the row's run_id
+    # field are always identical (never split by the manifest's own run_id).
+    def test_config_manifest_matching_run_id_binds_registry_key_to_row_field(self):
+        manifest = self.seal_config_manifest("sealed-run")
+        attestation = self.attest_with_config_manifest(manifest, "config-smoke-match")
+        result = self.cli(*self.start_args(smoke=attestation, run_id="sealed-run", config_manifest=manifest))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        run = json.loads(result.stdout.strip().splitlines()[-1])
+        self.assertEqual(run["run_id"], "sealed-run")
+        data = json.loads(self.registry.read_text())
+        self.assertIn("sealed-run", data["runs"])
+        self.assertEqual(data["runs"]["sealed-run"]["run_id"], "sealed-run")
+        self.assertEqual(data["runs"]["sealed-run"]["config_ref"], "./config")
+
+    # B3 regression -- the documented "__aN" attempt-suffix policy: a
+    # registry key that retries the same sealed manifest under a distinct
+    # key is accepted, and the row still carries the registry key, not the
+    # manifest's run_id.
+    def test_config_manifest_attempt_suffix_is_accepted(self):
+        manifest = self.seal_config_manifest("sealed-run")
+        attestation = self.attest_with_config_manifest(manifest, "config-smoke-attempt")
+        result = self.cli(*self.start_args(smoke=attestation, run_id="sealed-run__a2", config_manifest=manifest))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(self.registry.read_text())
+        self.assertIn("sealed-run__a2", data["runs"])
+        self.assertEqual(data["runs"]["sealed-run__a2"]["run_id"], "sealed-run__a2")
 
 
 if __name__ == "__main__":

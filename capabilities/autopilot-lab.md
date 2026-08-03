@@ -84,6 +84,75 @@ uses `--parent <slug>` lineage and the append-only `_RUNLOG`. Running a
 separable stage inline requires the recorded reason in the experiment
 `_RUNLOG` or `_internal/`.
 
+## Config Lifecycle and Provenance
+
+The 2026-08-03 BC_ResNet_tf pilot accumulated configs without distinguishing
+adopted, rejected, and historical reproduction settings. The prior SR_CorrNet
+case hid configs in gitignored or per-run directories without a stable snapshot
+or hash. These incidents motivate the following contract.
+
+### Lifecycle roots
+
+Unless a repository declares another layout in `analysis_project/code/experiment_conventions.md`
+or a root declaration file, `configs/` contains adopted public defaults,
+`configs_exp/<experiment-slug>/` contains active or unadopted experiments, and
+`configs_legacy/` is reserved for historical model-shape/checkpoint
+reproduction. New setup configs go under `configs_exp/<slug>/`. A declaration
+wins over these defaults for the recorded `config_layout` label, which is what
+run metadata, evaluation, and audits read to tell adopted, experimental, and
+historical config bytes apart.
+
+**Current tooling limit:** `tools/lab-config-provenance.py resolve` labels a
+declared layout as `declared/<name>` but still resolves bare, `exp:`, and
+`legacy:` references against the fixed physical roots `configs/`,
+`configs_exp/`, and `configs_legacy/`. A repository that declares a genuinely
+different physical layout (different directory names or nesting) gets an
+accurate `config_layout` label but no root remapping; treat declaration as
+authoritative for lineage labeling only until a declared-root mapping ships.
+
+### Resolution
+
+Bare names resolve only in `configs/`. Experiment and legacy configs require
+`exp:<slug>/<name>`, `legacy:<name>`, or an explicit physical path. There is no
+implicit root fallback and traversal or symlink escape is rejected. An
+unstructured repository is not rewritten: use an explicit path, require an
+exact snapshot, and record `legacy/unstructured`.
+
+### Sealing before a full run
+
+Before a full run, seal the resolved path, normalized `config_ref`, collision-safe
+run ID, config SHA256, source commit, and dirty state. Store the source snapshot
+and JSON manifest under `<artifact-root>/experiments/<slug>/_internal/configs/`.
+The manifest fields are named by `capabilities/lab-config-manifest.schema.json`
+and enforced by `tools/lab-config-provenance.py`. Same-input retries are
+idempotent; a hash-named snapshot with mismatched content fails closed.
+
+### Smoke binding
+
+The existing hash-bound smoke attestation includes the exact config snapshot
+hash. Any post-smoke config mutation invalidates it. `_RUNLOG` and existing
+provenance manifests are append-only.
+
+### Execution and evaluation lineage
+
+`config_ref`, `config_sha256`, `source_commit`, `source_dirty`, `run_id`, and
+`config_layout` are exposed in run metadata and registered resource-run rows.
+Run IDs include the experiment slug. Evaluation uses the runtime snapshot or
+manifest and never infers current config from checkpoint directory names;
+historical compatibility requires an explicit migration map or provenance
+manifest. Fleet metadata may be extended, but ordinary processes are not
+presented as separate training runs.
+
+### In-flight compatibility, termination, and promotion
+
+Existing processes are not restarted or altered: preserve their worktree,
+command, config path, and run ID. New policy applies to new runs or explicit
+restarts, with an `existing_run_exception` object in `run.json`; existing rows
+are not rewritten. Recommend winning configs for handoff to the code/spec owner
+without overwriting `configs/` without user approval. Keep unadopted configs in
+their experiment root; move to legacy only for historical reproduction. Check
+that all three config roots are package data for packaged projects.
+
 ## Routing Boundary
 
 Full-run entry is gated by a current hash-bound smoke attestation and detached

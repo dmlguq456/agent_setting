@@ -29,6 +29,34 @@ Rules: append only, one record per line, and **the file is the source of truth**
 
 Store `experiments/<id>/run.json` as the consolidation of existing run facts such as slug, parent, mode, checkpoint, and best result. It introduces no new calculation. `_RUNLOG.md` is its human-readable mirror.
 
+Optional provenance fields are `config_ref`, `config_sha256`, `source_commit`,
+`source_dirty`, `run_id`, and `config_layout`; their absence is visible as
+unsealed provenance for legacy or in-flight runs. The sealed manifest is the
+source of truth for snapshot bytes, and the harness-owned resource-run row
+requires these fields when `--config-manifest` is supplied. The harness does not
+write `run.json` or rewrite existing registry rows.
+
+An in-flight process kept alive across a policy change records an optional
+`existing_run_exception` object with a fixed shape:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `reason` | str | Why the running process is exempt from the new-run policy |
+| `policy_version` | str | Identifier of the config-provenance policy the process predates |
+| `applies_from` | ISO 8601 str | When the new policy starts governing subsequent runs |
+
+```json
+"existing_run_exception": {
+  "reason": "policy predates this run",
+  "policy_version": "2026-08-03",
+  "applies_from": "2026-08-04T00:00:00Z"
+}
+```
+
+The lab procedure writes this object into `run.json`; the harness never reads
+or enforces it, since `run.json` is a user-script-owned surface (see
+`references/config-provenance.md`).
+
 ```json
 { "id": "2026-06-23_lr_sweep", "parent": null, "skill_mode": "setup", "status": "done",
   "config_ref": "experiments/2026-06-23_lr_sweep/config.yaml",

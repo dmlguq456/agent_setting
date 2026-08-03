@@ -70,7 +70,7 @@ Have it add `<!-- review: ... -->` comments to `experiment_spec.md` and return t
 
 1. Make the smallest change by copying and varying the reference or parent; do not introduce a new layer by default.
 2. Prefer layers listed in `experiment_conventions.md`.
-3. Express minor changes in `config.yaml`; do not modify `model.py`.
+3. Express minor changes in `config.yaml`; do not modify `model.py`. New setup configs belong under `configs_exp/<slug>/` unless the repository declares another layout.
 4. Name fine-tuning variants beside the base with `_ft01_`-style prefixes.
 
 Required outputs:
@@ -104,6 +104,8 @@ At the same point, create `experiments/{date}_{slug}/run.json` with `status: "ru
 ```markdown
 | 2026-05-26 | lr_sweep | TF_Restormer base, lr 1e-3→3e-4 | ⏳ 대기 | — |
 ```
+
+**S3-2b. Seal config provenance before smoke.** Resolve the config, compute a collision-safe `run_id`, seal the exact snapshot and manifest under the artifact root, and write `config_ref`, `config_sha256`, `source_commit`, `source_dirty`, `run_id`, and `config_layout` into the new `run.json`. Only then create the smoke attestation with `--config-manifest`; an attestation without the matching config hash is rejected.
 
 **S3-3. Mandatory hash-bound smoke before full-run entry.** Run one epoch or the minimum batch through `tools/smoke-attestation.py attest`, binding the exact config, source, input/checkpoint signature, working directory, and command. Validate data loading, forward/backward, loss, and optimizer step, not convergence. A detached full run must verify that attestation immediately before launch and reject missing, failed, or stale hashes. If a one-batch probe is impossible, the capability registry must name the bounded substitute; there is no free-form skip.
 
