@@ -113,7 +113,15 @@ or the checked OpenCode equivalent) bound to an immutable route/node/attempt,
 the canonical registry, liveness, and completion gates. Team membership,
 runtime-native child status, and route dispatch depth never imply registered
 worker status. A restriction on one surface must not be silently extended to
-another.
+another. Concretely, a main-session lifecycle predicate decides worker status
+only from markers the harness itself plants at launch (`AGENT_SESSION_ROLE=worker`,
+`AGENT_DISPATCH_CHILD=1`, `AGENT_DISPATCH_DEPTH`). A runtime-owned session marker
+such as `CLAUDE_CODE_CHILD_SESSION`, which a runtime injects into every child
+process an ordinary interactive session spawns — hooks included — also appears in
+agent-team teammate sessions, so it is never standalone worker evidence. A
+dispatch launcher may keep exporting such a marker for observation collectors
+that read initial process environments; that producer role does not make it a
+lifecycle predicate term.
 
 | Scale | Handling |
 |---|---|
