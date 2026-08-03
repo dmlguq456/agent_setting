@@ -300,6 +300,8 @@ class Session:
     provenance: Optional[str] = None       # best-effort launcher lineage: herdr|terminal|vscode|worker
     state_evidence: Optional[dict] = None  # F-25 classifier verdict + inputs (additive; --json via asdict)
     branch: Optional[str] = None        # git branch override — demo fixtures; None = compute from cwd
+    branch_ahead: Optional[int] = None  # additive background git telemetry
+    branch_behind: Optional[int] = None
     mem_worker: bool = False   # Memory worker or title refresher; summarized and hidden by default.
     # F-29 (v9, prd.md:290-295) — enrichment ONLY, never a session-existence signal (prd.md:291).
     # None = source absent/unconfirmed (honest gap, prd.md:292's "no guessing"); [] = source

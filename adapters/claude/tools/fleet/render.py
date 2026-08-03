@@ -30,12 +30,14 @@ try:
 except ImportError:  # native Windows without windows-curses: plain --once / --json still work
     curses = None
 import glob
+import math
 import os
 import re
 import sys
 import time
 
 from .model import fmt_min, dash, project_of
+from . import gitinfo
 
 # curses attribute constants — real values when curses is present, harmless 0 fallbacks
 # otherwise, so this module imports (and the plain --once path runs) with no curses at all.
@@ -483,17 +485,21 @@ def _short_model_id(name):
     return "%s %s" % (fam, major + ("." + minor if minor else ""))
 
 
-# mid-height bar (━ filled / ─ empty): the glyphs sit at the cell's vertical centre, so gauges on
-# adjacent rows keep an above/below gap and never merge into a solid vertical wall (no blank line
-# needed). Filled carries the level color; the empty track is dim — the fill reads by color too.
-_BAR_FULL, _BAR_EMPTY = "━", "─"
+# Fixed six-cell battery. Filled carries the level color; the empty track is dim.
+_BAR_FULL, _BAR_EMPTY = "█", "░"
+_GAUGE_W = 6
+_GIT_TELEMETRY = True
 
 
 def _gauge_segs(pct, width):
-    """Two colored segments — filled ━ (level color) + empty ─ track (dim). Fills exactly `width`."""
-    p = max(0, min(100, int(pct or 0)))
-    filled = min(width, int(round(p / 100.0 * width)))
-    return [(_BAR_FULL * filled, _pct_key(pct)), (_BAR_EMPTY * (width - filled), "dim")]
+    """Return a fixed six-cell battery using half-up quantization."""
+    if not isinstance(pct, (int, float)) or isinstance(pct, bool) or pct <= 0:
+        filled = 0
+    elif pct >= 100:
+        filled = _GAUGE_W
+    else:
+        filled = max(1, min(_GAUGE_W - 1, int(math.floor(float(pct) * _GAUGE_W / 100.0 + 0.5))))
+    return [(_BAR_FULL * filled, _pct_key(pct)), (_BAR_EMPTY * (_GAUGE_W - filled), "dim")]
 
 
 def _pad(s, w):
@@ -506,58 +512,8 @@ _BR_TTL = 15.0
 _BR_CACHE = {"ts": 0.0, "map": {}}
 
 
-def _git_branch(cwd):
-    """Current branch for a cwd (⎇ display). None if not a repo. Cached 15s + 2s timeout so the
-    per-tick git calls (one per unique cwd) stay cheap and never block the render."""
-    if not cwd:
-        return None
-    now = time.time()
-    if now - _BR_CACHE["ts"] > _BR_TTL:
-        _BR_CACHE.update(ts=now, map={})
-    cache = _BR_CACHE["map"]
-    if cwd in cache:
-        return cache[cwd]
-    br = None
-    try:
-        import subprocess
-        r = subprocess.run(["git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"],
-                           capture_output=True, text=True, timeout=2)
-        if r.returncode == 0:
-            br = r.stdout.strip() or None
-    except Exception:
-        br = None
-    cache[cwd] = br
-    return br
-
-
-def _wt_count(cwd):
-    """Linked-worktree count for the repo owning `cwd` — counted from .git/worktrees/ entries
-    (pure filesystem, no subprocess; follows a worktree's `gitdir:` file back to the main repo).
-    Surface leftover or parallel worktrees with no live session."""
-    d = cwd
-    for _ in range(30):
-        g = os.path.join(d, ".git")
-        if os.path.isdir(g):
-            base = g
-            break
-        if os.path.isfile(g):
-            try:
-                with open(g) as f:
-                    gd = f.read().split("gitdir:", 1)[1].strip()
-            except Exception:
-                return 0
-            base = gd.split("/worktrees/")[0] if "/worktrees/" in gd else gd
-            break
-        nd = os.path.dirname(d)
-        if nd == d:
-            return 0
-        d = nd
-    else:
-        return 0
-    try:
-        return len([n for n in os.listdir(os.path.join(base, "worktrees")) if not n.startswith(".")])
-    except OSError:
-        return 0
+_git_branch = gitinfo.branch
+_wt_count = gitinfo.worktree_count
 
 
 # ---------- row builders (return a single segment-line: [(text, color_key), ...]) ----------
@@ -739,7 +695,21 @@ def _branch_suffix_segs(cwd, branch, dim=True, optional=False):
     # The title side reserves `_NAME_GAP`, so the visible suffix may use one cell
     # beyond its nominal reserve without moving the next column.
     shown = _clip_w(str(br or "—"), max(1, _BRANCH_SUFFIX_W - 2))
-    return [(" (", "dim"), (shown, "dim" if dim else "branch_s"), (")", "dim")]
+    base = [(" (", "dim"), (shown, "dim" if dim else "branch_s"), (")", "dim")]
+    counts = gitinfo.ahead_behind(cwd) if _GIT_TELEMETRY and br and cwd else None
+    if not counts:
+        return base
+    ahead, behind = counts
+    ahead_seg = [(" ↑%d" % ahead, "dim")] if ahead else []
+    behind_seg = [(" ↓%d" % behind, "dim")] if behind else []
+    result = base + ahead_seg + behind_seg
+    # Preserve the branch identity; drop behind first, then ahead, when the fixed suffix
+    # budget cannot carry both telemetry values.
+    if sum(_dw(text) for text, _key in result) > _BRANCH_SUFFIX_W:
+        result = base + ahead_seg
+    if sum(_dw(text) for text, _key in result) > _BRANCH_SUFFIX_W:
+        result = base
+    return result
 
 
 def _eff_key(effort, dim):
@@ -2529,13 +2499,8 @@ _CONTEXT_INDENT_W = 4        # left inset that aligns the row under the HARNESS 
 
 
 def _compact_context_gauge_width(available, depth=0):
-    """Harness-width context track, left-aligned under the harness-name column."""
-    # Root cards use the bare 16-cell harness width. Deeper cards spend their
-    # two-cell ladder inset inside the same column.
-    desired = max(4, _HW - 2 * max(0, int(depth or 0)))
-    # Preserve at least one subtitle cell on unexpectedly tiny terminals.
-    fixed = (_CTX_LABEL_W + _CONTEXT_VALUE_W + _CONTEXT_NOW_GAP + 1)
-    return min(desired, max(4, available - fixed))
+    """Compatibility shim: every context gauge is six cells."""
+    return _GAUGE_W
 
 
 _EXEC_GLYPH = "⚙"
@@ -2757,6 +2722,14 @@ def _projection_stage_detail_rows(entity, depth=0, term_width=None):
 def set_show_all(v):
     global _SHOW_ALL
     _SHOW_ALL = bool(v)
+
+
+_API_DISABLED = False   # F-51c: FLEET_DISABLE=usage-api / --no-usage-api, set by fleet.py main()
+
+
+def set_api_disabled(v):
+    global _API_DISABLED
+    _API_DISABLED = bool(v)
 
 
 # --- F-30 (v10, prd.md:304-310) — process view: pipeline-centric regrouping, `p` toggle ---
@@ -3361,6 +3334,76 @@ def _current_attempt_jobs(jobs):
     ]
 
 
+def live_harnesses(sessions):
+    """Return harnesses with live, top-level sessions eligible for usage refresh."""
+    return {s.harness for s in (sessions or ())
+            if getattr(s, "liveness", None) not in ("stale", "dead")
+            and not getattr(s, "app_server", False)
+            and not getattr(s, "is_child", False)
+            and not getattr(s, "mem_worker", False)}
+
+
+def _usage_header_rows(sessions, layout="wide", now=None, api_disabled=False):
+    """Build account usage rows independently of the main line builder.
+
+    F-51c: `api_disabled` (user opted out via FLEET_DISABLE=usage-api / --no-usage-api) is
+    "the user turned it off" — distinct from opencode's "no usage api" (structurally no
+    source). A claude/codex harness with no passive-tap value while opted out renders as an
+    unknown gauge (blank track + `—`), never the opencode-only opt-out sentence.
+    """
+    rl = {}
+    for s in sessions or ():
+        freshness = getattr(s, "_usage_freshness", None)
+        if (s.rl_5h is not None or s.rl_7d is not None or s.rl_ms
+                or getattr(s, "rl_windows", None) or freshness):
+            cur = rl.get(s.harness)
+            if cur is None or (s.mtime or 0) > (cur[3] or 0):
+                rl[s.harness] = (s.rl_5h, s.rl_7d, s.rl_ms, s.mtime, s.rl_rs,
+                                 getattr(s, "rl_windows", None), freshness)
+    live = live_harnesses(sessions)
+    if not rl and not live:
+        return []
+    hs = [h for h in ("claude", "codex", "opencode") if h in rl or h in live]
+    rows = []
+    for idx, h in enumerate(hs):
+        hn = _BADGE_TEXT.get(h, h)
+        row = [("  usage " if idx == 0 else "        ", "head"),
+               (_pad(hn, 14), "hb_" + h if h in _BADGE_TEXT else "hb_other")]
+        if h not in rl:
+            if api_disabled and h in ("claude", "codex"):
+                # F-51c: opt-out ("user turned it off"), not opencode's structural absence —
+                # render the same blank/unknown gauge shape other unknown values already use.
+                row.append(("[", "dim"))
+                row += [("·" * _GAUGE_W, "dim"), ("   —", "dim")]
+                row.append(("]", "dim"))
+            else:
+                row.append(("no usage api — plan quota is console-only", "dim"))
+            rows.append(row)
+            continue
+        r5, r7, rms, _mt, rrs, rwins, freshness = rl[h]
+        rs5, rs7 = (rrs or (None, None))[0], (rrs or (None, None))[1]
+        gauges = ([(str(lbl) + " ", pct, reset) for lbl, pct, reset in rwins]
+                  if rwins else [("5h ", r5, rs5), ("7d ", r7, rs7)])
+        gauges += [(lbl + " ", v, None) for lbl, v in (rms or [])]
+        for gi, (lbl, value, reset) in enumerate(gauges):
+            row.append(("   ", None) if gi else ("", None))
+            row.append((lbl, "dim")); row.append(("[", "dim"))
+            if value is None:
+                row += [("·" * _GAUGE_W, "dim"), ("   —", "dim")]
+            else:
+                gauge = _gauge_segs(value, _GAUGE_W)
+                if freshness == "stale":
+                    empty_cells = _GAUGE_W - _dw(gauge[0][0])
+                    gauge[1] = ("·" * empty_cells, "dim")
+                row += gauge
+                row.append((" %3d%%" % value, _pct_key(value)))
+            row.append(("]", "dim"))
+            if reset and reset > (now if now is not None else time.time()):
+                row.append((" ↻ " + fmt_min(int((reset - (now if now is not None else time.time())) / 60)), "dim"))
+        rows.append(row)
+    return rows
+
+
 def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memory=None,
                  term_width=None, live_order=None):
     """Return a flat list of segment-lines for the whole screen (None = blank line).
@@ -3543,59 +3586,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     # build. working/idle/dispatch/`~` stay unconditional (always relevant vocabulary); the
     # rest (detached/stale/dead/child-jobs/worktrees) only show up in the legend when at least
     # one row used them.
-    # account-level usage — shared per harness/account. ONE LINE PER HARNESS (user 2026-07-01:
-    # Use long gauges, generous gaps, and aligned windows.
-    # rate is account-shared → take the FRESHEST session's value per harness (a stale session's
-    # per-file rate is old; e.g. a 16-min-old file showed 7d 100% while the live rate was 15%).
-    _rl = {}   # harness -> (rl_5h, rl_7d, rl_ms, mtime, rl_rs, rl_windows)
-    for s in sessions:
-        if s.rl_5h is not None or s.rl_7d is not None or s.rl_ms or getattr(s, "rl_windows", None):
-            cur = _rl.get(s.harness)
-            if cur is None or (s.mtime or 0) > (cur[3] or 0):
-                _rl[s.harness] = (s.rl_5h, s.rl_7d, s.rl_ms, s.mtime, s.rl_rs,
-                                  getattr(s, "rl_windows", None))
-    # harnesses with LIVE sessions but no rate source still get a row with an explicit note —
-    # A silently missing provider row looks like a bug.
-    # opencode-go has no usage API (gateway 404s; docs: console-only), so say so on the board.
-    _live_h = set(s.harness for s in sessions
-                  if s.liveness not in ("stale", "dead") and not s.app_server and not s.is_child
-                  and not getattr(s, "mem_worker", False))
-    if _rl or _live_h:
-        hs = [h for h in ("claude", "codex", "opencode") if h in _rl or h in _live_h]
-        for idx, h in enumerate(hs):
-            hn = _BADGE_TEXT.get(h, h)
-            row = [("  usage " if idx == 0 else "        ", "head"),
-                   (_pad(hn, 14), "hb_" + h if h in _BADGE_TEXT else "hb_other")]  # bright = account
-            if h not in _rl:
-                row.append(("no usage api — plan quota is console-only", "dim"))
-                lines.append(row)
-                continue
-            r5, r7, rms, _mt, rrs, rwins = _rl[h]
-            # Dynamic windows + per-model buckets — ALL labels dim (a colored 'fable' read like a harness).
-            # htop BRACKET METERS (round-4): `[━━━━──────── 33%]` — the bracket draws the capacity
-            # vessel, % sits inside. Session-row ctx gauges stay bare (htop's list bars are bare too).
-            # ↻ = time until the window resets (API resets_at — was collected and discarded).
-            gw = 8 if layout != "wide" else 12
-            rs5, rs7 = (rrs or (None, None))[0], (rrs or (None, None))[1]
-            if rwins:
-                gauges = [(str(lbl) + " ", pct, reset) for lbl, pct, reset in rwins]
-            else:
-                gauges = [("5h ", r5, rs5), ("7d ", r7, rs7)]
-            gauges += [(lbl + " ", v, None) for lbl, v in (rms or [])]
-            now_ts = time.time()
-            for gi, (lbl, v, rs) in enumerate(gauges):
-                row.append(("   ", None) if gi else ("", None))          # 3-col gap between meters
-                row.append((lbl, "dim"))
-                row.append(("[", "dim"))
-                if v is not None:
-                    row += _gauge_segs(v, gw)
-                    row.append((" %3d%%" % v, _pct_key(v)))
-                else:
-                    row += [("·" * gw, "dim"), ("   —", "dim")]
-                row.append(("]", "dim"))
-                if rs and rs > now_ts:
-                    row.append((" ↻ " + fmt_min(int((rs - now_ts) / 60)), "dim"))
-            lines.append(row)
+    lines.extend(_usage_header_rows(sessions, layout=layout, api_disabled=_API_DISABLED))
     # fleet pulse — htop's "Tasks: N, M running" analogue: whole-board census + live spend Σ
     # Show the row by default; counts skip app-server companions. Extracted into _pulse_segs
     # (F-30, v10) so the process view (§5.1) shares this EXACT row instead of a second copy.
@@ -4129,6 +4120,7 @@ def _collect_memory():
 
 
 def render_once(collect_all, hfilter, section):
+    global _GIT_TELEMETRY
     sessions, jobs = collect_all(harness_filter=hfilter)
     malformed = _malformed()
     mem_snapshot = _collect_memory()
@@ -4137,8 +4129,13 @@ def render_once(collect_all, hfilter, section):
         tw = shutil.get_terminal_size().columns
     except Exception:
         tw = 200
-    lines = _build_lines(sessions, jobs, section, narrow=False, malformed=malformed,
-                         layout=_layout_mode(tw), memory=mem_snapshot, term_width=tw)
+    previous_git_telemetry = _GIT_TELEMETRY
+    _GIT_TELEMETRY = False
+    try:
+        lines = _build_lines(sessions, jobs, section, narrow=False, malformed=malformed,
+                             layout=_layout_mode(tw), memory=mem_snapshot, term_width=tw)
+    finally:
+        _GIT_TELEMETRY = previous_git_telemetry
     out = "\n".join(_plain(l) for l in lines) + "\n"
     # Write UTF-8 bytes directly so the snapshot's box/braille glyphs survive a
     # non-UTF-8 console codepage (e.g. Windows cp949), which would otherwise raise

@@ -127,11 +127,13 @@ def _adopt_child_titles(sessions, jobs):
             job.subagents = getattr(source, 'subagents', None)
 
 
-def collect_all(harness_filter=None, jobs_path=None):
+def collect_all(harness_filter=None, jobs_path=None, usage="cache-only"):
     """Return (sessions, jobs).
 
     harness_filter: optional iterable of harness names (fleet + dispatch both honor it).
     jobs_path:      override for .dispatch/jobs.log (else env / default).
+    usage:          only exact ``refresh`` may schedule a background usage fetch;
+                    all other values are cache-only.
     """
     sessions = procscan.scan(harness_filter=harness_filter)
 
@@ -150,7 +152,7 @@ def collect_all(harness_filter=None, jobs_path=None):
     codex_tick = None
     try:
         prepare = getattr(modules.get("codex"), "prepare_tick", None)
-        if prepare:
+        if prepare and any(s.harness == "codex" for s in sessions):
             codex_tick = prepare(sessions)
     except Exception:
         pass
@@ -178,52 +180,44 @@ def collect_all(harness_filter=None, jobs_path=None):
     except Exception:
         pass
 
-    # --- account usage via the oauth API (authoritative; taps lag / lack per-model buckets) ---
-    # Overrides every claude session's rate fields with the account-shared values so the render
-    # layer's freshest-pick sees them; on any failure the tap values simply remain (fallback).
+    # F-51d: JSON telemetry projection — cache-only lookup (never schedules a background
+    # `git rev-list`; the live render path's own ahead_behind() calls are what populate the
+    # cache over ticks). Absence stays None (F-51d "absence is normal"), never synthesized 0.
     try:
-        from . import usage_api
-        au = usage_api.account_usage()
-        if au:
-            for s in sessions:
-                if s.harness == "claude" and not s.is_child:
-                    if au["rl_5h"] is not None:
-                        s.rl_5h = au["rl_5h"]
-                    if au["rl_7d"] is not None:
-                        s.rl_7d = au["rl_7d"]
-                    if au["rl_ms"]:
-                        s.rl_ms = au["rl_ms"]
-                    if au.get("rs_5h") or au.get("rs_7d"):
-                        s.rl_rs = (au.get("rs_5h"), au.get("rs_7d"))
+        from .. import gitinfo
+        for s in sessions:
+            counts = gitinfo.cached_ahead_behind(getattr(s, "cwd", None))
+            if counts:
+                s.branch_ahead, s.branch_behind = counts
     except Exception:
         pass
 
-    # --- codex account usage from the newest rollout on disk (account-shared) — keeps the codex
-    # usage row alive/correct even when only app-servers (no rollout) are running.
+    # --- account usage: cache snapshot on every path; only live may request refresh ---
+    usage_meta = {}
     try:
-        from . import codex as _codex
-        cu = _codex.account_usage()
-        if cu:
+        from . import usage_cache
+        for harness in ("claude", "codex"):
+            if harness_filter is not None and harness not in set(harness_filter):
+                continue
+            snap = usage_cache.account_usage(harness, usage=usage if usage == "refresh" else "cache-only")
+            usage_meta[harness] = {k: snap.get(k) for k in ("freshness", "observed_at")}
+            payload = snap.get("payload") or {}
+            if not isinstance(payload, dict):
+                continue
             for s in sessions:
-                if s.harness == "codex":
-                    if isinstance(cu, dict):
-                        if cu.get("rl_5h") is not None:
-                            s.rl_5h = cu["rl_5h"]
-                        if cu.get("rl_7d") is not None:
-                            s.rl_7d = cu["rl_7d"]
-                        if cu.get("windows"):
-                            s.rl_windows = cu["windows"]
-                        if cu.get("rs_5h") or cu.get("rs_7d"):
-                            s.rl_rs = (cu.get("rs_5h"), cu.get("rs_7d"))
-                    else:
-                        if cu[0] is not None:
-                            s.rl_5h = cu[0]
-                        if cu[1] is not None:
-                            s.rl_7d = cu[1]
-                        if len(cu) > 3 and (cu[2] or cu[3]):
-                            s.rl_rs = (cu[2], cu[3])
+                if s.harness != harness or (harness == "claude" and s.is_child):
+                    continue
+                for key in ("rl_5h", "rl_7d", "rl_ms", "rl_windows"):
+                    value = payload.get(key)
+                    if value is not None and value != []:
+                        setattr(s, key, value)
+                if payload.get("rs_5h") or payload.get("rs_7d"):
+                    s.rl_rs = (payload.get("rs_5h"), payload.get("rs_7d"))
+                s._usage_freshness = snap.get("freshness")
+                s._usage_observed_at = snap.get("observed_at")
     except Exception:
-        pass
+        usage_meta = {}
+    collect_all.last_usage = usage_meta
 
     # --- liveness → 4-state ---
     try:

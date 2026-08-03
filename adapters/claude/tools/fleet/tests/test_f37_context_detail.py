@@ -36,14 +36,14 @@ class ContextDetailTruthTableTest(unittest.TestCase):
     def test_context_now_truth_table(self):
         cases = [
             (ContextProjection(63, "normal", "claude"), "Doing work",
-             "📚 ━━━━━━━━━━────── 63%"),
+             "📚 ████░░ 63%"),
             (ContextProjection(63, "normal", "claude"), None,
-             "📚 ━━━━━━━━━━────── 63%"),
+             "📚 ████░░ 63%"),
             (ContextProjection(None, "unknown", "claude"), "Doing work",
-             "📚 ────────────────   —"),
-            (None, None, "📚 ────────────────   —"),
+             "📚 ░░░░░░   —"),
+            (None, None, "📚 ░░░░░░   —"),
             (ContextProjection(0, "normal", "claude"), None,
-             "📚 ────────────────  0%"),
+             "📚 ░░░░░░  0%"),
         ]
         for context, now, context_text in cases:
             row = render._context_detail_row(self._session(context=context, summary=now), term_width=168)
@@ -90,7 +90,7 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                 row = render._context_detail_row(
                     self._session(ctx_pct=malformed), term_width=168)
                 self.assertEqual(text(row), " " * render._CONTEXT_INDENT_W +
-                                 "📚 ────────────────   —")
+                                 "📚 ░░░░░░   —")
 
     def test_context_alert_uses_the_full_visible_label(self):
         session = self._session(slug="hot", ctx_pct=85)
@@ -105,8 +105,8 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                 self._session(context=ContextProjection(63, "normal", "x"),
                               summary="한글 상태 설명이 아주 길게 이어지는 중"), term_width=width)
             self.assertLessEqual(render._dw(text(row)), width)
-            track = re.search(r"[━─]+", text(row)).group(0)
-            self.assertEqual(len(track), render._HW)
+            track = re.search(r"[█░]+", text(row)).group(0)
+            self.assertEqual(len(track), 6)
             self.assertIn("📚 ", text(row))
             self.assertLess(text(row).index("📚 "), text(row).index("한글"))
             self.assertNotIn(": ", text(row))
@@ -127,8 +127,8 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                     self.assertEqual(
                         render._dw(visible[:visible.index("Doing work")]),
                         render._NAME_COL)
-                    track = re.search(r"[━─]+", visible).group(0)
-                    self.assertEqual(len(track), render._HW - 2 * depth)
+                    track = re.search(r"[█░]+", visible).group(0)
+                    self.assertEqual(len(track), 6)
 
     def test_context_band_is_not_rendered(self):
         for band in ("normal", "tight", "critical"):
@@ -147,7 +147,7 @@ class ContextDetailTruthTableTest(unittest.TestCase):
             self._session(context=ContextProjection(85, "critical", "x")),
             term_width=168)[0]
         self.assertEqual([key for value, key in row if value == " 85%"], ["dim"])
-        self.assertIn("lvl_r", [key for value, key in row if "━" in value])
+        self.assertIn("lvl_r", [key for value, key in row if "█" in value])
 
     def test_linear_dispatch_owner_owns_projection_stage_once_at_all_widths(self):
         rid = route.load(REAL)["route_id"]
