@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Create and verify content-bound smoke attestations before expensive lab runs."""
-import argparse, hashlib, json, subprocess, sys
+import argparse, hashlib, json, re, subprocess, sys
 from pathlib import Path
 
 def digest(path):
@@ -45,22 +45,51 @@ def payload(paths, command, cwd, config_manifest=None):
     data["inputs"] = [dedup[key] for key in sorted(dedup)]
     return data
 
+CONFIG_KEYS = ("config_sha256", "config_source_sha256", "config_source_path")
+
 def verify(data):
     claimed=data.get("attestation_hash")
-    if claimed:
-        bare={k:v for k,v in data.items() if k!="attestation_hash"}
-        actual="sha256:"+hashlib.sha256(json.dumps(bare,sort_keys=True,separators=(",",":")).encode()).hexdigest()
-        if claimed!=actual: raise ValueError("attestation hash mismatch")
+    if not isinstance(claimed,str) or not claimed:
+        raise ValueError("attestation hash is required")
+    bare={k:v for k,v in data.items() if k!="attestation_hash"}
+    actual="sha256:"+hashlib.sha256(json.dumps(bare,sort_keys=True,separators=(",",":")).encode()).hexdigest()
+    if claimed!=actual: raise ValueError("attestation hash mismatch")
     for row in data["inputs"]:
         if not Path(row["path"]).exists() or digest(row["path"])!=row["sha256"]: raise ValueError("stale smoke input: "+row["path"])
-    if data.get("config_sha256") and not any(row["sha256"] == data["config_sha256"] for row in data["inputs"]):
-        raise ValueError("config hash is not bound to an input")
-    if data.get("config_source_path"):
+    present = [k for k in CONFIG_KEYS if k in data]
+    if present and len(present) != 3:
+        raise ValueError(
+            "config provenance must be absent as a whole or contain all of "
+            + ", ".join(CONFIG_KEYS) + "; missing: "
+            + ", ".join(k for k in CONFIG_KEYS if k not in data))
+    if present:
+        for key in ("config_sha256", "config_source_sha256"):
+            if not isinstance(data[key], str) or not re.fullmatch(r"[0-9a-f]{64}", data[key]):
+                raise ValueError(f"{key} must be a 64-character lowercase hex digest")
+        if not isinstance(data["config_source_path"], str) or not data["config_source_path"]:
+            raise ValueError("config_source_path must be a non-empty string")
+        if not any(row["sha256"] == data["config_sha256"] for row in data["inputs"]):
+            raise ValueError("config hash is not bound to an input")
         # Hash-only binding would be vacuous when source_sha256 == snapshot_sha256
         # (the snapshot row alone would satisfy it); a path match is required too.
         match = next((row for row in data["inputs"] if row["path"] == data["config_source_path"]), None)
-        if not match or match["sha256"] != data.get("config_source_sha256"):
+        if not match or match["sha256"] != data["config_source_sha256"]:
             raise ValueError("config source is not bound to an input")
+        # The snapshot row must be proven by a distinct input row carrying the
+        # config hash, UNLESS the source's own real bytes already are the
+        # snapshot bytes (config_source_sha256 == config_sha256) -- the only
+        # legitimate degenerate case, since source-path binding above already
+        # forces config_source_sha256 to be the file's real digest. A
+        # filename/stem heuristic here is forgeable (round 5 plan-check
+        # blocking finding): a file merely *named* like the hash, with
+        # unrelated real content, must not satisfy this.
+        snapshot_rows = [row for row in data["inputs"] if row["sha256"] == data["config_sha256"]]
+        source_is_snapshot = data["config_source_sha256"] == data["config_sha256"]
+        if len(snapshot_rows) < 2 and not source_is_snapshot:
+            raise ValueError(
+                "config snapshot row is not bound to an input: expected a "
+                "distinct input row carrying the config hash beside the "
+                "source row")
     if data.get("status")!="passed" or data.get("exit_code")!=0: raise ValueError("smoke did not pass")
     return True
 

@@ -163,18 +163,22 @@ def resolve_ref(repo, ref, requested=None):
         fail("control characters are not allowed in a config reference")
     if ".." in Path(ref).parts: fail("path traversal is not allowed")
     label, roots, declaration_kind = layout_spec(root)
+    requested_ns = None
     if ref.startswith("exp:"):
         rest = ref[4:]
         if not rest: fail("experiment reference requires a path")
         path = _under(root, roots["exp"], rest)
+        requested_ns = "exp"
     elif ref.startswith("legacy:"):
         rest = ref[7:]
         if not rest: fail("legacy reference requires a path")
         path = _under(root, roots["legacy"], rest)
+        requested_ns = "legacy"
     elif ref.startswith("config:"):
         rest = ref[7:]
         if not rest: fail("config reference requires a path")
         path = _under(root, roots["default"], rest)
+        requested_ns = "default"
     elif Path(ref).is_absolute() or "/" in ref or "\\" in ref:
         path = repo_path(root, ref)
     else:
@@ -183,6 +187,12 @@ def resolve_ref(repo, ref, requested=None):
         path = _under(root, roots["default"], ref)
     if not path.is_file(): fail("config does not exist: " + str(path))
     config_ref, namespace = canonical_ref(root, path, roots)
+    if requested_ns is not None and namespace != requested_ns:
+        fail(f"reference explicitly requested the {ROOT_NAMESPACE_PREFIX[requested_ns]} "
+             f"namespace but resolves under {ROOT_NAMESPACE_PREFIX.get(namespace, namespace)}; "
+             "use an explicit physical path to reach a nested root")
+    if requested is not None and requested != requested_ns:
+        fail("requested namespace does not match the reference prefix")
     return {
         "layout": label,
         "layout_declaration": declaration_kind,
@@ -269,14 +279,39 @@ def _assert_manifest_location(manifest_path, snapshot_path):
     s = Path(snapshot_path).resolve(strict=False)
     if m.parent != s.parent:
         fail("manifest and snapshot must be co-located")
-    if m.parent.name != "configs" or m.parent.parent.name != "_internal":
-        fail("manifest must live in an _internal/configs directory")
+
+def _manifest_chain_slug(manifest_path):
+    # Two candidates: a lexical (symlink-unresolved) form and a fully resolved
+    # form. Either satisfying the experiments/<slug>/_internal/configs shape
+    # is accepted -- cmd_seal's `resolve(strict=True)` on the output directory
+    # (see cmd_seal below) can collapse a symlinked `experiments` segment in
+    # the recorded paths, so the lexical candidate recovers the slug in that
+    # layout while the resolved candidate covers the reverse (logical-path
+    # side symlinked) layout.
+    manifest_path = Path(manifest_path)
+    candidates = (Path(os.path.abspath(str(manifest_path))), manifest_path.resolve(strict=False))
+    for cand in candidates:
+        if (cand.parent.name == "configs" and cand.parent.parent.name == "_internal"
+                and cand.parent.parent.parent.parent.name == "experiments"):
+            # Recomputation below assumes this recovered slug is byte-identical
+            # to the original `a.slug` cmd_seal used -- true only because
+            # cmd_seal names the directory with the raw, unnormalized slug.
+            slug = cand.parent.parent.parent.name
+            if not safe_slug(slug):
+                fail("inferred experiment slug is not a safe slug")
+            return slug
+    fail("manifest must live in <artifact-root>/experiments/<slug>/_internal/configs")
 
 def cmd_resolve(a): print(json.dumps(resolve_ref(a.repo, a.ref), sort_keys=True))
 
 def cmd_run_id(a):
+    if not safe_slug(a.slug): fail("invalid --slug")
     if not _config_ref_conforms(a.config_ref):
         fail("--config-ref does not match the expected grammar")
+    if not isinstance(a.config_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", a.config_sha256):
+        fail("--config-sha256 must be 64 lowercase hex characters")
+    if a.attempt is not None and a.attempt < 1:
+        fail("--attempt must be a positive integer")
     print(run_id(a.slug, a.config_ref, a.config_sha256, a.attempt))
 
 def cmd_seal(a):
@@ -289,6 +324,9 @@ def cmd_seal(a):
     if not artifact_root.is_absolute() or not artifact_root.is_dir():
         fail("--artifact-root must be an existing absolute directory")
     artifact_root = artifact_root.resolve(strict=True)
+    # _manifest_chain_slug() recomputes the sealed run id from a slug it
+    # recovers from this directory name -- that recomputation is only valid
+    # because this uses the raw, unnormalized `a.slug` (not normalize(slug)).
     out = artifact_root / "experiments" / a.slug / "_internal" / "configs"
     try:
         out.resolve(strict=False).relative_to(artifact_root)
@@ -343,6 +381,10 @@ def cmd_verify(a):
     if m.get("source_git_state") not in SOURCE_GIT_STATES: fail("source_git_state is not a recognized value")
     for key in ("config_ref", "run_id", "source_path", "snapshot_path", "source_commit", "config_layout"):
         if not isinstance(m.get(key), str) or not m[key]: fail(f"{key} must be a non-empty string")
+    for key in ("source_path", "snapshot_path"):
+        if not Path(m[key]).is_absolute(): fail(f"{key} must be an absolute path")
+    if m["source_dirty"] != (m["source_git_state"] != "clean"):
+        fail("source_dirty disagrees with source_git_state")
     if not _config_ref_conforms(m["config_ref"]): fail("config_ref does not match the expected grammar")
     if not safe_run_id(m["run_id"]): fail("run_id is not a safe run id")
     if m["source_sha256"] != m["snapshot_sha256"]: fail("source and snapshot digests disagree")
@@ -351,6 +393,11 @@ def cmd_verify(a):
     if sha(snapshot) != m["snapshot_sha256"]: fail("snapshot hash mismatch")
     if snapshot.stem != m["snapshot_sha256"]: fail("snapshot filename/hash mismatch")
     _assert_manifest_location(manifest_path, snapshot)
+    if manifest_path.name != f'{m["run_id"]}.manifest.json':
+        fail("manifest filename must be <run_id>.manifest.json")
+    slug = _manifest_chain_slug(manifest_path)
+    if m["run_id"] != run_id(slug, m["config_ref"], m["source_sha256"]):
+        fail("run_id does not match the sealed identity recomputed from slug, config_ref, and source_sha256")
     source = Path(m["source_path"]); source_present = source.exists()
     if source_present and sha(source) != m["source_sha256"]: fail("source hash mismatch")
     print(f"lab_config_manifest=valid source_present={'true' if source_present else 'false'}")
@@ -413,7 +460,7 @@ def cmd_package(a):
 def main():
     p = argparse.ArgumentParser(); s = p.add_subparsers(dest="cmd", required=True)
     x = s.add_parser("resolve"); x.add_argument("--repo", required=True); x.add_argument("--ref", required=True); x.set_defaults(fn=cmd_resolve)
-    x = s.add_parser("run-id"); x.add_argument("--slug", required=True); x.add_argument("--config-ref", required=True); x.add_argument("--config-sha256"); x.add_argument("--attempt", type=int); x.set_defaults(fn=cmd_run_id)
+    x = s.add_parser("run-id"); x.add_argument("--slug", required=True); x.add_argument("--config-ref", required=True); x.add_argument("--config-sha256", required=True); x.add_argument("--attempt", type=int); x.set_defaults(fn=cmd_run_id)
     x = s.add_parser("seal"); x.add_argument("--repo", required=True); x.add_argument("--config", required=True); x.add_argument("--slug", required=True); x.add_argument("--run-id"); x.add_argument("--artifact-root", required=True); x.add_argument("--config-ref"); x.set_defaults(fn=cmd_seal)
     x = s.add_parser("verify"); x.add_argument("--manifest", required=True); x.set_defaults(fn=cmd_verify)
     x = s.add_parser("package-data"); x.add_argument("--repo", required=True); x.add_argument("--archive"); x.set_defaults(fn=cmd_package)

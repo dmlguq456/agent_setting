@@ -105,7 +105,11 @@ A repository declares a genuinely different physical layout with a
 `tools/lab-config-provenance.py resolve` then resolves bare, `config:`, `exp:`,
 and `legacy:` references against those declared physical roots, not the fixed
 defaults. Root directories may nest (e.g. an `exp` root inside the `default`
-root); attribution uses longest-match on the resolved path. A plain-text
+root); attribution uses longest-match on the resolved path. An explicitly
+prefixed `config:`/`exp:`/`legacy:` reference must canonicalize into its own
+namespace — a nested-root crossover (e.g. a `config:` reference that
+longest-match-attributes into a nested `exp` root) is rejected; an explicit
+physical path may still reach any nested root. A plain-text
 `.lab-config-layout` file or an `experiment_conventions.md` label declares only
 the `config_layout` label, not physical roots — the tool's `resolve` output
 always exposes the *actually used* `roots` alongside `layout_declaration`
@@ -143,15 +147,31 @@ source: `config_sha256`/`config_source_sha256`/`config_source_path` are
 top-level fields, and `verify()` requires an input row whose path matches
 `config_source_path` and whose digest matches `config_source_sha256` — a
 snapshot-only match cannot satisfy this, since source and snapshot bytes are
-identical by construction. Any post-smoke config mutation invalidates it.
-`_RUNLOG` and existing provenance manifests are append-only.
+identical by construction. `verify()` requires `attestation_hash`; config
+provenance may be absent as a whole but not partially — if any of the three
+config fields is present, all three must be. The snapshot row itself is
+proven by a distinct input row carrying the config hash, unless the source's
+own real bytes already are the claimed snapshot bytes
+(`config_source_sha256 == config_sha256`); genuine binding to the snapshot's
+*path* still only happens at `resource-runner start`, which cross-checks the
+attestation against the sealed manifest. Any post-smoke config mutation
+invalidates it. `_RUNLOG` and existing provenance manifests are append-only.
 
 **Limits (by design):** attestation requires the source file to exist *at
 attest time* — a manifest whose source was later deleted stays
 `verify`-valid and snapshot-reproducible, but cannot back a *new* attestation.
-A sealed manifest is not portable on its own: `verify` requires the hash-named
-snapshot to sit beside it in the same `_internal/configs/` directory, so the
-manifest must move together with that directory.
+A sealed manifest is not portable on its own: `verify` re-proves the sealed
+identity, not just field shapes — it requires the full
+`experiments/<slug>/_internal/configs` directory chain (not just the
+hash-named snapshot beside it), the exact `<run_id>.manifest.json` filename,
+and that the slug recovered from that chain, together with `config_ref` and
+`source_sha256`, recomputes the same `run_id`. The manifest and its snapshot
+directory must therefore move together *and* keep their `experiments/<slug>`
+parents intact. If `experiments` itself is a symlink to a real sibling
+directory, the manifest must be addressed via the documented derived path
+(`<artifact-root>/experiments/<slug>/_internal/configs/<run_id>.manifest.json`)
+— addressing it via the fully-resolved path is rejected, since resolution
+collapses the `experiments` segment `seal` itself recorded.
 
 ### Execution and evaluation lineage
 

@@ -326,6 +326,32 @@ class TestRunner(unittest.TestCase):
         self.assert_rejected_before_side_effects(
             *self.start_args(smoke=attestation, run_id=manifest_run_id, config_manifest=manifest))
 
+    # T-G4-7: a smoke attestation missing its required hash must be rejected
+    # by `start` before Popen, the registry row, or the log file exist.
+    def test_T_G4_7_missing_attestation_hash_is_rejected_before_side_effects(self):
+        data = json.loads(self.attestation.read_text())
+        del data["attestation_hash"]
+        broken = self.base / "broken-hash-smoke.json"
+        broken.write_text(json.dumps(data))
+        self.assert_rejected_before_side_effects(*self.start_args(smoke=broken))
+
+    # T-G4-8: a smoke attestation with only partial config-provenance metadata
+    # (one of the three fields dropped, hash recomputed over the rest) must
+    # be rejected the same way -- config provenance is all-or-none.
+    def test_T_G4_8_partial_config_metadata_is_rejected_before_side_effects(self):
+        manifest = self.seal_config_manifest("sealed-run")
+        manifest_run_id = json.loads(manifest.read_text())["run_id"]
+        attestation = self.attest_with_config_manifest(manifest, "config-smoke-partial")
+        data = json.loads(attestation.read_text())
+        del data["config_source_path"]
+        del data["attestation_hash"]
+        data["attestation_hash"] = "sha256:" + hashlib.sha256(
+            json.dumps(data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        broken = self.base / "broken-partial-smoke.json"
+        broken.write_text(json.dumps(data))
+        self.assert_rejected_before_side_effects(
+            *self.start_args(smoke=broken, run_id=manifest_run_id, config_manifest=manifest))
+
 
 if __name__ == "__main__":
     unittest.main()

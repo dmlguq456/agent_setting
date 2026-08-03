@@ -14,6 +14,14 @@ def seal(repo, config, slug, artifact_root):
     run_id=json.loads(result.stdout)["run_id"]
     return artifact_root/"experiments"/slug/"_internal"/"configs"/f"{run_id}.manifest.json"
 
+def _with_hash(data):
+    # G4 hardening made attestation_hash required; this recomputes it the
+    # same way the CLI does so hand-built fixtures still verify.
+    data = dict(data); data.pop("attestation_hash", None)
+    data["attestation_hash"] = "sha256:" + hashlib.sha256(
+        json.dumps(data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return data
+
 class TestSmoke(unittest.TestCase):
  def _sealed_repo(self, td):
   root=Path(td); repo=root/"repo"; (repo/"configs").mkdir(parents=True)
@@ -23,7 +31,9 @@ class TestSmoke(unittest.TestCase):
 
  def test_hash_binding(self):
   with tempfile.TemporaryDirectory() as td:
-   p=Path(td)/"config"; p.write_text("a"); data=M.payload([p],["true"],td); data.update(status="passed",exit_code=0); self.assertTrue(M.verify(data)); p.write_text("b"); self.assertRaises(ValueError,M.verify,data)
+   p=Path(td)/"config"; p.write_text("a"); data=M.payload([p],["true"],td); data.update(status="passed",exit_code=0)
+   data=_with_hash(data)
+   self.assertTrue(M.verify(data)); p.write_text("b"); self.assertRaises(ValueError,M.verify,data)
  def test_attestation_hash(self):
    with tempfile.TemporaryDirectory() as td:
     p=Path(td)/"config"; p.write_text("a"); data=M.payload([p],["true"],td); data.update(status="passed",exit_code=0); data["attestation_hash"]="sha256:"+hashlib.sha256(json.dumps(data,sort_keys=True,separators=(",",":")).encode()).hexdigest(); self.assertTrue(M.verify(data)); data["command"]=["false"]; self.assertRaises(ValueError,M.verify,data)
@@ -35,7 +45,13 @@ class TestSmoke(unittest.TestCase):
    repo, manifest = self._sealed_repo(td)
    data=M.payload([], ["true"], td, manifest); data.update(status="passed",exit_code=0)
    m=json.loads(manifest.read_text())
-   self.assertEqual(data["config_sha256"], m["snapshot_sha256"]); self.assertTrue(M.verify(data))
+   self.assertEqual(data["config_sha256"], m["snapshot_sha256"])
+   data=_with_hash(data)
+   self.assertTrue(M.verify(data))
+   # Clearing `inputs` after the hash was computed over the full dict makes
+   # the *hash* mismatch fire first (rather than the missing-snapshot-row
+   # check) -- still a ValueError, and the original claim (empty inputs is
+   # rejected) still holds.
    data["inputs"]=[]; self.assertRaises(ValueError,M.verify,data)
 
  # T-sm-2: stale is now a byte tamper on the real snapshot rather than a
@@ -57,6 +73,7 @@ class TestSmoke(unittest.TestCase):
    data=M.payload([p],["true"],td); data.update(status="passed",exit_code=0)
    self.assertNotIn("config_sha256", data)
    self.assertNotIn("config_source_path", data)
+   data=_with_hash(data)
    self.assertTrue(M.verify(data))
 
  # T-F7-1: both a snapshot row and a source row land in `inputs`; a caller
@@ -80,6 +97,7 @@ class TestSmoke(unittest.TestCase):
    repo, manifest = self._sealed_repo(td)
    m = json.loads(manifest.read_text())
    data = M.payload([], ["true"], td, manifest); data.update(status="passed", exit_code=0)
+   data = _with_hash(data)
    self.assertTrue(M.verify(data))
    Path(m["source_path"]).write_text("tampered-source")
    self.assertRaises(ValueError, M.verify, data)
@@ -87,21 +105,30 @@ class TestSmoke(unittest.TestCase):
  # T-F7-3 (A4): hand-assembling config_sha256/config_source_sha256/
  # config_source_path onto an attestation that never went through
  # --config-manifest must still fail verify -- a snapshot-only input row
- # cannot satisfy the new path-bound requirement. The attested --input here
- # is a separate file from the manifest's source, so no input row can
- # accidentally satisfy the new config_source_path check by coincidence.
+ # cannot satisfy the new path-bound requirement.
+ #
+ # round 5 (plan §1.5): this test was already vacuous under 407b5e66 -- the
+ # `--input` here was a file unrelated to the config hash, so it never
+ # satisfied even the *hash*-binding check (":56-57"), and the test's
+ # assertRaises passed for that reason, never reaching the path-binding code
+ # path (":58-63") the name and docstring claim to exercise. The fix below
+ # includes the snapshot itself as a plain `--input` so hash-binding is
+ # satisfied first, then omits any row at `config_source_path` so the
+ # path-binding check is the one that actually fires, asserted on its
+ # message.
  def test_T_F7_3_config_source_path_binding_is_not_vacuous(self):
   with tempfile.TemporaryDirectory() as td:
    repo, manifest = self._sealed_repo(td)
    m = json.loads(manifest.read_text())
-   unrelated = Path(td) / "unrelated-input"; unrelated.write_text("unrelated")
-   data = M.payload([unrelated], ["true"], td); data.update(status="passed", exit_code=0)
+   snapshot = Path(m["snapshot_path"])
+   data = M.payload([snapshot], ["true"], td); data.update(status="passed", exit_code=0)
    data["config_sha256"] = m["snapshot_sha256"]
    data["config_source_sha256"] = m["source_sha256"]
    data["config_source_path"] = str(Path(m["source_path"]).resolve())
-   data["attestation_hash"] = "sha256:" + hashlib.sha256(
-       json.dumps(data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-   self.assertRaises(ValueError, M.verify, data)
+   data = _with_hash(data)
+   with self.assertRaises(ValueError) as ctx:
+       M.verify(data)
+   self.assertIn("config source is not bound to an input", str(ctx.exception))
 
  # T-F7-4 (A5): attest-time source absence is fail closed, even though a
  # standalone `verify` of an already-sealed manifest tolerates it.
@@ -124,5 +151,101 @@ class TestSmoke(unittest.TestCase):
    v1 = dict(m); v1["schema_version"] = 1
    manifest.write_text(json.dumps(v1))
    self.assertRaises(ValueError, M.payload, [], ["true"], td, manifest)
+
+ # ================= G4: hash-bound smoke verification =================
+
+ def _full_attestation(self, td, manifest):
+  data = M.payload([], ["true"], td, manifest); data.update(status="passed", exit_code=0)
+  return _with_hash(data)
+
+ def test_T_G4_1_missing_hash_is_rejected(self):
+  with tempfile.TemporaryDirectory() as td:
+   repo, manifest = self._sealed_repo(td)
+   data = self._full_attestation(td, manifest)
+   del data["attestation_hash"]
+   with self.assertRaises(ValueError) as ctx:
+       M.verify(data)
+   self.assertIn("attestation hash is required", str(ctx.exception))
+
+ def _assert_missing_config_key_rejected(self, key):
+  with tempfile.TemporaryDirectory() as td:
+   repo, manifest = self._sealed_repo(td)
+   data = M.payload([], ["true"], td, manifest); data.update(status="passed", exit_code=0)
+   del data[key]
+   data = _with_hash(data)
+   with self.assertRaises(ValueError) as ctx:
+       M.verify(data)
+   self.assertIn("missing: " + key, str(ctx.exception))
+
+ def test_T_G4_2_missing_config_sha256_is_rejected(self):
+  self._assert_missing_config_key_rejected("config_sha256")
+
+ def test_T_G4_3_missing_config_source_sha256_is_rejected(self):
+  self._assert_missing_config_key_rejected("config_source_sha256")
+
+ def test_T_G4_4_missing_config_source_path_is_rejected(self):
+  self._assert_missing_config_key_rejected("config_source_path")
+
+ def test_T_G4_5_absent_snapshot_row_is_rejected(self):
+  with tempfile.TemporaryDirectory() as td:
+   snapshot_bytes = b"real-snapshot-bytes"
+   source_bytes = b"different-source-content"
+   snapshot_sha = hashlib.sha256(snapshot_bytes).hexdigest()
+   source_path = Path(td) / "source.yaml"; source_path.write_bytes(source_bytes)
+   source_sha = hashlib.sha256(source_bytes).hexdigest()
+   # A real file carrying the snapshot hash satisfies hash-binding (step 1)
+   # without being byte-identical to the source -- so no *second* row with
+   # the config hash exists, and the source is not degenerately the
+   # snapshot (config_source_sha256 != config_sha256).
+   hash_carrier = Path(td) / "snapshot.bin"; hash_carrier.write_bytes(snapshot_bytes)
+   data = M.payload([hash_carrier, source_path], ["true"], td)
+   data.update(status="passed", exit_code=0)
+   data["config_sha256"] = snapshot_sha
+   data["config_source_sha256"] = source_sha
+   data["config_source_path"] = str(source_path.resolve())
+   data = _with_hash(data)
+   with self.assertRaises(ValueError) as ctx:
+       M.verify(data)
+   self.assertIn("config snapshot row is not bound to an input", str(ctx.exception))
+
+ def test_T_G4_6_degenerate_source_equals_snapshot_passes_with_one_row(self):
+  with tempfile.TemporaryDirectory() as td:
+   content = b"identical-bytes"
+   digest_hex = hashlib.sha256(content).hexdigest()
+   source_path = Path(td) / f"{digest_hex}.yaml"; source_path.write_bytes(content)
+   data = M.payload([source_path], ["true"], td)
+   data.update(status="passed", exit_code=0)
+   data["config_sha256"] = digest_hex
+   data["config_source_sha256"] = digest_hex
+   data["config_source_path"] = str(source_path.resolve())
+   data = _with_hash(data)
+   self.assertTrue(M.verify(data))
+
+ # T-G4-9 (round 5 plan-check blocking finding, lock-in): a filename/stem
+ # carve-out (`Path(config_source_path).stem == config_sha256`) is forgeable
+ # -- a source file literally *named* `<config_sha256><suffix>` whose real
+ # bytes hash to something else entirely would satisfy it. The corrected
+ # carve-out condition is real-digest equality
+ # (`config_source_sha256 == config_sha256`), which this forged input must
+ # NOT satisfy; if the carve-out ever regresses to a stem check, this test
+ # must fail.
+ def test_T_G4_9_forged_carve_out_via_deceptive_filename_is_rejected(self):
+  with tempfile.TemporaryDirectory() as td:
+   snapshot_bytes = b"real-snapshot-bytes"
+   snapshot_sha = hashlib.sha256(snapshot_bytes).hexdigest()
+   hash_carrier = Path(td) / "snapshot.bin"; hash_carrier.write_bytes(snapshot_bytes)
+   forged_source = Path(td) / f"{snapshot_sha}.yaml"
+   forged_source.write_text("totally unrelated content")
+   forged_sha = hashlib.sha256(forged_source.read_bytes()).hexdigest()
+   self.assertNotEqual(forged_sha, snapshot_sha)
+   data = M.payload([hash_carrier, forged_source], ["true"], td)
+   data.update(status="passed", exit_code=0)
+   data["config_sha256"] = snapshot_sha
+   data["config_source_sha256"] = forged_sha
+   data["config_source_path"] = str(forged_source.resolve())
+   data = _with_hash(data)
+   with self.assertRaises(ValueError) as ctx:
+       M.verify(data)
+   self.assertIn("config snapshot row is not bound to an input", str(ctx.exception))
 
 if __name__=="__main__": unittest.main()

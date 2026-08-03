@@ -315,9 +315,13 @@ class TestProvenance(unittest.TestCase):
         self.assertEqual(result.returncode, 65)
 
     def test_T_F2_5_run_id_config_ref_grammar_is_validated(self):
+        # G2 hardening (round 5) made --config-sha256 required at the argparse
+        # level; without a valid one, every case here would hit that gate
+        # (exit 2) instead of the grammar check this test targets, going
+        # vacuous. A valid 64-hex sha keeps the grammar assertion live.
         for bad in ("config:../x", "not-a-ref", "config:\x01bad", "config:trailing/"):
             with self.subTest(ref=bad):
-                result = run_cli("run-id", "--slug", "demo", "--config-ref", bad)
+                result = run_cli("run-id", "--slug", "demo", "--config-ref", bad, "--config-sha256", "a" * 64)
                 self.assertEqual(result.returncode, 65)
 
     def test_T_F2_6_symlinked_declared_root_still_attributes_correctly(self):
@@ -331,6 +335,88 @@ class TestProvenance(unittest.TestCase):
         resolved = M.resolve_ref(repo, "exp:demo/b.yaml")
         self.assertEqual(resolved["namespace"], "exp")
         self.assertEqual(resolved["config_ref"], "exp:demo/b.yaml")
+
+    # ================= G1: nested declared-root namespace crossover =================
+    # Three fixtures are needed because crossover direction is a function of
+    # nesting geometry -- no single layout exercises all six directions.
+
+    def _fixture_a(self):
+        # default:conf, exp:conf/experiments, legacy:conf/archive
+        repo = self._custom_repo({"default": "conf", "exp": "conf/experiments", "legacy": "conf/archive"})
+        (repo / "conf/experiments/demo").mkdir(parents=True, exist_ok=True)
+        (repo / "conf/experiments/demo/x.yaml").write_text("x")
+        (repo / "conf/archive/y.yaml").write_text("y")
+        return repo
+
+    def _fixture_b(self):
+        # exp:conf/exp, default:conf/exp/inner, legacy:conf/exp/old
+        repo = self._custom_repo({"exp": "conf/exp", "default": "conf/exp/inner", "legacy": "conf/exp/old"})
+        (repo / "conf/exp/inner/a.yaml").write_text("a")
+        (repo / "conf/exp/old/o.yaml").write_text("o")
+        return repo
+
+    def _fixture_c(self):
+        # legacy:conf, default:conf/adopted, exp:conf/experiments
+        repo = self._custom_repo({"legacy": "conf", "default": "conf/adopted", "exp": "conf/experiments"})
+        (repo / "conf/adopted/d.yaml").write_text("d")
+        (repo / "conf/experiments/demo").mkdir(parents=True, exist_ok=True)
+        (repo / "conf/experiments/demo/e.yaml").write_text("e")
+        return repo
+
+    def test_T_G1_1_fixture_A_default_to_exp_crossover_is_rejected(self):
+        repo = self._fixture_a()
+        result = run_cli("resolve", "--repo", str(repo), "--ref", "config:experiments/demo/x.yaml")
+        self.assertEqual(result.returncode, 65)
+        self.assertIn("requested the config namespace", result.stderr)
+        self.assertIn("resolves under exp", result.stderr)
+
+    def test_T_G1_2_fixture_A_default_to_legacy_crossover_is_rejected(self):
+        repo = self._fixture_a()
+        result = run_cli("resolve", "--repo", str(repo), "--ref", "config:archive/y.yaml")
+        self.assertEqual(result.returncode, 65)
+        self.assertIn("requested the config namespace", result.stderr)
+        self.assertIn("resolves under legacy", result.stderr)
+
+    def test_T_G1_3_fixture_B_exp_to_default_crossover_is_rejected(self):
+        repo = self._fixture_b()
+        result = run_cli("resolve", "--repo", str(repo), "--ref", "exp:inner/a.yaml")
+        self.assertEqual(result.returncode, 65)
+        self.assertIn("requested the exp namespace", result.stderr)
+        self.assertIn("resolves under config", result.stderr)
+
+    def test_T_G1_4_fixture_B_exp_to_legacy_crossover_is_rejected(self):
+        repo = self._fixture_b()
+        result = run_cli("resolve", "--repo", str(repo), "--ref", "exp:old/o.yaml")
+        self.assertEqual(result.returncode, 65)
+        self.assertIn("requested the exp namespace", result.stderr)
+        self.assertIn("resolves under legacy", result.stderr)
+
+    def test_T_G1_5_fixture_C_legacy_to_default_crossover_is_rejected(self):
+        repo = self._fixture_c()
+        result = run_cli("resolve", "--repo", str(repo), "--ref", "legacy:adopted/d.yaml")
+        self.assertEqual(result.returncode, 65)
+        self.assertIn("requested the legacy namespace", result.stderr)
+        self.assertIn("resolves under config", result.stderr)
+
+    def test_T_G1_6_fixture_C_legacy_to_exp_crossover_is_rejected(self):
+        repo = self._fixture_c()
+        result = run_cli("resolve", "--repo", str(repo), "--ref", "legacy:experiments/demo/e.yaml")
+        self.assertEqual(result.returncode, 65)
+        self.assertIn("requested the legacy namespace", result.stderr)
+        self.assertIn("resolves under exp", result.stderr)
+
+    def test_T_G1_7_physical_path_reaches_nested_root_that_prefixed_ref_cannot(self):
+        repo = self._fixture_a()
+        rejected = run_cli("resolve", "--repo", str(repo), "--ref", "config:experiments/demo/x.yaml")
+        self.assertEqual(rejected.returncode, 65)
+        allowed = run_cli("resolve", "--repo", str(repo), "--ref", "conf/experiments/demo/x.yaml")
+        self.assertEqual(allowed.returncode, 0, allowed.stderr)
+        self.assertEqual(json.loads(allowed.stdout)["config_ref"], "exp:demo/x.yaml")
+
+    def test_T_G1_8_requested_parameter_mismatch_is_rejected(self):
+        with self.assertRaises(SystemExit):
+            M.resolve_ref(self.repo, "a.yaml", requested="exp")
+        self.assertEqual(M.resolve_ref(self.repo, "exp:demo/b.yaml", requested="exp")["namespace"], "exp")
 
     # ================= F3: slug/run-id safety =================
 
@@ -367,6 +453,47 @@ class TestProvenance(unittest.TestCase):
         manifest = manifest_dir(artifact_root, "demo") / f"{run_id_value}.manifest.json"
         snapshot = next(manifest_dir(artifact_root, "demo").glob("*.yaml"))
         self.assertEqual(manifest.resolve().parent, snapshot.resolve().parent)
+
+    # ================= G2: standalone run-id validation =================
+
+    def test_T_G2_1_unsafe_slug_is_rejected(self):
+        for bad_slug in ("../evil", "", "a" * 65):
+            with self.subTest(slug=bad_slug):
+                result = run_cli("run-id", "--slug", bad_slug, "--config-ref", "config:a.yaml",
+                                  "--config-sha256", "a" * 64)
+                self.assertEqual(result.returncode, 65)
+
+    def test_T_G2_2_malformed_config_sha256_is_rejected(self):
+        for bad_sha in ("z" * 64, "A" * 64, "a" * 63, "a" * 65):
+            with self.subTest(sha=bad_sha):
+                result = run_cli("run-id", "--slug", "demo", "--config-ref", "config:a.yaml",
+                                  "--config-sha256", bad_sha)
+                self.assertEqual(result.returncode, 65)
+
+    def test_T_G2_3_missing_config_sha256_is_argparse_rejected(self):
+        result = run_cli("run-id", "--slug", "demo", "--config-ref", "config:a.yaml")
+        self.assertEqual(result.returncode, 2)
+
+    def test_T_G2_4_non_positive_attempt_is_rejected(self):
+        for bad_attempt in ("0", "-1"):
+            with self.subTest(attempt=bad_attempt):
+                result = run_cli("run-id", "--slug", "demo", "--config-ref", "config:a.yaml",
+                                  "--config-sha256", "a" * 64, "--attempt", bad_attempt)
+                self.assertEqual(result.returncode, 65)
+        ok = run_cli("run-id", "--slug", "demo", "--config-ref", "config:a.yaml",
+                      "--config-sha256", "a" * 64, "--attempt", "1")
+        self.assertEqual(ok.returncode, 0, ok.stderr)
+        self.assertTrue(ok.stdout.strip().endswith("__a1"))
+
+    def test_T_G2_5_run_id_matches_seal_computed_id(self):
+        artifact_root = self._dir()
+        result = seal_cli(self.repo, "a.yaml", "demo", artifact_root)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        manifest = json.loads(result.stdout)
+        cli = run_cli("run-id", "--slug", "demo", "--config-ref", manifest["config_ref"],
+                       "--config-sha256", manifest["source_sha256"])
+        self.assertEqual(cli.returncode, 0, cli.stderr)
+        self.assertEqual(cli.stdout.strip(), manifest["run_id"])
 
     # ================= F4: source-scoped git state =================
 
@@ -542,6 +669,132 @@ class TestProvenance(unittest.TestCase):
         self.assertEqual(set(schema["required"]), M.MANIFEST_KEYS)
         _, _, data = self._sealed_manifest()
         self.assertEqual(set(data.keys()), M.MANIFEST_KEYS)
+
+    # ================= G3: manifest identity re-proof =================
+
+    def test_T_G3_1_relative_source_path_is_rejected(self):
+        _, manifest, data = self._sealed_manifest()
+        bad = dict(data); bad["source_path"] = "relative/path.yaml"
+        manifest.write_text(json.dumps(bad))
+        result = run_cli("verify", "--manifest", str(manifest))
+        self.assertEqual(result.returncode, 65)
+        self.assertIn("source_path must be an absolute path", result.stderr)
+
+    def test_T_G3_2_relative_snapshot_path_is_rejected(self):
+        _, manifest, data = self._sealed_manifest()
+        bad = dict(data); bad["snapshot_path"] = "relative/snapshot.yaml"
+        manifest.write_text(json.dumps(bad))
+        result = run_cli("verify", "--manifest", str(manifest))
+        self.assertEqual(result.returncode, 65)
+        self.assertIn("snapshot_path must be an absolute path", result.stderr)
+
+    def test_T_G3_3_source_dirty_disagreement_is_rejected(self):
+        _, manifest, data = self._sealed_manifest()
+        bad = dict(data); bad["source_git_state"] = "clean"; bad["source_dirty"] = True
+        manifest.write_text(json.dumps(bad))
+        result = run_cli("verify", "--manifest", str(manifest))
+        self.assertEqual(result.returncode, 65)
+        self.assertIn("source_dirty disagrees with source_git_state", result.stderr)
+
+    def test_T_G3_4_manifest_filename_must_match_run_id(self):
+        _, manifest, data = self._sealed_manifest()
+        renamed = manifest.with_name("other.manifest.json")
+        manifest.rename(renamed)
+        result = run_cli("verify", "--manifest", str(renamed))
+        self.assertEqual(result.returncode, 65)
+        self.assertIn("manifest filename must be", result.stderr)
+
+    def test_T_G3_5_chain_violation_fires_independent_of_colocation(self):
+        _, manifest, data = self._sealed_manifest()
+        outside_root = self._dir()
+        broken = outside_root / "demo" / "_internal" / "configs"
+        broken.mkdir(parents=True)
+        new_snapshot = broken / Path(data["snapshot_path"]).name
+        new_snapshot.write_bytes(Path(data["snapshot_path"]).read_bytes())
+        rewritten = dict(data); rewritten["snapshot_path"] = str(new_snapshot)
+        new_manifest = broken / manifest.name
+        new_manifest.write_text(json.dumps(rewritten))
+        # co-location is satisfied (both files share `broken`); only the
+        # experiments/<slug>/_internal/configs chain is violated, and it must
+        # fire on its own.
+        result = run_cli("verify", "--manifest", str(new_manifest))
+        self.assertEqual(result.returncode, 65)
+        self.assertIn("experiments", result.stderr)
+
+    def test_T_G3_6_run_id_swap_fails_recomputation(self):
+        _, manifest, data = self._sealed_manifest()
+        bad = dict(data); bad["run_id"] = "other-run-id"
+        renamed = manifest.with_name("other-run-id.manifest.json")
+        manifest.write_text(json.dumps(bad))
+        manifest.rename(renamed)
+        result = run_cli("verify", "--manifest", str(renamed))
+        self.assertEqual(result.returncode, 65)
+        self.assertIn("run_id does not match the sealed identity", result.stderr)
+
+    def test_T_G3_7_config_ref_swap_fails_recomputation(self):
+        _, manifest, data = self._sealed_manifest()
+        bad = dict(data); bad["config_ref"] = "config:different.yaml"
+        manifest.write_text(json.dumps(bad))
+        result = run_cli("verify", "--manifest", str(manifest))
+        self.assertEqual(result.returncode, 65)
+        self.assertIn("run_id does not match the sealed identity", result.stderr)
+
+    # T-G3-R2/R3: `experiments` itself is a symlink to a real sibling
+    # directory. `cmd_seal`'s `resolve(strict=True)` collapses that segment in
+    # the recorded paths, so verify must accept the manifest when addressed
+    # via the documented derived path (through the `experiments` symlink) and
+    # reject it when addressed via the fully-resolved form -- a stated,
+    # accepted limitation (plan §1.3), not a bug.
+    def test_T_G3_R2_symlinked_experiments_segment_verifies_via_derived_path(self):
+        artifact_root = self._dir()
+        real_dir = artifact_root / "exp-store"; real_dir.mkdir()
+        (artifact_root / "experiments").symlink_to(real_dir, target_is_directory=True)
+        result = seal_cli(self.repo, "a.yaml", "demo", artifact_root)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        run_id_value = json.loads(result.stdout)["run_id"]
+        derived = artifact_root / "experiments" / "demo" / "_internal" / "configs" / f"{run_id_value}.manifest.json"
+        self.assertTrue(derived.is_file())
+        verify_result = run_cli("verify", "--manifest", str(derived))
+        self.assertEqual(verify_result.returncode, 0, verify_result.stderr)
+
+    def test_T_G3_R3_resolved_form_of_symlinked_experiments_is_the_documented_limitation(self):
+        artifact_root = self._dir()
+        real_dir = artifact_root / "exp-store"; real_dir.mkdir()
+        (artifact_root / "experiments").symlink_to(real_dir, target_is_directory=True)
+        result = seal_cli(self.repo, "a.yaml", "demo", artifact_root)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        run_id_value = json.loads(result.stdout)["run_id"]
+        resolved = real_dir / "demo" / "_internal" / "configs" / f"{run_id_value}.manifest.json"
+        self.assertTrue(resolved.is_file())
+        verify_result = run_cli("verify", "--manifest", str(resolved))
+        self.assertEqual(verify_result.returncode, 65)
+
+    def test_T_G3_R4_slug_level_symlink_seals_and_verifies_via_derived_path(self):
+        artifact_root = self._dir()
+        (artifact_root / "experiments").mkdir()
+        real_slug_dir = artifact_root / "real-demo"; real_slug_dir.mkdir()
+        (artifact_root / "experiments" / "demo").symlink_to(real_slug_dir, target_is_directory=True)
+        result = seal_cli(self.repo, "a.yaml", "demo", artifact_root)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        run_id_value = json.loads(result.stdout)["run_id"]
+        derived = artifact_root / "experiments" / "demo" / "_internal" / "configs" / f"{run_id_value}.manifest.json"
+        self.assertTrue(derived.is_file())
+        verify_result = run_cli("verify", "--manifest", str(derived))
+        self.assertEqual(verify_result.returncode, 0, verify_result.stderr)
+
+        # A second symlink at the <slug> level, `experiments/other-slug`,
+        # points at the same real directory -- the same physical manifest is
+        # now reachable under a different slug. run_id/config_ref/
+        # source_sha256 are untouched; the "candidate 1 wins" chain-slug
+        # recovery plus exact run-id recomputation must reject this, since the
+        # manifest's own run_id was computed against "demo", not "other-slug".
+        (artifact_root / "experiments" / "other-slug").symlink_to(real_slug_dir, target_is_directory=True)
+        via_other_slug = (artifact_root / "experiments" / "other-slug" / "_internal" / "configs"
+                           / f"{run_id_value}.manifest.json")
+        self.assertTrue(via_other_slug.is_file())
+        tampered_result = run_cli("verify", "--manifest", str(via_other_slug))
+        self.assertEqual(tampered_result.returncode, 65)
+        self.assertIn("run_id does not match the sealed identity", tampered_result.stderr)
 
     # ================= F8: archive-verified packaging =================
 

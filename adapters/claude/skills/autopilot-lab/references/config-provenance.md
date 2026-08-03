@@ -7,7 +7,10 @@ root declaration (`{"schema_version": 1, "layout": "<name>", "roots":
 {"default": "<dir>", "exp": "<dir>", "legacy": "<dir>"}}`) remaps `resolve`'s
 physical roots, not just the recorded `config_layout` label — bare, `config:`,
 `exp:`, and `legacy:` references then resolve against the declared
-directories, with longest-match attribution when roots nest. A plain-text
+directories, with longest-match attribution when roots nest — except that an
+explicitly prefixed `config:`/`exp:`/`legacy:` reference must canonicalize
+into its own namespace; a nested-root crossover is rejected, and only an
+explicit physical path can still reach a nested root. A plain-text
 `.lab-config-layout` file or `experiment_conventions.md` label only sets the
 label; `resolve` always exposes the actually-used `roots` and
 `layout_declaration` so a label-only declaration is never silently assumed to
@@ -31,7 +34,13 @@ python3 tools/lab-config-provenance.py seal --repo . --config exp:demo/train.yam
 ```
 
 `--run-id` is optional on `seal` — omit it to have the tool emit the computed
-run ID; if given, it must match the computed value exactly.
+run ID; if given, it must match the computed value exactly. `run-id` requires
+`--config-sha256` (64 lowercase hex characters) and applies the same
+safe-slug and canonical-ref rules `seal` applies; `--attempt`, if given, must
+be a positive integer. A missing `--config-sha256` is the one rejection in
+the whole provenance CLI that argparse raises directly (exit 2) — every other
+rejection across `resolve`/`seal`/`verify`/`run-id` (unsafe slug, bad ref
+grammar, malformed hash, non-positive attempt, and so on) is exit 65.
 
 Pass the resulting manifest to smoke attestation and the registered resource
 runner. Evaluation uses that snapshot or manifest, never a checkpoint
@@ -45,9 +54,17 @@ at attest time — a manifest whose source was later deleted stays
 `verify`-valid and snapshot-reproducible, but cannot back a *new*
 attestation, since the smoke gate is meant to guarantee the bytes a run will
 actually read. A sealed manifest is not portable on its own: `verify`
-requires the hash-named snapshot to sit beside it in the same
-`_internal/configs/` directory, so move the manifest together with that
-directory.
+re-proves the sealed identity, not just field shapes. It requires the full
+`experiments/<slug>/_internal/configs` directory chain (not just the
+hash-named snapshot beside the manifest), the exact `<run_id>.manifest.json`
+filename, and that the slug recovered from that chain, together with
+`config_ref` and `source_sha256`, recomputes the same `run_id`. Move the
+manifest together with its snapshot *and* keep the `experiments/<slug>`
+parents intact. If `experiments` itself is a symlink to a real sibling
+directory, address the manifest via the documented derived path
+(`<artifact-root>/experiments/<slug>/_internal/configs/<run_id>.manifest.json`)
+— the fully-resolved path is rejected, since resolution collapses the
+`experiments` segment that `seal` itself recorded.
 
 The smoke attestation now binds both the config snapshot and its source:
 `payload()` verifies the config manifest against the full `verify` contract
@@ -57,7 +74,16 @@ rows in `inputs`. `verify()` requires an input row whose path matches
 `config_source_path` and whose digest matches `config_source_sha256` — a
 snapshot-only input can no longer satisfy that check, since source and
 snapshot bytes are identical by construction and a hash-only check would be
-vacuous. The actual enforcement point for a `--config-manifest` launch whose
-run ID, config hash, or source path disagrees with the sealed manifest is
+vacuous. `verify()` requires `attestation_hash` to be present, and the three
+config-provenance fields are all-or-none — partial config metadata is
+rejected outright. The snapshot row itself must be proven by a distinct
+input row carrying the config hash, unless the source's own real bytes
+already are the claimed snapshot bytes
+(`config_source_sha256 == config_sha256`); this closes hash/path binding but
+does **not** create a genuine binding to the snapshot's own *path* — that
+still only happens at `utilities/resource-runner.py start`, which
+cross-checks the attestation against the sealed manifest. The actual
+enforcement point for a `--config-manifest` launch whose run ID, config
+hash, or source path disagrees with the sealed manifest is
 `utilities/resource-runner.py start`, which rejects the launch (exit 65)
 before the log, process, or registry row are created.
