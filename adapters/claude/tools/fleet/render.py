@@ -312,12 +312,11 @@ def _init_colors():
     _TINT_PAIR.clear()
     try:
         if curses.COLORS >= 256:
-            # Mid-dark neutral stock colors avoid the previous bright tint jump.
-            # Capable terminals receive only a low-chroma slate/taupe cast.
+            # One step below the mid-tone revision: neutral stock fallbacks stay
+            # readable while capable terminals receive a low-chroma slate cast.
             try:
                 if curses.can_change_color():
-                    curses.init_color(237, 228, 239, 290)  # #3a3d4a slate
-                    curses.init_color(236, 224, 200, 184)  # #39332f taupe
+                    curses.init_color(236, 188, 196, 239)  # #30323d slate
             except Exception:
                 pass
             hues = {"d": -1, "w": _palette_fg("soft", curses.COLOR_WHITE),
@@ -4204,9 +4203,9 @@ _TINT_CHARS = {"b", "c", "B", "C", "k", "i"}
 # sentinel (so tint detection in _addline is unaffected) by the group-loop post-pass.
 _ROW_BOLD = "\x00!\x00"
 # 256-color background levels per sentinel char. Base panels retain the
-# established range; hot/cooling sit at the middle 237/236 levels instead of
-# either near-black or the over-bright 60/95 swatches.
-_TINT_LVL = {"b": 235, "c": 238, "B": 237, "C": 237, "k": 236, "i": 235}
+# established range; hot/cooling move down one step to 236/235 without lowering
+# every card surface as the earlier near-black revision did.
+_TINT_LVL = {"b": 235, "c": 238, "B": 236, "C": 236, "k": 235, "i": 235}
 
 
 def _is_fill(t):

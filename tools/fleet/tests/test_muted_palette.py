@@ -35,7 +35,7 @@ class MutedPaletteTest(unittest.TestCase):
 
     def test_panel_tints_keep_brightness_and_reduce_chroma(self):
         self.assertEqual(render._TINT_LVL, {
-            "b": 235, "c": 238, "B": 237, "C": 237, "k": 236, "i": 235,
+            "b": 235, "c": 238, "B": 236, "C": 236, "k": 235, "i": 235,
         })
         self.assertEqual(render._TINT_LVL["b"], render._TINT_LVL["i"])
         self.assertNotIn(60, render._TINT_LVL.values())
