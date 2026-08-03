@@ -699,5 +699,94 @@ class CompletionMarkerTest(unittest.TestCase):
         self.assertEqual(note, "completed-marker")
 
 
+    # SD-94 fixtures -------------------------------------------------------
+    # A `parent_completion_delivery=claude-parent-runtime` supervisor closes the exact row
+    # BEFORE `complete` runs, so SD-70's "complete closes the row" order never happens on
+    # that path. The four cases below pin the corrected eligibility and the fail-closed
+    # boundary around it; the SD-70 fixtures above are the untouched regression baseline.
+    _SUPERVISOR_PASS = (
+        "note=completed-supervisor,failure_class=pass,"
+        "classifier_source=supervisor-terminal-v1,detected_by=completion-supervisor"
+    )
+
+    def test_supervisor_closed_pass_row_earns_its_marker(self):
+        route = self.compile_route()
+        route_path = self.write_route(route)
+        evidence = self.base / "plan.md"
+        evidence.write_text("plan body\n", encoding="utf-8")
+        self.write_row("done", "supervised", "att-supervised", self._SUPERVISOR_PASS)
+        self.write_row("open", "sibling", "att-sibling")
+        result = self.complete(route_path, "plan", evidence, jobs=self.jobs,
+                               attempt_id="att-supervised")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        directory = self.agent_home / ".dispatch" / "completion" / route["route_id"]
+        canonical = directory / "plan.json"
+        self.assertTrue(canonical.is_file())
+        status, meta = self.read_row("att-supervised")
+        self.assertEqual(status, "done")                      # never re-closed
+        self.assertEqual(meta.get("note"), "completed-marker")
+        self.assertEqual(meta.get("failure_class"), "pass")   # supervisor evidence survives
+        self.assertEqual(meta.get("completion_marker"), str(canonical))
+        self.assertEqual(meta.get("completion_marker_history"),
+                         str(directory / f"plan.{json.loads(canonical.read_text())['sequence']}.json"))
+        # the same route/node's other attempt is untouched
+        sibling_status, sibling_meta = self.read_row("att-sibling")
+        self.assertEqual(sibling_status, "open")
+        self.assertIsNone(sibling_meta.get("completion_marker"))
+
+    def test_supervisor_closed_non_pass_row_stays_refused(self):
+        route = self.compile_route()
+        route_path = self.write_route(route)
+        evidence = self.base / "blocked.md"
+        evidence.write_text("must not publish\n", encoding="utf-8")
+        self.write_row("done", "blocked", "att-supervised-blocked",
+                       "note=completed-supervisor,failure_class=blocked")
+        result = self.complete(route_path, "plan", evidence, jobs=self.jobs,
+                               attempt_id="att-supervised-blocked")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("attempt-row-terminal-without-completion", result.stderr)
+        directory = self.agent_home / ".dispatch" / "completion" / route["route_id"]
+        self.assertFalse((directory / "plan.json").exists())
+        status, meta = self.read_row("att-supervised-blocked")
+        self.assertEqual(status, "done")
+        self.assertEqual(meta.get("note"), "completed-supervisor")
+
+    def test_supervisor_marker_duplicate_complete_is_idempotent(self):
+        route = self.compile_route()
+        route_path = self.write_route(route)
+        evidence = self.base / "plan.md"
+        evidence.write_text("plan body\n", encoding="utf-8")
+        self.write_row("done", "supervised", "att-supervised-dup", self._SUPERVISOR_PASS)
+        first = self.complete(route_path, "plan", evidence, jobs=self.jobs,
+                              attempt_id="att-supervised-dup")
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        second = self.complete(route_path, "plan", evidence, jobs=self.jobs,
+                               attempt_id="att-supervised-dup")
+        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+        rows = [line for line in self.jobs.read_text(encoding="utf-8").splitlines()
+                if "att-supervised-dup" in line]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].count("completion_marker="), 1)
+        directory = self.agent_home / ".dispatch" / "completion" / route["route_id"]
+        self.assertTrue((directory / "plan.1.json").is_file())
+        self.assertFalse((directory / "plan.2.json").exists())   # no second history write
+
+    def test_other_terminal_notes_are_unaffected_by_the_sd94_exception(self):
+        route = self.compile_route()
+        route_path = self.write_route(route)
+        evidence = self.base / "plan.md"
+        evidence.write_text("plan body\n", encoding="utf-8")
+        for attempt, extra in (
+            ("att-killed-note", "note=dead-worker-fail,failure_class=fail"),
+            ("att-no-note", "failure_class=pass"),
+            ("att-orphan-note", "note=dead-parent-orphaned,failure_class=pass"),
+        ):
+            self.write_row("done", attempt, attempt, extra)
+            result = self.complete(route_path, "plan", evidence, jobs=self.jobs,
+                                   attempt_id=attempt)
+            self.assertNotEqual(result.returncode, 0, attempt)
+            self.assertIn("attempt-row-terminal-without-completion", result.stderr, attempt)
+
+
 if __name__ == "__main__":
     unittest.main()

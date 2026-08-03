@@ -1111,9 +1111,21 @@ def complete_node(
             if row_fields[1] not in {"open","running","done"}:
                 raise ValueError(f"attempt-row-terminal:{row_fields[1]}")
             already_closed=row_fields[1]=="done"
-            if already_closed and row_metadata.get("note")!="completed-marker":
+            row_note=row_metadata.get("note")
+            # SD-94 — supervisor-delivered completion closes the exact row BEFORE `complete`
+            # runs, so SD-70's "complete closes the row" order never happens on that path.
+            # A checked supervisor terminal (note=completed-supervisor) carrying a success
+            # verdict (failure_class=pass) is marker-eligible: publish the marker and append
+            # its evidence to THIS row only, leaving the `done` status untouched. Every other
+            # terminal note, and any non-pass verdict, keeps the fail-closed refusal.
+            marker_eligible=(
+                already_closed
+                and row_note=="completed-supervisor"
+                and row_metadata.get("failure_class")=="pass"
+            )
+            if already_closed and row_note!="completed-marker" and not marker_eligible:
                 raise ValueError(
-                    f"attempt-row-terminal-without-completion:{row_metadata.get('note','unknown')}"
+                    f"attempt-row-terminal-without-completion:{row_note or 'unknown'}"
                 )
             attempt_metadata={
                 key:value for key,value in row_metadata.items()
@@ -1123,13 +1135,18 @@ def complete_node(
                 route,node,node_id,evidence,
                 attempt_id=attempt_id,
                 attempt_metadata=attempt_metadata,
-                require_existing_link=already_closed,
+                require_existing_link=already_closed and not marker_eligible,
             )
-            if already_closed:
+            if already_closed and not marker_eligible:
                 return marker, {"attempt_id":attempt_id,"status":"already-closed"}
 
             canonical_marker_path=directory/f"{node_id}.json"
             history_marker_path=directory/f"{node_id}.{marker['sequence']}.json"
+            # SD-94: `done` for a marker-eligible row is a no-op re-assert, never a re-close —
+            # the supervisor's own terminal stays the row's closing act, and the appended
+            # note/marker evidence only records that the marker now exists. A duplicate
+            # `complete` then reads note=completed-marker (last value wins) and returns the
+            # idempotent already-closed path instead of appending twice.
             row_fields[1]="done"
             row_fields[5] += (
                 f",note=completed-marker,completion_marker={canonical_marker_path}"
@@ -1137,7 +1154,10 @@ def complete_node(
             )
             lines[row_index]="\t".join(row_fields)
             _atomic_registry_replace(jobs_path,lines)
-            return marker, {"attempt_id":attempt_id,"status":"closed"}
+            return marker, {
+                "attempt_id":attempt_id,
+                "status":"marker-appended" if marker_eligible else "closed",
+            }
 
 def main():
     p=argparse.ArgumentParser(); sub=p.add_subparsers(dest="command",required=True)
