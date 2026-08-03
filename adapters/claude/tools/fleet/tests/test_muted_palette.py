@@ -51,9 +51,9 @@ class MutedPaletteTest(unittest.TestCase):
             "blue": (663, 663, 1000),
         })
         self.assertEqual(render._TINT_RGB_1000, {
-            233: (71, 75, 94),
-            234: (122, 133, 176),
-            236: (184, 192, 220),
+            233: (67, 75, 102),
+            234: (114, 133, 188),
+            236: (176, 188, 235),
         })
         init_color = mock.Mock()
         with mock.patch.multiple(
