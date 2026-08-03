@@ -7,6 +7,12 @@ set -u
 HOOK="$(cd "$(dirname "$0")" && pwd)/mem-turn-nudge.sh"
 [ -f "$HOOK" ] || { echo "FAIL: hook not found at $HOOK"; exit 1; }
 
+# D-42 hermeticity: this file may itself run inside a registered worker, whose
+# markers would otherwise gate every case into the silent branch (false green on
+# the negative cases, false red on the positive ones). Each case sets its own.
+unset AGENT_SESSION_ROLE AGENT_DISPATCH_CHILD AGENT_DISPATCH_DEPTH \
+  CLAUDE_CODE_CHILD_SESSION OPENCODE_DISPATCH_SLUG FLEET_TITLE_REFRESH MEM_DISTILL
+
 PASS=0; FAIL=0
 ok()  { PASS=$((PASS+1)); printf '  ✅ %s\n' "$1"; }
 bad() { FAIL=$((FAIL+1)); printf '  ❌ %s\n' "$1"; }
@@ -108,7 +114,6 @@ for assignment in \
   "AGENT_SESSION_ROLE=worker" \
   "AGENT_DISPATCH_CHILD=1" \
   "AGENT_DISPATCH_DEPTH=1" \
-  "CLAUDE_CODE_CHILD_SESSION=1" \
   "OPENCODE_DISPATCH_SLUG=worker-slug" \
   "FLEET_TITLE_REFRESH=1" \
   "MEM_DISTILL=1"; do
@@ -124,6 +129,18 @@ for assignment in \
     bad "T8: $assignment must return before counter state"
   fi
 done
+
+echo "== T9: §5.10 — runtime child-session marker alone is an interactive session =="
+teammate_sid="teammate-nudge-1"
+teammate_state="$TMP/.turn-state-$teammate_sid"
+rm -f "$teammate_state"
+printf '{"hook_event_name":"UserPromptSubmit","session_id":"%s","prompt":"x"}' "$teammate_sid" \
+  | env CLAUDE_CODE_CHILD_SESSION=1 MEM_STORE="$TMP" MEM_NUDGE_INTERVAL=1 bash "$HOOK" >/dev/null
+if [ -e "$teammate_state" ]; then
+  ok "T9: CLAUDE_CODE_CHILD_SESSION alone keeps the turn counter running"
+else
+  bad "T9: teammate session (runtime marker only) was wrongly gated as a worker"
+fi
 
 echo
 echo "RESULT: PASS=$PASS FAIL=$FAIL"

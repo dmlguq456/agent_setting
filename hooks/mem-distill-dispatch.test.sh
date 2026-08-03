@@ -29,6 +29,11 @@ OPENCODE_DISTILL="$ROOT/adapters/opencode/bin/distill-worker.sh"
 # dispatch 가 *이 worktree* 의 mem.py 를 쓰도록 강제 (라이브 ~/.claude 는 pre-γ — curate-snapshot/prune 부재).
 export MEM_PY="$MEM"
 export MEM_DISTILL_WORKER=claude
+# D-42 hermeticity: this file may itself run inside a registered worker, whose
+# markers would otherwise gate every case into the silent branch. Each case sets
+# its own markers inline (mirrors hooks/portable-guards.test.sh).
+unset AGENT_SESSION_ROLE AGENT_DISPATCH_CHILD AGENT_DISPATCH_DEPTH \
+  CLAUDE_CODE_CHILD_SESSION OPENCODE_DISPATCH_SLUG FLEET_TITLE_REFRESH MEM_DISTILL
 
 PASS=0; FAIL=0
 ok()  { PASS=$((PASS+1)); printf '  ✅ %s\n' "$1"; }
@@ -191,7 +196,6 @@ for assignment in \
   "AGENT_SESSION_ROLE=worker" \
   "AGENT_DISPATCH_CHILD=1" \
   "AGENT_DISPATCH_DEPTH=1" \
-  "CLAUDE_CODE_CHILD_SESSION=1" \
   "OPENCODE_DISPATCH_SLUG=worker-slug" \
   "FLEET_TITLE_REFRESH=1"; do
   worker_case=$((worker_case + 1))
@@ -211,6 +215,20 @@ for assignment in \
     bad "D-42 portable dispatcher: $assignment escaped worker boundary"
   fi
 done
+
+# §5.10 regression: a runtime child-session marker alone is an interactive teammate
+# session, not a registered worker — the lifecycle must still run for it.
+teammate_sid="teammate-boundary-1"
+mkfix "$teammate_sid"
+rm -f "$STUBWORKER/CLAUDE_CALLED"
+rm -rf "$STORE/.distill-lock-$teammate_sid" "$STORE/.distill-state-$teammate_sid"
+CLAUDE_CODE_CHILD_SESSION=1 MEM_DISTILL_ENABLE=1 PATH="$STUBWORKER:$PATH" \
+  bash "$DISPATCH" distill "$teammate_sid" "/tmp" || true
+if [ -e "$STUBWORKER/CLAUDE_CALLED" ] || [ -e "$STORE/.distill-lock-$teammate_sid" ]; then
+  ok "§5.10: CLAUDE_CODE_CHILD_SESSION alone does not suppress distillation"
+else
+  bad "§5.10: teammate session (runtime marker only) was wrongly treated as a worker"
+fi
 
 adapter_sid="worker-boundary-claude-adapter"
 mkfix "$adapter_sid"

@@ -46,7 +46,6 @@ function isWorkerSession() {
     (process.env.AGENT_SESSION_ROLE || "").toLowerCase() === "worker" ||
     process.env.AGENT_DISPATCH_CHILD === "1" ||
     Boolean(process.env.AGENT_DISPATCH_DEPTH) ||
-    process.env.CLAUDE_CODE_CHILD_SESSION === "1" ||
     Boolean(process.env.OPENCODE_DISPATCH_SLUG) ||
     process.env.FLEET_TITLE_REFRESH === "1" ||
     process.env.MEM_DISTILL === "1"

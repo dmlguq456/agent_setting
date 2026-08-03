@@ -79,7 +79,7 @@ class ProducerTest(unittest.TestCase):
         self.assertIsNone(interaction.read_wait("sid", "claude"))
         values = {
             "AGENT_SESSION_ROLE": "worker", "AGENT_DISPATCH_CHILD": "1",
-            "AGENT_DISPATCH_DEPTH": "1", "CLAUDE_CODE_CHILD_SESSION": "1",
+            "AGENT_DISPATCH_DEPTH": "1",
             "OPENCODE_DISPATCH_SLUG": "child", "FLEET_TITLE_REFRESH": "1",
             "MEM_DISTILL": "1",
         }
@@ -91,6 +91,25 @@ class ProducerTest(unittest.TestCase):
             interaction.clear_wait("sid", "claude")
             self.run_hook(CLAUDE, {"session_id": "sid"}, "set", "--kind", "decision", env=env)
             self.assertIsNone(interaction.read_wait("sid", "claude"), key)
+
+    def test_runtime_child_session_marker_alone_is_not_a_worker(self):
+        # core/OPERATIONS.md §5.10: a runtime injects CLAUDE_CODE_CHILD_SESSION into
+        # every child process an ordinary interactive session spawns — hooks included —
+        # so an agent-team teammate session carries it. Only harness-planted markers
+        # gate the lifecycle; the teammate's waits must still reach Fleet.
+        env = dict(self.env, CLAUDE_CODE_CHILD_SESSION="1")
+        payload = {"session_id": "teammate-sid", "hook_event_name": "PreToolUse"}
+        self.run_hook(CLAUDE, payload, "set", "--kind", "decision", env=env)
+        record = interaction.read_wait("teammate-sid", "claude")
+        self.assertIsNotNone(record)
+        self.assertEqual(record["kind"], "decision")
+        self.run_hook(CLAUDE, payload, "clear", env=env)
+        self.assertIsNone(interaction.read_wait("teammate-sid", "claude"))
+        # The same marker on the Codex clear producer is likewise not worker evidence.
+        interaction.set_wait("teammate-sid", "codex", "approval",
+                             "codex-permissionrequest")
+        self.run_hook(CODEX_CLEAR, {"thread_id": "teammate-sid"}, env=env)
+        self.assertIsNone(interaction.read_wait("teammate-sid", "codex"))
 
     def test_claude_missing_or_unsafe_sid_is_silent(self):
         self.run_hook(CLAUDE, {}, "set", "--kind", "decision")

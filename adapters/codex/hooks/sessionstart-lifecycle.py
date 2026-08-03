@@ -74,7 +74,6 @@ def is_worker_session() -> bool:
         os.environ.get("AGENT_SESSION_ROLE", "").lower() == "worker"
         or os.environ.get("AGENT_DISPATCH_CHILD") == "1"
         or bool(os.environ.get("AGENT_DISPATCH_DEPTH"))
-        or os.environ.get("CLAUDE_CODE_CHILD_SESSION") == "1"
         or bool(os.environ.get("OPENCODE_DISPATCH_SLUG"))
         or os.environ.get("FLEET_TITLE_REFRESH") == "1"
         or os.environ.get("MEM_DISTILL") == "1"

@@ -4520,9 +4520,17 @@ out=$(CLAUDE_CODE_CHILD_SESSION=1 "$SDR" --skill code-plan --dispatch-depth 2 --
 # (iv) non-code skill → no-op
 out=$(CLAUDE_CODE_CHILD_SESSION=1 "$SDR" --skill autopilot-draft --dispatch-depth 1 --intensity standard 2>&1); rc=$?
 [ "$rc" -eq 0 ] && [ -z "$out" ] && ok "SDR no-ops for non-code skill" || bad "SDR should no-op for non-code skill [$out] rc=$rc"
-# (v) main (no child env) → no-op
-out=$(env -u CLAUDE_CODE_CHILD_SESSION "$SDR" --skill code-plan --dispatch-depth 1 --intensity standard 2>&1); rc=$?
-[ "$rc" -eq 0 ] && [ -z "$out" ] && ok "SDR no-ops for main (no child env)" || bad "SDR should no-op for main [$out] rc=$rc"
+# (v) main (no dispatch depth) → no-op
+out=$("$SDR" --skill code-plan --dispatch-depth "" --intensity standard 2>&1); rc=$?
+[ "$rc" -eq 0 ] && [ -z "$out" ] && ok "SDR no-ops for main (no dispatch depth)" || bad "SDR should no-op for main [$out] rc=$rc"
+# (vi) §5.10: a runtime child-session marker alone is a teammate session, not a conductor → no-op
+out=$(CLAUDE_CODE_CHILD_SESSION=1 "$SDR" --skill code-plan --dispatch-depth "" --intensity standard 2>&1); rc=$?
+[ "$rc" -eq 0 ] && [ -z "$out" ] && ok "SDR no-ops for teammate session (runtime marker, no depth)" || bad "SDR should no-op for teammate session [$out] rc=$rc"
+# (vii) depth is sufficient evidence without the runtime marker → still denies
+err=$(env -u CLAUDE_CODE_CHILD_SESSION AGENT_DISPATCH_SELF_SLUG=cyc "$SDR" --skill code-plan --dispatch-depth 1 --intensity standard 2>&1 >/dev/null); rc=$?
+[ "$rc" -eq 2 ] && printf '%s' "$err" | grep -q 'stage-dispatch denied' \
+  && ok "SDR denies on harness depth marker alone (no runtime marker)" \
+  || bad "SDR should deny on depth alone (rc=$rc) [$err]"
 
 echo "== SD-14b conductor Stop gate (UNREGISTERED / CLI unit) =="
 sdtmp="$(mktemp -d)"
@@ -4540,10 +4548,112 @@ else bad "CSG should block-diagnose for dead child [$out]"; fi
 # stop_hook_active → no block (loop guard)
 out=$(CLAUDE_CODE_CHILD_SESSION=1 AGENT_DISPATCH_DEPTH=1 "$CSG" --self-slug cyc --jobs "$sdjobs" --stop-active true 2>/dev/null)
 [ -z "$out" ] && ok "CSG no block when stop_hook_active" || bad "CSG should no-op when stop_hook_active [$out]"
-# non-conductor env → no block
-out=$(env -u CLAUDE_CODE_CHILD_SESSION "$CSG" --self-slug cyc --jobs "$sdjobs" 2>/dev/null)
+# non-conductor env (no dispatch depth) → no block
+out=$("$CSG" --self-slug cyc --jobs "$sdjobs" 2>/dev/null)
 [ -z "$out" ] && ok "CSG no block for non-conductor env" || bad "CSG should no-op for non-conductor [$out]"
+# §5.10: a runtime child-session marker alone is a teammate session → no block
+out=$(CLAUDE_CODE_CHILD_SESSION=1 "$CSG" --self-slug cyc --jobs "$sdjobs" 2>/dev/null)
+[ -z "$out" ] && ok "CSG no block for teammate session (runtime marker, no depth)" || bad "CSG should no-op for teammate session [$out]"
+# depth marker alone is sufficient conductor evidence → still blocks
+out=$(env -u CLAUDE_CODE_CHILD_SESSION AGENT_DISPATCH_DEPTH=1 DISPATCH_RUNTIME_ROOT="$sdtmp/rt" "$CSG" --self-slug cyc --jobs "$sdjobs" 2>/dev/null)
+printf '%s' "$out" | grep -q '"decision":[[:space:]]*"block"' \
+  && ok "CSG blocks on harness depth marker alone (no runtime marker)" \
+  || bad "CSG should block on depth alone [$out]"
 rm -rf "$sdtmp"
+
+echo "== §5.10 main-session lifecycle predicates: harness markers only =="
+# A runtime injects CLAUDE_CODE_CHILD_SESSION into every child process an ordinary
+# interactive session spawns (hooks included), so an agent-team teammate session carries
+# it. Only harness-planted markers may gate main-session lifecycle hooks.
+predtmp="$(mktemp -d)"
+mkdir -p "$predtmp/desk" "$predtmp/proj"
+printf '# oncall\n' > "$predtmp/oncall.md"
+HERDR="$ROOT/hooks/herdr-agent-state.sh"
+
+# (a) recall bridge: teammate marker → still publishes a recall opportunity receipt.
+pred_recall() { # $1=case-tag ; env assignments come from the caller
+  rcpt="$predtmp/receipts-$1"
+  rm -rf "$rcpt"
+  MEM_PY="$ROOT/tools/memory/mem.py" MEM_STORE="$predtmp/store-$1" MEM_RECALL_RECEIPTS="$rcpt" \
+    "$RECALL" --prompt "일반 질문" --cwd "$predtmp/proj" --session-id "pred-$1" \
+      --turn-id "turn-$1" --format text >/dev/null 2>&1 || true
+  find "$rcpt" -type f -name '*.json' -print -quit 2>/dev/null | grep -q .
+}
+if CLAUDE_CODE_CHILD_SESSION=1 pred_recall teammate; then
+  ok "recall bridge stays active for a teammate session (runtime marker only)"
+else bad "recall bridge must not treat CLAUDE_CODE_CHILD_SESSION as worker evidence"; fi
+for assignment in AGENT_SESSION_ROLE=worker AGENT_DISPATCH_CHILD=1 AGENT_DISPATCH_DEPTH=2; do
+  if env "$assignment" bash -c 'MEM_PY="$1/tools/memory/mem.py" MEM_STORE="$2/store-w" MEM_RECALL_RECEIPTS="$2/receipts-w" \
+      "$3" --prompt "일반 질문" --cwd "$2/proj" --session-id pred-w --turn-id turn-w --format text >/dev/null 2>&1; \
+      ! find "$2/receipts-w" -type f -name "*.json" -print -quit 2>/dev/null | grep -q .' _ "$ROOT" "$predtmp" "$RECALL"; then
+    ok "recall bridge stays silent for worker marker $assignment"
+  else bad "recall bridge should no-op for worker marker $assignment"; fi
+  rm -rf "$predtmp/receipts-w" "$predtmp/store-w"
+done
+
+# (b) briefing desk: teammate marker → still briefs; harness markers → silent.
+pred_brief() { # $1=case-tag ; prints nothing, returns 0 when the briefing ran
+  MEM_BRIEFING_DESK="$predtmp/desk" MEM_BRIEFING_ONCALL="$predtmp/oncall.md" \
+    MEM_PY="$ROOT/tools/memory/mem.py" MEM_STORE="$predtmp/bstore-$1" \
+    bash "$BRIEF" --cwd "$predtmp/desk" --format text 2>/dev/null | grep -q .
+}
+if CLAUDE_CODE_CHILD_SESSION=1 pred_brief teammate; then
+  ok "briefing desk stays active for a teammate session (runtime marker only)"
+else bad "briefing desk must not treat CLAUDE_CODE_CHILD_SESSION as worker evidence"; fi
+for assignment in AGENT_SESSION_ROLE=worker AGENT_DISPATCH_CHILD=1 AGENT_DISPATCH_DEPTH=2; do
+  bcase="b$(printf '%s' "$assignment" | tr -dc 'a-zA-Z')"
+  if env "$assignment" bash -c 'MEM_BRIEFING_DESK="$1/desk" MEM_BRIEFING_ONCALL="$1/oncall.md" \
+      MEM_PY="$2/tools/memory/mem.py" MEM_STORE="$1/bstore-$4" bash "$3" --cwd "$1/desk" --format text 2>/dev/null \
+      | grep -q .' _ "$predtmp" "$ROOT" "$BRIEF" "$bcase"; then
+    bad "briefing desk should no-op for worker marker $assignment"
+  else ok "briefing desk stays silent for worker marker $assignment"; fi
+done
+
+# (c) herdr pane state: teammate marker → still reports to the pane socket.
+predsock="$predtmp/herdr.sock"
+predrecv="$predtmp/herdr.received"
+python3 - "$predsock" "$predrecv" >/dev/null 2>&1 <<'PY' &
+import socket, sys, os
+path, out = sys.argv[1], sys.argv[2]
+srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+srv.bind(path); srv.listen(8); srv.settimeout(20)
+try:
+    while True:
+        conn, _ = srv.accept()
+        data = conn.recv(4096)
+        if data:
+            with open(out, "ab") as handle:
+                handle.write(data)
+        conn.close()
+except Exception:
+    pass
+PY
+predsrv=$!
+predwait=0
+while [ ! -S "$predsock" ] && [ "$predwait" -lt 50 ]; do predwait=$((predwait + 1)); sleep 0.1; done
+pred_herdr() { # $1=pane-id ; env assignments come from the caller
+  printf '{"hook_event_name":"PreToolUse","session_id":"pred-herdr"}' \
+    | HERDR_ENV=1 HERDR_SOCKET_PATH="$predsock" HERDR_PANE_ID="$1" sh "$HERDR" working >/dev/null 2>&1 || true
+}
+: > "$predrecv"
+CLAUDE_CODE_CHILD_SESSION=1 pred_herdr pane-teammate
+predwait=0
+while ! grep -q 'pane-teammate' "$predrecv" 2>/dev/null && [ "$predwait" -lt 30 ]; do predwait=$((predwait + 1)); sleep 0.1; done
+if grep -q 'pane-teammate' "$predrecv" 2>/dev/null; then
+  ok "herdr pane state stays active for a teammate session (runtime marker only)"
+else bad "herdr pane state must not treat CLAUDE_CODE_CHILD_SESSION as worker evidence"; fi
+: > "$predrecv"
+for assignment in AGENT_SESSION_ROLE=worker AGENT_DISPATCH_CHILD=1 AGENT_DISPATCH_DEPTH=2; do
+  env "$assignment" sh -c 'printf "{\"hook_event_name\":\"PreToolUse\",\"session_id\":\"pred-herdr\"}" \
+    | HERDR_ENV=1 HERDR_SOCKET_PATH="$1" HERDR_PANE_ID=pane-worker sh "$2" working >/dev/null 2>&1' _ "$predsock" "$HERDR" || true
+done
+sleep 0.3
+if ! grep -q 'pane-worker' "$predrecv" 2>/dev/null; then
+  ok "herdr pane state stays silent for every harness worker marker"
+else bad "herdr pane state should no-op for harness worker markers"; fi
+kill "$predsrv" 2>/dev/null || true
+wait "$predsrv" 2>/dev/null || true
+rm -rf "$predtmp"
 
 echo "== drill runtime failure propagation + Fleet limit marker =="
 drilltmp="$TMP/drill-runtime-failure"
