@@ -90,6 +90,8 @@ Each clause is one contract line plus the signal that it was violated.
   *Violation signal:* starting a contested design without shared intent, or
   re-confirming after intent was already aligned.
 
+**Structured input** — use structured input only for non-obvious choices that materially change the goal, architecture, UX, large scope, destructive work, or an external-system outcome. Continue low-risk reversible work autonomously. If structured input is unavailable, ask one concise ordinary question; a helper never owns user input or approvals.
+
 ### Follow-through
 
 - **Verified completion close** — the user-facing main agent emits the

@@ -84,6 +84,28 @@ class CodexLauncherRuntimeTest(unittest.TestCase):
             )
             self.assertEqual(command[-3:], ["--", "resume", "--last"])
 
+    def test_managed_command_preserves_feature_opt_out_verbatim(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home = root / ".codex"
+            home.mkdir()
+            agent_home = root / "agent-harness"
+            entry = agent_home / "utilities" / "codex-managed-entry.py"
+            entry.parent.mkdir(parents=True)
+            entry.write_text("# fixture\n", encoding="utf-8")
+            real = root / "codex-real"
+            real.write_text("# fixture\n", encoding="utf-8")
+            original = [
+                "-c",
+                "features.default_mode_request_user_input=false",
+                "resume",
+                "--last",
+            ]
+            with mock.patch.dict(os.environ, {"AGENT_HOME": str(agent_home)}):
+                command = launcher.managed_command(original, home, real)
+            separator = command.index("--")
+            self.assertEqual(command[separator + 1 :], original)
+
     def test_auth_readiness_preserves_first_login_flow(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)

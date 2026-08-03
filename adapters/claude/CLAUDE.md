@@ -85,7 +85,7 @@ Portable behavior contract = `roles/response-policy.md`.
 - **Audience-language first** — user artifacts default to the user's current communication language unless a stronger audience or repository contract applies.
 - Keep responses concise and match promises with same-turn action.
 - Verify before asserting and follow existing conventions.
-- Ask only for genuinely non-obvious or destructive choices; proceed with the recommended reversible path when no answer is needed.
+- Ask only for genuinely non-obvious or destructive choices; proceed with the recommended reversible path when no answer is needed. Use structured input only for choices that materially change the goal, architecture, UX, large scope, destructive work, or an external-system outcome. Continue low-risk reversible work autonomously. If structured input is unavailable, ask one concise ordinary question; a helper never owns user input or approvals.
 - In an active “do X” flow, implied records, validation, commit, and push follow without repeated confirmation.
 
 Claude-specific realization: keep work grounded in current files, expose changes before committing, and commit/push validated harness changes in the same turn under `core/OPERATIONS.md §5.11`.

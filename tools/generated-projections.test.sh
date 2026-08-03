@@ -172,6 +172,8 @@ five-field completion card in §0.5|WORKFLOW §0.5 completion report pointer
 §5.11|OPERATIONS §5.11 same-turn commit/push policy
 dispatch depth 3 is forbidden|dispatch-depth-3 prohibition
 genuinely non-obvious|genuinely-non-obvious ask clause
+continue low-risk reversible work autonomously|structured-input autonomy threshold
+if structured input is unavailable|structured-input fallback clause
 legacy `.claude_reports/` is only a fallback|legacy artifact-root fallback qualifier
 depth, tests, safety, and validation on fallback|fallback preservation guarantee
 before committing|expose-change-before-committing clause

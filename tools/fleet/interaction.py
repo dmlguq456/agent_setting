@@ -26,6 +26,7 @@ WAIT_SOURCES = (
     "claude-permission",
     "codex-permissionrequest",
     "codex-rollout",
+    "codex-appserver",
 )
 _ALLOWED_KEYS = frozenset(
     ("schema_version", "harness", "session_id", "kind", "source", "waiting_since")
@@ -194,7 +195,11 @@ def pending_wait(session_id, harness, session_start=None, activity_since=None, n
         return None
     if _number(session_start) and waiting_since < float(session_start):
         return None
-    if _number(activity_since) and float(activity_since) > waiting_since:
+    if (
+        payload.get("source") != "codex-appserver"
+        and _number(activity_since)
+        and float(activity_since) > waiting_since
+    ):
         return None
     return payload
 

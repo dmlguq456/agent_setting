@@ -27,10 +27,14 @@ import signal
 import socket
 import stat
 import struct
+import sys
 import tempfile
 import threading
 import time
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from tools.fleet import interaction as fleet_interaction
 
 
 MAX_FRAME_BYTES = 16 * 1024 * 1024
@@ -40,6 +44,7 @@ MAX_LEDGER_BYTES = 4 * 1024 * 1024
 MAX_DELIVERIES = 4096
 INTERNAL_ID_PREFIX = "agent-harness-managed:"
 ID_PATTERN = re.compile(r"^[A-Za-z0-9._:@/+\-=]{1,256}$")
+FLEET_SESSION_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,256}$")
 ALLOWED_RECEIPT_KEYS = {
     "schema_version", "state", "parent_attempt_id", "children",
 }
@@ -478,6 +483,9 @@ class ManagedGateway:
         self._current_thread_id = ""
         self._threads: dict[str, ThreadState] = {}
         self._tui_requests: dict[tuple[str, Any], tuple[str, dict[str, Any]]] = {}
+        self._appserver_requests: dict[
+            tuple[str, tuple[str, Any]], float
+        ] = {}
         self._internal: dict[tuple[str, Any], PendingInternal] = {}
         self._delivery_pending: dict[str, PendingInternal] = {}
         self._next_internal_id = 1
@@ -555,6 +563,11 @@ class ManagedGateway:
                 self._current_thread_id = ""
                 self._threads.clear()
                 self._tui_requests.clear()
+                for thread_id in {
+                    identity[0] for identity in self._appserver_requests
+                }:
+                    self._clear_thread_requests_locked(thread_id)
+                self._appserver_requests.clear()
                 self._internal.clear()
                 self._delivery_pending.clear()
             self.trace("tui-connected", epoch=epoch)
@@ -616,6 +629,11 @@ class ManagedGateway:
                 self._delivery_pending.clear()
                 self._internal.clear()
                 self._tui_requests.clear()
+                for thread_id in {
+                    identity[0] for identity in self._appserver_requests
+                }:
+                    self._clear_thread_requests_locked(thread_id)
+                self._appserver_requests.clear()
                 self._threads.clear()
                 self._current_thread_id = ""
                 current_tui = self._tui
@@ -636,6 +654,15 @@ class ManagedGateway:
             if epoch != self._epoch or self._upstream is None:
                 raise GatewayError("tui-epoch-stale")
             method = message.get("method")
+            response_key = (
+                request_key(message.get("id")) if "id" in message else None
+            )
+            if (
+                response_key is not None
+                and "method" not in message
+                and ("result" in message or "error" in message)
+            ):
+                self._resolve_unique_appserver_response_locked(response_key)
             if method == "turn/start" and "id" in message:
                 params = message.get("params")
                 if not isinstance(params, dict):
@@ -741,6 +768,29 @@ class ManagedGateway:
     def _handle_upstream_locked(self, message: dict[str, Any]) -> None:
         method = message.get("method")
         key = request_key(message.get("id")) if "id" in message else None
+        if method == "item/tool/requestUserInput":
+            thread_id = thread_id_from_message(message)
+            if (
+                thread_id
+                and FLEET_SESSION_PATTERN.fullmatch(thread_id)
+                and key is not None
+            ):
+                identity = (thread_id, key)
+                self._appserver_requests.setdefault(identity, time.time())
+                self._publish_wait_locked(thread_id)
+        elif method == "serverRequest/resolved":
+            params = message.get("params")
+            if isinstance(params, dict):
+                thread_id = params.get("threadId")
+                resolved = request_key(params.get("requestId"))
+                if (
+                    isinstance(thread_id, str)
+                    and FLEET_SESSION_PATTERN.fullmatch(thread_id)
+                    and resolved is not None
+                ):
+                    self._resolve_appserver_request_locked(
+                        thread_id, resolved
+                    )
         if key is not None and key in self._internal:
             self._handle_internal_response_locked(
                 self._internal.pop(key), message
@@ -771,6 +821,8 @@ class ManagedGateway:
         elif method == "turn/completed":
             thread_id = thread_id_from_message(message)
             turn_id = turn_id_from_message(message)
+            if thread_id:
+                self._clear_thread_requests_locked(thread_id)
             state = self._threads.get(thread_id)
             if state is not None and (
                 not turn_id or state.active_turn_id == turn_id
@@ -783,6 +835,82 @@ class ManagedGateway:
                 "turn-completed", thread_id=thread_id, turn_id=turn_id
             )
         self._send_tui_locked(message)
+
+    def _publish_wait_locked(self, thread_id: str) -> None:
+        try:
+            pending = [
+                waiting
+                for (current, _), waiting in self._appserver_requests.items()
+                if current == thread_id
+            ]
+            if pending:
+                existing = fleet_interaction.read_wait(thread_id, "codex")
+                if (
+                    existing is None
+                    or existing.get("source") == "codex-appserver"
+                ):
+                    fleet_interaction.set_wait(
+                        thread_id,
+                        "codex",
+                        "decision",
+                        "codex-appserver",
+                        now=min(pending),
+                    )
+        except Exception:
+            pass
+
+    def _clear_thread_requests_locked(self, thread_id: str) -> None:
+        keys = [
+            identity
+            for identity in self._appserver_requests
+            if identity[0] == thread_id
+        ]
+        for key in keys:
+            self._appserver_requests.pop(key, None)
+        try:
+            existing = fleet_interaction.read_wait(thread_id, "codex")
+            if existing and existing.get("source") == "codex-appserver":
+                fleet_interaction.clear_wait(thread_id, "codex")
+        except Exception:
+            pass
+
+    def _resolve_unique_appserver_response_locked(
+        self, key: tuple[str, Any]
+    ) -> None:
+        matches = [
+            identity
+            for identity in self._appserver_requests
+            if identity[1] == key
+        ]
+        if len(matches) == 1:
+            self._resolve_appserver_request_locked(*matches[0])
+
+    def _resolve_appserver_request_locked(
+        self, thread_id: str, key: tuple[str, Any]
+    ) -> None:
+        identity = (thread_id, key)
+        if self._appserver_requests.pop(identity, None) is None:
+            return
+        remaining = [
+            waiting
+            for (current, _), waiting in self._appserver_requests.items()
+            if current == thread_id
+        ]
+        try:
+            existing = fleet_interaction.read_wait(thread_id, "codex")
+            if existing and existing.get("source") == "codex-appserver":
+                if remaining:
+                    fleet_interaction.set_wait(
+                        thread_id,
+                        "codex",
+                        "decision",
+                        "codex-appserver",
+                        now=min(remaining),
+                    )
+                else:
+                    fleet_interaction.clear_wait(thread_id, "codex")
+        except Exception:
+            pass
 
     def _track_tui_response_locked(
         self,

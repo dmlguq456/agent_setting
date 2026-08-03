@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import signal
 import stat
@@ -18,6 +19,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 GATEWAY = ROOT / "utilities" / "codex-managed-gateway.py"
+FEATURE = "default_mode_request_user_input"
 
 
 class EntryError(RuntimeError):
@@ -79,7 +81,83 @@ def safe_registry(path: Path) -> Path:
     return candidate.resolve(strict=True)
 
 
-def check_runtime(codex: str, workspace: Path, environment: dict[str, str]) -> None:
+def _feature_enabled(output: str) -> bool:
+    """Accept only an exact feature row whose effective value is true."""
+    row = re.compile(
+        rf"^\s*{re.escape(FEATURE)}\s+.+\s+(true|false)\s*$",
+        re.IGNORECASE,
+    )
+    for line in output.splitlines():
+        match = row.fullmatch(line)
+        if match is not None:
+            return match.group(1).lower() == "true"
+    return False
+
+
+def feature_capability(
+    codex: str, workspace: Path, environment: dict[str, str]
+) -> str:
+    try:
+        result = subprocess.run(
+            [codex, "features", "list", "--enable", FEATURE],
+            cwd=workspace,
+            env=environment,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+            timeout=20,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "unsupported"
+    if result.returncode == 0 and _feature_enabled(result.stdout):
+        return "enabled"
+    return "unsupported"
+
+
+def _config_disables_feature(value: str) -> bool:
+    compact = "".join(value.split()).lower()
+    return compact == f"features.{FEATURE}=false"
+
+
+def explicit_feature_disable(args: list[str]) -> bool:
+    for index, value in enumerate(args):
+        if value == "--disable":
+            if index + 1 < len(args) and args[index + 1] == FEATURE:
+                return True
+        elif value == f"--disable={FEATURE}":
+            return True
+        if value in {"-c", "--config"} and index + 1 < len(args):
+            config_value = args[index + 1]
+        elif value.startswith("-c") and value != "-c":
+            config_value = value[2:]
+        elif value.startswith("--config="):
+            config_value = value.partition("=")[2]
+        else:
+            config_value = ""
+        if config_value and _config_disables_feature(config_value):
+            return True
+    return False
+
+
+def app_server_feature_args(feature_status: str) -> list[str]:
+    if feature_status == "enabled":
+        return ["--enable", FEATURE]
+    if feature_status == "user-disabled":
+        # The user's flag belongs to the remote TUI argv. Mirror that explicit
+        # intent into the separate App Server process so persisted config
+        # cannot turn the feature back on behind the user's back.
+        return ["--disable", FEATURE]
+    return []
+
+
+def tui_feature_args(feature_status: str) -> list[str]:
+    if feature_status == "enabled":
+        return ["--enable", FEATURE]
+    return []
+
+
+def check_runtime(codex: str, workspace: Path, environment: dict[str, str]) -> str:
     """Verify the two runtime surfaces needed by managed entry without login I/O."""
 
     commands = (
@@ -102,6 +180,7 @@ def check_runtime(codex: str, workspace: Path, environment: dict[str, str]) -> N
             raise EntryError(reason) from exc
         if result.returncode != 0 or marker not in result.stdout:
             raise EntryError(reason)
+    return feature_capability(codex, workspace, environment)
 
 
 def wait_socket(path: Path, process: subprocess.Popen[Any], timeout: float) -> None:
@@ -209,7 +288,9 @@ def execute(args: argparse.Namespace) -> int:
             "AGENT_DISPATCH_JOBS": str(jobs),
         }
     )
-    check_runtime(args.codex, workspace, environment)
+    capability = check_runtime(args.codex, workspace, environment)
+    user_disabled = explicit_feature_disable(list(args.client_args))
+    feature_status = "user-disabled" if user_disabled else capability
     if args.check:
         print(
             canonical(
@@ -218,6 +299,7 @@ def execute(args: argparse.Namespace) -> int:
                     "status": "ready",
                     "runtime": "codex-managed-entry",
                     "jobs": str(jobs),
+                    "feature_default_mode_request_user_input": feature_status,
                 }
             )
         )
@@ -231,6 +313,7 @@ def execute(args: argparse.Namespace) -> int:
                 "app-server",
                 "--listen",
                 f"unix://{upstream}",
+                *app_server_feature_args(feature_status),
             ],
             cwd=workspace,
             env=environment,
@@ -277,7 +360,24 @@ def execute(args: argparse.Namespace) -> int:
             trailing = list(args.client_args)
             if trailing[:1] == ["--"]:
                 trailing = trailing[1:]
-            client = [args.codex, "--remote", remote, *trailing]
+            client = [
+                args.codex,
+                "--remote",
+                remote,
+                *tui_feature_args(feature_status),
+                *trailing,
+            ]
+        if feature_status == "unsupported":
+            print(
+                canonical(
+                    {
+                        "status": "warning",
+                        "feature": FEATURE,
+                        "reason": "unsupported",
+                    }
+                ),
+                file=sys.stderr,
+            )
         result = subprocess.run(
             client,
             cwd=workspace,

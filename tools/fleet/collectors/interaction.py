@@ -23,10 +23,16 @@ def enrich(sess, now=None):
         "waiting_since": record["waiting_since"],
     }
     existing = getattr(sess, "interaction_state", None)
-    if (
-        isinstance(existing, dict)
-        and isinstance(existing.get("waiting_since"), (int, float))
-        and existing["waiting_since"] > candidate["waiting_since"]
-    ):
-        return
+    priorities = {"codex-appserver": 2, "codex-rollout": 1}
+    if isinstance(existing, dict):
+        existing_priority = priorities.get(existing.get("source"), 0)
+        candidate_priority = priorities.get(candidate.get("source"), 0)
+        if existing_priority > candidate_priority:
+            return
+        if (
+            existing_priority == candidate_priority
+            and isinstance(existing.get("waiting_since"), (int, float))
+            and existing["waiting_since"] > candidate["waiting_since"]
+        ):
+            return
     sess.interaction_state = candidate

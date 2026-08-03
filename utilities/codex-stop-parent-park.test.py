@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression tests for the silent no-op Codex Stop bridge."""
+"""Regression tests for the silent, exact-cleanup-only Codex Stop bridge."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ class StopLifecycleTest(unittest.TestCase):
         self.assertIn("stop-lifecycle.py", definition["command"])
         self.assertNotIn("sessionend-lifecycle.py", definition["command"])
 
-    def test_stop_is_a_silent_noop(self):
+    def test_stop_has_no_completion_or_continuation_authority(self):
         module = load_stop()
         self.assertEqual(module.main(), 0)
         source = STOP_PATH.read_text(encoding="utf-8")
@@ -44,10 +44,14 @@ class StopLifecycleTest(unittest.TestCase):
         ):
             self.assertNotIn(retired, source)
 
-    def test_stop_source_has_no_payload_or_environment_branch(self):
+    def test_stop_source_is_limited_to_exact_interaction_cleanup(self):
         source = STOP_PATH.read_text(encoding="utf-8")
-        self.assertNotIn("sys.stdin", source)
-        self.assertNotIn("os.environ", source)
+        self.assertIn("sys.stdin", source)
+        self.assertIn("os.environ", source)
+        self.assertIn("interaction.clear_wait", source)
+        self.assertNotIn("subprocess", source)
+        self.assertNotIn("dispatch-wait", source)
+        self.assertNotIn("join_session_batch", source)
 
     def test_sessionend_has_no_stop_branch(self):
         source = SESSIONEND_PATH.read_text(encoding="utf-8")
