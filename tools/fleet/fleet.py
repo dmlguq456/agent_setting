@@ -3,8 +3,9 @@
 
 Zero external deps (stdlib curses/sqlite3/json/subprocess/re/os/time only). Pure external
 observer: reads process table + on-disk state artifacts and injects nothing (PRD §0.5).
-The live TUI may schedule the fleet-owned title refresher, which writes only neutral local
-state; ``--json`` and ``--once`` remain side-effect-free snapshots.
+The live TUI may schedule fleet-owned title and usage-cache refreshers, which write only
+neutral local state; git telemetry is bounded background work. ``--json`` and ``--once``
+remain side-effect-free snapshots and never schedule refreshes or cache writes.
 
 Modes:
   (default)  curses full-screen, re-collect + redraw every --interval seconds
@@ -44,6 +45,8 @@ def parse_args(argv):
                    help="comma list to restrict harnesses, e.g. claude,codex")
     p.add_argument("--json", action="store_true",
                    help="emit collected state as JSON to stdout")
+    p.add_argument("--no-usage-api", action="store_true",
+                   help="disable live usage API refreshes")
     p.add_argument("--all", dest="show_all", action="store_true",
                    help="include stale/dead sessions in the fleet list (hidden by default)")
     p.add_argument("--demo", action="store_true",
@@ -67,6 +70,15 @@ def _harness_filter(spec):
     return hs or None
 
 
+def _disabled_tokens(value=None):
+    raw = os.environ.get("FLEET_DISABLE", "") if value is None else value
+    tokens = sorted(set(token.strip().lower() for token in str(raw).split(",") if token.strip()))
+    recognized = sorted(token for token in tokens if token == "usage-api")
+    return {"recognized": recognized,
+            "ignored": sorted(token for token in tokens if token not in recognized),
+            "api_disabled": "usage-api" in recognized}
+
+
 def _collect_memory():
     # F-19: additive, best-effort — a collector import/read failure must never break --json.
     try:
@@ -79,7 +91,7 @@ def _collect_memory():
         return None
 
 
-def _snapshot_json(sessions, jobs):
+def _snapshot_json(sessions, jobs, usage=None, disabled=None):
     counts = {}
     for s in sessions:
         counts[s.harness] = counts.get(s.harness, 0) + 1
@@ -99,6 +111,10 @@ def _snapshot_json(sessions, jobs):
     gov = _collect_governor()
     if gov is not None:
         out["governor"] = gov
+    if usage is not None:
+        out["usage"] = usage
+    if disabled is not None:
+        out["disabled"] = disabled
     return json.dumps(out, ensure_ascii=False, indent=2)
 
 
@@ -132,6 +148,8 @@ def _collect_route(entities):
 def main(argv=None):
     args = parse_args(argv if argv is not None else sys.argv[1:])
     hfilter = _harness_filter(args.harness)
+    disabled = _disabled_tokens()
+    disabled["api_disabled"] = bool(disabled["api_disabled"] or args.no_usage_api)
 
     collector = collect_all
     if args.demo or os.environ.get("FLEET_DEMO"):   # flag OR env (env works through any launcher/alias)
@@ -140,13 +158,16 @@ def main(argv=None):
         else:
             from . import demo
 
-        def collector(harness_filter=None):      # LIVE real data + injected demo fixtures (merged)
-            rs, rj = collect_all(harness_filter=harness_filter)
+        def collector(harness_filter=None, usage="cache-only"):      # LIVE real data + injected demo fixtures (merged)
+            rs, rj = collect_all(harness_filter=harness_filter, usage="cache-only")
             ds, dj = demo.collect(harness_filter=harness_filter)
             return rs + ds, rj + dj
 
-    def projected_collector(harness_filter=None):
-        sessions, jobs = collector(harness_filter=harness_filter)
+    def projected_collector(harness_filter=None, usage="cache-only"):
+        if usage == "cache-only":
+            sessions, jobs = collector(harness_filter=harness_filter)
+        else:
+            sessions, jobs = collector(harness_filter=harness_filter, usage=usage)
         try:
             if __package__ in (None, ""):
                 from fleet.projection import attach_projections
@@ -166,7 +187,18 @@ def main(argv=None):
 
     if args.json:
         sessions, jobs = projected_collector(harness_filter=hfilter)
-        print(_snapshot_json(sessions, jobs))
+        usage_json = dict(getattr(collect_all, "last_usage", {}))
+        snapshots = [value for value in usage_json.values() if isinstance(value, dict)]
+        freshnesses = [value.get("freshness") for value in snapshots]
+        usage_json["freshness"] = ("fresh" if "fresh" in freshnesses else
+                                    "stale" if "stale" in freshnesses else "unknown")
+        observed = [value.get("observed_at") for value in snapshots
+                    if isinstance(value.get("observed_at"), (int, float))]
+        usage_json["observed_at"] = max(observed) if observed else None
+        usage_json["api_disabled"] = disabled["api_disabled"]
+        print(_snapshot_json(sessions, jobs,
+                             usage=usage_json,
+                             disabled=disabled))
         return 0
 
     # curses / --once path (render module) — resolved lazily so --json needs no curses.
@@ -180,6 +212,7 @@ def main(argv=None):
         return 1
 
     render.set_show_all(args.show_all)
+    render.set_api_disabled(disabled["api_disabled"])
     # F-30 (v10, plan §P3/§9): --view is additive and honors the SAME single _PROCESS_VIEW
     # state the `p` key flips — never a second decision path. FLEET_VIEW env is the reduction
     # fallback the plan reserves in case --view itself is judged out of scope later (§9 note 1);
@@ -192,9 +225,17 @@ def main(argv=None):
     render.reset_scroll()   # fresh launch starts scrolled to top (belt-and-suspenders)
 
     base_collector = projected_collector
+    previous_sessions = []
 
     def live_collector(harness_filter=None):
-        sessions, jobs = base_collector(harness_filter=harness_filter)
+        nonlocal previous_sessions
+        effective = set(harness_filter) if harness_filter is not None else {"claude", "codex", "opencode"}
+        live = set()
+        if not disabled["api_disabled"] and args.section in ("fleet", "both"):
+            live = render.live_harnesses(previous_sessions) & effective & {"claude", "codex"}
+        usage = "refresh" if live else "cache-only"
+        sessions, jobs = base_collector(harness_filter=harness_filter, usage=usage)
+        previous_sessions = list(sessions)
         try:
             if __package__ in (None, ""):
                 from fleet import refresh_title
