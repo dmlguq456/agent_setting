@@ -41,7 +41,7 @@ class MutedPaletteTest(unittest.TestCase):
         self.assertNotIn(60, render._TINT_LVL.values())
         self.assertNotIn(95, render._TINT_LVL.values())
 
-    def test_changeable_palette_only_nudges_foreground_saturation(self):
+    def test_changeable_palette_only_nudges_saturation(self):
         self.assertEqual(render._RICHER_RGB_1000, {
             "green": (678, 859, 506),
             "yellow": (859, 859, 506),
@@ -49,6 +49,11 @@ class MutedPaletteTest(unittest.TestCase):
             "cyan": (506, 859, 859),
             "magenta": (859, 506, 859),
             "blue": (663, 663, 1000),
+        })
+        self.assertEqual(render._TINT_RGB_1000, {
+            233: (71, 75, 94),
+            234: (122, 133, 176),
+            236: (184, 192, 220),
         })
         init_color = mock.Mock()
         with mock.patch.multiple(
@@ -67,7 +72,10 @@ class MutedPaletteTest(unittest.TestCase):
             mock.call(render._MUTED_256[name], *rgb)
             for name, rgb in render._RICHER_RGB_1000.items()
         ]
-        expected.append(mock.call(234, 125, 133, 169))
+        expected.extend(
+            mock.call(index, *rgb)
+            for index, rgb in render._TINT_RGB_1000.items()
+        )
         self.assertEqual(init_color.call_args_list, expected)
 
     def test_semantic_hues_and_soft_focal_text_are_preserved(self):

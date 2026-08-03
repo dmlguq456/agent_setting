@@ -71,6 +71,14 @@ _RICHER_RGB_1000 = {
     "blue": (663, 663, 1000),    # #a9a9ff
 }
 
+# Keep each panel rung at effectively the same brightness while giving the
+# near-black backgrounds a very small shared slate cast.
+_TINT_RGB_1000 = {
+    233: (71, 75, 94),    # #121318
+    234: (122, 133, 176),  # #1f222d
+    236: (184, 192, 220),  # #2f3138
+}
+
 
 def _palette_fg(name, fallback):
     if curses is not None and getattr(curses, "COLORS", 0) >= 256:
@@ -184,7 +192,8 @@ def _init_colors():
         if curses.COLORS >= 256 and curses.can_change_color():
             for name, rgb in _RICHER_RGB_1000.items():
                 curses.init_color(_MUTED_256[name], *rgb)
-            curses.init_color(234, 125, 133, 169)  # #20222b low-chroma slate
+            for index, rgb in _TINT_RGB_1000.items():
+                curses.init_color(index, *rgb)
     except Exception:
         pass
     # color discipline (design review 2026-07-01): one meaning per color.
@@ -326,7 +335,7 @@ def _init_colors():
     except Exception:
         _COLOR["hdr_blk"] = 0
     # Subtle panel tints in 256-color mode: seven hues by tint level.
-    # text keeps its fg INSIDE a tinted band. Greyscale-only backgrounds — no new fg axis.
+    # text keeps its fg INSIDE a tinted band. Low-chroma slate backgrounds — no new fg axis.
     # Failure of any init → _TINT_OK False → rail+gap fallback (spec §4, zero regression).
     global _TINT_OK
     _TINT_OK = False
