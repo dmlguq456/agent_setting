@@ -17,7 +17,8 @@
 #   └─────────────────────────────────────────────────────────────────────┘
 #
 #   Fire only when (else clean exit 0):
-#     - CLAUDE_CODE_CHILD_SESSION=1 and AGENT_DISPATCH_DEPTH=1 (a conductor)
+#     - AGENT_DISPATCH_DEPTH=1 (harness-planted dispatch marker → a conductor;
+#       a runtime child-session marker is not used, §5.10)
 #     - AGENT_DISPATCH_SELF_SLUG set (from dispatch-headless.py, needed to match
 #       open children whose parent= equals my own slug)
 #     - stop_hook_active is NOT already true (loop guard — never infinite-block)
@@ -65,7 +66,6 @@ open_children() { # $1=jobs $2=self_slug ; prints matching open rows
 # returns 1 (no output) when the conductor may finish.
 decide() { # $1=self_slug $2=jobs $3=stop_active
   self=$1; jobs=$2; stop_active=$3
-  [ "${CLAUDE_CODE_CHILD_SESSION:-}" = "1" ] || return 1
   [ "${AGENT_DISPATCH_DEPTH:-}" = "1" ] || return 1
   [ -n "$self" ] || return 1
   [ "$stop_active" = "true" ] && return 1

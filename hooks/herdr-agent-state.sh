@@ -12,7 +12,6 @@ set -eu
 if [ "${AGENT_SESSION_ROLE:-}" = "worker" ] \
   || [ "${AGENT_DISPATCH_CHILD:-}" = "1" ] \
   || [ -n "${AGENT_DISPATCH_DEPTH:-}" ] \
-  || [ "${CLAUDE_CODE_CHILD_SESSION:-}" = "1" ] \
   || [ -n "${OPENCODE_DISPATCH_SLUG:-}" ] \
   || [ "${FLEET_TITLE_REFRESH:-}" = "1" ] \
   || [ "${MEM_DISTILL:-}" = "1" ]; then

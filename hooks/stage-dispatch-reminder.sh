@@ -13,7 +13,7 @@
 #   inline anyway), so at that deterministic condition we now **hard deny**.
 #
 #   Decision (else clean exit 0 / silent):
-#     conductor_code_stage = CLAUDE_CODE_CHILD_SESSION=1 AND AGENT_DISPATCH_DEPTH=1
+#     conductor_code_stage = AGENT_DISPATCH_DEPTH=1 (harness-planted dispatch marker)
 #                            AND skill ∈ {code-plan,code-execute,code-test,code-report}
 #     · not conductor_code_stage        → silent (main, dispatch-depth-2 stage session, non-code)
 #     · intensity ∈ {direct,quick}      → silent (direct inline; quick is a dispatch-depth-1 one-shot worker)
@@ -46,8 +46,9 @@ is_code_stage() {
 }
 
 # conductor_code_stage — whether a dispatch-depth-1 conductor invokes code-<stage> in-session.
-conductor_code_stage() { # $1=skill $2=depth ; env: CLAUDE_CODE_CHILD_SESSION
-  [ "${CLAUDE_CODE_CHILD_SESSION:-}" = "1" ] || return 1
+# Depth alone is the evidence: AGENT_DISPATCH_DEPTH is planted by the dispatch wrapper, while a
+# runtime child-session marker also appears in interactive teammate sessions (core/OPERATIONS.md §5.10).
+conductor_code_stage() { # $1=skill $2=depth ; env: AGENT_DISPATCH_DEPTH (via caller)
   [ "$2" = "1" ] || return 1
   is_code_stage "$1" || return 1
   return 0
