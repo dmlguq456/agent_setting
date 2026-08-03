@@ -701,6 +701,67 @@ def _tail_open_tool_call(path, chunk=65536):
     return None
 
 
+def _event_timestamp(value, fallback):
+    if not isinstance(value, str):
+        return fallback
+    try:
+        return __import__("datetime").datetime.fromisoformat(
+            value.replace("Z", "+00:00")
+        ).timestamp()
+    except ValueError:
+        return fallback
+
+
+def _tail_pending_request_user_input(path, chunk=65536):
+    """Newest structured request_user_input call not closed by a later output.
+
+    Parsing is shape-only after JSON decoding. Prompt prose and tool
+    descriptions are never searched. The ordered state machine deliberately
+    supports call-id reuse: a later call reopens an id closed earlier.
+    """
+    try:
+        size = os.path.getsize(path)
+        start = max(0, size - chunk)
+        fallback = os.path.getmtime(path)
+        with open(path, "rb") as handle:
+            handle.seek(start)
+            data = handle.read().decode("utf-8", "replace")
+    except OSError:
+        return None
+    lines = data.splitlines()
+    if start > 0 and lines:
+        lines = lines[1:]
+    open_calls = {}
+    sequence = 0
+    for line in lines:
+        try:
+            record = json.loads(line)
+        except Exception:
+            continue
+        if not isinstance(record, dict) or record.get("type") != "response_item":
+            continue
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        call_id = payload.get("call_id")
+        if not isinstance(call_id, str) or not call_id:
+            continue
+        kind = payload.get("type")
+        if kind == "function_call" and payload.get("name") == "request_user_input":
+            sequence += 1
+            open_calls[call_id] = {
+                "call_id": call_id,
+                "waiting_since": _event_timestamp(record.get("timestamp"), fallback),
+                "sequence": sequence,
+            }
+        elif kind == "function_call_output":
+            open_calls.pop(call_id, None)
+    if not open_calls:
+        return None
+    latest = max(open_calls.values(), key=lambda item: item["sequence"])
+    return {"call_id": latest["call_id"], "waiting_since": latest["waiting_since"]}
+
+
 def _apply_token_count(sess, line):
     # Shared parser keeps active context separate from cumulative session counters.
     telemetry = parse_codex_token_count(line, session_id=sess.session_id)
@@ -947,6 +1008,16 @@ def enrich(sess, tick=None):
             pass
     lifecycle = _latest_task_lifecycle(path)
     sess.task_lifecycle = lifecycle[0] if lifecycle else None
+    # Rollout mtime is exact post-marker activity for sidecar invalidation. The
+    # structured pending call itself remains authoritative until its paired output.
+    sess._interaction_activity = sess.mtime
+    pending_input = _tail_pending_request_user_input(path)
+    if pending_input:
+        sess.interaction_state = {
+            "kind": "decision",
+            "source": "codex-rollout",
+            "waiting_since": pending_input["waiting_since"],
+        }
     # F-47 display detail only — never a state input (see _tail_open_tool_call).
     if sess.task_lifecycle == "task_started":
         sess.exec_tool = _tail_open_tool_call(path)

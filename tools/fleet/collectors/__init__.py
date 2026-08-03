@@ -155,6 +155,19 @@ def collect_all(harness_filter=None, jobs_path=None):
             except Exception:
                 pass  # enrichment failure never removes the backbone row
 
+    # Exact Fleet-owned decision/approval waits are additive enrichment. Run
+    # after harness identity resolution and before the single liveness verdict.
+    try:
+        from . import interaction as _interaction
+        interaction_now = _time.time()
+        for s in sessions:
+            try:
+                _interaction.enrich(s, now=interaction_now)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
     # --- account usage via the oauth API (authoritative; taps lag / lack per-model buckets) ---
     # Overrides every claude session's rate fields with the account-shared values so the render
     # layer's freshest-pick sees them; on any failure the tap values simply remain (fallback).

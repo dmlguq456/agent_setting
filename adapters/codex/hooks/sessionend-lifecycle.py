@@ -87,6 +87,16 @@ def main() -> int:
     session = payload.get("session")
     if not event_session_id and isinstance(session, dict):
         event_session_id = first_string(session, "id")
+    if event_session_id:
+        try:
+            tools = ROOT / "tools"
+            if str(tools) not in sys.path:
+                sys.path.insert(0, str(tools))
+            from fleet import interaction
+
+            interaction.clear_wait(event_session_id, "codex")
+        except Exception:
+            pass
     event_session_id = event_session_id or "codex-hook"
     run_preflight("material-route", "clear", "--session", event_session_id, quiet=True)
     run_preflight("session-end", event_cwd, event_session_id)

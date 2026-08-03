@@ -8,8 +8,9 @@ F-25: this module used to BE the classifier. It is now the tier-2/tier-3 input l
 `classify()` keeps its signature and return contract (a state string) so callers do not
 regress, but the decision itself moved to model.py's single classifier.
 
-Fleet sessions resolve to working / idle / unused / stale / dead. `blocked` needs the
-herdr socket (out of MVP scope) so it is never emitted; `done` applies to dispatch jobs.
+Fleet sessions resolve to working / idle / unused / blocked / stale / dead. `blocked`
+comes only from an exact Fleet-owned interaction marker; Herdr remains optional external
+corroboration. `done` applies to dispatch jobs.
 """
 import os
 
@@ -91,6 +92,7 @@ def collect_evidence(sess):
         # F-47: owned process-subtree evidence. Only `shell` consults it (prd.md:612) — the
         # classifier decides, this layer just carries the fact.
         "exec_child": getattr(sess, "exec_child", None),
+        "interaction_wait": getattr(sess, "interaction_state", None),
         "mtime": sess.mtime,
         # `_has_transcript` is set by the claude enricher; other harnesses fall back to
         # "an mtime exists at all", which is the same signal they had pre-F-25.

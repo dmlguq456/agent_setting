@@ -73,6 +73,14 @@ def session_id(payload: dict[str, Any]) -> str:
     return sid or "codex-hook"
 
 
+def interaction_session_id(payload: dict[str, Any]) -> str:
+    sid = nested_string(payload, "session_id", "sessionID", "thread_id", "threadID")
+    session = payload.get("session")
+    if not sid and isinstance(session, dict):
+        sid = first_string(session, "id")
+    return sid
+
+
 def turn_id(payload: dict[str, Any]) -> str:
     return nested_string(payload, "turn_id", "turnID", "message_id", "messageID")
 
@@ -276,6 +284,14 @@ def main() -> int:
     if is_worker_session():
         return 0
     current_cwd = cwd(payload)
+    interaction_sid = interaction_session_id(payload)
+    if interaction_sid:
+        try:
+            from fleet import interaction
+
+            interaction.clear_wait(interaction_sid, "codex")
+        except Exception:
+            pass
     sid = session_id(payload)
 
     parts = []

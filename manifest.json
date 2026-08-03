@@ -1015,6 +1015,13 @@
   },
   "hooks": [
     {
+      "slug": "hook__fleet-interaction-state.py__PermissionRequest",
+      "name": "fleet-interaction-state.py set",
+      "mono": "fleet-interaction-state.py",
+      "event": "PermissionRequest",
+      "hard_block": false
+    },
+    {
       "slug": "hook__herdr-agent-state__PermissionRequest",
       "name": "herdr-agent-state blocked",
       "mono": "herdr-agent-state",
@@ -1050,6 +1057,13 @@
       "hard_block": false
     },
     {
+      "slug": "hook__fleet-interaction-state.py__PostToolUse",
+      "name": "fleet-interaction-state.py clear",
+      "mono": "fleet-interaction-state.py",
+      "event": "PostToolUse",
+      "hard_block": false
+    },
+    {
       "slug": "hook__material-route-guard.py__PostToolUse",
       "name": "material-route-guard.py",
       "mono": "material-route-guard.py",
@@ -1068,6 +1082,13 @@
       "name": "spec-sync-nudge",
       "mono": "spec-sync-nudge",
       "event": "PostToolUse",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__fleet-interaction-state.py__PostToolUseFailure",
+      "name": "fleet-interaction-state.py clear",
+      "mono": "fleet-interaction-state.py",
+      "event": "PostToolUseFailure",
       "hard_block": false
     },
     {
@@ -1090,6 +1111,13 @@
       "mono": "core-first-guard",
       "event": "PreToolUse",
       "hard_block": true
+    },
+    {
+      "slug": "hook__fleet-interaction-state.py__PreToolUse",
+      "name": "fleet-interaction-state.py set",
+      "mono": "fleet-interaction-state.py",
+      "event": "PreToolUse",
+      "hard_block": false
     },
     {
       "slug": "hook__git-state-guard__PreToolUse",
@@ -1148,6 +1176,13 @@
       "hard_block": false
     },
     {
+      "slug": "hook__fleet-interaction-state.py__SessionEnd",
+      "name": "fleet-interaction-state.py clear",
+      "mono": "fleet-interaction-state.py",
+      "event": "SessionEnd",
+      "hard_block": false
+    },
+    {
       "slug": "hook__herdr-agent-state__SessionEnd",
       "name": "herdr-agent-state release",
       "mono": "herdr-agent-state",
@@ -1183,10 +1218,24 @@
       "hard_block": false
     },
     {
+      "slug": "hook__fleet-interaction-state.py__Stop",
+      "name": "fleet-interaction-state.py clear",
+      "mono": "fleet-interaction-state.py",
+      "event": "Stop",
+      "hard_block": false
+    },
+    {
       "slug": "hook__herdr-agent-state__Stop",
       "name": "herdr-agent-state idle",
       "mono": "herdr-agent-state",
       "event": "Stop",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__fleet-interaction-state.py__UserPromptSubmit",
+      "name": "fleet-interaction-state.py clear",
+      "mono": "fleet-interaction-state.py",
+      "event": "UserPromptSubmit",
       "hard_block": false
     },
     {

@@ -43,10 +43,10 @@ if [ -z "$EVENTS" ]; then
   fail_msg "could not derive hook EVENTS domain from adapters/claude/settings.json .hooks (empty extraction)"
 fi
 # HOOK_EVENT_EXEMPT: events in $EVENTS explicitly not required to have a Codex hooks.json bridge /
-# INSTALL_LAYOUT.md doc entry. Empty today (all 7 current events are bridged and documented) — the
-# mechanism, not a current exemption. Module-level so both consumer sites (check_install_layout_codex_projection,
+# INSTALL_LAYOUT.md doc entry. PostToolUseFailure is Claude-native; the current Codex native hook
+# surface has no verified matching event, so projecting a bridge would overclaim parity. Module-level so both consumer sites (check_install_layout_codex_projection,
 # check_codex_bin_wrappers) can read it regardless of registration order.
-HOOK_EVENT_EXEMPT=""
+HOOK_EVENT_EXEMPT="PostToolUseFailure"
 
 is_mechanized_install_layout() {
   grep -Fq 'tools/install/harness.sh' INSTALL_LAYOUT.md 2>/dev/null
@@ -973,8 +973,7 @@ check_codex_bin_wrappers() {
   # codex-adapter-parity audit P-19 (2026-07-04): derive the hook-event domain from the module-level
   # $EVENTS var (adapters/claude/settings.json .hooks keys) instead of a hardcoded 7-event list, so a
   # newly added Claude hook event that lacks a Codex hooks.json bridge fails loud instead of leaking.
-  # HOOK_EVENT_EXEMPT (module-level, defined near $EVENTS) is empty today — the mechanism, not a
-  # current exemption.
+  # HOOK_EVENT_EXEMPT (module-level, defined near $EVENTS) records only verified runtime asymmetry.
   for event in $EVENTS; do
     case " $HOOK_EVENT_EXEMPT " in
       *" $event "*) continue ;;
@@ -1981,10 +1980,28 @@ check_codex_native_hook_projection() {
     || ! grep -Fq 'material-route", "check", "--tool", "Bash"' "$pre_bridge" \
     || ! grep -Fq 'material-route", "bind", "--route"' "$read_bridge" \
     || grep -Fq 'AGENT_PARENT_PARK_ONLY' "$pre_bridge" \
-    || grep -Fq '"matcher": "*"' "$hook_json" \
     || ! grep -Fq 'SessionEnd' adapters/codex/hooks/sessionend-lifecycle.py \
     || ! grep -Fq 'Stop is a' adapters/codex/hooks/sessionend-lifecycle.py; then
     fail_msg "Codex material-route write/check/bind call sites and SessionEnd-only clear must remain wired"
+  fi
+  if ! python3 - "$hook_json" <<'PY'
+import json
+import sys
+
+hooks = json.load(open(sys.argv[1], encoding="utf-8")).get("hooks", {})
+if any(item.get("matcher") in {"*", ""} for item in hooks.get("PreToolUse", [])):
+    raise SystemExit(1)
+post = hooks.get("PostToolUse", [])
+if not any(
+    item.get("matcher") == "*"
+    and any("posttooluse-interaction-clear.py" in hook.get("command", "")
+            for hook in item.get("hooks", []))
+    for item in post
+):
+    raise SystemExit(1)
+PY
+  then
+    fail_msg "Codex PreToolUse must stay targeted and PostToolUse must expose only the named wildcard interaction-release bridge"
   fi
   if ! grep -Fq '"design"' "$post_bridge"; then
     fail_msg "$post_bridge must call the Codex design preflight"

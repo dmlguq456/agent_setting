@@ -71,7 +71,7 @@ invariant.
 | Custom agents | `adapters/codex/agents/<role>.toml` generated from `roles/README.md` | `codex_setting/codex-agents` |
 | Mode guides | `adapters/codex/modes/*/*.md` generated from `roles/modes/` with Codex mode-info contracts | `codex_setting/codex-modes` |
 | Plugin marketplace | `adapters/codex/plugin-marketplace/.agents/plugins/marketplace.json` plus `adapters/codex/plugin-marketplace/plugins/agent-harness-codex` | `codex_setting/codex-plugin-marketplace` |
-| Hook bridge | `adapters/codex/hooks/hooks.json`, `adapters/codex/hooks/run-hook.sh`, `adapters/codex/hooks/sessionstart-lifecycle.py`, `adapters/codex/hooks/sessionend-lifecycle.py`, `adapters/codex/hooks/stop-lifecycle.py`, `adapters/codex/hooks/userprompt-lifecycle.py`, `adapters/codex/hooks/permissionrequest-lifecycle.py`, `adapters/codex/hooks/pretooluse-write-guard.py`, `adapters/codex/hooks/posttooluse-read-marker.py`, `adapters/codex/hooks/posttooluse-design-check.py` | `codex_setting/codex-hooks` |
+| Hook bridge | `adapters/codex/hooks/hooks.json`, `adapters/codex/hooks/run-hook.sh`, `adapters/codex/hooks/sessionstart-lifecycle.py`, `adapters/codex/hooks/sessionend-lifecycle.py`, `adapters/codex/hooks/stop-lifecycle.py`, `adapters/codex/hooks/userprompt-lifecycle.py`, `adapters/codex/hooks/permissionrequest-lifecycle.py`, `adapters/codex/hooks/posttooluse-interaction-clear.py`, `adapters/codex/hooks/pretooluse-write-guard.py`, `adapters/codex/hooks/posttooluse-read-marker.py`, `adapters/codex/hooks/posttooluse-design-check.py` | `codex_setting/codex-hooks` |
 | Permission/sandbox contract | `adapters/codex/bin/preflight.sh permissions` | `codex_setting/bin/preflight.sh permissions` |
 | MCP contract | `adapters/codex/bin/preflight.sh mcp` | `codex_setting/bin/preflight.sh mcp` |
 | Design scaffold assets | `adapters/codex/scaffolds/` Codex-owned projection of shared scaffold HTML assets | `codex_setting/scaffolds` |
@@ -271,8 +271,8 @@ default because Codex `SessionStart` can run on startup, resume, clear, and
 compact; `CODEX_SESSION_MEMORY_INJECT=1` restores `memory` output as
 `hookSpecificOutput.additionalContext`. The `SessionEnd` bridge calls `session-end` for `mem sync` plus the verified automatic distill worker
 (default on; `CODEX_DISTILL_ENABLE=0` opt-out). The separate `Stop` bridge
-is a silent no-op. It never starts distillation, reads the dispatch registry,
-joins a child, or emits a blocking continuation. The
+silently clears only an exact Fleet interaction marker. It never starts
+distillation, reads the dispatch registry, joins a child, or emits a blocking continuation. The
 `UserPromptSubmit` bridge calls the portable capsule-only candidate bridge and
 `briefing` when they have content, a transition-only `token-budget ... hook`
 response, and
@@ -295,9 +295,11 @@ no routing-contract or git-risk aggregate is injected per turn. The structured
 `routing_contract=core/WORKFLOW.md`,
 `routing_action=read-workflow-and-select-codex-skill`, and
 `capability_entrypoints=codex-native-skills`. The `PermissionRequest`
-bridge is a registered no-op that emits nothing; harness monitoring is owned by
-Codex native `/statusline` while Codex owns approval and sandbox
-decisions. The write bridge registers
+bridge emits no hook output and never answers the prompt; it writes only the
+Fleet allowlist (`harness`, exact thread id, approval kind/source/time). Codex
+continues to own approval and sandbox decisions. A wildcard `PostToolUse`
+side-effect bridge clears the exact marker after success, with prompt/Stop/
+SessionEnd as abandonment backstops. The write bridge registers
 `PreToolUse` for write/edit/multiedit/patch tools, including qualified
 `functions.apply_patch` payloads, and calls
 `adapters/codex/bin/preflight.sh write <file> <session-id>`, which runs
@@ -403,13 +405,12 @@ Harness-specific status signals still need Codex-native realization:
 | pipeline stage nudges | preflight/AGENTS instructions first; UI only when Codex exposes a suitable surface |
 | oncall/note/study/drill/runtime-watch loop nudges | `preflight.sh briefing` plus `preflight.sh loop-info <loop>` for loop-specific support/fallback status |
 | merge/rebase/merged-branch risk | `preflight.sh write` git safety checks; `preflight.sh status` reports `git_operation` (merge/rebase/cherry-pick), `git_branch_done` (non-default branch fully merged = DONE-BRANCH hazard), dirty counts, and extra worktree counts. A native graphical warning remains optional polish |
-| fleet (multi-agent) observability | No Codex-native equivalent. Claude's adapter feeds a fleet dashboard via `hooks/herdr-agent-state.sh`, wired to 6 Claude hook events (`PermissionRequest`→blocked, `PreToolUse`→working, `UserPromptSubmit`→working, `SessionStart`→idle, `Stop`→idle, `SessionEnd`→release), plus a per-session `.statusline/<sid>.json` tap; Codex's `PermissionRequest` bridge is a registered no-op that emits nothing (see Native Hook Surface) |
+| fleet (multi-agent) observability | Fleet owns a neutral exact-session interaction sidecar independent of Herdr. Codex `PermissionRequest` publishes approval wait and native `PostToolUse` plus turn/session boundaries release it without changing approval ownership. A decision wait is recognized only from structured rollout `function_call(name=request_user_input)` / matching `function_call_output` call-id order; this path is synthetic-fixture verified but live-runtime `unknown`. Claude publishes the same neutral schema while Herdr remains optional corroboration. |
 
-observability caveat: the gap above is scoped to fleet (multi-agent)
-observability specifically, not an absence of monitoring — Codex retains full
-per-session observability through native `/statusline`. Only the cross-agent
-dashboard view that Claude's adapter derives from `herdr-agent-state.sh` has no
-Codex-native counterpart today.
+observability caveat: Codex keeps native `/statusline` ownership of model,
+context, limits, and footer monitoring. Fleet's new cross-agent signal is
+strictly interaction wait metadata; it neither replaces the native footer nor
+claims live `request_user_input` rollout proof before that shape is observed.
 
 ## Required Codex Mappings
 

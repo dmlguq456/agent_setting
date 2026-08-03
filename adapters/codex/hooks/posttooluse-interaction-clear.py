@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Silent Codex Stop boundary with no completion or lifecycle authority."""
+"""Clear an exact Codex interaction marker after a successful tool call."""
+
+from __future__ import annotations
 
 import json
 import os
@@ -25,27 +27,29 @@ def _worker():
     )
 
 
-def _sid(value):
-    if not isinstance(value, dict):
+def _find(payload):
+    if not isinstance(payload, dict):
         return ""
     for key in ("session_id", "sessionID", "thread_id", "threadID"):
-        item = value.get(key)
-        if isinstance(item, str) and item:
-            return item
-    item = value.get("session")
-    if isinstance(item, dict) and isinstance(item.get("id"), str):
-        return item["id"]
+        value = payload.get(key)
+        if isinstance(value, str) and value:
+            return value
+    session = payload.get("session")
+    if isinstance(session, dict) and isinstance(session.get("id"), str):
+        return session["id"]
     for key in ("context", "workspace", "payload", "event", "input", "data"):
-        item = _sid(value.get(key))
-        if item:
-            return item
+        value = _find(payload.get(key))
+        if value:
+            return value
     return ""
 
 
-def main() -> int:
+def main():
     try:
         payload = json.load(sys.stdin)
-        session_id = "" if _worker() else _sid(payload)
+        if _worker():
+            return 0
+        session_id = _find(payload)
         if session_id:
             from fleet import interaction
 

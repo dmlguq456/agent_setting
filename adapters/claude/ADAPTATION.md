@@ -242,6 +242,17 @@ the exact Claude session, and on SessionEnd to remove that session marker. It
 revalidates the immutable route on every protected action; the separate
 capability-grounding Skill marker is display-only and never satisfies this gate.
 
+`fleet-interaction-state.py` is the Claude-native payload wrapper for the
+portable interaction-wait invariant. `PreToolUse(AskUserQuestion)` publishes a
+decision marker and `PermissionRequest(*)` publishes a permission marker;
+`PostToolUse(*)`, `PostToolUseFailure(*)`, `UserPromptSubmit`, `Stop`, and
+`SessionEnd` clear only the exact session. The hook stores no question,
+choices, command, arguments, reason, model output, or tool payload, emits no
+stdout, and is a no-op for registered workers and native subagents. Herdr's
+separate hook remains optional corroboration and is not edited. Claude's native
+`PostToolUseFailure` has no verified Codex counterpart, so the adaptation
+boundary records that event as an explicit non-parity exception.
+
 Utility scripts are a whole-layer collapse (2026-07-22): `claude_setting/utilities`
 points at `adapters/claude/utilities`, which is itself ONE symlink to the shared
 `utilities/` layer. Every shared utility — including a newly added file — resolves

@@ -178,6 +178,7 @@ doctor() {
     "$ROOT/adapters/codex/hooks/stop-lifecycle.py" \
     "$ROOT/adapters/codex/hooks/userprompt-lifecycle.py" \
     "$ROOT/adapters/codex/hooks/permissionrequest-lifecycle.py" \
+    "$ROOT/adapters/codex/hooks/posttooluse-interaction-clear.py" \
     "$ROOT/adapters/codex/hooks/pretooluse-write-guard.py" \
     "$ROOT/adapters/codex/hooks/posttooluse-design-check.py" \
     "$ROOT/adapters/codex/hooks/posttooluse-read-marker.py" || rc=1

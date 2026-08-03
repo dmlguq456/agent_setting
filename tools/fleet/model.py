@@ -63,6 +63,7 @@ def dash(v, fmt=None):
 
 # 4-state herdr vocabulary (+ stale/dead/unused) — single source for render coloring.
 LIVENESS_STATES = ("working", "idle", "unused", "blocked", "done", "stale", "dead", "unknown")
+INTERACTION_KINDS = ("decision", "approval", "permission", "elicitation")
 
 # Stable public name consumed by Fleet, the progress watchdog, liveness and
 # registry reconciliation.  Keeping the exact-attempt verdict here prevents
@@ -283,6 +284,9 @@ class Session:
     # Both are None when there is no evidence — never a guess (prd.md:263).
     exec_child: Optional[dict] = None
     exec_tool: Optional[dict] = None
+    # Exact privacy-minimal decision/approval evidence. Content is impossible
+    # in the sidecar schema; only kind/source/time reach this public projection.
+    interaction_state: Optional[dict] = None
     mtime: Optional[float] = None       # newest transcript/db mtime (epoch sec) for liveness
     liveness: str = "unknown"
     # --- F-25/F-26 registry first-class fields (all Optional → absent harness = None) ---
@@ -872,9 +876,9 @@ def _is_unused(state, ev_in):
 def classify_session(ev_in, now, stale_min=SESSION_STALE_MIN, key=None):
     """(state, evidence). ev_in = collected evidence, never a live probe (hermetic).
 
-    Recognized keys: pid_alive, proc_start_match, orphan, status, task_lifecycle,
-    mtime, transcript, started_at, updated_at, activity_ms, harness, pid,
-    proc_start, fd_owner, is_worker.
+    Recognized keys: pid_alive, proc_start_match, orphan, interaction_wait, status,
+    task_lifecycle, mtime, transcript, started_at, updated_at, activity_ms,
+    harness, pid, proc_start, fd_owner, is_worker.
     """
     def out(state, tier, source, rule):
         if key is None:
@@ -894,6 +898,20 @@ def classify_session(ev_in, now, stale_min=SESSION_STALE_MIN, key=None):
         return out("dead", 2, "proc", "start-time mismatch (pid reuse) — registry evidence discarded")
     if ev_in.get("orphan"):
         return out("stale", 2, "proc", "orphan cwd (deleted worktree)")
+
+    interaction_wait = ev_in.get("interaction_wait")
+    if (
+        isinstance(interaction_wait, dict)
+        and interaction_wait.get("kind") in INTERACTION_KINDS
+    ):
+        source = interaction_wait.get("source")
+        source = source if isinstance(source, str) and source else "unknown"
+        return out(
+            "blocked",
+            2,
+            "interaction:%s" % source,
+            "unresolved %s wait" % interaction_wait["kind"],
+        )
 
     status = ev_in.get("status")
     st = _session_status_state(status, exec_child=ev_in.get("exec_child"))

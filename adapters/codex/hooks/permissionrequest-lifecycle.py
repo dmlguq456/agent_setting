@@ -1,31 +1,73 @@
 #!/usr/bin/env python3
-"""Codex PermissionRequest bridge — intentionally a no-op.
-
-This bridge used to emit a harness status snapshot as
-``hookSpecificOutput.additionalContext`` on every approval prompt. That was a
-monitoring substitute for Codex's (then-absent) live statusline. Codex now ships
-a native ``/statusline`` that owns runtime monitoring, so this bridge no longer
-injects a status snapshot.
-
-The ``PermissionRequest`` event stays registered as a trusted no-op so the Codex
-hook projection/installation contract is preserved and an approval-time signal
-can be reintroduced here without re-wiring projection. Harness status snapshots
-remain available on demand via ``adapters/codex/bin/preflight.sh status`` (manual
-lookups and headless-worker startup); Codex owns approval and sandbox decisions.
-"""
+"""Publish a privacy-minimal Codex approval wait without owning the approval."""
 
 from __future__ import annotations
 
 import json
+import os
 import sys
+from pathlib import Path
+from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[3]
+TOOLS = ROOT / "tools"
+if str(TOOLS) not in sys.path:
+    sys.path.insert(0, str(TOOLS))
+
+
+def first_string(mapping: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = mapping.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return ""
+
+
+def nested_string(payload: dict[str, Any], *keys: str) -> str:
+    direct = first_string(payload, *keys)
+    if direct:
+        return direct
+    for key in ("context", "workspace", "session", "payload", "event", "input", "data"):
+        value = payload.get(key)
+        if isinstance(value, dict):
+            found = nested_string(value, *keys)
+            if found:
+                return found
+    return ""
+
+
+def is_worker_session() -> bool:
+    return (
+        os.environ.get("AGENT_SESSION_ROLE", "").lower() == "worker"
+        or os.environ.get("AGENT_DISPATCH_CHILD") == "1"
+        or bool(os.environ.get("AGENT_DISPATCH_DEPTH"))
+        or os.environ.get("CLAUDE_CODE_CHILD_SESSION") == "1"
+        or bool(os.environ.get("OPENCODE_DISPATCH_SLUG"))
+        or os.environ.get("FLEET_TITLE_REFRESH") == "1"
+        or os.environ.get("MEM_DISTILL") == "1"
+    )
 
 
 def main() -> int:
-    # Consume any hook payload on stdin so the runtime never sees a broken pipe,
-    # then emit nothing — monitoring is owned by the native Codex /statusline.
     try:
-        json.load(sys.stdin)
-    except (json.JSONDecodeError, ValueError):
+        payload = json.load(sys.stdin)
+        if not isinstance(payload, dict) or is_worker_session():
+            return 0
+        session_id = nested_string(
+            payload, "session_id", "sessionID", "thread_id", "threadID"
+        )
+        session = payload.get("session")
+        if not session_id and isinstance(session, dict):
+            session_id = first_string(session, "id")
+        if not session_id:
+            return 0
+        from fleet import interaction
+
+        interaction.set_wait(
+            session_id, "codex", "approval", "codex-permissionrequest"
+        )
+    except Exception:
         pass
     return 0
 

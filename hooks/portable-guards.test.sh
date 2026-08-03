@@ -2375,12 +2375,16 @@ else
   bad "codex native hook projection should reset the turn-nudge counter on every prompt"
 fi
 if printf '{"context":{"cwd":"%s","session_id":"permissionsid"}}\n' "$TMP/flowproj" \
-  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/permissionrequest-lifecycle.py" >/tmp/codex_permission_hook.out 2>/tmp/codex_permission_hook.err \
+  | FLEET_INTERACTION_STATE_DIR="$TMP/codex-interactions" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/permissionrequest-lifecycle.py" >/tmp/codex_permission_hook.out 2>/tmp/codex_permission_hook.err \
   && [ ! -s /tmp/codex_permission_hook.out ] \
+  && [ -f "$TMP/codex-interactions/codex/permissionsid.json" ] \
+  && grep -q '"session_id":"permissionsid"' "$TMP/codex-interactions/codex/permissionsid.json" \
+  && grep -q '"kind":"approval"' "$TMP/codex-interactions/codex/permissionsid.json" \
+  && grep -q '"source":"codex-permissionrequest"' "$TMP/codex-interactions/codex/permissionsid.json" \
   && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_permission_hook.out /tmp/codex_permission_hook.err; then
-  ok "codex native hook projection keeps PermissionRequest a no-op (monitoring owned by native /statusline)"
+  ok "codex native hook projection publishes a silent privacy-minimal approval wait"
 else
-  bad "codex native hook projection should keep PermissionRequest a no-op"
+  bad "codex native hook projection should publish a silent exact-session approval wait"
 fi
 if (cd "$TMP/flowproj" && MEM_STORE="$TMP/codex_hook_mem" python3 "$ROOT/tools/memory/mem.py" add durable thread "지난번 결정론 우선 설계가 핵심이라고 배웠다" >/tmp/codex_nested_prompt_seed.out 2>/tmp/codex_nested_prompt_seed.err) \
   && printf '{"input":{"messages":[{"role":"user","content":[{"type":"text","text":"지난번 결정론 내용을 다시 확인"}]}]},"session_id":"nestedpromptsid","cwd":"%s"}\n' "$TMP/flowproj" \

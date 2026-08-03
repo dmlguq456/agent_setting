@@ -329,6 +329,12 @@ _DETACHED_GLYPH = "○"   # Ring means no attached client; idle uses a filled di
 _GLYPH_KEY = {"working": "g_work", "idle": "g_work_off", "unused": "g_unused",
               "blocked": "g_idle", "done": "green",
               "stale": "g_stale", "dead": "g_dead", "degraded": "lvl_y", "queued": "dim", "unknown": "dim"}
+_INTERACTION_LABEL = {
+    "decision": "decision",
+    "approval": "approval",
+    "permission": "perm",
+    "elicitation": "elicit",
+}
 
 # group "cooling" state (user 2026-07-03): a directory with NO active work whose newest session
 # A recent transcript write reads as cooling after completion, between hot
@@ -1218,6 +1224,12 @@ def _unused_badge(s, compact=False):
     return " unused %s" % fmt_min(s.elapsed_min if s.elapsed_min is not None else None)
 
 
+def _interaction_badge(s):
+    state = getattr(s, "interaction_state", None)
+    label = _INTERACTION_LABEL.get(state.get("kind")) if isinstance(state, dict) else None
+    return " " + label if label else ""
+
+
 def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx_width=None,
                  show_projection_stage=True, stage_zone=None):
     live = s.liveness
@@ -1261,6 +1273,11 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx
             unused_at = len(suffix)
             suffix.append((ub, "g_unused_b"))
             suffix_w += _dw(ub)
+    elif live == "blocked":
+        badge = _interaction_badge(s)
+        if badge and suffix_w + _dw(badge) < avail:
+            suffix.append((badge, "g_idle"))
+            suffix_w += _dw(badge)
     # Degradation ladder, tightest-last (the F-22 40-cell cap makes this reachable at every
     # width, so it cannot be left to chance): provenance drops first, then the badge's age,
     # and only then does the name itself clip. The name is what identifies the row — F-26
@@ -1769,6 +1786,10 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False, term_wid
     if live == "unused":                       # F-26 parity with the wide row
         unused_at = len(suffix)
         suffix.append((_unused_badge(s), "g_unused_b"))
+    elif live == "blocked":
+        badge = _interaction_badge(s)
+        if badge:
+            suffix.append((badge, "g_idle"))
     # provenance is optional here: in the narrow/stack layouts every suffix cell
     # is taken straight out of the name, so a 9-cell tag can clip a real name down to "age…".
     # A name the user can read outranks knowing who launched it — drop the tag instead.
@@ -3825,6 +3846,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 _seen_glyphs.add("dead")
             elif s.liveness == "unused":
                 _seen_glyphs.add("unused")
+            elif s.liveness == "blocked":
+                _seen_glyphs.add("blocked")
             if s.detached and s.liveness not in ("stale", "dead"):
                 _seen_glyphs.add("detached")
             if nested_n:
@@ -3960,7 +3983,9 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     if "dead" in _seen_glyphs:
         legend += [("✕", "g_dead"), (" dead     ", "dim")]
     if "degraded" in _seen_glyphs:
-        legend += [("◐", "lvl_y"), (" degraded node   ", "dim"), ("◑", "g_idle"), (" blocked session   ", "dim")]
+        legend += [("◐", "lvl_y"), (" degraded node   ", "dim")]
+    if "blocked" in _seen_glyphs:
+        legend += [("◑", "g_idle"), (" blocked session   ", "dim")]
     if "child" in _seen_glyphs:
         legend += [("▾N", "dim"), (" child jobs   ", "dim")]
     if "subagent" in _seen_glyphs:

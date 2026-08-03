@@ -65,7 +65,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 |---|---|
 | capability | Read `capabilities/README.md` for meaning; run `adapters/codex/bin/preflight.sh capability-info <capability>` to confirm Codex realization; use `adapters/codex/skills/<capability>/SKILL.md` as Codex-native guidance |
 | native skill/plugin surface | Skills are materialized under `adapters/codex/skills/`; the installable plugin projection is materialized under `adapters/codex/plugins/agent-harness-codex`. Command-like capability entrypoints use these native Skills/plugin surfaces and are verified with Codex discoverability (`codex debug prompt-input`) |
-| native hook surface | `adapters/codex/hooks/hooks.json` registers Codex `SessionStart` lifecycle prep, synchronous `SessionEnd`, an explicit silent no-op `Stop` boundary, `UserPromptSubmit` bounded capsule candidates plus prompt signals and turn nudges, `PermissionRequest` (registered no-op — harness monitoring is owned by Codex native `/statusline`), targeted `PreToolUse` material/write guards including the same-turn recall-opportunity and core-first gates, `PostToolUse` spec/core read markers, and `PostToolUse` design HTML checks. Stop has no completion or lifecycle authority and no wildcard completion park is registered; explicit preflight remains fallback |
+| native hook surface | `adapters/codex/hooks/hooks.json` registers Codex `SessionStart` lifecycle prep, synchronous `SessionEnd`, a silent `Stop` boundary, `UserPromptSubmit` bounded capsule candidates plus prompt signals and turn nudges, privacy-minimal `PermissionRequest` approval-wait publication, targeted `PreToolUse` material/write guards, `PostToolUse` approval-wait release, spec/core read markers, and design HTML checks. Interaction bridges keep stdout empty and never own approve/deny; Stop has no completion authority or wildcard parent park |
 | shell I/O hook boundary | Structured write tools (`Write`, `Edit`, `MultiEdit`, `apply_patch`, `functions.apply_patch`) and structured `Read` are guarded. Shell/Bash/`functions.exec_command` gets targeted detection for obvious write redirects, common mutation commands (`tee`, `touch`, `cp`, `mv`, `rm`, `install`, `rsync`), `dd of=...`, `sed -i`, direct `spec/prd.md` / `core/*.md` reads, and design HTML save paths; target-ambiguous shell I/O still requires explicit `preflight.sh write`, `preflight.sh read`, or `preflight.sh design` before touching guarded paths |
 | role profile | Use `roles/README.md` for meaning; Codex custom agents are materialized under `adapters/codex/agents/*.toml`; `adapters/codex/bin/preflight.sh role <portable-role|role-profile|pipeline-stage>` resolves both concrete model roles and pipeline profiles such as `planning`, `implementation`, `verification`, and `report` |
 | role mode | Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; use the reported `native_mode_path` under `adapters/codex/modes/`; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes report `fallback=reference-only` when no Codex-native runtime surface exists |
@@ -119,7 +119,7 @@ Registry writes and harvest rewrites are serialized with a `.lock` file; `_kerne
 | git safety gate | `core/HOOKS.md` defines the invariant; included in `adapters/codex/bin/preflight.sh write <file> [session-id]` |
 | memory write guard | `core/HOOKS.md` defines the invariant; included in `adapters/codex/bin/preflight.sh write <file> [session-id]` |
 | memory injection | Codex `SessionStart` hook bridge keeps memory injection off by default because `SessionStart` can run on startup, resume, clear, and compact; set `CODEX_SESSION_MEMORY_INJECT=1` to emit `adapters/codex/bin/preflight.sh memory [cwd]` through `hookSpecificOutput.additionalContext`, or run it manually when needed |
-| memory sync | Codex `SessionEnd` runs `adapters/codex/bin/preflight.sh session-end [cwd] [session-id]`, which performs `mem sync` and then runs automatic distillation by default (the read-only `codex exec` worker is verified tool-free). Codex `Stop` is a silent no-op and never starts this lifecycle. Opt out with `CODEX_DISTILL_ENABLE=0` |
+| memory sync | Codex `SessionEnd` runs `adapters/codex/bin/preflight.sh session-end [cwd] [session-id]`, which performs `mem sync` and then runs automatic distillation by default (the read-only `codex exec` worker is verified tool-free). Codex `Stop` never starts this lifecycle; its only side effect is clearing the exact Fleet interaction marker. Opt out with `CODEX_DISTILL_ENABLE=0` |
 | memory turn nudge | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh turn-nudge [cwd] [session-id]`; it is deterministic and launches distillation when the configured interval is reached. Automatic distillation is on by default (`CODEX_DISTILL_ENABLE` defaults to `1`); opt out with `CODEX_DISTILL_ENABLE=0` |
 | memory candidate exposure and deeper retrieval | Codex `UserPromptSubmit` runs the fail-open capsule-only candidate bridge and adds at most three headline-and-ID candidates within 1,200 UTF-8 bytes. The bridge publishes a same-turn receipt; `PreToolUse` requires it before main-session material mutation. The model ignores unrelated candidates and reads relevant records in full. Use `preflight.sh recall <query> [cwd] [session-id]` for deeper search or `recall-gate` as the hook-failure recovery path. No prompt classifier or body injection is attached |
 | oncall briefing injection | Codex `UserPromptSubmit` hook bridge runs `adapters/codex/bin/preflight.sh briefing [cwd]` and aggregates matching output into `hookSpecificOutput.additionalContext`; run it manually when hooks are unavailable |
@@ -283,16 +283,18 @@ entrypoints are represented by Codex-native Skills and the installable
 `adapters/codex/hooks/` contains a Codex-native `hooks.json`, a validated
 `run-hook.sh` launcher, and concrete adapter-owned hook bridges. The
 `SessionEnd` bridge runs `mem sync` and automatic distillation (on by
-default; opt out with `CODEX_DISTILL_ENABLE=0`). `Stop` is an explicit
-silent no-op: it neither schedules lifecycle work nor inspects the registry,
-waits for a child, or emits `decision=block`.
+default; opt out with `CODEX_DISTILL_ENABLE=0`). `Stop` silently clears only an
+exact Fleet interaction marker; it neither schedules lifecycle work nor
+inspects the registry, waits for a child, or emits `decision=block`.
 The `UserPromptSubmit` bridge extracts the runtime's prompt field for a bounded
 capsule-index lookup, publishes the same-turn recall-opportunity receipt, and
 also runs the deterministic N-turn distill nudge under the same default. It
 does not inspect bodies or decide candidate relevance. The
-`PermissionRequest` bridge is a registered no-op that emits nothing — harness
-monitoring is owned by Codex native `/statusline` — while Codex owns approval and
-sandbox decisions. The targeted `PreToolUse` bridge has no completion scheduling
+`PermissionRequest` publishes only allowlisted Fleet interaction metadata
+(`approval`, source, timestamp, exact thread id), emits nothing, and leaves
+approval and sandbox decisions to Codex. A wildcard `PostToolUse` side-effect
+bridge clears that exact marker; prompt, Stop, and SessionEnd are bounded
+abandonment backstops. The targeted `PreToolUse` bridge has no completion scheduling
 or parent-park responsibility. Qualified `functions.apply_patch` payloads and
 other writes continue through
 artifact-order, git-state, core-first, and memory-write checks in
@@ -301,6 +303,13 @@ actual `spec/prd.md` and `core/*.md` reads through `adapters/codex/bin/preflight
 `PostToolUse` design bridge runs after write/edit/multiedit/patch tools,
 including qualified `functions.apply_patch` payloads, and delegates
 design HTML saves to `adapters/codex/bin/preflight.sh design`.
+
+Fleet also reads a pending decision only from structured rollout
+`response_item` records whose `function_call(name=request_user_input, call_id)`
+has no later matching `function_call_output`. It never searches transcript
+prose. This shape is fixture-verified but remains unverified in live Codex
+traffic; App Server `tool/requestUserInput` is experimental, so runtime support
+is reported as `unknown` until an observed rollout proves the projection.
 
 Shell/Bash/`functions.exec_command` I/O has targeted hook coverage for obvious
 write redirects, common mutation commands (`tee`, `touch`, `cp`, `mv`, `rm`,
