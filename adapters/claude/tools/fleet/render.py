@@ -48,12 +48,12 @@ _A_DIM = getattr(curses, "A_DIM", 0)
 # Eight-color terminals keep their native colors as a checked fallback.
 _MUTED_256 = {
     "soft": 253,       # #dadada — focal text, below pure white
-    "green": 151,     # #afd7af — light sage
-    "yellow": 187,    # #d7d7af — pale beige
-    "red": 181,       # #d7afaf — dusty rose
-    "cyan": 152,      # #afd7d7 — pale teal
-    "magenta": 182,   # #d7afd7 — pale mauve
-    "blue": 146,      # #afafd7 — soft periwinkle
+    "green": 150,     # #afd787 — richer sage
+    "yellow": 186,    # #d7d787 — warm beige
+    "red": 217,       # #ffafaf — soft coral
+    "cyan": 116,      # #87d7d7 — clear teal
+    "magenta": 176,   # #d787d7 — clear mauve
+    "blue": 147,      # #afafff — clear periwinkle
     "vanilla": 230,   # #ffffd7 — pale vanilla spinner
     "chrome": 252,    # #d0d0d0 — header/footer bands
     "warning": 131,   # #af5f5f — warning-band background
@@ -312,11 +312,10 @@ def _init_colors():
     _TINT_PAIR.clear()
     try:
         if curses.COLORS >= 256:
-            # One step below the mid-tone revision: neutral stock fallbacks stay
-            # readable while capable terminals receive a low-chroma slate cast.
+            # Darker again, while retaining only a low-chroma slate cast.
             try:
                 if curses.can_change_color():
-                    curses.init_color(236, 188, 196, 239)  # #30323d slate
+                    curses.init_color(235, 153, 165, 204)  # #272a34 slate
             except Exception:
                 pass
             hues = {"d": -1, "w": _palette_fg("soft", curses.COLOR_WHITE),
@@ -4203,9 +4202,9 @@ _TINT_CHARS = {"b", "c", "B", "C", "k", "i"}
 # sentinel (so tint detection in _addline is unaffected) by the group-loop post-pass.
 _ROW_BOLD = "\x00!\x00"
 # 256-color background levels per sentinel char. Base panels retain the
-# established range; hot/cooling move down one step to 236/235 without lowering
-# every card surface as the earlier near-black revision did.
-_TINT_LVL = {"b": 235, "c": 238, "B": 236, "C": 236, "k": 235, "i": 235}
+# established range; the whole ladder moves down one restrained step while the
+# cap remains visible and hot stays slightly above the base body.
+_TINT_LVL = {"b": 234, "c": 237, "B": 235, "C": 235, "k": 234, "i": 234}
 
 
 def _is_fill(t):

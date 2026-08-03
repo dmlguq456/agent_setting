@@ -14,19 +14,19 @@ class MutedPaletteTest(unittest.TestCase):
     def test_256_color_palette_is_low_chroma(self):
         self.assertEqual(render._MUTED_256, {
             "soft": 253,
-            "green": 151,
-            "yellow": 187,
-            "red": 181,
-            "cyan": 152,
-            "magenta": 182,
-            "blue": 146,
+            "green": 150,
+            "yellow": 186,
+            "red": 217,
+            "cyan": 116,
+            "magenta": 176,
+            "blue": 147,
             "vanilla": 230,
             "chrome": 252,
             "warning": 131,
         })
         with mock.patch.object(render.curses, "COLORS", 256, create=True):
-            self.assertEqual(render._palette_fg("green", 2), 151)
-            self.assertEqual(render._palette_fg("blue", 4), 146)
+            self.assertEqual(render._palette_fg("green", 2), 150)
+            self.assertEqual(render._palette_fg("blue", 4), 147)
 
     def test_low_color_terminal_keeps_native_fallback(self):
         with mock.patch.object(render.curses, "COLORS", 8, create=True):
@@ -35,7 +35,7 @@ class MutedPaletteTest(unittest.TestCase):
 
     def test_panel_tints_keep_brightness_and_reduce_chroma(self):
         self.assertEqual(render._TINT_LVL, {
-            "b": 235, "c": 238, "B": 236, "C": 236, "k": 235, "i": 235,
+            "b": 234, "c": 237, "B": 235, "C": 235, "k": 234, "i": 234,
         })
         self.assertEqual(render._TINT_LVL["b"], render._TINT_LVL["i"])
         self.assertNotIn(60, render._TINT_LVL.values())
