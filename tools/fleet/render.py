@@ -86,8 +86,8 @@ _TINT_OK = False   # 256-color tint pairs initialized (round-5 panels); False �
 _TINT_PAIR = {}    # (tint_char, hue_char) → curses attr — the (fg, tint_bg) composed pairs
 
 # fg color_key → (hue, attr) decomposition (spec §5.2) — the basis for composing (fg, tint_bg)
-# pairs. hue: d=default g=green y=yellow r=red c=cyan m=magenta l=blue. Keys absent here render
-# as default-hue plain text under tint (safe degradation).
+# pairs. hue: d=default g=green y=yellow v=vanilla r=red c=cyan m=magenta l=blue.
+# Keys absent here render as default-hue plain text under tint (safe degradation).
 _A_B, _A_D = _A_BOLD, _A_DIM
 _HUE_OF = {
     None: ("d", 0), "dim": ("d", _A_D), "head": ("d", _A_D), "unknown": ("d", _A_D),
@@ -96,7 +96,7 @@ _HUE_OF = {
     "qa_quick": ("d", _A_D), "qa_light": ("d", _A_D), "qa_standard": ("d", 0),
     "qa_thorough": ("d", _A_B), "qa_adversarial": ("d", _A_B),
     "g_work": ("g", _A_B), "g_work_off": ("g", _A_D),
-    "g_spin": ("y", _A_B), "g_spin_dim": ("y", 0), "g_idle": ("y", 0),
+    "g_spin": ("v", 0), "g_spin_dim": ("v", _A_D), "g_idle": ("y", 0),
     "g_stale": ("d", _A_D), "g_dead": ("r", _A_B), "g_unused": ("y", _A_D),
     # Badge text, NOT the glyph: plain yellow, distinct from the dim g_unused glyph so the
     # ●>○>◌ ink-weight gradient still reads.
@@ -157,14 +157,23 @@ def _init_colors():
             n += 1
         except Exception:
             _COLOR[key] = 0
+    # Stock xterm-256 223 (#ffd7af) is the closest stable vanilla/cream swatch to
+    # #f3e5ab. Eight-color terminals degrade to a non-bold yellow instead of
+    # bringing back the previous high-intensity yellow spinner.
+    vanilla_fg = 223 if getattr(curses, "COLORS", 0) >= 256 else curses.COLOR_YELLOW
+    try:
+        curses.init_pair(n, vanilla_fg, bg)
+        _COLOR["vanilla"] = curses.color_pair(n)
+    except Exception:
+        _COLOR["vanilla"] = _COLOR.get("yellow", 0)
     # status dots — working "blinks" via a manual on/off toggle in the loop (A_BLINK is stripped
     # by tmux/herdr, so we animate it ourselves: g_work bright ↔ g_work_off dim each ~500ms)
     _COLOR["g_work"] = _COLOR.get("green", 0) | curses.A_BOLD
     _COLOR["g_work_off"] = _COLOR.get("green", 0) | curses.A_DIM
-    # Working spinners use light yellow without changing the green working
-    # accents elsewhere in a row. Dispatch spinners keep the quieter weight.
-    _COLOR["g_spin"] = _COLOR.get("yellow", 0) | curses.A_BOLD
-    _COLOR["g_spin_dim"] = _COLOR.get("yellow", 0)
+    # Working spinners use vanilla without changing the green working accents
+    # elsewhere in a row. Dispatch spinners keep the quieter dim weight.
+    _COLOR["g_spin"] = _COLOR.get("vanilla", _COLOR.get("yellow", 0))
+    _COLOR["g_spin_dim"] = _COLOR["g_spin"] | curses.A_DIM
     _COLOR["g_idle"] = _COLOR.get("yellow", 0)
     _COLOR["g_stale"] = curses.A_DIM
     _COLOR["g_dead"] = _COLOR.get("red", 0) | curses.A_BOLD
@@ -287,6 +296,7 @@ def _init_colors():
             except Exception:
                 pass
             hues = {"d": -1, "g": curses.COLOR_GREEN, "y": curses.COLOR_YELLOW,
+                    "v": 223,
                     "r": curses.COLOR_RED, "c": curses.COLOR_CYAN,
                     "m": curses.COLOR_MAGENTA, "l": curses.COLOR_BLUE}
             n_pair = 20
