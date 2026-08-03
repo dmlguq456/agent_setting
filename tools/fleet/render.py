@@ -47,15 +47,15 @@ _A_DIM = getattr(curses, "A_DIM", 0)
 # cyan/magenta/blue, but the stock primaries are replaced with softer midtones.
 # Eight-color terminals keep their native colors as a checked fallback.
 _MUTED_256 = {
-    "soft": 252,       # #d0d0d0 — focal text, below pure white
-    "green": 108,     # #87af87 — sage
-    "yellow": 180,    # #d7af87 — muted amber
-    "red": 174,       # #d78787 — dusty coral
-    "cyan": 109,      # #87afaf — muted teal
-    "magenta": 139,   # #af87af — dusty mauve
-    "blue": 110,      # #87afd7 — soft blue
-    "vanilla": 223,   # #ffd7af — working spinner
-    "chrome": 250,    # #bcbcbc — header/footer bands
+    "soft": 253,       # #dadada — focal text, below pure white
+    "green": 151,     # #afd7af — light sage
+    "yellow": 187,    # #d7d7af — pale beige
+    "red": 181,       # #d7afaf — dusty rose
+    "cyan": 152,      # #afd7d7 — pale teal
+    "magenta": 182,   # #d7afd7 — pale mauve
+    "blue": 146,      # #afafd7 — soft periwinkle
+    "vanilla": 230,   # #ffffd7 — pale vanilla spinner
+    "chrome": 252,    # #d0d0d0 — header/footer bands
     "warning": 131,   # #af5f5f — warning-band background
 }
 
@@ -312,14 +312,8 @@ def _init_colors():
     _TINT_PAIR.clear()
     try:
         if curses.COLORS >= 256:
-            # Use neutral-grey stock fallbacks, then add only a trace of blue/brown
-            # where palette redefinition works. Ignored init_color stays calm.
-            try:
-                if curses.can_change_color():
-                    curses.init_color(236, 85, 90, 120)   # dark slate blue
-                    curses.init_color(235, 105, 85, 65)   # dark taupe
-            except Exception:
-                pass
+            # Background levels use fixed low-chroma xterm swatches so terminals
+            # that ignore init_color still render the same slate/taupe intent.
             hues = {"d": -1, "w": _palette_fg("soft", curses.COLOR_WHITE),
                     "g": _palette_fg("green", curses.COLOR_GREEN),
                     "y": _palette_fg("yellow", curses.COLOR_YELLOW),
@@ -4176,10 +4170,10 @@ _TINT_CHARS = {"b", "c", "B", "C", "k", "i"}
 # any other row in the card, font weight carries the distinction). Inserted AFTER any tint
 # sentinel (so tint detection in _addline is unaffected) by the group-loop post-pass.
 _ROW_BOLD = "\x00!\x00"
-# 256-color background levels per sentinel char. Stock values are a tight
-# near-black greyscale ladder; supported terminals add a restrained slate/taupe
-# cast to hot/cooling through init_color above.
-_TINT_LVL = {"b": 233, "c": 234, "B": 236, "C": 236, "k": 235, "i": 233}
+# 256-color background levels per sentinel char. Base-panel brightness returns
+# to the established 235/238 range; hot/cooling lower saturation through slate
+# blue 60 (#5f5f87) and taupe 95 (#875f5f), rather than becoming near-black.
+_TINT_LVL = {"b": 235, "c": 238, "B": 60, "C": 60, "k": 95, "i": 235}
 
 
 def _is_fill(t):

@@ -13,32 +13,33 @@ from fleet import render  # noqa: E402
 class MutedPaletteTest(unittest.TestCase):
     def test_256_color_palette_is_low_chroma(self):
         self.assertEqual(render._MUTED_256, {
-            "soft": 252,
-            "green": 108,
-            "yellow": 180,
-            "red": 174,
-            "cyan": 109,
-            "magenta": 139,
-            "blue": 110,
-            "vanilla": 223,
-            "chrome": 250,
+            "soft": 253,
+            "green": 151,
+            "yellow": 187,
+            "red": 181,
+            "cyan": 152,
+            "magenta": 182,
+            "blue": 146,
+            "vanilla": 230,
+            "chrome": 252,
             "warning": 131,
         })
         with mock.patch.object(render.curses, "COLORS", 256, create=True):
-            self.assertEqual(render._palette_fg("green", 2), 108)
-            self.assertEqual(render._palette_fg("blue", 4), 110)
+            self.assertEqual(render._palette_fg("green", 2), 151)
+            self.assertEqual(render._palette_fg("blue", 4), 146)
 
     def test_low_color_terminal_keeps_native_fallback(self):
         with mock.patch.object(render.curses, "COLORS", 8, create=True):
             self.assertEqual(render._palette_fg("green", 2), 2)
             self.assertEqual(render._palette_fg("soft", 7), 7)
 
-    def test_panel_tints_use_near_black_ladder(self):
+    def test_panel_tints_keep_brightness_and_reduce_chroma(self):
         self.assertEqual(render._TINT_LVL, {
-            "b": 233, "c": 234, "B": 236, "C": 236, "k": 235, "i": 233,
+            "b": 235, "c": 238, "B": 60, "C": 60, "k": 95, "i": 235,
         })
-        self.assertLess(render._TINT_LVL["b"], render._TINT_LVL["k"])
-        self.assertLess(render._TINT_LVL["k"], render._TINT_LVL["B"])
+        self.assertEqual(render._TINT_LVL["b"], render._TINT_LVL["i"])
+        self.assertNotIn(233, render._TINT_LVL.values())
+        self.assertNotIn(234, render._TINT_LVL.values())
 
     def test_semantic_hues_and_soft_focal_text_are_preserved(self):
         self.assertEqual(render._HUE_OF["g_work"][0], "g")
