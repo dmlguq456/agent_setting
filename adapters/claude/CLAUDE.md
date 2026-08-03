@@ -60,7 +60,7 @@ data. Use `stage-dispatch-fallback.py` for ordinary standard+ dispatch-depth-2 w
 `dispatch-batch.py --parallel-group` call for each sealed 2–4-way group. Contract v3 claims one
 stable attempt before spawn; the retired broker only supports `status`/`stop`.
 
-Keep native agents distinct from registered headless worker dispatch; a restriction on one surface never silently extends to the other. Preserve model role, intensity, depth, tests, safety, and validation on fallback. Do not run drill automatically.
+Keep native agents distinct from registered headless worker dispatch; a restriction on one surface never silently extends to the other. Preserve model role, intensity, depth, tests, safety, and validation on fallback. Do not run drill automatically. A Codex job the openai-codex plugin detaches after its foreground timeout runs in the plugin's own queue, never in jobs.log; Fleet shows it only as a read-only plugin-queue row. Launch substantial Codex delegation that needs attempt-grade tracking or gates through registered dispatch instead.
 
 ## Runtime Lifecycle
 
