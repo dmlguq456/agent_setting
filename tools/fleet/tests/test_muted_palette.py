@@ -35,11 +35,11 @@ class MutedPaletteTest(unittest.TestCase):
 
     def test_panel_tints_keep_brightness_and_reduce_chroma(self):
         self.assertEqual(render._TINT_LVL, {
-            "b": 235, "c": 238, "B": 60, "C": 60, "k": 95, "i": 235,
+            "b": 235, "c": 238, "B": 237, "C": 237, "k": 236, "i": 235,
         })
         self.assertEqual(render._TINT_LVL["b"], render._TINT_LVL["i"])
-        self.assertNotIn(233, render._TINT_LVL.values())
-        self.assertNotIn(234, render._TINT_LVL.values())
+        self.assertNotIn(60, render._TINT_LVL.values())
+        self.assertNotIn(95, render._TINT_LVL.values())
 
     def test_semantic_hues_and_soft_focal_text_are_preserved(self):
         self.assertEqual(render._HUE_OF["g_work"][0], "g")
