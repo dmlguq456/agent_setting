@@ -43,6 +43,29 @@ from .model import fmt_min, dash, project_of
 _A_BOLD = getattr(curses, "A_BOLD", 0)
 _A_DIM = getattr(curses, "A_DIM", 0)
 
+# Low-chroma xterm-256 palette. Semantic axes stay green/yellow/red and
+# cyan/magenta/blue, but the stock primaries are replaced with softer midtones.
+# Eight-color terminals keep their native colors as a checked fallback.
+_MUTED_256 = {
+    "soft": 252,       # #d0d0d0 — focal text, below pure white
+    "green": 108,     # #87af87 — sage
+    "yellow": 180,    # #d7af87 — muted amber
+    "red": 174,       # #d78787 — dusty coral
+    "cyan": 109,      # #87afaf — muted teal
+    "magenta": 139,   # #af87af — dusty mauve
+    "blue": 110,      # #87afd7 — soft blue
+    "vanilla": 223,   # #ffd7af — working spinner
+    "chrome": 250,    # #bcbcbc — header/footer bands
+    "warning": 131,   # #af5f5f — warning-band background
+}
+
+
+def _palette_fg(name, fallback):
+    if curses is not None and getattr(curses, "COLORS", 0) >= 256:
+        return _MUTED_256[name]
+    return fallback
+
+
 # harness = dim lowercase word in its identity color (no bracket chip, no reverse-video)
 _BADGE_TEXT = {"claude": "claude code", "codex": "codex", "opencode": "opencode"}
 _BADGE_KEY = {"claude": "h_claude", "codex": "h_codex", "opencode": "h_opencode"}
@@ -86,13 +109,14 @@ _TINT_OK = False   # 256-color tint pairs initialized (round-5 panels); False �
 _TINT_PAIR = {}    # (tint_char, hue_char) → curses attr — the (fg, tint_bg) composed pairs
 
 # fg color_key → (hue, attr) decomposition (spec §5.2) — the basis for composing (fg, tint_bg)
-# pairs. hue: d=default g=green y=yellow v=vanilla r=red c=cyan m=magenta l=blue.
+# pairs. hue: d=default w=soft white g=green y=yellow v=vanilla r=red c=cyan
+# m=magenta l=blue.
 # Keys absent here render as default-hue plain text under tint (safe degradation).
 _A_B, _A_D = _A_BOLD, _A_DIM
 _HUE_OF = {
     None: ("d", 0), "dim": ("d", _A_D), "head": ("d", _A_D), "unknown": ("d", _A_D),
-    "name_work": ("d", _A_B), "name_idle": ("d", _A_B), "name_dim": ("d", _A_D),
-    "grp": ("d", _A_B), "branch_s": ("d", 0), "cost_hi": ("d", _A_B),
+    "name_work": ("w", _A_B), "name_idle": ("w", _A_B), "name_dim": ("w", _A_D),
+    "grp": ("w", _A_B), "branch_s": ("d", 0), "cost_hi": ("w", _A_B),
     "qa_quick": ("d", _A_D), "qa_light": ("d", _A_D), "qa_standard": ("d", 0),
     "qa_thorough": ("d", _A_B), "qa_adversarial": ("d", _A_B),
     "g_work": ("g", _A_B), "g_work_off": ("g", _A_D),
@@ -144,10 +168,18 @@ def _init_colors():
         bg = curses.COLOR_BLACK
     # color discipline (design review 2026-07-01): one meaning per color.
     #   green/yellow/red = status + level ONLY · cyan/magenta/blue = harness identity ONLY
-    #   white bold = the row's single focal point (session name) · dim = all metadata
-    spec = {
+    #   soft-white bold = the row's single focal point (session name) · dim = all metadata
+    fallback_spec = {
         "green": curses.COLOR_GREEN, "yellow": curses.COLOR_YELLOW, "red": curses.COLOR_RED,
         "h_claude": curses.COLOR_CYAN, "h_codex": curses.COLOR_MAGENTA, "h_opencode": curses.COLOR_BLUE,
+        "soft": curses.COLOR_WHITE, "vanilla": curses.COLOR_YELLOW,
+    }
+    palette_name = {
+        "h_claude": "cyan", "h_codex": "magenta", "h_opencode": "blue",
+    }
+    spec = {
+        key: _palette_fg(palette_name.get(key, key), fallback)
+        for key, fallback in fallback_spec.items()
     }
     n = 1
     for key, fg in spec.items():
@@ -157,15 +189,6 @@ def _init_colors():
             n += 1
         except Exception:
             _COLOR[key] = 0
-    # Stock xterm-256 223 (#ffd7af) is the closest stable vanilla/cream swatch to
-    # #f3e5ab. Eight-color terminals degrade to a non-bold yellow instead of
-    # bringing back the previous high-intensity yellow spinner.
-    vanilla_fg = 223 if getattr(curses, "COLORS", 0) >= 256 else curses.COLOR_YELLOW
-    try:
-        curses.init_pair(n, vanilla_fg, bg)
-        _COLOR["vanilla"] = curses.color_pair(n)
-    except Exception:
-        _COLOR["vanilla"] = _COLOR.get("yellow", 0)
     # status dots — working "blinks" via a manual on/off toggle in the loop (A_BLINK is stripped
     # by tmux/herdr, so we animate it ourselves: g_work bright ↔ g_work_off dim each ~500ms)
     _COLOR["g_work"] = _COLOR.get("green", 0) | curses.A_BOLD
@@ -188,8 +211,11 @@ def _init_colors():
     # per-MODEL family colors, in TWO intensities (2026-07-02: main↔dispatch contrast = whole-row
     # brightness): fam_* = BRIGHT (main session rows) / famd_* = DIM (dispatch rows recede).
     _hue = {h: _COLOR.get("h_" + h, 0) for h in ("claude", "codex", "opencode")}
-    _fam = {"opus": curses.COLOR_CYAN, "sonnet": curses.COLOR_BLUE, "haiku": curses.COLOR_GREEN,
-            "fable": curses.COLOR_MAGENTA, "gpt": curses.COLOR_YELLOW}
+    _fam = {"opus": _palette_fg("cyan", curses.COLOR_CYAN),
+            "sonnet": _palette_fg("blue", curses.COLOR_BLUE),
+            "haiku": _palette_fg("green", curses.COLOR_GREEN),
+            "fable": _palette_fg("magenta", curses.COLOR_MAGENTA),
+            "gpt": _palette_fg("yellow", curses.COLOR_YELLOW)}
     n_pair = 10                                     # pairs 1-9 reserved above; families from 10
     for fam, fg in _fam.items():
         try:
@@ -209,7 +235,7 @@ def _init_colors():
         # harness (h_<h>) → main↔spawned weight is carried by font-color intensity (no bg fill).
         _COLOR["hb_" + h] = hue
     _COLOR["hb_other"] = 0
-    _COLOR["grp"] = curses.A_BOLD      # group (directory) card title
+    _COLOR["grp"] = _COLOR.get("soft", 0) | curses.A_BOLD  # group card title
     _COLOR["grp_live"] = _COLOR.get("green", 0)
     _COLOR["grp_hot"] = _COLOR.get("green", 0) | curses.A_BOLD   # active card title (working)
     _COLOR["grp_cool"] = _COLOR.get("yellow", 0) | curses.A_DIM  # Cooling indicator, name, and elapsed time.
@@ -219,13 +245,13 @@ def _init_colors():
         _COLOR["h_" + h] = _COLOR.get("h_" + h, 0) | curses.A_DIM
     # session name = THE left pillar of every row (design r2): bright bold for any live session —
     # the eye lands here first; only stale/dead recede. working is distinguished by its dot blink.
-    _COLOR["name_work"] = curses.A_BOLD
-    _COLOR["name_idle"] = curses.A_BOLD
-    _COLOR["name_dim"] = curses.A_DIM
+    _COLOR["name_work"] = _COLOR.get("soft", 0) | curses.A_BOLD
+    _COLOR["name_idle"] = _COLOR.get("soft", 0) | curses.A_BOLD
+    _COLOR["name_dim"] = _COLOR.get("soft", 0) | curses.A_DIM
     # gate words · cost alarm · structure
     _COLOR["gate_t"] = _COLOR.get("green", 0) | curses.A_DIM
     _COLOR["gate_u"] = _COLOR.get("yellow", 0) | curses.A_DIM
-    _COLOR["cost_hi"] = curses.A_BOLD
+    _COLOR["cost_hi"] = _COLOR.get("soft", 0) | curses.A_BOLD
     # qa rigor ramp (dispatch tag after the name): quick dim … adversarial bold
     for lvl, it in _QA_INT.items():
         _COLOR["qa_" + lvl] = it
@@ -243,12 +269,13 @@ def _init_colors():
     for _e in ("low", "medium", "high", "xhigh", "max"):
         _COLOR["effd_" + _e] = (_COLOR.get("eff_" + _e, 0) & ~curses.A_BOLD) | curses.A_DIM
     # htop chrome: the one background pair on screen — black on
-    # WHITE full-width bars wrapping the board (column-header bar + footer key bar). htop's CYAN
-    # looked dated, so use neutral white.
+    # muted neutral full-width bars wrapping the board (column-header bar + footer key bar).
+    # They stay structural without the glare of stock white.
     # Structural, one-shot — NOT a per-item classification color, so the fg color-axis budget
     # The no-rainbow-noise rule remains; keycaps use bold because dim vanishes on the bar.
     try:
-        curses.init_pair(15, curses.COLOR_BLACK, curses.COLOR_WHITE)
+        curses.init_pair(15, curses.COLOR_BLACK,
+                         _palette_fg("chrome", curses.COLOR_WHITE))
         _COLOR["hdr_bar"] = curses.color_pair(15)
     except Exception:
         _COLOR["hdr_bar"] = curses.A_REVERSE
@@ -260,19 +287,20 @@ def _init_colors():
     # inverts the hierarchy the double-confirm ladder depends on: the live-session prompt must
     # read as MORE serious, not like a render glitch.
     try:
-        curses.init_pair(17, curses.COLOR_WHITE, curses.COLOR_RED)
+        curses.init_pair(17, _palette_fg("soft", curses.COLOR_WHITE),
+                         _palette_fg("warning", curses.COLOR_RED))
         _COLOR["hdr_warn"] = curses.color_pair(17) | curses.A_BOLD
     except Exception:
         _COLOR["hdr_warn"] = curses.A_REVERSE | curses.A_BOLD
     # The one key the user must press, advertised on top of the red bar.
     _COLOR["hdr_warn_key"] = _COLOR["hdr_warn"] | curses.A_REVERSE
-    # bar BLANKS are drawn as white-fg █ blocks on the DEFAULT bg (pair 16), not as bg-colored
+    # bar BLANKS are drawn as muted-neutral █ blocks on the DEFAULT bg (pair 16), not as bg-colored
     # spaces: ncurses collapses blank runs into ECH/EL erase sequences, and on terminals without
     # working BCE the erased cells come out BLACK — the bar broke between words and after the
     # text. A block glyph is a real character, so it is
-    # physically written every time and looks identical to a white background cell.
+    # physically written every time and matches the muted bar background cell.
     try:
-        curses.init_pair(16, curses.COLOR_WHITE, bg)
+        curses.init_pair(16, _palette_fg("chrome", curses.COLOR_WHITE), bg)
         _COLOR["hdr_blk"] = curses.color_pair(16)
     except Exception:
         _COLOR["hdr_blk"] = 0
@@ -284,21 +312,22 @@ def _init_colors():
     _TINT_PAIR.clear()
     try:
         if curses.COLORS >= 256:
-            # deepen the midnight-blue active tint (~#0c0f30) where the terminal honors palette
-            # redefinition; ignored → stock 17 (#00005f), already subtle (user's terminal was
-            # shown to ignore init_color — the green attempt stayed bright, hence the hue move).
+            # Use neutral-grey stock fallbacks, then add only a trace of blue/brown
+            # where palette redefinition works. Ignored init_color stays calm.
             try:
                 if curses.can_change_color():
-                    # Approximately #0e0f21: dark, desaturated, near-grey midnight blue.
-                    curses.init_color(17, 55, 60, 130)
-                    # Cooling background is dark brown; stock 94 is the fallback.
-                    curses.init_color(94, 120, 75, 38)
+                    curses.init_color(236, 85, 90, 120)   # dark slate blue
+                    curses.init_color(235, 105, 85, 65)   # dark taupe
             except Exception:
                 pass
-            hues = {"d": -1, "g": curses.COLOR_GREEN, "y": curses.COLOR_YELLOW,
-                    "v": 223,
-                    "r": curses.COLOR_RED, "c": curses.COLOR_CYAN,
-                    "m": curses.COLOR_MAGENTA, "l": curses.COLOR_BLUE}
+            hues = {"d": -1, "w": _palette_fg("soft", curses.COLOR_WHITE),
+                    "g": _palette_fg("green", curses.COLOR_GREEN),
+                    "y": _palette_fg("yellow", curses.COLOR_YELLOW),
+                    "v": _palette_fg("vanilla", curses.COLOR_YELLOW),
+                    "r": _palette_fg("red", curses.COLOR_RED),
+                    "c": _palette_fg("cyan", curses.COLOR_CYAN),
+                    "m": _palette_fg("magenta", curses.COLOR_MAGENTA),
+                    "l": _palette_fg("blue", curses.COLOR_BLUE)}
             n_pair = 20
             for tch, lvl in _TINT_LVL.items():
                 for hch, fg in hues.items():
@@ -4147,10 +4176,10 @@ _TINT_CHARS = {"b", "c", "B", "C", "k", "i"}
 # any other row in the card, font weight carries the distinction). Inserted AFTER any tint
 # sentinel (so tint detection in _addline is unaffected) by the group-loop post-pass.
 _ROW_BOLD = "\x00!\x00"
-# 256-color background levels per sentinel char. Base panels = dark GREY (235/238); the
-# Active-group variants use a dark midnight-blue tint. Color 17 is the cube's darkest blue.
-# even where init_color is ignored (green 22 #005f00 read too bright — user ×2).
-_TINT_LVL = {"b": 235, "c": 238, "B": 17, "C": 17, "k": 94, "i": 235}
+# 256-color background levels per sentinel char. Stock values are a tight
+# near-black greyscale ladder; supported terminals add a restrained slate/taupe
+# cast to hot/cooling through init_color above.
+_TINT_LVL = {"b": 233, "c": 234, "B": 236, "C": 236, "k": 235, "i": 233}
 
 
 def _is_fill(t):
@@ -4213,13 +4242,13 @@ def _addline(stdscr, row, segs, w):
         return col
 
     endcol = _draw(left, start_col)
-    # band lines (htop WHITE bars = full width · round-5 tint panels = inset cards) paint their
+    # band lines (muted neutral bars = full width · round-5 tint panels = inset cards) paint their
     # background across; tint rows stop at w-1 so the right margin stays on the default bg.
     bar = bool(segs) and segs[0][1] in _BAR_ROLES
     band = bar or tint is not None
     band_lim = w if bar else (w - _INSET)
     # The bar inherits its color from the leading role, so a warning bar paints red across the
-    # full width exactly as the normal bar paints white — same structure, different severity.
+    # full width exactly as the normal bar paints neutral — same structure, different severity.
     fill_key = segs[0][1] if bar else None     # tint rows fill with the default-hue tint pair
     if fillch is not None:              # right may be EMPTY (a bare full-width rule line) — the
         rw = sum(_dw(t) for t, _ in right)   # fill itself must still draw (bug: divider invisible)
