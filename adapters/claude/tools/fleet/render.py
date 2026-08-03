@@ -95,7 +95,8 @@ _HUE_OF = {
     "grp": ("d", _A_B), "branch_s": ("d", 0), "cost_hi": ("d", _A_B),
     "qa_quick": ("d", _A_D), "qa_light": ("d", _A_D), "qa_standard": ("d", 0),
     "qa_thorough": ("d", _A_B), "qa_adversarial": ("d", _A_B),
-    "g_work": ("g", _A_B), "g_work_off": ("g", _A_D), "g_idle": ("y", 0),
+    "g_work": ("g", _A_B), "g_work_off": ("g", _A_D),
+    "g_spin": ("y", _A_B), "g_spin_dim": ("y", 0), "g_idle": ("y", 0),
     "g_stale": ("d", _A_D), "g_dead": ("r", _A_B), "g_unused": ("y", _A_D),
     # Badge text, NOT the glyph: plain yellow, distinct from the dim g_unused glyph so the
     # ●>○>◌ ink-weight gradient still reads.
@@ -160,6 +161,10 @@ def _init_colors():
     # by tmux/herdr, so we animate it ourselves: g_work bright ↔ g_work_off dim each ~500ms)
     _COLOR["g_work"] = _COLOR.get("green", 0) | curses.A_BOLD
     _COLOR["g_work_off"] = _COLOR.get("green", 0) | curses.A_DIM
+    # Working spinners use light yellow without changing the green working
+    # accents elsewhere in a row. Dispatch spinners keep the quieter weight.
+    _COLOR["g_spin"] = _COLOR.get("yellow", 0) | curses.A_BOLD
+    _COLOR["g_spin_dim"] = _COLOR.get("yellow", 0)
     _COLOR["g_idle"] = _COLOR.get("yellow", 0)
     _COLOR["g_stale"] = curses.A_DIM
     _COLOR["g_dead"] = _COLOR.get("red", 0) | curses.A_BOLD
@@ -316,7 +321,7 @@ def _live_key(state):
 
 
 # status dot — SHAPE+SIZE gradient (design r2, a11y): the less active the state, the smaller
-# the glyph. Working uses a bright green spinner; live idle/detached use the same dim-green
+# the glyph. Working uses a light-yellow spinner; live idle/detached use the dim-green
 # loading axis; stale/dead recede to grey/red. Readable without color.
 # F-26 `unused` = ◌ (U+25CC DOTTED CIRCLE). Shape gradient reads ● (filled) > ○ (ring) >
 # ◌ (dotted ring = never filled), which is exactly the "started but never prompted" meaning.
@@ -353,11 +358,11 @@ _SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"   # braille loading spinner — working
 
 
 def _glyph(state, dim=False):
-    """Session/job status glyph. working = braille spinner frame — BRIGHT green for a main
-    session, dim green for a dispatch job so main and dispatch spinners differ.
+    """Session/job status glyph. working = a light-yellow braille spinner frame;
+    the dispatch variant keeps a quieter weight so main and dispatch differ.
     idle = dim-green FILLED ●, detached = dim-green ring ○."""
     if state == "working":
-        return _SPIN[int(time.time() * 10) % len(_SPIN)], ("g_work_off" if dim else "g_work")
+        return _SPIN[int(time.time() * 10) % len(_SPIN)], ("g_spin_dim" if dim else "g_spin")
     return _LIVE_GLYPH.get(state, "·"), _GLYPH_KEY.get(state, "dim")
 
 
@@ -1988,7 +1993,7 @@ def _pulse_segs(sessions, jobs):
     jw = sum(1 for j in listed_jobs if j.liveness == "working")
     spin = _SPIN[int(time.time() * 10) % len(_SPIN)]
     pulse = [("  fleet ", "head"),
-             (spin + " %d" % n_wk, "g_work"), (" working   ", "dim"),
+             (spin + " %d" % n_wk, "g_spin"), (" working   ", "dim"),
              ("● %d" % n_id, "g_work_off"), (" idle   ", "dim")]
     # F-26: only when there IS one — a healthy board stays quiet (F-12 contract).
     if n_un:
@@ -3978,7 +3983,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     # when this build actually used them (_seen_glyphs, tracked above — local, not global).
     lines.append(None)
     legend = [
-        ("  ", None), ("⠹", "g_work"), (" working   ", "dim"),
+        ("  ", None), ("⠹", "g_spin"), (" working   ", "dim"),
         ("●", "g_work_off"), (" idle   ", "dim"),
     ]
     if "unused" in _seen_glyphs:

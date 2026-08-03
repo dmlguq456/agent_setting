@@ -77,6 +77,20 @@ class InvalidationRenderTest(unittest.TestCase):
         for kind, label in expected.items():
             self.assertEqual(render._interaction_badge(self.session(kind)).strip(), label)
 
+    def test_working_spinners_use_dedicated_light_yellow_keys(self):
+        with mock.patch.object(render.time, "time", return_value=0.0):
+            _main_glyph, main_key = render._glyph("working")
+            _job_glyph, job_key = render._glyph("working", dim=True)
+            pulse = render._pulse_segs(
+                [Session(harness="codex", pid=1, liveness="working")], []
+            )
+        self.assertEqual(main_key, "g_spin")
+        self.assertEqual(job_key, "g_spin_dim")
+        self.assertEqual(render._HUE_OF[main_key], ("y", render._A_BOLD))
+        self.assertEqual(render._HUE_OF[job_key], ("y", 0))
+        self.assertEqual(pulse[1][1], "g_spin")
+        self.assertEqual(render._GLYPH_KEY["blocked"], "g_idle")
+
     def test_public_json_contains_only_interaction_metadata(self):
         with mock.patch.object(fleetmod, "_collect_memory", return_value=None), \
              mock.patch.object(fleetmod, "_collect_route", return_value=[]), \
