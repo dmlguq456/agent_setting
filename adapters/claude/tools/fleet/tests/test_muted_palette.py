@@ -35,11 +35,40 @@ class MutedPaletteTest(unittest.TestCase):
 
     def test_panel_tints_keep_brightness_and_reduce_chroma(self):
         self.assertEqual(render._TINT_LVL, {
-            "b": 234, "c": 237, "B": 235, "C": 235, "k": 234, "i": 234,
+            "b": 233, "c": 236, "B": 234, "C": 234, "k": 233, "i": 233,
         })
         self.assertEqual(render._TINT_LVL["b"], render._TINT_LVL["i"])
         self.assertNotIn(60, render._TINT_LVL.values())
         self.assertNotIn(95, render._TINT_LVL.values())
+
+    def test_changeable_palette_only_nudges_foreground_saturation(self):
+        self.assertEqual(render._RICHER_RGB_1000, {
+            "green": (678, 859, 506),
+            "yellow": (859, 859, 506),
+            "red": (1000, 663, 663),
+            "cyan": (506, 859, 859),
+            "magenta": (859, 506, 859),
+            "blue": (663, 663, 1000),
+        })
+        init_color = mock.Mock()
+        with mock.patch.multiple(
+            render.curses,
+            create=True,
+            COLORS=256,
+            start_color=mock.Mock(),
+            use_default_colors=mock.Mock(),
+            init_pair=mock.Mock(),
+            color_pair=mock.Mock(return_value=0),
+            can_change_color=mock.Mock(return_value=True),
+            init_color=init_color,
+        ):
+            render._init_colors()
+        expected = [
+            mock.call(render._MUTED_256[name], *rgb)
+            for name, rgb in render._RICHER_RGB_1000.items()
+        ]
+        expected.append(mock.call(234, 125, 133, 169))
+        self.assertEqual(init_color.call_args_list, expected)
 
     def test_semantic_hues_and_soft_focal_text_are_preserved(self):
         self.assertEqual(render._HUE_OF["g_work"][0], "g")

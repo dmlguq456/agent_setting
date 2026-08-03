@@ -59,6 +59,18 @@ _MUTED_256 = {
     "warning": 131,   # #af5f5f — warning-band background
 }
 
+# On terminals that allow palette redefinition, open the semantic hues by only
+# a few RGB points.  The xterm indices above remain the stable fallback, while
+# these values add a barely perceptible amount of saturation at equal brightness.
+_RICHER_RGB_1000 = {
+    "green": (678, 859, 506),    # #addb81
+    "yellow": (859, 859, 506),   # #dbdb81
+    "red": (1000, 663, 663),     # #ffa9a9
+    "cyan": (506, 859, 859),     # #81dbdb
+    "magenta": (859, 506, 859),  # #db81db
+    "blue": (663, 663, 1000),    # #a9a9ff
+}
+
 
 def _palette_fg(name, fallback):
     if curses is not None and getattr(curses, "COLORS", 0) >= 256:
@@ -166,6 +178,15 @@ def _init_colors():
         bg = -1
     except Exception:
         bg = curses.COLOR_BLACK
+    # Apply optional palette refinements before creating pairs.  Unsupported
+    # terminals keep the checked xterm-256 colors without losing any semantics.
+    try:
+        if curses.COLORS >= 256 and curses.can_change_color():
+            for name, rgb in _RICHER_RGB_1000.items():
+                curses.init_color(_MUTED_256[name], *rgb)
+            curses.init_color(234, 125, 133, 169)  # #20222b low-chroma slate
+    except Exception:
+        pass
     # color discipline (design review 2026-07-01): one meaning per color.
     #   green/yellow/red = status + level ONLY · cyan/magenta/blue = harness identity ONLY
     #   soft-white bold = the row's single focal point (session name) · dim = all metadata
@@ -312,12 +333,6 @@ def _init_colors():
     _TINT_PAIR.clear()
     try:
         if curses.COLORS >= 256:
-            # Darker again, while retaining only a low-chroma slate cast.
-            try:
-                if curses.can_change_color():
-                    curses.init_color(235, 153, 165, 204)  # #272a34 slate
-            except Exception:
-                pass
             hues = {"d": -1, "w": _palette_fg("soft", curses.COLOR_WHITE),
                     "g": _palette_fg("green", curses.COLOR_GREEN),
                     "y": _palette_fg("yellow", curses.COLOR_YELLOW),
@@ -4202,9 +4217,9 @@ _TINT_CHARS = {"b", "c", "B", "C", "k", "i"}
 # sentinel (so tint detection in _addline is unaffected) by the group-loop post-pass.
 _ROW_BOLD = "\x00!\x00"
 # 256-color background levels per sentinel char. Base panels retain the
-# established range; the whole ladder moves down one restrained step while the
+# established range; the whole ladder moves down another restrained step while the
 # cap remains visible and hot stays slightly above the base body.
-_TINT_LVL = {"b": 234, "c": 237, "B": 235, "C": 235, "k": 234, "i": 234}
+_TINT_LVL = {"b": 233, "c": 236, "B": 234, "C": 234, "k": 233, "i": 233}
 
 
 def _is_fill(t):
