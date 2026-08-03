@@ -282,6 +282,25 @@ A worker handoff, background-process exit, or stage verdict alone is not task
 completion. Read-only orientation, simple factual answers, and status-only
 replies are exempt and use concise prose instead.
 
+Reporting completion is not the same as recording it. A compiled route states
+that work began; nothing else states that it ended, and `complete` closes only a
+registered attempt in the jobs registry, so inline and `direct` work leaves no
+closure at all. Close the route in the same turn as the card:
+
+```text
+python3 utilities/capability-route.py close --route <route.json> [--commit <sha>] [--summary <line>]
+python3 utilities/capability-route.py status --artifact-root <dir> --open-only
+```
+
+`close` writes an outcome sidecar beside the immutable route record — the record
+itself cannot carry the closure, because `route_hash` covers every other field.
+`status --open-only` then answers "what was started and never finished" directly.
+An unclosed route is indistinguishable from abandoned work, and the same applies
+to the other things a finished attempt leaves behind: a merged worktree and
+branch, a spec `pipeline_state.yaml` still naming a live phase, and a memory
+handoff still `pending` after its obligation is met. Close what the attempt
+opened, or the next session pays for it in reconstruction.
+
 ## 1. Four Tracks
 
 ```text

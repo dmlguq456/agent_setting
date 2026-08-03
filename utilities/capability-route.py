@@ -736,6 +736,56 @@ def atomic_write(path, payload):
     with os.fdopen(fd,"w",encoding="utf-8") as fh: fh.write(data); fh.flush(); os.fsync(fh.fileno())
     os.replace(temp,path)
 
+OUTCOME_SCHEMA_VERSION=1
+
+def outcome_path(route_file):
+    path=Path(route_file); return path.with_name(path.stem+".outcome.json")
+
+def _head_commit(cwd):
+    probe=subprocess.run(["git","-C",str(cwd),"rev-parse","HEAD"],text=True,capture_output=True)
+    return probe.stdout.strip() if probe.returncode==0 else None
+
+# A compiled route says work started; nothing said it finished. `complete` closes a
+# registered attempt in the jobs registry, so an inline/direct route — which never
+# reaches that registry — left no closure anywhere, and a leftover route file was
+# indistinguishable from abandoned work. The route record cannot carry the closure
+# itself: `route_hash` covers every field but the hash and id, so any added key makes
+# `verify_route` reject it. The closure lives in a sidecar and binds `route_hash`, so a
+# recompiled route leaves a detectably stale one rather than a silently wrong one.
+def close_route(route, route_file, commit=None, summary=None):
+    from datetime import datetime, timezone
+    target=outcome_path(route_file)
+    if target.exists():
+        return json.loads(target.read_text(encoding="utf-8")), False
+    outcome={"schema_version":OUTCOME_SCHEMA_VERSION,
+             "route_id":route["route_id"],"route_hash":route["route_hash"],
+             "route_file":str(Path(route_file).resolve()),"cwd":route["cwd"],
+             "capability":route["capability"],"effective_intensity":route["effective_intensity"],
+             "closed_at":datetime.now(timezone.utc).isoformat().replace("+00:00","Z"),
+             "head_commit":commit or _head_commit(route["cwd"]),"summary":summary}
+    atomic_write(target,outcome)
+    return outcome, True
+
+def route_status(artifact_root):
+    """Report every compiled route under one artifact root and whether it is closed."""
+    rows=[]
+    for path in sorted(Path(artifact_root).glob("*.json")):
+        if path.name.endswith(".outcome.json"): continue
+        try: raw=json.loads(path.read_text(encoding="utf-8"))
+        except (OSError,json.JSONDecodeError,UnicodeDecodeError): continue
+        if not isinstance(raw,dict) or "route_id" not in raw or "nodes" not in raw: continue
+        target=outcome_path(path)
+        row={"route_file":str(path),"route_id":raw.get("route_id"),
+             "capability":raw.get("capability"),"effective_intensity":raw.get("effective_intensity"),
+             "source_commit":raw.get("source_commit"),"closed":target.is_file()}
+        if row["closed"]:
+            try: closure=json.loads(target.read_text(encoding="utf-8"))
+            except (OSError,json.JSONDecodeError,UnicodeDecodeError): closure={}
+            row["closed_at"]=closure.get("closed_at"); row["head_commit"]=closure.get("head_commit")
+            row["stale_closure"]=closure.get("route_hash")!=raw.get("route_hash")
+        rows.append(row)
+    return rows
+
 def _marker_attempt_axes(node, attempt_id, attempt_metadata):
     if node.get("kind") == "resource-runner":
         if attempt_id or attempt_metadata:
@@ -1112,6 +1162,11 @@ def main():
     d.add_argument("--execution-surface")
     d.add_argument("--registered-worker",choices=("0","1","false","true"))
     d.add_argument("--fallback-hop")
+    cl=sub.add_parser("close"); cl.add_argument("--route",required=True)
+    cl.add_argument("--commit",help="result commit; defaults to HEAD in the route cwd")
+    cl.add_argument("--summary",help="one line naming what the route produced")
+    st=sub.add_parser("status"); st.add_argument("--artifact-root",required=True)
+    st.add_argument("--open-only",action="store_true",help="list only routes with no recorded outcome")
     a=p.parse_args()
     if a.command=="compile":
         gate={"spec_read":{"satisfied":a.spec_read.lower() not in ("0","false","no"),"source":a.spec_read},
@@ -1142,9 +1197,17 @@ def main():
             )
         if a.output: write_once(a.output,route)
         print(json.dumps(route,sort_keys=True))
+    elif a.command=="status":
+        rows=route_status(a.artifact_root)
+        if a.open_only: rows=[row for row in rows if not row["closed"]]
+        print(json.dumps(rows,sort_keys=True,indent=2))
     else:
         route=verify_route(json.loads(Path(a.route).read_text()), getattr(a,"cwd",None))
         if a.command=="verify": print(f"route_id={route['route_id']}\nroute_hash={route['route_hash']}")
+        elif a.command=="close":
+            outcome,created=close_route(route,a.route,a.commit,a.summary)
+            print(json.dumps(outcome,sort_keys=True))
+            if not created: print("capability-route: route already closed",file=sys.stderr)
         else:
             node=next((x for x in route["nodes"] if x["id"]==a.node),None)
             if not node: raise SystemExit("unknown route node")

@@ -487,5 +487,38 @@ class TestRoute(unittest.TestCase):
   legacy["route_hash"]=R.route_hash(legacy)
   legacy["route_id"]="rt-"+legacy["route_hash"].split(":",1)[1][:16]
   R.verify_route(legacy,R.ROOT)
+ def test_close_writes_an_idempotent_outcome_sidecar(self):
+  route=R.compile_route(**self.args())
+  with tempfile.TemporaryDirectory() as tmp:
+   path=Path(tmp)/"demo-route.json"; path.write_text(json.dumps(route),encoding="utf-8")
+   outcome,created=R.close_route(route,path,commit="0"*40,summary="demo")
+   self.assertTrue(created); self.assertTrue(R.outcome_path(path).is_file())
+   self.assertEqual(outcome["route_hash"],route["route_hash"]); self.assertEqual(outcome["route_id"],route["route_id"])
+   self.assertEqual(outcome["head_commit"],"0"*40); self.assertEqual(outcome["summary"],"demo")
+   again,created_again=R.close_route(route,path,commit="1"*40)
+   self.assertFalse(created_again); self.assertEqual(again["head_commit"],"0"*40)
+ def test_status_splits_open_from_closed_and_ignores_sidecars(self):
+  route=R.compile_route(**self.args())
+  with tempfile.TemporaryDirectory() as tmp:
+   root=Path(tmp)
+   (root/"open-route.json").write_text(json.dumps(route),encoding="utf-8")
+   closed=root/"closed-route.json"; closed.write_text(json.dumps(route),encoding="utf-8")
+   (root/"unrelated.json").write_text(json.dumps({"note":"not a route"}),encoding="utf-8")
+   R.close_route(route,closed,commit="2"*40)
+   rows={Path(row["route_file"]).name:row for row in R.route_status(root)}
+   self.assertEqual(set(rows),{"open-route.json","closed-route.json"})
+   self.assertFalse(rows["open-route.json"]["closed"]); self.assertTrue(rows["closed-route.json"]["closed"])
+   self.assertFalse(rows["closed-route.json"]["stale_closure"])
+   self.assertEqual(rows["closed-route.json"]["head_commit"],"2"*40)
+ def test_status_flags_a_closure_left_behind_by_a_recompiled_route(self):
+  first=R.compile_route(**self.args())
+  second=R.compile_route(**self.args(artifact_root=R.ROOT/"other"))
+  self.assertNotEqual(first["route_hash"],second["route_hash"])
+  with tempfile.TemporaryDirectory() as tmp:
+   path=Path(tmp)/"demo-route.json"; path.write_text(json.dumps(first),encoding="utf-8")
+   R.close_route(first,path,commit="3"*40)
+   path.write_text(json.dumps(second),encoding="utf-8")
+   row=R.route_status(Path(tmp))[0]
+   self.assertTrue(row["closed"]); self.assertTrue(row["stale_closure"])
 
 if __name__=="__main__": unittest.main()
