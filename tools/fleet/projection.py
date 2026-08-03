@@ -894,6 +894,12 @@ def attach_projections(sessions: Iterable[Session], jobs: Iterable[DispatchJob],
     for job in jobs:
         # A registered dispatch stream does not expose a session-owned context
         # window.  Drop legacy/inferred values instead of projecting "unknown".
+        # F-50f is the one exception: a plugin-queue row IS one Codex thread, joined to its
+        # own rollout by an exact sid match, so it owns a real context window.  It still goes
+        # through the same resolver — never a second, render-local context path.
+        if job.source == "plugin-queue" and job._context_evidence is not None:
+            job.context, job._context_evidence = normalize_context(_evidence(job), now=now)
+            continue
         job.context = None
         job._context_evidence = None
     # Resolve the current inline entry before artifact fallback.  A spec-read

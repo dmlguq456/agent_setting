@@ -937,8 +937,29 @@ def _stage_segs(key, stage, working=False, max_width=None, route_seq=None):
     return [("-", "dim")]
 
 
+def _plugin_phase(j):
+    """F-50e — the openai-codex plugin's own `phase` word, verbatim, or ''.
+
+    The plugin's phase vocabulary is third-party internal ("investigating", "done", …). It is
+    NEVER mapped onto a canonical stage, breadcrumb or WorkProjection (F-50a forbids inventing
+    meaning for an unknown word); it is shown as-is, dim, in the row's micro-status slot, and
+    an absent/blank phase simply shows nothing.
+    """
+    record = getattr(j, "plugin_job", None)
+    phase = record.get("phase") if isinstance(record, dict) else None
+    if not isinstance(phase, str) or not phase.strip():
+        return ""
+    return _clip_w(" ".join(phase.split()), _STAGE_ZONE_MAX)
+
+
 def _dispatch_stage_segs(j, key, stage, slug_name, working=False, route_seq=None,
                          route_zone=None):
+    if getattr(j, "source", None) == "plugin-queue":
+        # F-50e: a plugin-queue row has no fleet pipeline at all — its micro-status is the
+        # plugin's verbatim phase (same display rank as a depth-2 worker's "running"), and
+        # nothing else may occupy this slot.
+        phase = _plugin_phase(j)
+        return [(phase, "dim")] if phase else []
     depth = max(1, int(getattr(j, "depth", 1) or 1))
     intensity = getattr(j, "intensity", None) or ""
     projection = getattr(j, "work_projection", None)
@@ -2454,6 +2475,12 @@ def _dispatch_summary_detail_row(job, depth=1, term_width=None):
     """Dispatch has no session-owned context window; show only fresh NOW."""
     if getattr(job, "liveness", None) in ("stale", "dead"):
         return []
+    if getattr(job, "source", None) == "plugin-queue" and not getattr(job, "afterglow", False):
+        # F-50f: the one dispatch row that DOES own a context window (its own Codex thread,
+        # joined exact-1 on `threadId`). It reuses the session gauge row unchanged, so a
+        # failed/ambiguous join renders the same honest `—` every other source does. A
+        # finished row keeps the F-13/F-46 "no live telemetry" lane instead.
+        return _context_detail_row(job, depth=depth, term_width=term_width)
     summary = getattr(job, "summary", None)
     if not summary:
         return []

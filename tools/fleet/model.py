@@ -464,6 +464,11 @@ class DispatchJob:
     # The prompt body is the one omission (F-50d: fleet never carries a prompt), marked as
     # `prompt_omitted` inside `request`.
     plugin_job: Optional[dict] = None
+    # F-50f (v34): context/token telemetry joined from the plugin job's own Codex rollout
+    # (`threadId` == rollout filename sid, exact-1 only). Display-layer additive — it is
+    # attached after the F-50b state verdict and is never an input to it. None = honest gap
+    # (no match, ambiguous match, or unparseable tail).
+    plugin_telemetry: Optional[dict] = None
     context: Optional[ContextProjection] = None
     work_projection: Optional[WorkProjection] = None
     cap_grounding: Optional[dict] = None   # {capability, mode?, intensity?} for an inline entry

@@ -23,7 +23,9 @@ import time
 from datetime import datetime, timezone
 
 from .. import model
-from ..model import DispatchJob
+from ..model import ContextEvidence, DispatchJob
+from ..token_budget import parse_codex_token_count
+from . import codex
 from .dispatch import DONE_AFTERGLOW_MIN
 
 # The plugin's own layout, relative to the Claude config home.
@@ -151,7 +153,69 @@ def _public_record(record):
     return public
 
 
-def _row(record, state_dir, now):
+def _rollout_for_thread(thread_id, home=None):
+    """F-50f — the Codex rollout whose filename sid EXACTLY equals `threadId`, else None.
+
+    Exact-1 or nothing: zero matches, two or more matches, or an id that is not a rollout sid
+    at all all leave the telemetry an honest gap. The filename grammar keeps its single owner
+    (`codex._sid`) — this join never re-implements it, and glob metacharacters cannot reach
+    the pattern because the id has to parse as a sid first.
+
+    Only the two layouts Codex actually writes are searched (`sessions/YYYY/MM/DD/` and a flat
+    `sessions/`); a recursive walk of every rollout would cost a full tree scan per tick for a
+    lookup that is already exact.
+    """
+    if not isinstance(thread_id, str) or codex._sid("rollout-x-%s.jsonl" % thread_id) != thread_id:
+        return None
+    root = os.path.join(home or codex._home(), "sessions")
+    pattern = "rollout-*-%s.jsonl" % thread_id
+    paths = set(glob.glob(os.path.join(root, "*", "*", "*", pattern)))
+    paths |= set(glob.glob(os.path.join(root, pattern)))
+    if len(paths) != 1:
+        return None                          # 0 = no thread on disk, 2+ = ambiguous → deficit
+    return paths.pop()
+
+
+def _telemetry(record, home=None):
+    """F-50f — (telemetry dict, ContextEvidence) for the joined rollout, or (None, None).
+
+    Display-layer additive ONLY: this runs after `classify_job` and feeds nothing back into
+    the F-50b lifecycle judgement — a job's state is decided by the plugin's own status word
+    and the pid evidence, never by how full its context window is.
+    """
+    path = _rollout_for_thread(record.get("threadId"), home=home)
+    if not path:
+        return None, None
+    line = codex._tail_token_count(path)     # bounded 64 KB tail, same as session enrichment
+    if not line:
+        return None, None
+    tel = parse_codex_token_count(line, session_id=record.get("threadId"))
+    if tel.context_used_pct is None and tel.active_context_tokens is None:
+        return None, None                    # parsed but empty → still an honest gap
+    payload = {
+        "source": "codex-rollout",
+        "thread_id": record.get("threadId"),
+        "rollout": path,
+        "context_used_pct": tel.context_used_pct,
+        "active_context_tokens": tel.active_context_tokens,
+        "context_window_tokens": tel.context_window_tokens,
+        "session_total_tokens": tel.session_total_tokens,
+    }
+    evidence = None
+    if tel.context_used_pct is not None:
+        try:
+            st = os.stat(path)
+        except OSError:
+            return payload, None
+        sequence = (st.st_mtime_ns, st.st_size)
+        evidence = ContextEvidence(
+            used_pct=tel.context_used_pct, source="codex-rollout",
+            sequence=sequence, source_head_sequence=sequence,
+            observed_at=st.st_mtime, fresh_until=st.st_mtime + 900)
+    return payload, evidence
+
+
+def _row(record, state_dir, now, codex_home=None):
     """One record → DispatchJob, `_EXPIRED` when it is finished history, None when malformed.
 
     The three outcomes are kept distinct on purpose: a terminal row that has aged out of the
@@ -223,10 +287,13 @@ def _row(record, state_dir, now):
     }
     job.liveness, job.state_evidence = model.classify_job(
         ev_in, now, key=("j", "plugin-queue:" + job_id))
+    # F-50f — additive display telemetry, attached AFTER the state verdict is settled so the
+    # join can never move a row between states.
+    job.plugin_telemetry, job._context_evidence = _telemetry(record, home=codex_home)
     return job
 
 
-def _scan_state_file(path, now):
+def _scan_state_file(path, now, codex_home=None):
     """(rows, malformed) for one state.json. Tolerant: a broken file is a skip, not a raise."""
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
@@ -245,7 +312,7 @@ def _scan_state_file(path, now):
     malformed = 0
     for record in records:
         try:
-            job = _row(record, state_dir, now)
+            job = _row(record, state_dir, now, codex_home=codex_home)
         except Exception:
             job = None                       # a single odd record is a skip, never a raise
         if job is _EXPIRED:
@@ -257,7 +324,7 @@ def _scan_state_file(path, now):
     return rows, malformed
 
 
-def collect(home=None, now=None):
+def collect(home=None, now=None, codex_home=None):
     """Return [DispatchJob] for every live/afterglow plugin-queue job.
 
     `collect.last_malformed` mirrors the jobs.log idiom: skipped files + skipped records,
@@ -268,7 +335,7 @@ def collect(home=None, now=None):
     jobs = []
     malformed = 0
     for path in sorted(glob.glob(os.path.join(root, _STATE_GLOB))):
-        rows, skipped = _scan_state_file(path, now)
+        rows, skipped = _scan_state_file(path, now, codex_home=codex_home)
         jobs.extend(rows)
         malformed += skipped
     collect.last_malformed = malformed
