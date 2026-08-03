@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Detached process runner with PID reuse-safe reattachment."""
-import argparse, fcntl, hashlib, importlib.util, json, os, signal, subprocess, sys, time
+import argparse, fcntl, hashlib, importlib.util, json, os, re, signal, subprocess, sys, time
 from pathlib import Path
+
+SAFE_RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+RETRY = re.compile(r"^(?P<base>.+)__a(?P<n>[1-9][0-9]*)$")
 
 def proc_identity(pid):
     stat=Path(f"/proc/{pid}/stat"); cmd=Path(f"/proc/{pid}/cmdline")
@@ -46,19 +49,34 @@ def main():
             manifest = json.loads(Path(args.config_manifest).read_text())
             verify_tool = Path(__file__).parents[1] / "tools" / "lab-config-provenance.py"
             subprocess.run([sys.executable, str(verify_tool), "verify", "--manifest", args.config_manifest], check=True)
+            if not SAFE_RUN_ID.match(args.run_id):
+                fail("invalid --run-id")
             # --attempt suffix policy: "<manifest_run_id>__a<N>" retries the same
             # sealed manifest under a distinct registry key; anything else must
             # match the manifest's run_id exactly. The registry row's run_id is
             # always args.run_id (the registry key), never the manifest's.
+            # Order is load-bearing (A9): the exact match must be checked before
+            # the regex, since a computed run id's 12-hex hash tail can
+            # coincidentally read as "a" + digits and get mis-split otherwise.
             manifest_run_id = manifest["run_id"]
-            base_run_id = args.run_id.split("__a", 1)[0]
-            if args.run_id != manifest_run_id and base_run_id != manifest_run_id:
-                fail("run id does not match sealed manifest")
+            if args.run_id != manifest_run_id:
+                m = RETRY.fullmatch(args.run_id)
+                if not (m and m["base"] == manifest_run_id):
+                    fail("run id does not match sealed manifest")
             attestation = json.loads(Path(args.smoke_attestation).read_text())
             if attestation.get("config_sha256") != manifest.get("snapshot_sha256"):
                 fail("config provenance does not match smoke attestation")
+            if attestation.get("config_source_sha256") != manifest.get("source_sha256"):
+                fail("config source provenance does not match smoke attestation")
+            try:
+                attested_source = Path(attestation.get("config_source_path", "")).resolve(strict=False)
+            except (OSError, ValueError):
+                attested_source = None
+            if attested_source != Path(manifest["source_path"]).resolve(strict=False):
+                fail("config source path does not match smoke attestation")
             provenance = {"config_ref": manifest["config_ref"], "config_sha256": manifest["snapshot_sha256"],
                           "source_commit": manifest["source_commit"], "source_dirty": manifest["source_dirty"],
+                          "source_git_state": manifest.get("source_git_state", "unknown-no-git"),
                           "config_layout": manifest.get("config_layout", "unknown")}
         log=Path(args.log).resolve(); log.parent.mkdir(parents=True,exist_ok=True)
         out=open(log,"ab",buffering=0); proc=subprocess.Popen(command,cwd=cwd,stdout=out,stderr=subprocess.STDOUT,start_new_session=True)

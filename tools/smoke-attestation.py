@@ -11,17 +11,38 @@ def digest(path):
         rows.append((str(item.relative_to(path)),hashlib.sha256(item.read_bytes()).hexdigest()))
     return hashlib.sha256(json.dumps(rows,separators=(",",":")).encode()).hexdigest()
 
+def _verify_config_manifest(path):
+    tool = Path(__file__).with_name("lab-config-provenance.py")
+    result = subprocess.run([sys.executable, str(tool), "verify", "--manifest", str(path)], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise ValueError("config manifest failed verification: " + result.stderr.strip())
+
 def payload(paths, command, cwd, config_manifest=None):
-    data = {"schema_version":1,"cwd":str(Path(cwd).resolve(strict=True)),"command":command,
-            "inputs":[{"path":str(Path(p).resolve(strict=True)),"sha256":digest(p)} for p in sorted(paths)]}
+    data = {"schema_version":1,"cwd":str(Path(cwd).resolve(strict=True)),"command":command}
+    input_rows = [{"path":str(Path(p).resolve(strict=True)),"sha256":digest(p)} for p in paths]
     if config_manifest:
+        # Full rule 1-8 contract first (schema, hashes, in-situ location); this
+        # only allows source *absence*, so attest-time presence (A5) is a
+        # separate, stricter check below.
+        _verify_config_manifest(config_manifest)
         manifest = json.loads(Path(config_manifest).read_text())
         snapshot = Path(manifest["snapshot_path"]).resolve(strict=True)
-        snapshot_digest = digest(snapshot)
-        if snapshot_digest != manifest["snapshot_sha256"]:
-            raise ValueError("config manifest snapshot is stale: " + str(snapshot))
-        data["inputs"].append({"path":str(snapshot),"sha256":snapshot_digest})
+        source_raw = Path(manifest["source_path"])
+        if not source_raw.exists():
+            raise ValueError("config manifest source is missing: " + str(source_raw))
+        source = source_raw.resolve(strict=True)
+        source_digest = digest(source)
+        if source_digest != manifest["source_sha256"]:
+            raise ValueError("config manifest source is stale: " + str(source))
+        input_rows.append({"path": str(snapshot), "sha256": manifest["snapshot_sha256"]})
+        input_rows.append({"path": str(source), "sha256": source_digest})
         data["config_sha256"] = manifest["snapshot_sha256"]
+        data["config_source_sha256"] = manifest["source_sha256"]
+        data["config_source_path"] = str(source)
+    dedup = {}
+    for row in input_rows:
+        dedup[row["path"]] = row
+    data["inputs"] = [dedup[key] for key in sorted(dedup)]
     return data
 
 def verify(data):
@@ -34,6 +55,12 @@ def verify(data):
         if not Path(row["path"]).exists() or digest(row["path"])!=row["sha256"]: raise ValueError("stale smoke input: "+row["path"])
     if data.get("config_sha256") and not any(row["sha256"] == data["config_sha256"] for row in data["inputs"]):
         raise ValueError("config hash is not bound to an input")
+    if data.get("config_source_path"):
+        # Hash-only binding would be vacuous when source_sha256 == snapshot_sha256
+        # (the snapshot row alone would satisfy it); a path match is required too.
+        match = next((row for row in data["inputs"] if row["path"] == data["config_source_path"]), None)
+        if not match or match["sha256"] != data.get("config_source_sha256"):
+            raise ValueError("config source is not bound to an input")
     if data.get("status")!="passed" or data.get("exit_code")!=0: raise ValueError("smoke did not pass")
     return True
 

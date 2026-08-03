@@ -30,8 +30,9 @@ Rules: append only, one record per line, and **the file is the source of truth**
 Store `experiments/<id>/run.json` as the consolidation of existing run facts such as slug, parent, mode, checkpoint, and best result. It introduces no new calculation. `_RUNLOG.md` is its human-readable mirror.
 
 Optional provenance fields are `config_ref`, `config_sha256`, `source_commit`,
-`source_dirty`, `run_id`, and `config_layout`; their absence is visible as
-unsealed provenance for legacy or in-flight runs. The sealed manifest is the
+`source_dirty`, `source_git_state`, `run_id`, and `config_layout`; their
+absence is visible as unsealed provenance for legacy or in-flight runs. The
+sealed manifest is the
 source of truth for snapshot bytes, and the harness-owned resource-run row
 requires these fields when `--config-manifest` is supplied. The harness does not
 write `run.json` or rewrite existing registry rows.

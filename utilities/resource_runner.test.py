@@ -81,14 +81,16 @@ class TestRunner(unittest.TestCase):
                 *(('--config-manifest', str(config_manifest)) if config_manifest is not None else ()),
                 "--", sys.executable, "-c", f"from pathlib import Path; import time; Path({str(self.launch)!r}).write_text('launched'); time.sleep(30)")
 
-    def seal_config_manifest(self, run_id):
+    def seal_config_manifest(self, label):
         PROV = ROOT / "tools" / "lab-config-provenance.py"
-        out = self.base / f"configs-out-{run_id}"
-        subprocess.run([
+        artifact_root = self.base / f"artifacts-{label}"
+        artifact_root.mkdir()
+        result = subprocess.run([
             sys.executable, str(PROV), "seal", "--repo", str(self.repo), "--config", "./config",
-            "--slug", "demo", "--run-id", run_id, "--out", str(out),
+            "--slug", "demo", "--artifact-root", str(artifact_root),
         ], check=True, capture_output=True, text=True, env=CLEAN_ENV)
-        return out / f"{run_id}.manifest.json"
+        computed_run_id = json.loads(result.stdout)["run_id"]
+        return artifact_root / "experiments" / "demo" / "_internal" / "configs" / f"{computed_run_id}.manifest.json"
 
     def attest_with_config_manifest(self, manifest_path, name):
         attestation = self.base / f"{name}.json"
@@ -244,15 +246,16 @@ class TestRunner(unittest.TestCase):
     # field are always identical (never split by the manifest's own run_id).
     def test_config_manifest_matching_run_id_binds_registry_key_to_row_field(self):
         manifest = self.seal_config_manifest("sealed-run")
+        manifest_run_id = json.loads(manifest.read_text())["run_id"]
         attestation = self.attest_with_config_manifest(manifest, "config-smoke-match")
-        result = self.cli(*self.start_args(smoke=attestation, run_id="sealed-run", config_manifest=manifest))
+        result = self.cli(*self.start_args(smoke=attestation, run_id=manifest_run_id, config_manifest=manifest))
         self.assertEqual(result.returncode, 0, result.stderr)
         run = json.loads(result.stdout.strip().splitlines()[-1])
-        self.assertEqual(run["run_id"], "sealed-run")
+        self.assertEqual(run["run_id"], manifest_run_id)
         data = json.loads(self.registry.read_text())
-        self.assertIn("sealed-run", data["runs"])
-        self.assertEqual(data["runs"]["sealed-run"]["run_id"], "sealed-run")
-        self.assertEqual(data["runs"]["sealed-run"]["config_ref"], "./config")
+        self.assertIn(manifest_run_id, data["runs"])
+        self.assertEqual(data["runs"][manifest_run_id]["run_id"], manifest_run_id)
+        self.assertEqual(data["runs"][manifest_run_id]["config_ref"], "path:config")
 
     # B3 regression -- the documented "__aN" attempt-suffix policy: a
     # registry key that retries the same sealed manifest under a distinct
@@ -260,12 +263,68 @@ class TestRunner(unittest.TestCase):
     # manifest's run_id.
     def test_config_manifest_attempt_suffix_is_accepted(self):
         manifest = self.seal_config_manifest("sealed-run")
+        manifest_run_id = json.loads(manifest.read_text())["run_id"]
         attestation = self.attest_with_config_manifest(manifest, "config-smoke-attempt")
-        result = self.cli(*self.start_args(smoke=attestation, run_id="sealed-run__a2", config_manifest=manifest))
+        attempt_run_id = f"{manifest_run_id}__a2"
+        result = self.cli(*self.start_args(smoke=attestation, run_id=attempt_run_id, config_manifest=manifest))
         self.assertEqual(result.returncode, 0, result.stderr)
         data = json.loads(self.registry.read_text())
-        self.assertIn("sealed-run__a2", data["runs"])
-        self.assertEqual(data["runs"]["sealed-run__a2"]["run_id"], "sealed-run__a2")
+        self.assertIn(attempt_run_id, data["runs"])
+        self.assertEqual(data["runs"][attempt_run_id]["run_id"], attempt_run_id)
+
+    # T-F3-5 (A9): every one of these must be rejected before Popen, whether
+    # by safe_run_id() or by the exact-match-then-regex attempt policy.
+    def test_T_F3_5_unsafe_or_invalid_run_ids_are_rejected(self):
+        manifest = self.seal_config_manifest("sealed-run")
+        manifest_run_id = json.loads(manifest.read_text())["run_id"]
+        attestation = self.attest_with_config_manifest(manifest, "config-smoke-unsafe")
+        cases = [
+            "run__a0", "run__a01", "run__a", "run__aX", "run__a1x", "run__a-1", "../evil",
+            # regex matches, but base != manifest_run_id after the split -- must
+            # still be rejected by the exact-match-first ordering (A9).
+            f"{manifest_run_id}__a1__a2",
+        ]
+        for bad in cases:
+            with self.subTest(run_id=bad):
+                self.assert_rejected_before_side_effects(
+                    *self.start_args(smoke=attestation, run_id=bad, config_manifest=manifest))
+
+    # T-F9-1: the full provenance field set is visible on `status`.
+    def test_T_F9_1_status_exposes_the_full_provenance_field_set(self):
+        manifest = self.seal_config_manifest("sealed-run")
+        manifest_run_id = json.loads(manifest.read_text())["run_id"]
+        attestation = self.attest_with_config_manifest(manifest, "config-smoke-fields")
+        result = self.cli(*self.start_args(smoke=attestation, run_id=manifest_run_id, config_manifest=manifest))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        status = self.cli("status", "--run-id", manifest_run_id)
+        self.assertEqual(status.returncode, 0, status.stderr)
+        row = json.loads(status.stdout)
+        for key in ("run_id", "config_ref", "config_sha256", "source_commit",
+                    "source_dirty", "source_git_state", "config_layout"):
+            self.assertIn(key, row)
+
+    # T-F9-2: status/stop/tail never create a process -- exactly one registry
+    # row for one start, no phantom second run.
+    def test_T_F9_2_read_commands_never_create_processes_or_rows(self):
+        result = self.cli(*self.start_args(smoke=self.attestation))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.cli("status", "--run-id", "case")
+        self.cli("tail", "--run-id", "case")
+        self.cli("stop", "--run-id", "case")
+        self.cli("status", "--run-id", "case")
+        data = json.loads(self.registry.read_text())
+        self.assertEqual(len(data["runs"]), 1)
+
+    # T-F7-6: tampering the config source after attest (before start) must be
+    # rejected before any process, log, or registry row is created.
+    def test_T_F7_6_source_tamper_after_attest_is_rejected_before_side_effects(self):
+        manifest = self.seal_config_manifest("sealed-run")
+        manifest_run_id = json.loads(manifest.read_text())["run_id"]
+        attestation = self.attest_with_config_manifest(manifest, "config-smoke-tamper")
+        m = json.loads(manifest.read_text())
+        Path(m["source_path"]).write_text("tampered-after-attest")
+        self.assert_rejected_before_side_effects(
+            *self.start_args(smoke=attestation, run_id=manifest_run_id, config_manifest=manifest))
 
 
 if __name__ == "__main__":

@@ -93,55 +93,78 @@ or hash. These incidents motivate the following contract.
 
 ### Lifecycle roots
 
-Unless a repository declares another layout in `analysis_project/code/experiment_conventions.md`
-or a root declaration file, `configs/` contains adopted public defaults,
-`configs_exp/<experiment-slug>/` contains active or unadopted experiments, and
-`configs_legacy/` is reserved for historical model-shape/checkpoint
-reproduction. New setup configs go under `configs_exp/<slug>/`. A declaration
-wins over these defaults for the recorded `config_layout` label, which is what
-run metadata, evaluation, and audits read to tell adopted, experimental, and
-historical config bytes apart.
+Unless a repository declares another layout, `configs/` contains adopted public
+defaults, `configs_exp/<experiment-slug>/` contains active or unadopted
+experiments, and `configs_legacy/` is reserved for historical
+model-shape/checkpoint reproduction. New setup configs go under
+`configs_exp/<slug>/`.
 
-**Current tooling limit:** `tools/lab-config-provenance.py resolve` labels a
-declared layout as `declared/<name>` but still resolves bare, `exp:`, and
-`legacy:` references against the fixed physical roots `configs/`,
-`configs_exp/`, and `configs_legacy/`. A repository that declares a genuinely
-different physical layout (different directory names or nesting) gets an
-accurate `config_layout` label but no root remapping; treat declaration as
-authoritative for lineage labeling only until a declared-root mapping ships.
+A repository declares a genuinely different physical layout with a
+`.lab-config-layout.json` root declaration (`{"schema_version": 1, "layout":
+"<name>", "roots": {"default": "<dir>", "exp": "<dir>", "legacy": "<dir>"}}`);
+`tools/lab-config-provenance.py resolve` then resolves bare, `config:`, `exp:`,
+and `legacy:` references against those declared physical roots, not the fixed
+defaults. Root directories may nest (e.g. an `exp` root inside the `default`
+root); attribution uses longest-match on the resolved path. A plain-text
+`.lab-config-layout` file or an `experiment_conventions.md` label declares only
+the `config_layout` label, not physical roots — the tool's `resolve` output
+always exposes the *actually used* `roots` alongside `layout_declaration`
+(`json-roots`/`label-only`/`conventions-label`/`none`), so a label-only
+declaration that never remapped the physical roots is visible to any caller,
+not silently assumed.
 
 ### Resolution
 
-Bare names resolve only in `configs/`. Experiment and legacy configs require
-`exp:<slug>/<name>`, `legacy:<name>`, or an explicit physical path. There is no
-implicit root fallback and traversal or symlink escape is rejected. An
-unstructured repository is not rewritten: use an explicit path, require an
-exact snapshot, and record `legacy/unstructured`.
+Bare names, `config:<name>`, `exp:<slug>/<name>`, `legacy:<name>`, and explicit
+physical paths all resolve to a normalized `config_ref` (e.g. `config:a.yaml`)
+independent of which input form was used. There is no implicit root fallback
+and traversal or symlink escape is rejected, including within a declared
+custom layout. An unstructured repository is not rewritten: use an explicit
+path, require an exact snapshot, and record `legacy/unstructured`.
+Case-insensitive filesystems are an explicit non-goal (Linux-only harness).
 
 ### Sealing before a full run
 
-Before a full run, seal the resolved path, normalized `config_ref`, collision-safe
-run ID, config SHA256, source commit, and dirty state. Store the source snapshot
-and JSON manifest under `<artifact-root>/experiments/<slug>/_internal/configs/`.
+Before a full run, seal the resolved path, normalized `config_ref`, a required
+`--slug` and derived collision-safe run ID, config SHA256, source commit, and
+source-scoped git state (`source_git_state`; `source_dirty` is
+`source_git_state != "clean"`). `seal` derives its output directory from a
+required `--artifact-root` as
+`<artifact-root>/experiments/<slug>/_internal/configs/` — there is no `--out`.
 The manifest fields are named by `capabilities/lab-config-manifest.schema.json`
-and enforced by `tools/lab-config-provenance.py`. Same-input retries are
-idempotent; a hash-named snapshot with mismatched content fails closed.
+(`schema_version` 2; v1 manifests are rejected without migration) and enforced
+by `tools/lab-config-provenance.py`. Same-input retries are idempotent; a
+hash-named snapshot with mismatched content fails closed.
 
 ### Smoke binding
 
-The existing hash-bound smoke attestation includes the exact config snapshot
-hash. Any post-smoke config mutation invalidates it. `_RUNLOG` and existing
-provenance manifests are append-only.
+The hash-bound smoke attestation binds *both* the config snapshot and its
+source: `config_sha256`/`config_source_sha256`/`config_source_path` are
+top-level fields, and `verify()` requires an input row whose path matches
+`config_source_path` and whose digest matches `config_source_sha256` — a
+snapshot-only match cannot satisfy this, since source and snapshot bytes are
+identical by construction. Any post-smoke config mutation invalidates it.
+`_RUNLOG` and existing provenance manifests are append-only.
+
+**Limits (by design):** attestation requires the source file to exist *at
+attest time* — a manifest whose source was later deleted stays
+`verify`-valid and snapshot-reproducible, but cannot back a *new* attestation.
+A sealed manifest is not portable on its own: `verify` requires the hash-named
+snapshot to sit beside it in the same `_internal/configs/` directory, so the
+manifest must move together with that directory.
 
 ### Execution and evaluation lineage
 
-`config_ref`, `config_sha256`, `source_commit`, `source_dirty`, `run_id`, and
-`config_layout` are exposed in run metadata and registered resource-run rows.
-Run IDs include the experiment slug. Evaluation uses the runtime snapshot or
-manifest and never infers current config from checkpoint directory names;
-historical compatibility requires an explicit migration map or provenance
-manifest. Fleet metadata may be extended, but ordinary processes are not
-presented as separate training runs.
+`config_ref`, `config_sha256`, `source_commit`, `source_dirty`,
+`source_git_state`, `run_id`, and `config_layout` are exposed in run metadata
+and registered resource-run rows. Run IDs include the experiment slug.
+Evaluation uses the runtime snapshot or manifest and never infers current
+config from checkpoint directory names; historical compatibility requires an
+explicit migration map or provenance manifest. Config lineage is visible
+through the resource-run registry JSON and `resource-runner status`/`tail`,
+plus lab-owned `run.json`/`_RUNLOG` — Fleet schema-validates `resource-runner`
+route nodes but does not render resource-run rows or config metadata today;
+ordinary processes are never presented as separate training runs.
 
 ### In-flight compatibility, termination, and promotion
 
@@ -150,8 +173,13 @@ command, config path, and run ID. New policy applies to new runs or explicit
 restarts, with an `existing_run_exception` object in `run.json`; existing rows
 are not rewritten. Recommend winning configs for handoff to the code/spec owner
 without overwriting `configs/` without user approval. Keep unadopted configs in
-their experiment root; move to legacy only for historical reproduction. Check
-that all three config roots are package data for packaged projects.
+their experiment root; move to legacy only for historical reproduction.
+`package-data` has two modes: the default static-declaration check reports
+whether the three config roots are named in `pyproject.toml`/`setup.py`/
+`setup.cfg`/`MANIFEST.in` (a pre-build declaration, not proof of packaging);
+`--archive <path>` verifies an actual built `.whl`/`.zip`/`.tar.gz`/`.tgz`/
+`.tar` contains a file under each declared root (symlink and hardlink members
+count), exposing the matched member path per root.
 
 ## Routing Boundary
 
