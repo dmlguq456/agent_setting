@@ -459,6 +459,11 @@ class DispatchJob:
                                         # attempt (e.g. "dead-parent-orphaned"); None = no note
     resume_boundary: Optional[str] = None  # SD-64/71: first incomplete route node, set only
                                         # alongside note == "dead-parent-orphaned"
+    # F-50d (v33): the openai-codex plugin-queue record exactly as observed, so `--json`
+    # consumers read the third-party fields verbatim instead of a fleet re-interpretation.
+    # The prompt body is the one omission (F-50d: fleet never carries a prompt), marked as
+    # `prompt_omitted` inside `request`.
+    plugin_job: Optional[dict] = None
     context: Optional[ContextProjection] = None
     work_projection: Optional[WorkProjection] = None
     cap_grounding: Optional[dict] = None   # {capability, mode?, intensity?} for an inline entry
@@ -491,6 +496,18 @@ JOB_QUEUED_GRACE_MIN   = 15      # absorbed from dispatch.py _QUEUED_GRACE_MIN
 ATTEMPT_HEARTBEAT_LIVE_SEC = JOB_STALE_MIN * 60
 UNUSED_ACTIVITY_MS     = 2000    # §2.2: updatedAt-startedAt at or below this = never prompted
                                  # (measured: the pid 1168514 ghost sits at 119ms)
+
+# F-50b (v33) — the openai-codex plugin queue declares its own status vocabulary in
+# state.json. Only the words the plugin actually emits are translated into fleet's job
+# vocabulary; anything else stays `unknown` rather than being given a synthesized meaning
+# (F-50a: 미지 status 어휘는 의미 합성 금지). `running` is deliberately absent — its
+# activity axis is decided by the pid evidence, not by the word alone.
+PLUGIN_QUEUE_STATES = {
+    "queued":    "queued",
+    "completed": "done",
+    "failed":    "dead",
+    "cancelled": "killed",
+}
 
 # Downgrade dwell — a threshold must hold CONTINUOUSLY this long before the state drops.
 # Upgrades (activity resumed) and strong evidence (dead/killed) are immediate (0).
@@ -957,6 +974,32 @@ def classify_session(ev_in, now, stale_min=SESSION_STALE_MIN, key=None):
     return out("idle", 3, "mtime", "no activity within %ds" % SESSION_WORK_SEC)
 
 
+def _classify_plugin_queue_job(ev_in, raw, out):
+    """F-50b — one plugin-queue row's state. `out` is classify_job's own settler.
+
+    The plugin's explicit `status` is a tier-1 registry declaration, exactly like a jobs.log
+    word. `running` is the only status whose activity axis needs process evidence: a verified
+    pid (the job's own node worker, else the queue broker) is tier-2 proof, and with neither
+    the row stays `working` as a tier-3 derivation so the render layer marks it `~`.
+    """
+    if raw == "running":
+        verified = ev_in.get("pid_verified")
+        if verified == "job":
+            return out("working", 2, "plugin-queue",
+                       "registry running and the job's own worker pid is alive")
+        if verified == "broker":
+            return out("working", 2, "plugin-queue",
+                       "registry running and the queue broker pid is alive")
+        return out("working", 3, "plugin-queue",
+                   "registry running, no pid could be verified")
+    mapped = PLUGIN_QUEUE_STATES.get(raw)
+    if mapped:
+        return out(mapped, 1, "plugin-queue", "plugin state.json status=%s" % raw)
+    # Unknown third-party word: report the absence, never a guess (F-50a).
+    return out("unknown", 1, "plugin-queue",
+               "plugin status outside the known vocabulary (raw preserved)")
+
+
 def classify_job(ev_in, now, key=None):
     """(state, evidence) for a dispatch job. ev_in keys: source, key, is_loop, harness,
     status (raw jobs.log word), elapsed_min, transcript (tier-3 signal string), proc_liveness.
@@ -969,6 +1012,12 @@ def classify_job(ev_in, now, key=None):
         state, tier, (source, rule), hyst = _settle(key, state, tier, now, source, rule)
         return state, _evidence(state, tier, source, rule, ev_in, raw_status=raw,
                                 hysteresis=hyst)
+
+    # F-50b: the plugin queue is a third-party registry with its own vocabulary and its own
+    # evidence (a node worker pid / the broker pid), so it never reaches the jobs.log rules
+    # below — but it is still decided HERE, by the one classifier.
+    if ev_in.get("source") == "plugin-queue":
+        return _classify_plugin_queue_job(ev_in, raw, out)
 
     # tier-2: a live loop process IS the evidence (dispatch.py:305 contract).
     if ev_in.get("source") == "proc" and ev_in.get("is_loop"):

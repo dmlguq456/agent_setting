@@ -3686,6 +3686,13 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                     orphans.append(j)
             elif j.is_child and j.parent_sid and j.parent_sid in shown_sids:
                 children.setdefault(j.parent_sid, []).append(j)
+            elif getattr(j, "source", None) == "plugin-queue":
+                # F-50c: a plugin-queue job nests ONLY on an exact `sessionId` ==
+                # `Session.session_id` match (the branch above). Its `parent_cwd` is the
+                # plugin workspace root — nesting on it would attach the job to whatever
+                # session happens to sit in that directory, which is the misattribution the
+                # separate-surface rule exists to prevent. Unmatched → orphan.
+                orphans.append(j)
             elif j.is_child and getattr(j, "parent_cwd", None):
                 sid = shown_cwds.get(os.path.realpath(j.parent_cwd))
                 if sid:

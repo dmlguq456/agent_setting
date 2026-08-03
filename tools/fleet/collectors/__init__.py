@@ -28,6 +28,11 @@ def _mark_dispatch_child_sessions(sessions, jobs):
     for j in jobs:
         if not getattr(j, 'cwd', None) or not getattr(j, 'harness', None):
             continue
+        # F-50c: a plugin-queue row is its job's ONLY visible surface, and its cwd is the
+        # plugin workspace — reconciling it against a same-cwd session would reclassify an
+        # unrelated interactive session as that job's child (misattribution, not enrichment).
+        if getattr(j, 'source', None) == 'plugin-queue':
+            continue
         if not (getattr(j, 'is_child', False) or getattr(j, 'parent_sid', None)
                 or getattr(j, 'parent_cwd', None) or getattr(j, 'parent_slug', None)):
             continue
@@ -76,6 +81,11 @@ def _adopt_child_titles(sessions, jobs):
         if child.cwd and child.harness:
             by_cwd.setdefault((child.harness, os.path.realpath(child.cwd)), []).append(child)
     for job in jobs:
+        # F-50c: a plugin-queue row already carries the plugin's own name/summary and has no
+        # runtime child session of its own — there is nothing to adopt, and a cwd-wide match
+        # would borrow another session's title.
+        if getattr(job, 'source', None) == 'plugin-queue':
+            continue
         source = None
         ambiguity = None
         identity = (getattr(job, 'harness', None), getattr(job, 'pid', None),
@@ -231,6 +241,16 @@ def collect_all(harness_filter=None, jobs_path=None):
         jobs = dispatch.collect(jobs_path=jobs_path, harness_filter=harness_filter)
     except Exception:
         jobs = []
+
+    # F-50 (v33): the openai-codex plugin queue is a SEPARATE runtime surface (F-35e), so its
+    # rows are appended, never merged or deduped against jobs.log attempts — no plugin job is
+    # currently reachable through both. Defensive import like every other enricher: an absent
+    # or broken plugin state tree costs the plugin rows, never the dispatch section.
+    try:
+        from . import codex_companion
+        jobs = jobs + codex_companion.collect()
+    except Exception:
+        pass
 
     try:
         _mark_dispatch_child_sessions(sessions, jobs)
