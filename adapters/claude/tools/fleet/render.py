@@ -700,8 +700,8 @@ def _branch_suffix_segs(cwd, branch, dim=True, optional=False):
     if not counts:
         return base
     ahead, behind = counts
-    ahead_seg = [(" ↑%d" % ahead, "dim")] if ahead else []
-    behind_seg = [(" ↓%d" % behind, "dim")] if behind else []
+    ahead_seg = [(" ↑%d" % ahead, "lvl_g")] if ahead else []
+    behind_seg = [(" ↓%d" % behind, "lvl_r")] if behind else []
     result = base + ahead_seg + behind_seg
     # Preserve the branch identity; drop behind first, then ahead, when the fixed suffix
     # budget cannot carry both telemetry values.

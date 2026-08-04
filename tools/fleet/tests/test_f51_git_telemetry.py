@@ -410,9 +410,12 @@ class F51GitTelemetryTest(unittest.TestCase):
         old = gitinfo.ahead_behind
         try:
             gitinfo.ahead_behind = lambda cwd: (2, 1)
-            text = "".join(x[0] for x in render._branch_suffix_segs("/tmp", "main"))
+            segs = render._branch_suffix_segs("/tmp", "main")
+            text = "".join(x[0] for x in segs)
             self.assertIn("(main)", text)
             self.assertLess(text.index("↑2"), text.index("↓1"))
+            self.assertIn((" ↑2", "lvl_g"), segs)
+            self.assertIn((" ↓1", "lvl_r"), segs)
         finally:
             gitinfo.ahead_behind = old
 
