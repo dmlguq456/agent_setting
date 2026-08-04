@@ -45,7 +45,7 @@ make_fixture() {
     "$root/adapters/claude/scaffolds" \
     "$root/adapters/claude/plugin-marketplace/plugins/agent-harness-claude/.claude-plugin" \
     "$root/adapters/claude/plugin-marketplace/plugins/agent-harness-claude/skills/demo" \
-    "$root/adapters/opencode/skills/demo" "$root/adapters/opencode/agents/demo" \
+    "$root/adapters/opencode/skills/demo" "$root/adapters/opencode/agents/memory-scout" \
     "$root/adapters/opencode/commands" "$root/adapters/opencode/plugins"
 
   printf '%s\n' '# core fixture' > "$root/core/CORE.md"
@@ -59,8 +59,8 @@ make_fixture() {
   printf '%s\n' '# mode' > "$root/adapters/codex/modes/dev/refactor.md"
   printf '%s\n' '---' 'name: demo' 'description: demo' '---' '# demo codex' \
     > "$root/adapters/codex/skills/demo/SKILL.md"
-  printf '%s\n' 'name = "demo"' 'description = "demo"' \
-    > "$root/adapters/codex/agents/demo.toml"
+  printf '%s\n' 'name = "memory-scout"' 'description = "demo"' \
+    > "$root/adapters/codex/agents/memory-scout.toml"
   printf '%s\n' '{"name":"agent-harness-codex","version":"1.0.0"}' \
     > "$root/adapters/codex/plugins/agent-harness-codex/.codex-plugin/plugin.json"
   cp "$root/adapters/codex/skills/demo/SKILL.md" \
@@ -70,7 +70,7 @@ make_fixture() {
   printf '%s\n' '# mode' > "$root/adapters/claude/agent-modes/dev/refactor.md"
   printf '%s\n' '---' 'name: demo' 'description: demo' '---' '# demo claude' \
     > "$root/adapters/claude/skills/demo/SKILL.md"
-  printf '%s\n' '# demo agent' > "$root/adapters/claude/agents/demo.md"
+  printf '%s\n' '# demo agent' > "$root/adapters/claude/agents/memory-scout.md"
   printf '%s\n' '# demo command' > "$root/adapters/claude/commands/demo.md"
   printf '%s\n' '#!/bin/sh' 'exit 0' > "$root/adapters/claude/hooks/demo.sh"
   chmod +x "$root/adapters/claude/hooks/demo.sh"
@@ -91,7 +91,7 @@ make_fixture() {
   printf '%s\n' '# OpenCode instructions' > "$root/adapters/opencode/AGENTS.md"
   printf '%s\n' '---' 'name: demo' 'description: demo' '---' '# demo opencode' \
     > "$root/adapters/opencode/skills/demo/SKILL.md"
-  printf '%s\n' '# demo agent' > "$root/adapters/opencode/agents/demo/demo.md"
+  printf '%s\n' '# demo agent' > "$root/adapters/opencode/agents/memory-scout/demo.md"
   printf '%s\n' '# demo command' > "$root/adapters/opencode/commands/demo.md"
   printf '%s\n' 'export const AgentHarnessGuards = async () => ({})' \
     > "$root/adapters/opencode/plugins/agent-harness-guards.js"

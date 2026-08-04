@@ -73,11 +73,6 @@ def build_parser():
 
     p_install = sub.add_parser("install", parents=[common], help="Install projections, runtime-owned surfaces, and manifests")
     p_install.add_argument("target", nargs="?", choices=[*RUNTIMES, "all"], default="all")
-    p_install.add_argument(
-        "--profile",
-        choices=runtime_activation.PROFILES,
-        help="linked product profile; explicit use routes install through runtime activation",
-    )
 
     p_verify = sub.add_parser("verify", parents=[common], help="Run the automated Migration Order checks")
     p_verify.add_argument("target", nargs="?", choices=RUNTIMES, default=None)
@@ -93,7 +88,6 @@ def build_parser():
         default=None,
         help="Managed release tag, or latest to leave a pin",
     )
-    p_update.add_argument("--profile", choices=runtime_activation.PROFILES)
     p_update.add_argument("--auto", action="store_true", help=argparse.SUPPRESS)
 
     sub.add_parser("status", parents=[common], help="Summarize installation channels, versions, and drift")
@@ -127,11 +121,9 @@ def build_parser():
     runtime_common(p_runtime_activate, require_runtime=True)
     p_runtime_activate.add_argument("--mode", choices=runtime_activation.MODES, required=True)
     p_runtime_activate.add_argument("--source", help="local canonical repo (default: AGENT_HOME)")
-    p_runtime_activate.add_argument("--profile", choices=runtime_activation.PROFILES)
 
     p_runtime_refresh = runtime_sub.add_parser("refresh", help="Refresh the current mode from its local source")
     runtime_common(p_runtime_refresh, require_runtime=True)
-    p_runtime_refresh.add_argument("--profile", choices=runtime_activation.PROFILES)
 
     p_runtime_doctor = runtime_sub.add_parser("doctor", help="Diagnose projections, duplicates, and freshness")
     runtime_common(p_runtime_doctor)
@@ -204,57 +196,6 @@ def emit(result, as_json):
 
 def cmd_install(args):
     runtimes = resolve_runtimes(args)
-    if args.profile:
-        if args.plugin:
-            return {
-                "runtime": runtimes,
-                "channel": "linked",
-                "checks": [],
-                "drift": [],
-                "exit": EXIT_BLOCKED,
-                "lines": ["install --profile cannot be combined with the external plugin channel"],
-            }
-        try:
-            for runtime in runtimes:
-                runtime_activation.validate_scope(runtime, args.scope)
-        except runtime_activation.ActivationError as exc:
-            return {
-                "runtime": runtimes,
-                "channel": "linked",
-                "profile": args.profile,
-                "checks": [],
-                "drift": [],
-                "exit": EXIT_BLOCKED,
-                "lines": [f"install --profile: blocked: {exc}"],
-            }
-        if args.dry_run:
-            return {
-                "runtime": runtimes,
-                "channel": "linked",
-                "profile": args.profile,
-                "checks": [],
-                "drift": [],
-                "exit": EXIT_OK,
-                "lines": [
-                    f"install(dry-run): runtime={runtime} mode=linked profile={args.profile}"
-                    for runtime in runtimes
-                ],
-            }
-        runtime_args = argparse.Namespace(
-            runtime=runtimes,
-            runtime_command="activate",
-            source=str(paths.agent_home()),
-            scope=args.scope,
-            json=args.json,
-            mode="linked",
-            profile=args.profile,
-        )
-        result = cmd_runtime(runtime_args)
-        result["channel"] = "linked"
-        result["profile"] = args.profile
-        result["lines"].insert(0, f"install: linked profile={args.profile}")
-        return result
-
     lines = [f"install: runtime={r} scope={args.scope} plugin={args.plugin} dry_run={args.dry_run}" for r in runtimes]
     checks = []
     results = []
@@ -338,7 +279,6 @@ def cmd_verify(args):
                         "id": f"{rt}.runtime-activation",
                         "ok": report["ok"],
                         "detail": (
-                            f"profile={status.get('profile')} "
                             f"freshness={report['freshness']} "
                             f"next={report['next_action']}"
                         ),
@@ -414,7 +354,6 @@ def cmd_update(args):
             result = distribution.update(
                 version=args.version,
                 runtimes=args.runtimes,
-                profile=args.profile,
                 automatic=args.auto,
             )
         except distribution.DistributionError as exc:
@@ -704,12 +643,9 @@ def cmd_runtime(args):
                     args.mode,
                     args.source,
                     args.scope,
-                    getattr(args, "profile", None),
                 )
             elif args.runtime_command == "refresh":
-                report = runtime_activation.refresh(
-                    runtime, args.scope, getattr(args, "profile", None)
-                )
+                report = runtime_activation.refresh(runtime, args.scope)
             elif args.runtime_command == "doctor":
                 report = runtime_activation.doctor(runtime, args.strict, args.scope)
                 if not report["ok"]:
@@ -723,8 +659,7 @@ def cmd_runtime(args):
             if freshness is None and isinstance(report.get("status"), dict):
                 freshness = report["status"].get("freshness")
             lines.append(
-                f"{runtime}: {args.runtime_command} profile="
-                f"{report.get('profile') or report.get('status', {}).get('profile')} "
+                f"{runtime}: {args.runtime_command} "
                 f"freshness={freshness} "
                 f"next={report.get('next_action', 'none')}"
             )

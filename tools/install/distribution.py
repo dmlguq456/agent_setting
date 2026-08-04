@@ -34,7 +34,6 @@ ARCHIVE_NAME = "agent-harness.tar.gz"
 CHECKSUM_NAME = ARCHIVE_NAME + ".sha256"
 STATE_SCHEMA = 1
 RUNTIMES = ("claude", "codex", "opencode")
-PROFILES = ("starter", "builder", "full")
 MAX_METADATA_BYTES = 2 * 1024 * 1024
 MAX_CHECKSUM_BYTES = 64 * 1024
 MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
@@ -152,7 +151,6 @@ def _load_state() -> Optional[dict]:
         "version",
         "archive_sha256",
         "release_root",
-        "profile",
     )
     if any(not isinstance(value.get(name), str) for name in required_strings):
         raise DistributionError(f"distribution state lacks required string fields: {path}")
@@ -164,8 +162,6 @@ def _load_state() -> Optional[dict]:
         raise DistributionError(f"distribution state has an invalid checksum: {path}")
     if not Path(value["release_root"]).is_absolute():
         raise DistributionError(f"distribution state release_root must be absolute: {path}")
-    if value["profile"] not in PROFILES:
-        raise DistributionError(f"distribution state has an invalid profile: {path}")
     runtimes = value.get("runtimes")
     if (
         not isinstance(runtimes, list)
@@ -620,27 +616,7 @@ def _selected_update_runtimes(state: dict, requested: Iterable[str]) -> tuple[li
     return selected, skipped
 
 
-def _detected_managed_profile(state: dict) -> Optional[str]:
-    old_root = Path(state["release_root"]).resolve(strict=False)
-    profiles = set()
-    for runtime in state.get("runtimes", RUNTIMES):
-        activation = _activation_state(runtime)
-        if not activation or activation.get("mode") != "packaged":
-            continue
-        source_value = activation.get("source_root")
-        source = Path(source_value).resolve(strict=False) if source_value else None
-        profile = activation.get("profile")
-        if source == old_root and profile in PROFILES:
-            profiles.add(profile)
-    if len(profiles) > 1:
-        raise DistributionError(
-            "managed runtimes use mixed profiles; normalize them with "
-            "harness runtime refresh --runtime all --profile <name>"
-        )
-    return next(iter(profiles)) if profiles else None
-
-
-def _activate_release(root: Path, runtimes: Iterable[str], profile: str) -> dict:
+def _activate_release(root: Path, runtimes: Iterable[str]) -> dict:
     selected = list(runtimes)
     if not selected:
         return {"runtimes": [], "session_action": {}}
@@ -653,8 +629,6 @@ def _activate_release(root: Path, runtimes: Iterable[str], profile: str) -> dict
             "packaged",
             "--source",
             str(root),
-            "--profile",
-            profile,
             "--json",
         ]
     )
@@ -689,6 +663,8 @@ def _activate_release(root: Path, runtimes: Iterable[str], profile: str) -> dict
 def _write_distribution_state(value: dict) -> None:
     if os.environ.get("HARNESS_TEST_FAIL_STATE_COMMIT") == "1":
         raise DistributionError("injected distribution state commit failure")
+    value = dict(value)
+    value.pop("profile", None)
     _atomic_json(state_path(), value)
 
 
@@ -714,7 +690,6 @@ def _install_or_update(
     repository: str,
     version: str,
     runtimes: Iterable[str],
-    profile: str,
     bootstrap: bool,
     channel: str,
     pinned_version: Optional[str],
@@ -722,8 +697,6 @@ def _install_or_update(
     repository = _validate_repository(repository)
     if version != "latest":
         _validate_version(version)
-    if profile not in PROFILES:
-        raise DistributionError(f"invalid profile: {profile}")
     requested = list(dict.fromkeys(runtimes))
     if not requested or any(runtime not in RUNTIMES for runtime in requested):
         raise DistributionError("at least one valid runtime is required")
@@ -742,45 +715,19 @@ def _install_or_update(
             and previous_state.get("version") == release["version"]
             and previous_state.get("archive_sha256") == checksum
         ):
-            old_profile = (
-                _detected_managed_profile(previous_state)
-                or previous_state.get("profile", "full")
-            )
-            state_profile_changed = profile != previous_state.get("profile", "full")
-            runtime_profile_changed = profile != old_profile
-            selected, skipped = (
-                _selected_update_runtimes(previous_state, requested)
-                if runtime_profile_changed
-                else ([], {})
-            )
-            activation = {"runtimes": [], "session_action": {}}
             previous_state_bytes = state_path().read_bytes()
             try:
-                if runtime_profile_changed:
-                    activation = _activate_release(
-                        Path(previous_state["release_root"]), selected, profile
-                    )
                 repaired = _repair_managed_pointers(previous_state)
                 previous_state["channel"] = channel
                 previous_state["pinned_version"] = pinned_version
-                previous_state["profile"] = profile
                 previous_state["last_checked_at"] = _utc_now()
                 _write_distribution_state(previous_state)
             except Exception as original_error:
                 rollback_error = None
-                if runtime_profile_changed and selected:
-                    try:
-                        _activate_release(
-                            Path(previous_state["release_root"]),
-                            selected,
-                            old_profile,
-                        )
-                    except Exception as exc:
-                        rollback_error = str(exc)
                 try:
                     _atomic_bytes(state_path(), previous_state_bytes)
                 except Exception as exc:
-                    rollback_error = rollback_error or str(exc)
+                    rollback_error = str(exc)
                 if rollback_error:
                     raise DistributionError(
                         "same-release reconfiguration failed and rollback was "
@@ -792,17 +739,13 @@ def _install_or_update(
                     f"same-release reconfiguration failed: {original_error}"
                 ) from original_error
             return {
-                "status": (
-                    "reconfigured"
-                    if state_profile_changed or runtime_profile_changed
-                    else ("repaired" if repaired else "up-to-date")
-                ),
+                "status": "repaired" if repaired else "up-to-date",
                 "version": release["version"],
                 "release_root": previous_state["release_root"],
                 "archive_sha256": checksum,
-                "runtimes": activation["runtimes"],
-                "skipped": skipped,
-                "session_action": activation["session_action"],
+                "runtimes": [],
+                "skipped": {},
+                "session_action": {},
             }
 
         if bootstrap:
@@ -825,14 +768,6 @@ def _install_or_update(
             if previous_state and previous_state.get("release_root")
             else None
         )
-        old_profile = (
-            (
-                _detected_managed_profile(previous_state)
-                or previous_state.get("profile", profile)
-            )
-            if previous_state
-            else profile
-        )
         staging = Path(tempfile.mkdtemp(prefix=".staging-", dir=str(data_root().parent)))
         archive = staging / ARCHIVE_NAME
         published = False
@@ -842,7 +777,7 @@ def _install_or_update(
             _download_archive(release["assets"][ARCHIVE_NAME], archive, checksum)
             extracted = _safe_extract(archive, staging / "extract", release["version"])
             target, published = _publish_release(extracted, release["version"], checksum)
-            activation = _activate_release(target, selected, profile)
+            activation = _activate_release(target, selected)
             _atomic_symlink(current, target)
             _atomic_symlink(launcher, current / "tools/install/harness.sh")
             next_state = {
@@ -851,7 +786,6 @@ def _install_or_update(
                 "version": release["version"],
                 "archive_sha256": checksum,
                 "release_root": str(target),
-                "profile": profile,
                 "runtimes": (
                     previous_state.get("runtimes", requested)
                     if previous_state
@@ -873,7 +807,7 @@ def _install_or_update(
             rollback_error = None
             if old_root and selected:
                 try:
-                    _activate_release(old_root, selected, old_profile)
+                    _activate_release(old_root, selected)
                 except Exception as exc:
                     rollback_error = str(exc)
             try:
@@ -919,7 +853,6 @@ def bootstrap(
     repository: str,
     version: str,
     runtimes: Iterable[str],
-    profile: str,
     auto_update: bool,
 ) -> dict:
     channel = "stable" if version == "latest" else "pinned"
@@ -927,7 +860,6 @@ def bootstrap(
         repository=repository,
         version=version,
         runtimes=runtimes,
-        profile=profile,
         bootstrap=True,
         channel=channel,
         pinned_version=None if channel == "stable" else version,
@@ -958,7 +890,6 @@ def bootstrap(
 def update(
     version: Optional[str] = None,
     runtimes: Optional[Iterable[str]] = None,
-    profile: Optional[str] = None,
     automatic: bool = False,
 ) -> dict:
     state = _load_state()
@@ -976,13 +907,6 @@ def update(
             "skipped": {},
             "session_action": {},
         }
-    if profile is not None and runtimes is not None:
-        requested_set = set(runtimes)
-        configured_set = set(state.get("runtimes", RUNTIMES))
-        if requested_set != configured_set:
-            raise DistributionError(
-                "a managed profile change must target all configured runtimes"
-            )
     if version is None:
         requested_version = pinned_version if channel == "pinned" else "latest"
     elif version == "latest":
@@ -993,16 +917,10 @@ def update(
         requested_version = _validate_version(version)
         channel = "pinned"
         pinned_version = requested_version
-    selected_profile = (
-        profile
-        or _detected_managed_profile(state)
-        or state.get("profile", "full")
-    )
     return _install_or_update(
         repository=state["repository"],
         version=requested_version,
         runtimes=runtimes or state.get("runtimes", RUNTIMES),
-        profile=selected_profile,
         bootstrap=False,
         channel=channel,
         pinned_version=pinned_version,
@@ -1456,9 +1374,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--runtime", action="append", choices=[*RUNTIMES, "all"]
     )
     bootstrap_parser.add_argument(
-        "--profile", choices=PROFILES, default=os.environ.get("HARNESS_PROFILE", "full")
-    )
-    bootstrap_parser.add_argument(
         "--no-auto-update",
         action="store_true",
         default=os.environ.get("HARNESS_NO_AUTO_UPDATE") == "1",
@@ -1471,7 +1386,6 @@ def build_parser() -> argparse.ArgumentParser:
     update_parser.add_argument(
         "--runtime", action="append", choices=[*RUNTIMES, "all"]
     )
-    update_parser.add_argument("--profile", choices=PROFILES)
     update_parser.add_argument("--auto", action="store_true", help=argparse.SUPPRESS)
     update_parser.add_argument("--json", action="store_true")
     auto_parser = sub.add_parser("auto-update")
@@ -1488,14 +1402,12 @@ def main(argv: Optional[list[str]] = None) -> int:
                 args.repository,
                 args.version,
                 _runtime_values(args.runtime),
-                args.profile,
                 not args.no_auto_update,
             )
         elif args.command == "update":
             result = update(
                 args.version,
                 _runtime_values(args.runtime) if args.runtime else None,
-                args.profile,
                 args.auto,
             )
         else:

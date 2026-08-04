@@ -8,7 +8,7 @@ public audience so the flagship subsystems are visible: sealed N-way dispatch,
 the Fleet view over it, per-role model tiers, the fixed artifact system, the
 persistent memory store, and the loops that keep the harness honest.
 
-Sources: manifest.json (profile closure, tracks, hooks, loops) and
+Sources: manifest.json (tracks, hooks, loops) and
 harness-manifest.json (capability census, summaries, taxonomy). Both pages are
 self-contained (no CDN/network), share one design system, and are dark-first
 with a light override. The internal operator hub is intentionally NOT published.
@@ -36,20 +36,12 @@ INSTALL_CMD = (
 def load_data() -> dict:
     manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
     harness = json.loads((ROOT / "harness-manifest.json").read_text(encoding="utf-8"))
-    resolved = manifest["resolved_profiles"]
     caps = harness["capabilities"]
     units = harness["units"]
     entries = sorted(
         name for name, spec in caps.items()
         if spec["invocation"]["class"] == "entry-router"
     )
-    membership = {
-        name: [
-            profile for profile in ("starter", "builder", "full")
-            if name in resolved[profile]["capabilities"]
-        ]
-        for name in caps
-    }
     hard_hooks = [h for h in manifest["hooks"] if h.get("hard_block")]
     roles = sorted({spec["role"] for spec in units.values()})
     return {
@@ -57,20 +49,16 @@ def load_data() -> dict:
         "units": units,
         "roles": roles,
         "entries": entries,
-        "membership": membership,
         "tracks": manifest["tracks"],
         "hard_hooks": hard_hooks,
         "loops": manifest["loops"],
         "cap_total": len(caps),
         "entry_total": len(entries),
-        "unit_total": resolved["full"]["counts"]["units"],
+        "unit_total": len(units),
         "role_total": len(roles),
         "hook_total": len(manifest["hooks"]),
         "hard_total": len(hard_hooks),
         "loop_total": len(manifest["loops"]),
-        "starter_caps": resolved["starter"]["counts"]["capabilities"],
-        "builder_caps": resolved["builder"]["counts"]["capabilities"],
-        "full_caps": resolved["full"]["counts"]["capabilities"],
     }
 
 
@@ -734,7 +722,7 @@ def build_info(d: dict) -> dict:
             "kind": "entry router" if entry else "stage",
             "title": name,
             "body": str(spec.get("summary", "")).strip(),
-            "meta": "profiles: " + (" · ".join(d["membership"].get(name, [])) or "full only"),
+            "meta": f"group: {spec['group']} · family: {spec['family']}",
         }
     for hook in d["hard_hooks"]:
         info[f"hook:{hook['mono']}"] = {
@@ -854,7 +842,6 @@ def build_info(d: dict) -> dict:
 
 def build_canvas(d: dict) -> str:
     caps = d["caps"]
-    membership = d["membership"]
 
     def cap_chip(name: str) -> str:
         spec = caps.get(name)
@@ -862,8 +849,7 @@ def build_canvas(d: dict) -> str:
             return ""
         entry = spec["invocation"]["class"] == "entry-router"
         cls = "chip" + (" entry" if entry else "")
-        profiles = " ".join(membership.get(name, []))
-        return (f'<button class="{cls}" data-profiles="{profiles}" '
+        return (f'<button class="{cls}" '
                 f'data-info="cap:{name}">{html.escape(name)}</button>')
 
     tracks_html = []
@@ -1231,22 +1217,6 @@ CANVAS_JS = r"""
   var close = document.getElementById("insp-close");
   if (close) close.addEventListener("click", function () { panel.classList.remove("on"); });
 
-  /* ── profile filter (toolbar + sidebar cards stay in sync) ── */
-  var filters = Array.prototype.slice.call(document.querySelectorAll("[data-p]"));
-  function applyProfile(p) {
-    filters.forEach(function (b) { b.classList.toggle("on", b.dataset.p === p); });
-    document.querySelectorAll("[data-profiles]").forEach(function (el) {
-      var set = (el.dataset.profiles || "").split(/\s+/);
-      el.classList.toggle("dim", p !== "all" && set.indexOf(p) === -1);
-    });
-    requestAnimationFrame(draw);
-  }
-  filters.forEach(function (b) {
-    b.addEventListener("click", function () {
-      applyProfile(b.classList.contains("on") && b.dataset.p !== "all" ? "all" : b.dataset.p);
-    });
-  });
-
   /* ── jump list follows the canvas ── */
   var canvas = document.querySelector(".canvas");
   var links = Array.prototype.slice.call(document.querySelectorAll(".jump a[data-target]"));
@@ -1421,28 +1391,13 @@ def render_index(d: dict) -> str:
     </div>
 
     <div class="sblock">
-      <div class="skick">Profiles</div>
-      <p style="margin-bottom:12px">Manifest-computed with automatic dependency closure. Tap one to
-      filter the map to exactly what that install exposes.</p>
-      <div class="profs">
-        <button class="prof" data-p="starter"><span class="cnt">{d['starter_caps']}</span>
-          <span><span class="nm">starter</span><br /><span class="ds">the code pipeline, analysis, memory</span></span></button>
-        <button class="prof" data-p="builder"><span class="cnt">{d['builder_caps']}</span>
-          <span><span class="nm">builder</span><br /><span class="ds">analyze → spec → implement → ship</span></span>
-          <span class="tag">DEFAULT</span></button>
-        <button class="prof" data-p="full"><span class="cnt">{d['full_caps']}</span>
-          <span><span class="nm">full</span><br /><span class="ds">research, documents, design, experiments</span></span></button>
-      </div>
-    </div>
-
-    <div class="sblock">
       <div class="skick">Quickstart</div>
       <ol class="steps">
         <li><span class="n"></span><div><b>Install the verified release.</b> One line, SHA-256
           checksummed, no clone — and <code>verify</code> / <code>update</code> /
           <code>uninstall</code> stay reversible.</div></li>
-        <li><span class="n"></span><div><b>Activate a profile per runtime.</b>
-          <code>harness install claude --profile builder</code>, repeat for
+        <li><span class="n"></span><div><b>Activate per runtime.</b>
+          <code>harness install claude</code>, repeat for
           <code>codex</code> / <code>opencode</code>, then <code>harness verify</code>.</div></li>
         <li><span class="n"></span><div><b>Describe the outcome.</b> The harness proposes the route
           card and closes the loop with durable evidence.</div></li>
@@ -1469,13 +1424,6 @@ def render_index(d: dict) -> str:
         <span><i class="e"></i>entry router</span>
         <span><i class="s"></i>stage</span>
         <span><i class="g"></i>gate</span>
-      </div>
-      <div class="filters">
-        <span class="lab">profile</span>
-        <button class="on" data-p="all">all</button>
-        <button data-p="starter">starter</button>
-        <button data-p="builder">builder</button>
-        <button data-p="full">full</button>
       </div>
     </div>
 
@@ -1515,24 +1463,8 @@ MAP_GROUP_ORDER = [
      ["analyze-user", "audit", "post-it"]),
 ]
 
-MAP_JS = r"""
-  var buttons = document.querySelectorAll('#filters button');
-  buttons.forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      buttons.forEach(function (b) { b.classList.toggle('on', b === btn); });
-      var p = btn.dataset.p;
-      document.querySelectorAll('.cap').forEach(function (card) {
-        var set = (card.dataset.profiles || '').split(/\s+/);
-        card.classList.toggle('dim', p !== 'all' && set.indexOf(p) === -1);
-      });
-    });
-  });
-"""
-
-
 def render_map(d: dict) -> str:
     caps = d["caps"]
-    membership = d["membership"]
     listed: set[str] = set()
     groups_html = []
     for _key, title, desc, names in MAP_GROUP_ORDER:
@@ -1545,10 +1477,9 @@ def render_map(d: dict) -> str:
             entry = spec["invocation"]["class"] == "entry-router"
             pill = "entry" if entry else "stage"
             pill_class = "" if entry else " stage"
-            profiles = " ".join(membership.get(name, []))
             summary = html.escape(str(spec.get("summary", "")).strip())
             cards.append(
-                f'<div class="cap" data-profiles="{profiles}">'
+                f'<div class="cap">'
                 f'<div class="name"><span class="mono">{name}</span>'
                 f'<span class="pill{pill_class}">{pill}</span></div>'
                 f"<p>{summary}</p></div>"
@@ -1561,7 +1492,7 @@ def render_map(d: dict) -> str:
     orphans = sorted(set(caps) - listed)
     if orphans:
         cards = "".join(
-            f'<div class="cap" data-profiles="{" ".join(membership.get(n, []))}">'
+            f'<div class="cap">'
             f'<div class="name"><span class="mono">{n}</span></div>'
             f'<p>{html.escape(str(caps[n].get("summary", "")).strip())}</p></div>'
             for n in orphans
@@ -1576,7 +1507,7 @@ def render_map(d: dict) -> str:
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Capability catalog — Agent Harness</title>
-<meta name="description" content="Every Agent Harness capability, pipeline stage, and profile membership." />
+<meta name="description" content="Every Agent Harness capability and pipeline stage." />
 <!-- GENERATED by tools/render-landing.py — DO NOT EDIT BY HAND. -->
 <style>{CSS}</style>
 </head>
@@ -1586,15 +1517,6 @@ def render_map(d: dict) -> str:
     <div class="bar">
       <a class="ttl" href="index.html" style="display:flex;align-items:center;gap:9px">{LOGO}
         <span style="color:var(--text);font-weight:650">Agent Harness</span></a>
-      <div class="filters">
-        <span class="lab">profile</span>
-        <span id="filters" style="display:flex;gap:4px">
-          <button class="on" data-p="all">all</button>
-          <button data-p="starter">starter &middot; {d['starter_caps']}</button>
-          <button data-p="builder">builder &middot; {d['builder_caps']}</button>
-          <button data-p="full">full &middot; {d['full_caps']}</button>
-        </span>
-      </div>
     </div>
 
     <div class="canvas">
@@ -1603,8 +1525,7 @@ def render_map(d: dict) -> str:
         <div class="maphead">
           <h1>Every capability, <span class="grad">one catalog.</span></h1>
           <p>One portable catalog projected into three runtimes. Entry routers own whole
-          pipelines; stages are the sealed workers they dispatch. Filter by profile to see
-          exactly what an installation exposes.</p>
+          pipelines; stages are the sealed workers they dispatch.</p>
           <div class="stats">
             <div class="stat"><b>{d['cap_total']}</b><span>capabilities</span></div>
             <div class="stat"><b>{d['entry_total']}</b><span>entry routers</span></div>
@@ -1618,7 +1539,6 @@ def render_map(d: dict) -> str:
     </div>
   </main>
 </div>
-<script>{MAP_JS}</script>
 </body>
 </html>
 """

@@ -35,10 +35,11 @@ Agent Harness는 지원되는 코딩 에이전트 런타임에서 조사, 계획
   지속 가능한 근거가 한 흐름으로 이어집니다.
 - **세 런타임에서 하나의 계약을 유지합니다.** 공유 동작을 Claude Code,
   Codex, OpenCode가 실제로 발견하는 표면에 투영합니다.
-- **무엇이 실행 중인지 확인합니다.** 활성 release 또는 checkout, profile,
+- **무엇이 실행 중인지 확인합니다.** 활성 release 또는 checkout,
   revision, freshness, duplicate와 필요한 session action을 검사합니다.
-- **작게 시작해서 확장합니다.** Capability를 fork하거나 별도 setup을 관리하지
-  않고 `starter`, `builder`, `full`을 선택합니다.
+- **한 번 활성화하면 harness 전체입니다.** 모든 런타임이 manifest가 정의한
+  전체 capability 집합을 그대로 발견합니다 — 나뉜 부분집합이나 별도 setup은
+  없습니다.
 - **결정을 안전하게 이어갑니다.** Durable memory와 실행 가능한 guard가 기존
   convention을 보존하고 spec, artifact, git, projection 경계를 확인합니다.
 
@@ -58,8 +59,8 @@ curl -fsSL https://github.com/dmlguq456/agent_setting/releases/latest/download/i
 ```
 
 installer와 distribution logic은 동일한 immutable Release tag에서 오며, 그 exact
-tag의 archive를 SHA-256으로 확인한 뒤 설치합니다. 세 런타임에 `full`
-profile의 불변 packaged bundle을 활성화하고, OS가 지원하면
+tag의 archive를 SHA-256으로 확인한 뒤 설치합니다. 세 런타임에 전체 capability
+집합의 불변 packaged bundle을 활성화하고, OS가 지원하면
 user-level 일일 update 확인도 등록합니다. Runtime credential, session, log,
 database는 건드리지 않습니다.
 
@@ -94,27 +95,6 @@ Version 고정 또는 자동 확인 제외:
 curl -fsSL https://github.com/dmlguq456/agent_setting/releases/download/v2.0.0/install.sh | sh -s -- --no-auto-update
 ```
 
-## 프로필 선택
-
-프로필은 각 런타임이 발견할 capability와 role의 범위를 조절합니다. 의존성
-폐쇄는 자동으로 포함되며 guard, bootstrap 지침, `memory-scout` 같은 kernel
-표면은 모든 프로필에서 유지됩니다.
-
-| 프로필 | 적합한 용도 | Capability | Role | Mode |
-|---|---|---:|---:|---:|
-| `starter` | 가벼운 핵심 코드 파이프라인 | 6 | 5 | 11 |
-| `builder` | 소프트웨어 개발, 분석, 운영, 메모리 | 13 | 7 | 19 |
-| `full` **기본값** | 조사, 문서, 디자인을 포함한 전체 harness | 26 | 8 | 29 |
-
-```bash
-harness runtime activate --runtime codex --mode linked --profile starter
-harness runtime refresh --runtime all --profile full
-```
-
-활성화 과정은 선택한 프로필, capability, role, mode 목록과 manifest digest를
-기록합니다. 따라서 README의 설명을 그대로 믿는 대신 런타임 상태에서 실제
-설치 내용을 검증할 수 있습니다.
-
 ## 자연어로 사용하기
 
 명령 이름을 외울 필요가 없습니다. 원하는 결과와 제약을 평소 사용하는
@@ -139,7 +119,7 @@ harness runtime refresh --runtime all --profile full
 
 ```text
                        harness-manifest.json
-                    capability · role · profile
+                        capability · role
                                │
              ┌─────────────────┼─────────────────┐
              │                 │                 │
@@ -154,7 +134,7 @@ harness runtime refresh --runtime all --profile full
 | 계층 | 책임 |
 |---|---|
 | `core/` | Workflow, artifact, assurance, memory, git/worktree 계약 |
-| `harness-manifest.json` | Capability, role, mode, pack, profile의 canonical machine contract |
+| `harness-manifest.json` | Capability, role, mode의 canonical machine contract |
 | `capabilities/`, `roles/` | 사람이 읽는 portable behavior source |
 | `adapters/` | 각 런타임의 네이티브 projection과 bridge |
 | `tools/install/` | 런타임 소유 상태를 건드리지 않는 activation lifecycle |
@@ -186,7 +166,7 @@ Maintainer는 managed release 대신 live checkout을 사용할 수 있습니다
 ```bash
 git clone https://github.com/dmlguq456/agent_setting.git ~/agent_setting
 cd ~/agent_setting
-./tools/install/harness.sh runtime activate --runtime all --mode linked --profile builder
+./tools/install/harness.sh runtime activate --runtime all --mode linked
 ```
 
 공유 정의를 변경한 후에는 모든 생성 projection을 갱신하고 drift를
@@ -197,7 +177,7 @@ python3 tools/generate.py
 python3 tools/generate.py --check
 
 ./tools/generated-projections.test.sh
-./tools/install/profile-activation.test.sh
+./tools/install/projection-completeness.test.sh
 ./tools/install/runtime-activation.test.sh
 ./tools/skill-conformance/check.sh
 ./tools/check-adaptation-boundary.sh

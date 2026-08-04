@@ -1,9 +1,8 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "product": {
     "id": "agent-harness",
-    "manifest_version": "1.2.0",
-    "default_profile": "full",
+    "manifest_version": "2.0.0",
     "runtimes": [
       "claude",
       "codex",
@@ -860,78 +859,6 @@
     "research/research-survey": {
       "unit": "research/research-survey",
       "status": "portable-persona"
-    }
-  },
-  "packs": {
-    "core": {
-      "requires": [],
-      "capabilities": [
-        "autopilot-code"
-      ]
-    },
-    "design": {
-      "requires": [],
-      "capabilities": [
-        "autopilot-design"
-      ]
-    },
-    "operations": {
-      "requires": [],
-      "capabilities": [
-        "analyze-user",
-        "audit",
-        "post-it"
-      ]
-    },
-    "research-writing": {
-      "requires": [],
-      "capabilities": [
-        "analyze-project",
-        "autopilot-apply",
-        "autopilot-draft",
-        "autopilot-refine",
-        "autopilot-research"
-      ]
-    },
-    "software": {
-      "requires": [
-        "core"
-      ],
-      "capabilities": [
-        "analyze-project",
-        "autopilot-lab",
-        "autopilot-ship",
-        "autopilot-spec"
-      ]
-    }
-  },
-  "profiles": {
-    "builder": {
-      "summary": "Analyze, specify, implement, verify, and retain project memory without the document/design specialist surface.",
-      "packs": [
-        "software",
-        "operations"
-      ]
-    },
-    "full": {
-      "summary": "Expose every built-in capability and portable role.",
-      "packs": [
-        "core",
-        "software",
-        "research-writing",
-        "design",
-        "operations"
-      ],
-      "units": [
-        "material/browser-fetch",
-        "qa/data-curate"
-      ]
-    },
-    "starter": {
-      "summary": "Run the golden code task with the code pipeline and mandatory kernel guards.",
-      "packs": [
-        "core"
-      ]
     }
   },
   "kernel": {

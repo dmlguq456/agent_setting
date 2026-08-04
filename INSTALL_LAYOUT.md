@@ -16,7 +16,7 @@ through native discovery paths and adapter bootstrap files.
 >
 > **Design note — this document preserves contracts, not procedures.** It
 > explains what maps where, why the mapping exists, and which cases are unsafe.
-> The activation and profile sections of the productization PRD own the full
+> The activation sections of the productization PRD own the full
 > surface-by-channel decision matrix and channel specifications. This page
 > keeps only their summary and local facts that are unique to it, such as
 > concrete Windows paths and the fleet contract.
@@ -51,17 +51,10 @@ The installer embeds distribution logic from the same immutable release tag,
 then downloads that exact tag's archive and SHA-256 sidecar. It never combines
 distribution code from `main` with a separately selected release archive.
 
-`harness-manifest.json` owns the `starter`, `builder`, and `full` profiles and
-their dependency closure. `full` is the default for new activations, so a
-reactivation without an explicit flag never silently narrows the discovery
-surface. A legacy activation record without a profile is likewise interpreted
-as `full`.
-
-| profile | projected capabilities | projected roles | projected modes |
-|---|---:|---:|---:|
-| `starter` | 6 | 5 | 11 |
-| `builder` | 13 | 7 | 19 |
-| `full` | 26 | 8 | 29 |
+`harness-manifest.json` owns the full capability, role, and mode set, and
+activation always projects that complete set — there is no subset selection,
+so a reactivation never silently narrows the discovery surface. A legacy
+activation record carrying a retired `profile*` field is read but ignored.
 
 - Managed `packaged` releases are the general-user default. The release
   updater verifies an archive in staging, activates only runtimes still bound
@@ -315,10 +308,10 @@ harness runtime doctor --runtime all --strict
 
 `verify` follows the selected runtime's active installation contract. When an
 `activation.json` record exists it runs strict activation doctor checks for the
-recorded source, profile, projection, duplicate, and freshness state. Without
+recorded source, projection, duplicate, and freshness state. Without
 an activation record it preserves the legacy driver's `checks()` list (symlink
 existence · canonical generator drift · preflight assertions · bootstrap load
-smoke). This avoids mixing profile-native plural discovery paths with the old
+smoke). This avoids mixing activation's per-file discovery paths with the old
 installer layout while retaining verification for installations that have not
 migrated to activation yet.
 
@@ -348,6 +341,7 @@ migrated to activation yet.
 - **Marketplace bundles are optional distribution artifacts.** Core generation,
   activation, `doctor`, and `verify` neither register nor require them. An
   explicit legacy `install --plugin` flow owns its own runtime-currentness and
-  registration checks; it cannot shadow or duplicate the active native profile.
+  registration checks; it cannot shadow or duplicate the active native
+  activation.
 
 Do not run drill automatically during migration; it invokes headless runtime sessions and can spend tokens. Run a targeted drill only after `harness verify` reports clean.

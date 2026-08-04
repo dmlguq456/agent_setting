@@ -30,23 +30,24 @@ printf 'codex_home=%s\n' "$CODEX_HOME"
 
 real() { readlink -f "$1" 2>/dev/null || true; }
 
-# The portable runtime activator projects a selected product profile. Its
+# The portable runtime activator projects the full capability set per-file. Its
 # activation record is authoritative for per-file Skills, agents, and modes;
 # the legacy installer instead projects the complete compatibility trees.
-profile_state="$CODEX_HOME/.harness/activation.json"
-profile_managed=0
-profile_name=
-if [ -f "$profile_state" ]; then
-  profile_name=$(python3 - "$profile_state" "$AGENT_HOME" <<'PY' 2>/dev/null || true
+activation_state="$CODEX_HOME/.harness/activation.json"
+native_managed=0
+if [ -f "$activation_state" ]; then
+  if python3 - "$activation_state" "$AGENT_HOME" <<'PY' 2>/dev/null; then
 import json, pathlib, sys
 state = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 source = pathlib.Path(state.get("source_root", "")).resolve()
 expected = pathlib.Path(sys.argv[2]).resolve()
-if state.get("runtime") == "codex" and source == expected and state.get("profile"):
-    print(state["profile"])
+if state.get("runtime") == "codex" and source == expected and state.get("activated_projection_digest"):
+    print("managed")
+    raise SystemExit(0)
+raise SystemExit(1)
 PY
-  )
-  [ -n "$profile_name" ] && profile_managed=1
+    native_managed=1
+  fi
 fi
 
 expect_link() {  # <linkpath> <expected-target> <checkname>
@@ -66,15 +67,15 @@ expect_link "$CODEX_HOME/agent-capabilities"       "$S/capabilities"            
 expect_link "$CODEX_HOME/agent-roles"              "$S/roles"                     agent-roles
 expect_link "$CODEX_HOME/agent-bin"                "$S/bin"                       agent-bin
 expect_link "$CODEX_HOME/agent-hooks"              "$S/codex-hooks"               agent-hooks
-if [ "$profile_managed" -eq 1 ]; then
+if [ "$native_managed" -eq 1 ]; then
   for name in agent-harness-readme agent-tools agent-utilities agent-scaffolds agent-skills agent-agents agent-config agent-plugin-marketplace; do
-    printf 'check=%s:skipped reason=profile-managed\n' "$name"
+    printf 'check=%s:skipped reason=runtime-managed\n' "$name"
   done
-  printf 'check=agent-modes:ok reason=profile-managed-per-file profile=%s\n' "$profile_name"
+  printf 'check=agent-modes:ok reason=runtime-managed-per-file\n'
   if "$AGENT_HOME/tools/install/harness.sh" runtime doctor --runtime codex --strict --json >/dev/null 2>&1; then
-    printf 'check=profile-activation:ok profile=%s\n' "$profile_name"
+    printf 'check=runtime-activation:ok\n'
   else
-    printf 'check=profile-activation:failed profile=%s\n' "$profile_name"
+    printf 'check=runtime-activation:failed\n'
     fails=$((fails + 1))
   fi
 else
@@ -207,11 +208,11 @@ detect_plugin_state
 # Codex skill discovery may be native symlinks or the installable plugin. A
 # count-only check can miss stale or wrong targets, so every projected skill is
 # classified before selecting the active discovery surface.
-if [ "$profile_managed" -eq 1 ]; then
+if [ "$native_managed" -eq 1 ]; then
   linked_skills=$(find "$CODEX_HOME/skills" -mindepth 1 -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')
-  printf 'skills_linked=%s plugin_state=%s profile=%s\n' "$linked_skills" "$plugin_state" "$profile_name"
-  printf 'check=skill-discovery:native profile=%s\n' "$profile_name"
-  printf 'check=skills-linked:ok reason=profile-activation-verified\n'
+  printf 'skills_linked=%s plugin_state=%s\n' "$linked_skills" "$plugin_state"
+  printf 'check=skill-discovery:native\n'
+  printf 'check=skills-linked:ok reason=runtime-activation-verified\n'
 else
 projected_skills=$(find -L "$S/codex-skills" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
 linked_skills=$(find "$CODEX_HOME/skills" -mindepth 1 -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')
@@ -270,10 +271,10 @@ fi
 
 # Native agent links: every projected custom-agent TOML must be linked to the
 # matching adapter-owned file.
-if [ "$profile_managed" -eq 1 ]; then
+if [ "$native_managed" -eq 1 ]; then
   linked_agents=$(find "$CODEX_HOME/agents" -mindepth 1 -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')
-  printf 'agents_linked=%s profile=%s\n' "$linked_agents" "$profile_name"
-  printf 'check=agents-linked:ok reason=profile-activation-verified\n'
+  printf 'agents_linked=%s\n' "$linked_agents"
+  printf 'check=agents-linked:ok reason=runtime-activation-verified\n'
 else
 projected_agents=$(find -L "$S/codex-agents" -mindepth 1 -maxdepth 1 -type f -name '*.toml' 2>/dev/null | wc -l | tr -d ' ')
 linked_agents=$(find "$CODEX_HOME/agents" -mindepth 1 -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')

@@ -120,9 +120,9 @@ def make_release(version, attack=None, wrong_checksum=False):
     return archive
 
 activation_calls = []
-def fake_activate(release_root, runtimes, profile):
+def fake_activate(release_root, runtimes):
     selected = list(runtimes)
-    activation_calls.append((Path(release_root).name, tuple(selected), profile))
+    activation_calls.append((Path(release_root).name, tuple(selected)))
     return {
         "runtimes": selected,
         "session_action": {runtime: {"skill": "new-session"} for runtime in selected},
@@ -138,7 +138,7 @@ else:
     raise AssertionError("auto-update enabled without a managed release")
 
 make_release("v1.0.0")
-installed = d.bootstrap("example/harness", "latest", d.RUNTIMES, "builder", True)
+installed = d.bootstrap("example/harness", "latest", d.RUNTIMES, True)
 assert installed["status"] == "installed"
 assert Path(installed["release_root"]).name == "v1.0.0"
 assert d.current_path().resolve().name == "v1.0.0"
@@ -294,7 +294,6 @@ for runtime in ("codex", "opencode"):
             {
                 "mode": "packaged",
                 "source_root": updated["release_root"],
-                "profile": "full",
             }
         )
     )
@@ -314,7 +313,6 @@ assert d.current_path().resolve().name == "v1.1.0"
 assert d.state_path().read_bytes() == state_before_failure
 assert not (d.data_root() / "releases/v1.2.0").exists()
 assert activation_calls[-1][0] == "v1.1.0"
-assert activation_calls[-1][2] == "full"
 
 for version, attack, wrong in [
     ("v1.2.1", None, True),
@@ -350,18 +348,13 @@ index.write_text(
 d.current_path().unlink()
 d.launcher_path().unlink()
 pinned = d.update(version="v1.1.0")
-assert pinned["status"] == "reconfigured"
+assert pinned["status"] == "repaired"
 assert d.current_path().resolve().name == "v1.1.0"
 assert d.launcher_path().is_symlink()
 assert json.loads(d.state_path().read_text())["pinned_version"] == "v1.1.0"
-assert json.loads(d.state_path().read_text())["profile"] == "full"
+assert "profile" not in json.loads(d.state_path().read_text())
 index.unlink()
 assert d.update(automatic=True)["status"] == "pinned"
-for runtime in ("codex", "opencode"):
-    path = runtime_homes[runtime] / ".harness/activation.json"
-    value = json.loads(path.read_text())
-    value["profile"] = "starter"
-    path.write_text(json.dumps(value))
 index.write_text(
     json.dumps(
         {
@@ -373,11 +366,18 @@ index.write_text(
         }
     )
 )
-calls_before_profile_sync = len(activation_calls)
-reconfigured = d.update()
-assert reconfigured["status"] == "reconfigured"
-assert json.loads(d.state_path().read_text())["profile"] == "starter"
-assert len(activation_calls) == calls_before_profile_sync
+
+# Legacy distribution state read-compat: an old state file may still carry
+# the retired `profile` field. update() must succeed without it driving any
+# runtime reconfiguration, and the rewritten state must drop the field.
+legacy_state = json.loads(d.state_path().read_text())
+legacy_state["profile"] = "builder"
+d.state_path().write_text(json.dumps(legacy_state))
+calls_before_legacy_profile = len(activation_calls)
+legacy_result = d.update()
+assert legacy_result["status"] in ("repaired", "up-to-date")
+assert "profile" not in json.loads(d.state_path().read_text())
+assert len(activation_calls) == calls_before_legacy_profile
 
 disabled = d.auto_update("disable")
 assert disabled["status"] == "disabled"
@@ -425,7 +425,6 @@ args = argparse.Namespace(
     reapply=False,
     dry_run=False,
     version="latest",
-    profile=None,
     scope="global",
     plugin=False,
     auto=False,
@@ -638,7 +637,7 @@ HARNESS_INSTALL_URL="file://$INTEGRATION/assets/install.sh" "$ROOT/install.sh" -
 python3 - "$INTEGRATION/legacy-redirect.json" <<'PY'
 import json, sys
 result = json.load(open(sys.argv[1]))
-assert result["status"] in {"up-to-date", "reconfigured"}
+assert result["status"] in {"up-to-date", "repaired"}
 assert result["version"] == "v0.0.0-integration"
 PY
 echo "ok - release-bound installer and legacy redirect activate and verify all runtimes"

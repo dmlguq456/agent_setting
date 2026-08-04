@@ -33,10 +33,10 @@ actually discovers.
   reports, and durable evidence stay connected.
 - **Keep one contract across three runtimes.** Shared behavior is projected
   onto the surfaces Claude Code, Codex, and OpenCode actually discover.
-- **Know what is running.** Inspect the active release or checkout, profile,
-  revision, freshness, duplicates, and required session action.
-- **Start small and grow.** Choose `starter`, `builder`, or `full` without
-  forking capabilities or maintaining separate setups.
+- **Know what is running.** Inspect the active release or checkout, revision,
+  freshness, duplicates, and required session action.
+- **One activation, the whole harness.** Every runtime discovers the full
+  manifest-derived capability set — no forked subsets or separate setups.
 - **Carry decisions safely.** Durable memory and executable guards preserve
   conventions while checking spec, artifact, git, and projection boundaries.
 
@@ -57,7 +57,7 @@ curl -fsSL https://github.com/dmlguq456/agent_setting/releases/latest/download/i
 
 The installer and distribution logic come from the same immutable Release tag;
 that exact tag's SHA-256 integrity-checked archive is then installed. It activates
-the `full` profile for all three runtimes as immutable packaged bundles and
+the full capability set for all three runtimes as immutable packaged bundles and
 registers a daily user-level update check where the OS supports it. It does not
 touch runtime credentials, sessions, logs, or databases.
 
@@ -100,28 +100,6 @@ To pin a version or disable scheduled checks:
 curl -fsSL https://github.com/dmlguq456/agent_setting/releases/download/v2.0.0/install.sh | sh -s -- --no-auto-update
 ```
 
-## Choose a profile
-
-Profiles control how many capabilities and roles each runtime discovers.
-Dependency closure is included automatically, while kernel surfaces such as
-guards, bootstrap instructions, and `memory-scout` remain available in every
-profile.
-
-| Profile | Best for | Capabilities | Roles | Modes |
-|---|---|---:|---:|---:|
-| `starter` | A lightweight core code pipeline | 6 | 5 | 11 |
-| `builder` | Software development, analysis, operations, and memory | 13 | 7 | 19 |
-| `full` **default** | The complete research, documentation, and design harness | 26 | 8 | 29 |
-
-```bash
-harness runtime activate --runtime codex --mode linked --profile starter
-harness runtime refresh --runtime all --profile full
-```
-
-Activation records the selected profile, capability, role, and mode lists plus
-the manifest digest. You can verify what is installed from runtime state rather
-than trusting a README description.
-
 ## Use natural language
 
 You do not need to memorize command names. Describe the outcome and constraints
@@ -146,7 +124,7 @@ See [capabilities/README.md](capabilities/README.md) for every entrypoint and
 
 ```text
                        harness-manifest.json
-                    capability · role · profile
+                        capability · role
                                │
              ┌─────────────────┼─────────────────┐
              │                 │                 │
@@ -161,7 +139,7 @@ See [capabilities/README.md](capabilities/README.md) for every entrypoint and
 | Layer | Responsibility |
 |---|---|
 | `core/` | Workflow, artifact, assurance, memory, and git/worktree contracts |
-| `harness-manifest.json` | Canonical machine contract for capabilities, roles, modes, packs, and profiles |
+| `harness-manifest.json` | Canonical machine contract for capabilities, roles, and modes |
 | `capabilities/`, `roles/` | Human-readable portable behavior sources |
 | `adapters/` | Native projections and bridges for each runtime |
 | `tools/install/` | Activation lifecycle that leaves runtime-owned state alone |
@@ -194,7 +172,7 @@ Maintainers can keep a live checkout instead of the managed release:
 ```bash
 git clone https://github.com/dmlguq456/agent_setting.git ~/agent_setting
 cd ~/agent_setting
-./tools/install/harness.sh runtime activate --runtime all --mode linked --profile builder
+./tools/install/harness.sh runtime activate --runtime all --mode linked
 ```
 
 After changing a shared definition, refresh every generated projection and
@@ -205,7 +183,7 @@ python3 tools/generate.py
 python3 tools/generate.py --check
 
 ./tools/generated-projections.test.sh
-./tools/install/profile-activation.test.sh
+./tools/install/projection-completeness.test.sh
 ./tools/install/runtime-activation.test.sh
 ./tools/skill-conformance/check.sh
 ./tools/check-adaptation-boundary.sh

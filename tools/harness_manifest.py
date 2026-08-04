@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Canonical harness manifest loader, validator, and profile resolver.
+"""Canonical harness manifest loader and validator.
 
 `harness-manifest.json` owns portable product metadata. Runtime-specific
 procedure bodies and fallbacks remain in their adapter sources; generated
@@ -9,7 +9,6 @@ another.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from pathlib import Path
@@ -19,7 +18,7 @@ from typing import Iterable
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_NAME = "harness-manifest.json"
 MANIFEST_PATH = ROOT / MANIFEST_NAME
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 UNIT_ID_PATTERN = re.compile(r"^[a-z][a-z0-9-]*/[a-z][a-z0-9-]*$")
 UNIT_WORKER_TYPES = {"owner", "stage", "review", "support"}
 UNIT_FLOORS = {"near-zero", "low", "moderate", "high", "highest"}
@@ -39,8 +38,6 @@ REQUIRED_TOP_LEVEL = {
     "capabilities",
     "units",
     "modes",
-    "packs",
-    "profiles",
     "kernel",
     "ownership",
 }
@@ -136,13 +133,8 @@ def validate(data: dict, root: Path = ROOT) -> None:
     capabilities = _expect_sorted_mapping(data["capabilities"], "capabilities")
     units = _expect_sorted_mapping(data["units"], "units")
     modes = _expect_sorted_mapping(data["modes"], "modes")
-    packs = _expect_sorted_mapping(data["packs"], "packs")
-    profiles = _expect_sorted_mapping(data["profiles"], "profiles")
     _expect(capabilities, "capabilities cannot be empty")
     _expect(units, "units cannot be empty")
-    _expect(packs, "packs cannot be empty")
-    _expect(set(profiles) == {"starter", "builder", "full"}, "profiles must be starter, builder, and full")
-    _expect(product.get("default_profile") in profiles, "product.default_profile must name a profile")
 
     capability_graph: dict[str, list[str]] = {}
     for identifier, spec in capabilities.items():
@@ -261,27 +253,6 @@ def validate(data: dict, root: Path = ROOT) -> None:
     }
     _expect(discovered_units == set(units), "unit catalog set differs from canonical manifest")
 
-    pack_graph: dict[str, list[str]] = {}
-    for pack, spec in packs.items():
-        _expect(isinstance(spec, dict) and set(spec) == {"requires", "capabilities"},
-                f"pack {pack} fields do not match schema")
-        pack_graph[pack] = _expect_string_list(spec["requires"], f"pack {pack}.requires")
-        pack_capabilities = _expect_string_list(spec["capabilities"], f"pack {pack}.capabilities")
-        for identifier in pack_capabilities:
-            _expect(identifier in capabilities, f"pack {pack} references unknown capability {identifier}")
-    for pack in packs:
-        _closure([pack], pack_graph, "pack")
-
-    for profile, spec in profiles.items():
-        _expect(isinstance(spec, dict), f"profile {profile} must be an object")
-        _expect(set(spec).issubset({"summary", "packs", "units"}) and {"summary", "packs"} <= set(spec),
-                f"profile {profile} fields do not match schema")
-        _expect(isinstance(spec["summary"], str) and spec["summary"], f"profile {profile}.summary required")
-        for pack in _expect_string_list(spec["packs"], f"profile {profile}.packs"):
-            _expect(pack in packs, f"profile {profile} references unknown pack {pack}")
-        for unit in _expect_string_list(spec.get("units", []), f"profile {profile}.units"):
-            _expect(unit in units, f"profile {profile} references unknown unit {unit}")
-
     kernel = data["kernel"]
     _expect(isinstance(kernel, dict) and set(kernel) == {"always_on", "agents"},
             "kernel fields do not match schema")
@@ -293,69 +264,15 @@ def validate(data: dict, root: Path = ROOT) -> None:
     _expect_string_list(ownership["generated"], "ownership.generated")
     _expect_string_list(ownership["adapter_owned"], "ownership.adapter_owned")
 
-    full = resolve_profile(data, "full")
-    _expect(set(full["capabilities"]) == set(capabilities), "full profile must expose every capability")
-    _expect(set(full["units"]) == set(units), "full profile must expose every catalog unit")
-    starter = resolve_profile(data, "starter")
-    _expect(len(starter["capabilities"]) * 2 <= len(full["capabilities"]),
-            "starter capability metadata must be at most 50% of full")
-
-
-def resolve_profile(data: dict, profile: str | None = None) -> dict:
-    profiles = data["profiles"]
-    name = profile or data["product"]["default_profile"]
-    _expect(name in profiles, f"unknown profile: {name}")
-
-    pack_graph = {key: value["requires"] for key, value in data["packs"].items()}
-    selected_packs = _closure(profiles[name]["packs"], pack_graph, "pack")
-    capability_roots: list[str] = []
-    for pack in selected_packs:
-        capability_roots.extend(data["packs"][pack]["capabilities"])
-    capability_graph = {
-        key: value["requires"]["capabilities"] for key, value in data["capabilities"].items()
-    }
-    capabilities = _closure(capability_roots, capability_graph, "capability")
-
-    units = set(profiles[name].get("units", []))
-    for identifier in capabilities:
-        units.update(data["capabilities"][identifier]["requires"]["units"])
-    families = {unit.split("/", 1)[0] for unit in units}
-    roles = {data["units"][unit]["role"] for unit in units}
-    modes = sorted(
-        mode for mode, spec in data["modes"].items()
-        if (spec["unit"] in units if "unit" in spec else mode.split("/", 1)[0] in families)
-    )
-    payload = {
-        "name": name,
-        "packs": selected_packs,
-        "capabilities": capabilities,
-        "units": sorted(units),
-        "roles": sorted(roles),
-        "modes": modes,
-        "kernel_agents": sorted(data["kernel"]["agents"]),
-    }
-    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
-    payload["digest"] = hashlib.sha256(encoded).hexdigest()
-    payload["counts"] = {
-        "capabilities": len(capabilities),
-        "units": len(units),
-        "roles": len(roles),
-        "modes": len(modes),
-    }
-    return payload
-
-
-def profile_names(data: dict | None = None) -> tuple[str, ...]:
-    manifest = data if data is not None else load()
-    return tuple(sorted(manifest["profiles"]))
-
-
-def default_profile(data: dict | None = None) -> str:
-    manifest = data if data is not None else load()
-    return manifest["product"]["default_profile"]
-
 
 if __name__ == "__main__":
     manifest = load()
-    print(json.dumps({name: resolve_profile(manifest, name) for name in profile_names(manifest)},
-                     ensure_ascii=False, indent=2))
+    print(json.dumps(
+        {
+            "capabilities": len(manifest["capabilities"]),
+            "units": len(manifest["units"]),
+            "modes": len(manifest["modes"]),
+            "kernel_agents": sorted(manifest["kernel"]["agents"]),
+        },
+        ensure_ascii=False, indent=2,
+    ))

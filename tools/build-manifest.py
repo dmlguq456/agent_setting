@@ -196,7 +196,7 @@ def build_agents(canonical):
             "name": agent,
             "model": "",
             "modes": [],
-            "blurb": "Kernel agent active in every product profile.",
+            "blurb": "Kernel agent projected into every activation.",
         })
     return sorted(rows, key=lambda r: r["slug"])
 
@@ -623,12 +623,6 @@ def build_manifest(canonical):
         "agents": build_agents(canonical),
         "units": canonical["units"],
         "modes": canonical["modes"],
-        "packs": canonical["packs"],
-        "profiles": canonical["profiles"],
-        "resolved_profiles": {
-            name: harness_manifest.resolve_profile(canonical, name)
-            for name in harness_manifest.profile_names(canonical)
-        },
         "ownership": canonical["ownership"],
         "hooks": build_hooks(),
         "loops": build_loops(),
