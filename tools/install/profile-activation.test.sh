@@ -120,13 +120,14 @@ assert row["freshness"] == "duplicate", row
 assert "profile-extra:agents/legacy-external.toml" in row["duplicate_sources"], row
 PY
 
-# A source with the canonical manifest but no explicit flag selects builder.
+# A source with the canonical manifest but no explicit flag selects full, so a
+# reactivation never silently drops a capability the caller did not opt out of.
 harness runtime activate --runtime codex --mode linked --source "$ROOT" --json > "$TMP/default.json"
 python3 - "$TMP/default.json" <<'PY'
 import json, sys
 row=json.load(open(sys.argv[1]))
-assert row["profile"] == "builder", row
-assert row["profile_counts"]["capabilities"] == 13, row
+assert row["profile"] == "full", row
+assert row["profile_counts"]["capabilities"] == 26, row
 PY
 test ! -e "$HOME/.codex/agents/legacy-external.toml" \
   || fail "profile refresh retained a legacy harness agent"

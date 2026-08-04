@@ -744,9 +744,9 @@ def _install_or_update(
         ):
             old_profile = (
                 _detected_managed_profile(previous_state)
-                or previous_state.get("profile", "builder")
+                or previous_state.get("profile", "full")
             )
-            state_profile_changed = profile != previous_state.get("profile", "builder")
+            state_profile_changed = profile != previous_state.get("profile", "full")
             runtime_profile_changed = profile != old_profile
             selected, skipped = (
                 _selected_update_runtimes(previous_state, requested)
@@ -996,7 +996,7 @@ def update(
     selected_profile = (
         profile
         or _detected_managed_profile(state)
-        or state.get("profile", "builder")
+        or state.get("profile", "full")
     )
     return _install_or_update(
         repository=state["repository"],
@@ -1456,7 +1456,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--runtime", action="append", choices=[*RUNTIMES, "all"]
     )
     bootstrap_parser.add_argument(
-        "--profile", choices=PROFILES, default=os.environ.get("HARNESS_PROFILE", "builder")
+        "--profile", choices=PROFILES, default=os.environ.get("HARNESS_PROFILE", "full")
     )
     bootstrap_parser.add_argument(
         "--no-auto-update",

@@ -52,15 +52,16 @@ then downloads that exact tag's archive and SHA-256 sidecar. It never combines
 distribution code from `main` with a separately selected release archive.
 
 `harness-manifest.json` owns the `starter`, `builder`, and `full` profiles and
-their dependency closure. `builder` is the default for new activations. A
-legacy activation record without a profile is interpreted as `full` to preserve
-its existing discovery surface.
+their dependency closure. `full` is the default for new activations, so a
+reactivation without an explicit flag never silently narrows the discovery
+surface. A legacy activation record without a profile is likewise interpreted
+as `full`.
 
 | profile | projected capabilities | projected roles | projected modes |
 |---|---:|---:|---:|
-| `starter` | 6 | 4 | 13 |
-| `builder` | 14 | 7 | 26 |
-| `full` | 27 | 8 | 26 |
+| `starter` | 6 | 5 | 11 |
+| `builder` | 13 | 7 | 19 |
+| `full` | 26 | 8 | 29 |
 
 - Managed `packaged` releases are the general-user default. The release
   updater verifies an archive in staging, activates only runtimes still bound

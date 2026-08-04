@@ -57,7 +57,7 @@ curl -fsSL https://github.com/dmlguq456/agent_setting/releases/latest/download/i
 
 The installer and distribution logic come from the same immutable Release tag;
 that exact tag's SHA-256 integrity-checked archive is then installed. It activates
-the `builder` profile for all three runtimes as immutable packaged bundles and
+the `full` profile for all three runtimes as immutable packaged bundles and
 registers a daily user-level update check where the OS supports it. It does not
 touch runtime credentials, sessions, logs, or databases.
 
@@ -110,8 +110,8 @@ profile.
 | Profile | Best for | Capabilities | Roles | Modes |
 |---|---|---:|---:|---:|
 | `starter` | A lightweight core code pipeline | 6 | 5 | 11 |
-| `builder` **default** | Software development, analysis, operations, and memory | 13 | 7 | 19 |
-| `full` | The complete research, documentation, and design harness | 26 | 8 | 29 |
+| `builder` | Software development, analysis, operations, and memory | 13 | 7 | 19 |
+| `full` **default** | The complete research, documentation, and design harness | 26 | 8 | 29 |
 
 ```bash
 harness runtime activate --runtime codex --mode linked --profile starter

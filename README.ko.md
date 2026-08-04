@@ -58,7 +58,7 @@ curl -fsSL https://github.com/dmlguq456/agent_setting/releases/latest/download/i
 ```
 
 installer와 distribution logic은 동일한 immutable Release tag에서 오며, 그 exact
-tag의 archive를 SHA-256으로 확인한 뒤 설치합니다. 세 런타임에 `builder`
+tag의 archive를 SHA-256으로 확인한 뒤 설치합니다. 세 런타임에 `full`
 profile의 불변 packaged bundle을 활성화하고, OS가 지원하면
 user-level 일일 update 확인도 등록합니다. Runtime credential, session, log,
 database는 건드리지 않습니다.
@@ -103,8 +103,8 @@ curl -fsSL https://github.com/dmlguq456/agent_setting/releases/download/v2.0.0/i
 | 프로필 | 적합한 용도 | Capability | Role | Mode |
 |---|---|---:|---:|---:|
 | `starter` | 가벼운 핵심 코드 파이프라인 | 6 | 5 | 11 |
-| `builder` **기본값** | 소프트웨어 개발, 분석, 운영, 메모리 | 13 | 7 | 19 |
-| `full` | 조사, 문서, 디자인을 포함한 전체 harness | 26 | 8 | 29 |
+| `builder` | 소프트웨어 개발, 분석, 운영, 메모리 | 13 | 7 | 19 |
+| `full` **기본값** | 조사, 문서, 디자인을 포함한 전체 harness | 26 | 8 | 29 |
 
 ```bash
 harness runtime activate --runtime codex --mode linked --profile starter

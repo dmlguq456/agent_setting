@@ -3,7 +3,7 @@
   "product": {
     "id": "agent-harness",
     "manifest_version": "1.2.0",
-    "default_profile": "builder",
+    "default_profile": "full",
     "runtimes": [
       "claude",
       "codex",
