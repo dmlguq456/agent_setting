@@ -842,6 +842,50 @@ class TestCapabilityIntegration(WorkflowFixture):
         self.assertEqual(marker.read_text(), "x")
 
 
+class TestRouteClosure(unittest.TestCase):
+    """A cycle that edits the registry must still be able to close its own route."""
+
+    def compile(self, cwd):
+        return compile_fixture("autopilot-code", "dev", cwd, ["shared-contract"])
+
+    def test_a_registry_edit_does_not_orphan_the_route_that_made_it(self):
+        with tempfile.TemporaryDirectory() as td:
+            route = self.compile(td)
+            path = Path(td) / "route.json"
+            ROUTE.write_once(path, route)
+            stale = dict(route, registry_digest="sha256:" + "0" * 64)
+            stale["route_hash"] = ROUTE.route_hash(stale)
+            stale["route_id"] = "rt-" + stale["route_hash"].split(":", 1)[1][:16]
+            stale_path = Path(td) / "stale-route.json"
+            ROUTE.write_once(stale_path, stale)
+
+            # Anything that could launch or mutate still refuses the stale route.
+            with self.assertRaisesRegex(ValueError, "stale registry digest"):
+                ROUTE.verify_route(stale)
+
+            verified = ROUTE.verify_route(stale, allow_stale_registry=True)
+            self.assertFalse(verified["_registry_current"])
+            outcome, created = ROUTE.close_route(verified, stale_path, "deadbeef", "superseded")
+            self.assertTrue(created)
+            self.assertIs(outcome["registry_current"], False)
+            self.assertEqual(outcome["route_id"], stale["route_id"])
+
+            fresh, _created = ROUTE.close_route(
+                ROUTE.verify_route(route, allow_stale_registry=True), path, "deadbeef", "done")
+            self.assertIs(fresh["registry_current"], True)
+
+            rows = {row["route_id"]: row for row in ROUTE.route_status(td)}
+            self.assertTrue(all(row["closed"] for row in rows.values()))
+            self.assertIs(rows[stale["route_id"]]["registry_current"], False)
+
+    def test_a_tampered_route_is_never_closable(self):
+        with tempfile.TemporaryDirectory() as td:
+            route = self.compile(td)
+            route["nodes"][0]["write_scope"] = ["source/**"]
+            with self.assertRaisesRegex(ValueError, "stale or modified route hash"):
+                ROUTE.verify_route(route, allow_stale_registry=True)
+
+
 class TestParentResumeOncePerBatch(unittest.TestCase):
     """Managed completion resumes the parent thread once per batch, not per child."""
 

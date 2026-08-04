@@ -626,7 +626,18 @@ def _compile_from_recipe(registry, recipe, capability, capability_mode, requeste
     digest=route_hash(payload); payload["route_hash"]=digest; payload["route_id"]="rt-"+digest.split(":",1)[1][:16]
     return payload
 
-def verify_route(route, expected_cwd=None):
+def verify_route(route, expected_cwd=None, *, allow_stale_registry=False):
+    """Verify a route for mutating/resume use.
+
+    `allow_stale_registry` exists for one caller: closing a route. A registry or unit
+    edit inside the same cycle changes the digest and permanently invalidates the route
+    compiled before it, so a strict `close` could never record the outcome of exactly
+    the work that changed the registry — leaving an open route that `WORKFLOW §0.5`
+    calls indistinguishable from abandoned work. Closure writes a sidecar and grants no
+    authority, so the route's own integrity (hash, id, cwd) is the right gate there;
+    digest currentness stays required for anything that launches, dispatches, or
+    mutates, and the closure records which case it was.
+    """
     if route.get("schema_version") != ROUTE_SCHEMA_VERSION:
         raise ValueError(
             f"legacy route schema_version={route.get('schema_version')!r} rejected for mutating/resume use"
@@ -637,9 +648,17 @@ def verify_route(route, expected_cwd=None):
     if route.get("route_id") != "rt-"+route["route_hash"].split(":",1)[1][:16]: raise ValueError("invalid route id")
     if expected_cwd and Path(expected_cwd).resolve()!=Path(route["cwd"]): raise ValueError("route cwd mismatch")
     registry=TOPO.load_registry()
-    if route["registry_digest"] != TOPO.registry_digest(registry): raise ValueError("stale registry digest")
-    if route.get("unit_catalog_digest") is not None and route["unit_catalog_digest"] != unit_catalog_digest():
-        raise ValueError("stale unit catalog digest")
+    registry_current=route["registry_digest"]==TOPO.registry_digest(registry)
+    units_current=(route.get("unit_catalog_digest") is None
+                   or route["unit_catalog_digest"]==unit_catalog_digest())
+    if not (registry_current and units_current):
+        if not allow_stale_registry:
+            raise ValueError(
+                "stale registry digest" if not registry_current else "stale unit catalog digest"
+            )
+        # A stale sealed graph cannot be re-derived from the current registry, so every
+        # check that compares against it is skipped rather than guessed at.
+        return dict(route, _registry_current=False)
     if route.get("composed"):
         if route.get("effective_intensity") in ("direct","quick"):
             raise ValueError("composed routes require a standard+ effective intensity")
@@ -874,7 +893,9 @@ def atomic_write(path, payload):
     with os.fdopen(fd,"w",encoding="utf-8") as fh: fh.write(data); fh.flush(); os.fsync(fh.fileno())
     os.replace(temp,path)
 
-OUTCOME_SCHEMA_VERSION=1
+# v2 adds `registry_current`: a closure recorded against a registry that has since
+# changed is still a real closure, but it says so instead of implying currency.
+OUTCOME_SCHEMA_VERSION=2
 
 def outcome_path(route_file):
     path=Path(route_file); return path.with_name(path.stem+".outcome.json")
@@ -900,7 +921,8 @@ def close_route(route, route_file, commit=None, summary=None):
              "route_file":str(Path(route_file).resolve()),"cwd":route["cwd"],
              "capability":route["capability"],"effective_intensity":route["effective_intensity"],
              "closed_at":datetime.now(timezone.utc).isoformat().replace("+00:00","Z"),
-             "head_commit":commit or _head_commit(route["cwd"]),"summary":summary}
+             "head_commit":commit or _head_commit(route["cwd"]),"summary":summary,
+             "registry_current":route.get("_registry_current",True)}
     atomic_write(target,outcome)
     return outcome, True
 
@@ -921,6 +943,7 @@ def route_status(artifact_root):
             except (OSError,json.JSONDecodeError,UnicodeDecodeError): closure={}
             row["closed_at"]=closure.get("closed_at"); row["head_commit"]=closure.get("head_commit")
             row["stale_closure"]=closure.get("route_hash")!=raw.get("route_hash")
+            row["registry_current"]=closure.get("registry_current",True)
         rows.append(row)
     return rows
 
@@ -1360,7 +1383,10 @@ def main():
         if a.open_only: rows=[row for row in rows if not row["closed"]]
         print(json.dumps(rows,sort_keys=True,indent=2))
     else:
-        route=verify_route(json.loads(Path(a.route).read_text()), getattr(a,"cwd",None))
+        route=verify_route(
+            json.loads(Path(a.route).read_text()), getattr(a,"cwd",None),
+            allow_stale_registry=a.command=="close",
+        )
         if a.command=="verify": print(f"route_id={route['route_id']}\nroute_hash={route['route_hash']}")
         elif a.command=="close":
             outcome,created=close_route(route,a.route,a.commit,a.summary)
