@@ -154,11 +154,15 @@ if [ -n "$S_SID" ] && [ -n "${S_TRANSCRIPT:-}" ] && [ "${FLEET_TITLE_REFRESH:-}"
         # 지연돼 "즉시 반환" 불변식이 깨진다.
         ( trap 'rmdir "$lockdir" 2>/dev/null || true' EXIT
           priority_arg=
+          quota_arg=
           if [ "$scts" -eq 0 ] || [ "$sf" -gt 0 ]; then
             priority_arg=--priority
           fi
+          if [ "$scts" -eq 0 ]; then
+            quota_arg='--quota-class initial'
+          fi
           FLEET_TITLE_REFRESH=1 setsid python3 "$refresher" \
-            --harness claude --sid "$S_SID" --transcript "$S_TRANSCRIPT" $priority_arg >/dev/null 2>&1 </dev/null
+            --harness claude --sid "$S_SID" --transcript "$S_TRANSCRIPT" $priority_arg $quota_arg >/dev/null 2>&1 </dev/null
         ) >/dev/null 2>&1 &
       fi
     fi

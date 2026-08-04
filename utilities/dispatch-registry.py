@@ -34,6 +34,7 @@ from codex_dispatch_terminal import (  # noqa: E402
     inspect_terminal_attempt,
     inspect_terminal_log,
 )
+from dispatch_summary import ensure_attempt_owner  # noqa: E402
 _cleanup_spec = importlib.util.spec_from_file_location("worktree_cleanup", ROOT / "utilities/worktree-cleanup.py")
 cleanup = importlib.util.module_from_spec(_cleanup_spec)
 sys.modules[_cleanup_spec.name] = cleanup
@@ -488,6 +489,7 @@ def reconcile(rows, args):
         category, reason, note = classify(row, args, newest, rows)
         closed = False
         cascade = []
+        summary_owner = {"state": "not-applied", "reason": "dry-run"}
         revalidated = None
         if args.apply and note and row["meta"].get("attempt_id"):
             fresh_decision = {}
@@ -518,10 +520,15 @@ def reconcile(rows, args):
             if closed and note == "dead-parent-orphaned":
                 route_id, _, _ = resolve_owner_route(row, rows)
                 cascade = cascade_orphan_children(row, route_id, args)
+        if (args.apply and not closed and row["status"] in OPEN
+                and row["attempt_contract_status"] == "current"
+                and row["meta"].get("attempt_id")):
+            summary_owner = ensure_attempt_owner(
+                args.jobs, row["meta"]["attempt_id"])
         decisions.append({"attempt_id": row["meta"].get("attempt_id"), "slug": row["slug"],
                           "category": category, "reason": reason, "proposed_note": note,
                           "revalidated": revalidated, "closed": closed,
-                          "cascade": cascade})
+                          "cascade": cascade, "summary_owner": summary_owner})
     record = {"at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
               "apply": args.apply, "classifier_source": ATTEMPT_CLASSIFIER_SOURCE,
               "attempted": len(selected), "closed": sum(item["closed"] for item in decisions),

@@ -13,6 +13,9 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
 PREFLIGHT = ROOT / "adapters" / "codex" / "bin" / "preflight.sh"
+UTILITIES = ROOT / "utilities"
+if str(UTILITIES) not in sys.path:
+    sys.path.insert(0, str(UTILITIES))
 
 
 def first_string(mapping: dict[str, Any], *keys: str) -> str:
@@ -92,8 +95,10 @@ def main() -> int:
             if str(tools) not in sys.path:
                 sys.path.insert(0, str(tools))
             from fleet import interaction
+            from session_summary_trigger import launch_trigger
 
             interaction.clear_wait(event_session_id, "codex")
+            launch_trigger("codex", event_session_id, "final")
         except Exception:
             pass
     event_session_id = event_session_id or "codex-hook"

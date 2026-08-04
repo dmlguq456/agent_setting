@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import hashlib, importlib.util, json, os, subprocess, sys, tempfile, time, unittest
+import contextlib, hashlib, importlib.util, io, json, os, subprocess, sys, tempfile, time, types, unittest
 from pathlib import Path
 from unittest import mock
 
@@ -42,6 +42,23 @@ class RegistryTest(unittest.TestCase):
   applied=self.invoke("reconcile","--attempt","att-dead000001","--apply");self.assertEqual(json.loads(applied.stdout)["closed"],1)
   text=self.jobs.read_text();self.assertIn("note=dead-exact-pid",text);self.assertIn("\topen\t/r\t/w\tactive\t",text);self.assertIn("\topen\t/r\t/w\tother\t",text)
   again=self.invoke("reconcile","--attempt","att-dead000001","--apply");self.assertEqual(json.loads(again.stdout)["closed"],0)
+ def test_apply_reconcile_repairs_missing_summary_owner_for_live_exact_attempt(self):
+  spec=importlib.util.spec_from_file_location("dispatch_registry_summary_test",SCRIPT)
+  module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  rows=module.read_rows(self.jobs)
+  args=types.SimpleNamespace(
+   session=None,route=None,node=None,attempt="att-active0001",job=None,
+   apply=True,audit=None,jobs=self.jobs,agent_home=self.base,
+   integration_ref=None,now=time.time(),cascade_grace=0,cascade_kill_wait=0)
+  repaired={"state":"started","reason":"reattached","summary_owner":"dispatch-v1"}
+  stream=io.StringIO()
+  with mock.patch.object(module,"classify",return_value=("live","exact-pid",None)), \
+       mock.patch.object(module,"ensure_attempt_owner",return_value=repaired) as ensure, \
+       contextlib.redirect_stdout(stream):
+   self.assertEqual(module.reconcile(rows,args),0)
+  ensure.assert_called_once_with(self.jobs,"att-active0001")
+  decision=json.loads(stream.getvalue())["decisions"][0]
+  self.assertEqual(decision["summary_owner"],repaired)
  def test_terminal_handoff_closes_namespace_attempt_without_watchdog(self):
   attempt="att-sandbox-terminal";route="rt-sandbox";node="refs";log=self.base/"exact.jsonl"
   events=[

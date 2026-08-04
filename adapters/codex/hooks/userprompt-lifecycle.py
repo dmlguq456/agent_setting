@@ -20,9 +20,13 @@ RECALL_HOOK = ROOT / "hooks" / "mem-recall-inject.sh"
 TOOLS = ROOT / "tools"
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
+UTILITIES = ROOT / "utilities"
+if str(UTILITIES) not in sys.path:
+    sys.path.insert(0, str(UTILITIES))
 
 from fleet.token_accounting import record_accounting  # noqa: E402
 from fleet.token_budget import DIRECTIVE_TEXTS  # noqa: E402
+from session_summary_trigger import launch_trigger  # noqa: E402
 
 
 @dataclass
@@ -292,6 +296,8 @@ def main() -> int:
         except Exception:
             pass
     sid = session_id(payload)
+    if interaction_sid:
+        launch_trigger("codex", interaction_sid, "initial")
 
     parts = []
     parts.append(candidate_context(payload, current_cwd, sid))

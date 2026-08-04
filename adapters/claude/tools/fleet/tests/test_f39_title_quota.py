@@ -98,6 +98,71 @@ class QuotaTest(unittest.TestCase):
         self.assertEqual(sum(priority), 2)
         self.assertEqual(len(starts), 6)
 
+    def test_initial_and_final_each_get_one_session_ticket_after_regular_budget(self):
+        now = 2500.0
+        starts = []
+
+        def fake_popen(argv, **_kwargs):
+            starts.append(argv)
+            for flag in ("--slotdir", "--lockdir"):
+                rt._remove_empty_dir(argv[argv.index(flag) + 1])
+            return object()
+
+        with mock.patch.object(rt.subprocess, "Popen", side_effect=fake_popen):
+            for index in range(4):
+                self.assertTrue(rt.maybe_spawn(
+                    "claude", "ordinary-%d" % index, self.transcript, now=now))
+            self.assertTrue(rt.maybe_spawn(
+                "claude", "ticketed", self.transcript, now=now,
+                quota_class="initial"))
+            self.assertFalse(rt.maybe_spawn(
+                "claude", "ticketed", self.transcript, now=now,
+                quota_class="initial"))
+            self.assertTrue(rt.maybe_spawn(
+                "claude", "ticketed", self.transcript, now=now,
+                quota_class="final"))
+        self.assertEqual(len(starts), 6)
+
+    def test_session_ticket_never_bypasses_hard_concurrency(self):
+        now = 2700.0
+        slot_root = os.path.join(titles.state_root(), ".refresh-workers")
+        os.makedirs(slot_root, exist_ok=True)
+        for index in range(rt.MAX_CONCURRENCY):
+            path = os.path.join(slot_root, "slot-held-%d" % index)
+            os.mkdir(path)
+            os.utime(path, (now, now))
+        with mock.patch.object(rt.subprocess, "Popen") as popen:
+            self.assertFalse(rt.maybe_spawn(
+                "claude", "capacity", self.transcript, now=now,
+                quota_class="initial"))
+        popen.assert_not_called()
+
+    def test_failed_spawn_releases_session_ticket_for_exact_retry(self):
+        now = 2800.0
+        for index in range(4):
+            root = os.path.join(titles.state_root(), ".refresh-budget")
+            os.makedirs(root, exist_ok=True)
+            path = os.path.join(root, "start-held-%d" % index)
+            os.mkdir(path)
+            os.utime(path, (now, now))
+        with mock.patch.object(rt.subprocess, "Popen", side_effect=OSError("no spawn")):
+            self.assertFalse(rt.maybe_spawn(
+                "claude", "retry-ticket", self.transcript, now=now,
+                quota_class="initial"))
+        started = []
+
+        def fake_popen(argv, **_kwargs):
+            started.append(argv)
+            for flag in ("--slotdir", "--lockdir"):
+                rt._remove_empty_dir(argv[argv.index(flag) + 1])
+            return object()
+
+        with mock.patch.object(rt.subprocess, "Popen", side_effect=fake_popen):
+            self.assertTrue(rt.maybe_spawn(
+                "claude", "retry-ticket", self.transcript, now=now,
+                quota_class="initial"))
+        self.assertEqual(len(started), 1)
+
     def test_summary_failure_backoff_uses_30_60_120_seconds_and_keeps_same_delta_eligible(self):
         starts = []
 
@@ -133,6 +198,15 @@ class QuotaTest(unittest.TestCase):
 
 
 class OpenCodeReadOnlyTest(unittest.TestCase):
+    def test_dispatch_jsonl_is_normalized_without_database_access(self):
+        raw = "\n".join([
+            '{"type":"text","text":"implement owner"}',
+            '{"type":"tool","text":"ignored"}',
+            '{"type":"step_finish","parts":[{"type":"text","text":"summary ready"}]}',
+        ])
+        self.assertEqual(rt._delta_text(raw, harness="opencode"),
+                         "implement owner\nsummary ready")
+
     def test_exact_session_delta_advances_integer_cursor_without_db_writes(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = os.path.join(tmp, "opencode.db")
@@ -204,6 +278,7 @@ class CentralGovernorParityTest(unittest.TestCase):
     def test_title_class_admits_four_and_rejects_fifth_with_fleet_ceiling(self):
         path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "utilities",
                             "model-worker-governor.py")
+        sys.path.insert(0, os.path.dirname(path))
         spec = importlib.util.spec_from_file_location("fleet_model_worker_governor", path)
         governor = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(governor)

@@ -12,6 +12,7 @@ const isHarnessRoot = (candidate) =>
   existsSync(path.join(candidate, "adapters", "opencode", "bin", "preflight.sh"))
 const root = isHarnessRoot(envRoot) ? envRoot : pluginRoot
 const preflight = path.join(root, "adapters", "opencode", "bin", "preflight.sh")
+const summaryTrigger = path.join(root, "utilities", "session_summary_trigger.py")
 const designPattern = /(designs?\/|\/design\/|spec\/design|preview\.html$|slides?\.html$|03_components|scaffolds\/)/
 // Capabilities that mutate the spec blueprint — must pass the prd.md read gate in a
 // spec-backed cwd. Mirrors Claude's PreToolUse[Skill] spec-skill-gate scope.
@@ -144,6 +145,22 @@ function spawnDetached(command, args) {
   }
 }
 
+function spawnSummary(sid, phase) {
+  if (!sid || isWorkerSession()) return
+  try {
+    const child = spawn("python3", [summaryTrigger, "--harness", "opencode",
+      "--sid", sid, "--phase", phase, "--wait", phase === "initial" ? "5" : "1"], {
+      cwd: root,
+      env: { ...process.env, AGENT_HOME: root, AGENT_SESSION_ROLE: "worker" },
+      detached: true,
+      stdio: "ignore",
+    })
+    child.unref()
+  } catch {
+    // best-effort; session execution never depends on observational summaries
+  }
+}
+
 function collectPreflight(command, args) {
   const result = spawnSync(preflight, [command, ...args], {
     cwd: root,
@@ -194,8 +211,12 @@ export const AgentHarnessGuards = async (ctx) => {
     // per session and the --pure worker never re-enters this plugin. Mirrors the
     // Claude SessionEnd + codex session-end detached distiller.
     if (event && event.type === "session.idle") {
-      const sid = (event.properties && event.properties.sessionID) || "opencode-plugin"
-      if (!isWorkerSession()) spawnDetached("session-end", [baseDir(ctx), sid])
+      const eventSid = (event.properties && event.properties.sessionID) || ""
+      const sid = eventSid || "opencode-plugin"
+      if (!isWorkerSession()) {
+        spawnDetached("session-end", [baseDir(ctx), sid])
+        spawnSummary(eventSid, "final")
+      }
       // Liveness side-channel: touch the heartbeat for the active dispatch slug
       // so dispatch-liveness.py can detect stale/crashed headless sessions even
       // when the OpenCode SQLite session mtime is inconclusive.
@@ -204,6 +225,7 @@ export const AgentHarnessGuards = async (ctx) => {
     if (event && event.type === "session.deleted") {
       const sid = (event.properties && event.properties.sessionID) || ""
       if (sid) {
+        spawnSummary(sid, "final")
         promptBySession.delete(sid)
         turnBySession.delete(sid)
       }
@@ -211,7 +233,9 @@ export const AgentHarnessGuards = async (ctx) => {
   },
   "chat.message": async (input, output) => {
     if (isWorkerSession()) return
-    const sid = input.sessionID || output?.message?.sessionID || "opencode-plugin"
+    const eventSid = input.sessionID || output?.message?.sessionID || ""
+    const sid = eventSid || "opencode-plugin"
+    spawnSummary(eventSid, "initial")
     const prompt = promptText(output)
     const turn = input.messageID || output?.message?.id || ""
     if (prompt) promptBySession.set(sid, prompt)

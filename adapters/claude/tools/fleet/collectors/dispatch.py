@@ -898,12 +898,13 @@ def _attempt_summary_sid(job):
 
 
 def _enrich_attempt_summary(job):
-    """Attach attempt-owned refresh input and any fresh fallback sidecar.
+    """Attach an attempt-owned summary sidecar produced by dispatch.
 
     A registered job does not always materialize as a separately collectible
     ``Session``.  The exact attempt log is still a conversational transcript, so
-    expose it to the shared scheduler under an attempt-scoped sidecar key.  This
-    never guesses by cwd or pid and therefore cannot borrow another child's NOW.
+    expose its exact path for attribution and read the dispatch owner's sidecar
+    under an attempt-scoped key. Fleet never starts the producer. This never
+    guesses by cwd or pid and therefore cannot borrow another child's NOW.
     """
     path = _owned_attempt_log_path(job)
     sid = _attempt_summary_sid(job)

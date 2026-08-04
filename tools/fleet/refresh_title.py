@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Cross-harness live-title refresher.
+"""Cross-harness session-summary producer shared by runtime lifecycle owners.
 
-The worker reads a Claude or Codex transcript tail, normalizes only user/assistant
+The worker reads a Claude, Codex, or OpenCode transcript tail, normalizes visible
+user/assistant
 text, asks a no-tools low-cost model for a short English title, validates it, and
 writes fleet-owned neutral state. The default provider preserves the existing
 ``claude -p --model haiku --disallowedTools ...`` security contract.
@@ -15,6 +16,7 @@ small GPT model). No command is ever evaluated through a shell.
 import argparse
 import contextlib
 import importlib.util
+import hashlib
 import json
 import os
 import re
@@ -57,6 +59,7 @@ MAX_START_LIMIT = 4
 DEFAULT_PRIORITY_START_LIMIT = 2
 MAX_PRIORITY_START_LIMIT = 2
 START_WINDOW_SEC = 60      # 1-minute rolling window (was 600s; paired with the 16→3 limit above)
+SESSION_TICKET_MAX_AGE = 86400
 DISABLE_MARKER = ".refresh-disabled"
 MODEL = os.environ.get("FLEET_TITLE_MODEL", "haiku")
 
@@ -184,7 +187,12 @@ def _delta_text(raw, harness="claude"):
             data = json.loads(line)
         except Exception:
             continue
-        out.extend(text for text in parser(data) if isinstance(text, str) and text)
+        if harness == "opencode":
+            extracted = _opencode_text(data)
+            if extracted:
+                out.append(extracted)
+        else:
+            out.extend(text for text in parser(data) if isinstance(text, str) and text)
     text = "\n".join(out).strip()
     return text[-TEXT_CAP:] if len(text) > TEXT_CAP else text
 
@@ -646,6 +654,37 @@ def _acquire_priority_start_budget(now=None):
         return _new_lease(root, "start-", now)
 
 
+def _acquire_session_ticket(harness, sid, phase, now=None):
+    """Claim one durable initial/final admission without bypassing hard capacity."""
+    if refresh_disabled() or harness not in ("claude", "codex", "opencode"):
+        return None
+    if not sid or phase not in ("initial", "final"):
+        return None
+    now = time.time() if now is None else now
+    root = os.path.join(titles.state_root(), ".refresh-session-tickets")
+    digest = hashlib.sha256(
+        (harness + "\0" + sid + "\0" + phase).encode("utf-8")
+    ).hexdigest()
+    path = os.path.join(root, "ticket-" + digest)
+    try:
+        os.makedirs(root, exist_ok=True)
+    except OSError:
+        return None
+    with _state_guard() as acquired:
+        if not acquired:
+            return None
+        _lease_dirs(root, "ticket-", now, SESSION_TICKET_MAX_AGE)
+        if os.path.exists(path):
+            return None
+        try:
+            os.mkdir(path)
+            os.utime(path, (now, now))
+            return path
+        except OSError:
+            _remove_empty_dir(path)
+            return None
+
+
 def _summary_failures(sidecar):
     value = sidecar.get("summary_failures", 0) if isinstance(sidecar, dict) else 0
     if not isinstance(value, int) or isinstance(value, bool):
@@ -718,7 +757,7 @@ def _provider_source():
 
 
 def maybe_spawn(harness, sid, transcript=None, now=None, debounce=DEBOUNCE_SEC,
-                refresh_source=None, priority=False):
+                refresh_source=None, priority=False, quota_class=None):
     """Start one detached refresh when state is stale and the transcript grew."""
     if (
         refresh_disabled()
@@ -772,6 +811,9 @@ def maybe_spawn(harness, sid, transcript=None, now=None, debounce=DEBOUNCE_SEC,
         _remove_empty_dir(lockdir)
         return False
     budget_lease = _acquire_start_budget(now=now)
+    if not budget_lease and quota_class in ("initial", "final"):
+        budget_lease = _acquire_session_ticket(
+            harness, sid, quota_class, now=now)
     if not budget_lease and priority:
         budget_lease = _acquire_priority_start_budget(now=now)
     if not budget_lease:
@@ -893,6 +935,7 @@ def main(argv=None):
     parser.add_argument("--lockdir")
     parser.add_argument("--slotdir")
     parser.add_argument("--priority", action="store_true")
+    parser.add_argument("--quota-class", choices=("initial", "final"))
     args = parser.parse_args(argv)
 
     owned_slot = args.slotdir
@@ -906,11 +949,14 @@ def main(argv=None):
             if not owned_slot:
                 return 0
             budget_lease = _acquire_start_budget()
+            if not budget_lease and args.quota_class:
+                budget_lease = _acquire_session_ticket(
+                    args.harness, args.sid, args.quota_class)
             if not budget_lease and args.priority:
                 budget_lease = _acquire_priority_start_budget()
             if not budget_lease:
                 return 0
-        if args.harness == "opencode" and (not args.opencode_db or not args.opencode_session):
+        if args.harness == "opencode" and args.opencode_db and not args.opencode_session:
             return 0
         if args.harness != "opencode" and (args.opencode_db or args.opencode_session):
             return 0

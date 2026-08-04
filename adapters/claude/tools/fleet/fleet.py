@@ -3,9 +3,9 @@
 
 Zero external deps (stdlib curses/sqlite3/json/subprocess/re/os/time only). Pure external
 observer: reads process table + on-disk state artifacts and injects nothing (PRD §0.5).
-The live TUI may schedule fleet-owned title and usage-cache refreshers, which write only
-neutral local state; git telemetry is bounded background work. ``--json`` and ``--once``
-remain side-effect-free snapshots and never schedule refreshes or cache writes.
+Summary production belongs to dispatch or the interactive runtime lifecycle; starting,
+refreshing, or closing this TUI never invokes a model provider. Git telemetry remains
+bounded background work. ``--json`` and ``--once`` are side-effect-free snapshots.
 
 Modes:
   (default)  curses full-screen, re-collect + redraw every --interval seconds
@@ -236,14 +236,6 @@ def main(argv=None):
         usage = "refresh" if live else "cache-only"
         sessions, jobs = base_collector(harness_filter=harness_filter, usage=usage)
         previous_sessions = list(sessions)
-        try:
-            if __package__ in (None, ""):
-                from fleet import refresh_title
-            else:
-                from . import refresh_title
-            refresh_title.schedule_sessions(sessions, jobs)
-        except Exception:
-            pass                              # title refresh must never break observation
         return sessions, jobs
 
     return render.run_live(live_collector, hfilter, args.section, args.interval)

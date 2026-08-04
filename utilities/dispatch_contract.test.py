@@ -620,6 +620,60 @@ class DispatchContractTest(unittest.TestCase):
    self.assertEqual(caught.exception.reason,"parent-attempt-not-live")
    self.assertEqual(spawned,[])
 
+ def test_pre_release_observer_is_attached_before_gate_and_committed_atomically(self):
+  with tempfile.TemporaryDirectory() as td:
+   base=Path(td);jobs=base/"jobs.log";marker=base/"payload-started"
+   attempt="att-summary-atomic"
+   row=(f"2026-07-23T00:00:01Z\topen\t/repo\t/wt\tchild\t{CURRENT},"
+        f"attempt_id={attempt}")
+   self.assertTrue(D.claim_attempt_row(jobs,attempt,row,launch=False))
+   observed=[]
+   def spawn(gate_fd):
+    return subprocess.Popen(
+     [sys.executable,str(Path(__file__).with_name("launch-fence.py")),
+      "--parent-pid",str(os.getpid()),"--gate-fd",str(gate_fd),"--",
+      sys.executable,"-c",f"from pathlib import Path;Path({str(marker)!r}).write_text('yes')"],
+     pass_fds=(gate_fd,),start_new_session=True)
+   def attach(identity):
+    self.assertFalse(marker.exists())
+    observed.append(dict(identity))
+    return {"summary_owner":"dispatch-v1","summary_owner_pid":"777"}
+   proc,identity=D.spawn_claimed_attempt(
+    jobs,attempt,parent_binding=None,spawn=spawn,pre_release=attach)
+   proc.wait(timeout=5)
+   self.assertTrue(marker.exists())
+   self.assertEqual(observed[0]["pid"],str(proc.pid))
+   meta=D.parse_registry_metadata(jobs.read_text().strip().split("\t",5)[5])
+   self.assertEqual(meta["summary_owner"],"dispatch-v1")
+   self.assertEqual(meta["summary_owner_pid"],"777")
+   self.assertEqual(meta["launch_claimed"],"1")
+   self.assertEqual(identity["summary_owner"],"dispatch-v1")
+
+ def test_pre_release_failure_aborts_fenced_payload_and_leaves_claim_retryable(self):
+  with tempfile.TemporaryDirectory() as td:
+   base=Path(td);jobs=base/"jobs.log";marker=base/"must-not-run";children=[]
+   attempt="att-summary-failure"
+   row=(f"2026-07-23T00:00:01Z\topen\t/repo\t/wt\tchild\t{CURRENT},"
+        f"attempt_id={attempt}")
+   self.assertTrue(D.claim_attempt_row(jobs,attempt,row,launch=False))
+   def spawn(gate_fd):
+    proc=subprocess.Popen(
+     [sys.executable,str(Path(__file__).with_name("launch-fence.py")),
+      "--parent-pid",str(os.getpid()),"--gate-fd",str(gate_fd),"--",
+      sys.executable,"-c",f"from pathlib import Path;Path({str(marker)!r}).write_text('bad')"],
+     pass_fds=(gate_fd,),start_new_session=True)
+    children.append(proc);return proc
+   with self.assertRaises(D.DispatchContractError) as caught:
+    D.spawn_claimed_attempt(
+     jobs,attempt,parent_binding=None,spawn=spawn,
+     pre_release=lambda _identity: (_ for _ in ()).throw(RuntimeError("owner failed")))
+   self.assertEqual(caught.exception.reason,"attempt-pre-release-callback-failed")
+   self.assertFalse(marker.exists())
+   self.assertIsNotNone(children[0].poll())
+   meta=D.parse_registry_metadata(jobs.read_text().strip().split("\t",5)[5])
+   self.assertEqual(meta["launch_claimed"],"0")
+   self.assertNotIn("summary_owner",meta)
+
  def test_incomplete_launch_identity_never_releases_fence(self):
   with tempfile.TemporaryDirectory() as td:
    base=Path(td);jobs=base/"jobs.log";marker=base/"marker"

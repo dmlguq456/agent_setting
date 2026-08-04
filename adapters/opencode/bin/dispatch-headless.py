@@ -42,6 +42,7 @@ from dispatch_contract import (  # noqa: E402
     validate_nested_eligibility,
     wait_governor_reservation_claim,
 )
+from dispatch_summary import launch_summary_owner  # noqa: E402
 from dispatch_mode_contract import (  # noqa: E402
     capability_mode_from_route_file,
     DispatchModeContractError,
@@ -1131,7 +1132,7 @@ def main(argv: list[str]) -> int:
     )
     prompt_path = log_dir / prompt_name
     log_name = (f"{args.slug}.{args.attempt_id}.opencode.jsonl"
-                if args.route_id and args.attempt_id else f"{args.slug}.opencode.jsonl")
+                if args.attempt_id else f"{args.slug}.opencode.jsonl")
     log_path = log_dir / log_name
     args.log_path = log_path
     command = shell_command(args, prompt_path, log_path)
@@ -1263,6 +1264,13 @@ def main(argv: list[str]) -> int:
                 spawn=spawn_worker,
                 launch_metadata=launch_metadata,
                 preclaim=getattr(args, "launch_preclaim", None),
+                pre_release=lambda identity: launch_summary_owner(
+                    attempt_id=args.attempt_id,
+                    harness="opencode",
+                    transcript=log_path,
+                    target_pid=int(identity["pid"]),
+                    target_start=identity["pid_start"],
+                ),
             )
         except DispatchContractError as exc:
             if exc.reason == "attempt-launch-already-claimed":
@@ -1284,7 +1292,12 @@ def main(argv: list[str]) -> int:
             )
             annotate_attempt_row(jobs, args.attempt_id, {"launch_outcome": outcome})
             cancel_governor_reservation(governor, governor_root, reservation_token)
-            close_job_row(jobs, args.slug, args.worktree, "launch-error", "", args.attempt_id)
+            reason = (
+                "summary-owner-launch-failed"
+                if exc.reason.startswith("attempt-pre-release-")
+                else "launch-error"
+            )
+            close_job_row(jobs, args.slug, args.worktree, reason, "", args.attempt_id)
             return fail(exc.reason, 73, detail=exc.detail, attempt_id=args.attempt_id)
         except OSError as exc:
             annotate_attempt_row(

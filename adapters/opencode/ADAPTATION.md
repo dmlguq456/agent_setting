@@ -410,6 +410,14 @@ registry from `open` to `done`; it never performs merge or worktree cleanup. Do
 not project material/design helpers such as `extract_web_figures.py` until an
 OpenCode capability uses them directly.
 
+OpenCode summary production is independent of Fleet. Registered dispatch starts
+an exact-attempt supervisor before worker fence release and records its identity
+in the same registry transaction; the supervisor parses the attempt JSONL and
+owns early, debounced, and final sidecars. Interactive `chat.message` and
+`session.idle`/deletion events trigger the shared producer against an exact
+session DB cursor. `dispatch-reconcile --apply` may restore only a missing owner
+for one exact live attempt. Fleet merely reads the resulting sidecars.
+
 Token self-regulation v2 remains deferred for OpenCode: no automatic Phase 2
 hook accounting, no projected `token-budget-experiment.py`, and no production
 dynamic-policy import, activation flag, or config mutation. Portable Fleet

@@ -11,6 +11,9 @@ ROOT = Path(__file__).resolve().parents[3]
 TOOLS = ROOT / "tools"
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
+UTILITIES = ROOT / "utilities"
+if str(UTILITIES) not in sys.path:
+    sys.path.insert(0, str(UTILITIES))
 
 
 def _worker():
@@ -47,8 +50,10 @@ def main() -> int:
         session_id = "" if _worker() else _sid(payload)
         if session_id:
             from fleet import interaction
+            from session_summary_trigger import launch_trigger
 
             interaction.clear_wait(session_id, "codex")
+            launch_trigger("codex", session_id, "final")
     except Exception:
         pass
     return 0

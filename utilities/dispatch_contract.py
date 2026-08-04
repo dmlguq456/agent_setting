@@ -101,6 +101,17 @@ ATTEMPT_MUTABLE_METADATA = {
     "managed_sealed_batch_id",
     "managed_sidecar_pid",
     "managed_sidecar_log",
+    "summary_owner",
+    "summary_sid",
+    "summary_owner_pid",
+    "summary_owner_pid_start",
+    "summary_owner_pid_scope",
+    "summary_owner_pid_host",
+    "summary_owner_pid_host_start",
+    "summary_owner_pid_host_ns",
+    "summary_owner_pid_observer_ns",
+    "summary_owner_pid_host_proof",
+    "summary_state_file",
     "watchdog",
     "heartbeat",
     "teardown_claim",
@@ -1735,6 +1746,7 @@ def spawn_claimed_attempt(
     spawn: Callable[[int], subprocess.Popen],
     launch_metadata: dict[str, str] | None = None,
     preclaim: Callable[[list[str]], None] | None = None,
+    pre_release: Callable[[dict[str, str]], dict[str, str] | None] | None = None,
 ) -> tuple[subprocess.Popen, dict[str, str]]:
     """Claim one registered attempt while publishing its fenced process.
 
@@ -1742,7 +1754,9 @@ def spawn_claimed_attempt(
     ready. The same registry replacement publishes the identity and transitions
     the claim to 1. A launcher killed before spawn therefore leaves a retryable
     registered row, while a launcher killed after spawn leaves either a blocked
-    fence or a fully attributable process group.
+    fence or a fully attributable process group. ``pre_release`` may attach a
+    bounded observer to that exact identity; its metadata is committed in the
+    same replacement and any failure aborts the still-fenced worker.
     """
 
     if not attempt_id:
@@ -1859,9 +1873,44 @@ def spawn_claimed_attempt(
                 ),
                 f"pid={proc.pid}",
             )
-        identity.update(
-            provided_metadata
+        observer_metadata: dict[str, str] = {}
+        if pre_release is not None:
+            try:
+                observer_metadata = {
+                    key: str(value)
+                    for key, value in (pre_release(dict(identity)) or {}).items()
+                    if value not in (None, "")
+                }
+            except BaseException as exc:
+                cleanup_verified = _abort_fenced_launch(
+                    proc, gate_write, identity.get("pid_start", "")
+                )
+                raise DispatchContractError(
+                    (
+                        "attempt-pre-release-callback-failed"
+                        if cleanup_verified
+                        else "attempt-launch-cleanup-unverified"
+                    ),
+                    str(exc),
+                ) from exc
+        callback_conflicts = sorted(
+            ({*_PROCESS_IDENTITY_METADATA_KEYS, "launch_claimed"})
+            .intersection(observer_metadata)
         )
+        if callback_conflicts:
+            cleanup_verified = _abort_fenced_launch(
+                proc, gate_write, identity.get("pid_start", "")
+            )
+            raise DispatchContractError(
+                (
+                    "attempt-pre-release-metadata-conflict"
+                    if cleanup_verified
+                    else "attempt-launch-cleanup-unverified"
+                ),
+                ",".join(callback_conflicts),
+            )
+        identity.update(provided_metadata)
+        identity.update(observer_metadata)
         try:
             replace_keys = {*identity, "launch_claimed"}
             parts = [

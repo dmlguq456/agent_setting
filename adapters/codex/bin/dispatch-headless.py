@@ -51,6 +51,7 @@ from dispatch_contract import (  # noqa: E402
     validate_nested_eligibility,
     wait_governor_reservation_claim,
 )
+from dispatch_summary import launch_summary_owner  # noqa: E402
 from dispatch_lifecycle import (  # noqa: E402
     DETACHED,
     FOREGROUND_SCOPED,
@@ -2236,6 +2237,13 @@ def main(argv: list[str]) -> int:
                 spawn=spawn_worker,
                 launch_metadata=launch_metadata,
                 preclaim=getattr(args, "launch_preclaim", None),
+                pre_release=lambda identity: launch_summary_owner(
+                    attempt_id=args.attempt_id,
+                    harness="codex",
+                    transcript=log_path,
+                    target_pid=int(identity["pid"]),
+                    target_start=identity["pid_start"],
+                ),
             )
         except DispatchContractError as exc:
             if exc.reason == "attempt-launch-already-claimed":
@@ -2249,7 +2257,11 @@ def main(argv: list[str]) -> int:
             reason = (
                 "parent-exited"
                 if exc.reason.startswith("parent-attempt-")
-                else "launch-error"
+                else (
+                    "summary-owner-launch-failed"
+                    if exc.reason.startswith("attempt-pre-release-")
+                    else "launch-error"
+                )
             )
             outcome = (
                 "reaped-before-publish"

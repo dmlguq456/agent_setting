@@ -194,23 +194,21 @@ class CrossHarnessWorkerTest(_EnvMixin, unittest.TestCase):
         self.assertEqual(captured["kwargs"]["env"]["FLEET_TITLE_REFRESH"], "1")
         self.assertEqual(captured["kwargs"]["env"]["AGENT_SESSION_ROLE"], "worker")
 
-    def test_fleet_schedules_only_live_mode(self):
+    def test_fleet_never_schedules_summary_providers(self):
         session = Session(harness="codex", pid=1, cwd="/repo", session_id="sid", liveness="working")
         original_collect = fleet_main.collect_all
-        original_schedule = rt.schedule_sessions
         original_run_live = render.run_live
         calls = []
         fleet_main.collect_all = lambda harness_filter=None: ([session], [])
-        rt.schedule_sessions = lambda sessions, jobs=None: calls.append(
-            (list(sessions), list(jobs or ()))) or 0
+        original_schedule = rt.schedule_sessions
+        rt.schedule_sessions = lambda *_args, **_kwargs: calls.append("called")
         render.run_live = lambda collector, hfilter, section, interval: collector(hfilter) and 0
         try:
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(fleet_main.main(["--json"]), 0)
             self.assertEqual(calls, [])
             self.assertEqual(fleet_main.main([]), 0)
-            self.assertEqual(len(calls), 1)
-            self.assertEqual(calls[0], ([session], []))
+            self.assertEqual(calls, [])
         finally:
             fleet_main.collect_all = original_collect
             rt.schedule_sessions = original_schedule

@@ -10,11 +10,15 @@ This adapter maps the common agent harness onto Claude Code.
 | Runtime settings | `adapters/claude/settings.json` |
 | Slash commands | `adapters/claude/commands/` |
 | Runtime worker wrappers | `adapters/claude/bin/` |
-| Dispatch registry metadata | `adapters/claude/bin/dispatch-headless.py` records route/depth ownership plus SD-49 `attempt_id`, exact `parent_attempt_id`, PID/start/PGID identity, launch authority, fallback ordinal, and checked nested tuple evidence in the inherited canonical global registry so Fleet can render and safely reconcile cross-harness ownership such as Codex → Claude. |
+| Dispatch registry metadata | `adapters/claude/bin/dispatch-headless.py` records route/depth ownership plus SD-49 `attempt_id`, exact `parent_attempt_id`, PID/start/PGID identity, launch authority, fallback ordinal, checked nested tuple evidence, and the exact summary-owner identity in the inherited canonical global registry. The owner is attached before worker fence release and continues producing early/debounced/final sidecars with Fleet closed. |
 | Capabilities | `adapters/claude/skills/*/SKILL.md` |
 | Role profiles | `adapters/claude/agents/*.md` |
 | Hook scripts | `hooks/`, `utilities/` |
 | Status line | `adapters/claude/statusline.sh` |
+
+Fleet is read-only. Interactive Claude summary refresh remains a statusline
+lifecycle producer, while registered Claude dispatch uses the attempt-owned
+supervisor and `dispatch-reconcile --apply` exact-live recovery contract.
 
 ## Worker bootstrap boundary
 

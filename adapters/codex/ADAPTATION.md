@@ -405,12 +405,13 @@ Harness-specific status signals still need Codex-native realization:
 | pipeline stage nudges | preflight/AGENTS instructions first; UI only when Codex exposes a suitable surface |
 | oncall/note/study/drill/runtime-watch loop nudges | `preflight.sh briefing` plus `preflight.sh loop-info <loop>` for loop-specific support/fallback status |
 | merge/rebase/merged-branch risk | `preflight.sh write` git safety checks; `preflight.sh status` reports `git_operation` (merge/rebase/cherry-pick), `git_branch_done` (non-default branch fully merged = DONE-BRANCH hazard), dirty counts, and extra worktree counts. A native graphical warning remains optional polish |
-| fleet (multi-agent) observability | Fleet owns a neutral exact-session interaction sidecar independent of Herdr. Codex `PermissionRequest` publishes approval wait and native `PostToolUse` plus turn/session boundaries release it without changing approval ownership. A decision wait is recognized only from structured rollout `function_call(name=request_user_input)` / matching `function_call_output` call-id order; this path is synthetic-fixture verified but live-runtime `unknown`. Claude publishes the same neutral schema while Herdr remains optional corroboration. |
+| fleet (multi-agent) observability | Fleet is a pure reader of registry and neutral sidecars. Each registered dispatch wrapper attaches an exact-attempt summary supervisor before releasing the worker launch fence; the supervisor owns early, debounced, and final updates even when Fleet is closed, and `dispatch-reconcile --apply` repairs a missing owner only for an exact live attempt. Interactive Codex `UserPromptSubmit`, Stop, and SessionEnd hooks trigger the same shared producer independently of Fleet. Interaction waits remain separate: `PermissionRequest` publishes approval wait and native `PostToolUse` plus turn/session boundaries release it without changing approval ownership. |
 
 observability caveat: Codex keeps native `/statusline` ownership of model,
-context, limits, and footer monitoring. Fleet's new cross-agent signal is
-strictly interaction wait metadata; it neither replaces the native footer nor
-claims live `request_user_input` rollout proof before that shape is observed.
+context, limits, and footer monitoring. Fleet does not own summary generation or
+interaction lifecycle; it only renders stored evidence. The decision-wait path
+still does not claim live `request_user_input` rollout proof before that shape
+is observed.
 
 ## Required Codex Mappings
 
