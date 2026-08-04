@@ -92,7 +92,10 @@ class F52bTrackLengthTest(unittest.TestCase):
         self.assertEqual(track_of(row), EMPTY)
         self.assertEqual(track_of(self._row(50000, 100)), FULL)
 
-    def test_usage_header_meter_stays_six_cells_whatever_the_session_window(self):
+    def test_usage_header_meter_is_fixed_whatever_the_session_window(self):
+        """The two axes stay separate: F-52b's context track is window-proportional, the
+        usage meter is a constant. F-59 moved that constant 6→12 and this test reads it from
+        `_GAUGE_W` so the separation, not the number, is what is asserted."""
         for window in (None, 256000, 1000000):
             with self.subTest(window=window):
                 session = Session(harness="claude", pid=1, cwd="/x", liveness="idle",
@@ -100,14 +103,15 @@ class F52bTrackLengthTest(unittest.TestCase):
                                   context_window_tokens=window)
                 joined = "".join(v for row in render._usage_header_rows([session])
                                  for v, _k in row)
-                self.assertIn("[" + FULL * 5 + EMPTY, joined)
+                self.assertIn("[" + FULL * 9 + EMPTY, joined)   # 75% → half_up(9.0) = 9/12
                 for chunk in joined.split("[")[1:]:
                     meter = chunk.split("]")[0]
                     self.assertEqual(len([c for c in meter if c in (FULL, EMPTY)]),
                                      render._GAUGE_W)
 
     def test_default_track_argument_is_the_usage_meter_width(self):
-        self.assertEqual(render._gauge_segs(50, 99), render._gauge_segs(50, 99, track=6))
+        self.assertEqual(render._gauge_segs(50, 99),
+                         render._gauge_segs(50, 99, track=render._GAUGE_W))
 
 
 class F52cLivenessLeadTest(unittest.TestCase):

@@ -502,7 +502,13 @@ def _short_model_id(name):
 # adjacent rows keep an above/below gap and never merge into a solid vertical wall (no blank line
 # needed). Filled carries the level color; the empty track is dim — the fill reads by color too.
 _BAR_FULL, _BAR_EMPTY = "━", "─"
-_GAUGE_W = 6                  # usage-header meter: fixed six cells (F-51a; F-52b does NOT touch it)
+_GAUGE_W = 12                 # usage-header meter: fixed twelve cells. F-59 (v44) replaces the
+                              # SIX-cell figure in F-51a and nothing else in it — the glyphs,
+                              # the 50/80 color thresholds, the unknown-vs-real-0% split and
+                              # F-51b's stale `·` track are all unchanged, and the quantization
+                              # generalizes because `_gauge_segs` reads this constant instead of
+                              # hardcoding a width. F-52b's context track is a separate axis and
+                              # is still not sized from here.
 _CTX_TRACK_MAX = 16           # F-52b/F-57b: a 1M context window is 16 cells. Independent of the
                               # harness column — v38 widened this 16→20 for readability, and F-57b
                               # (v41) restores 16 (user 2026-08-04: "게이지 폭을 좀 줄이자").

@@ -15,20 +15,27 @@ FULL, EMPTY = render._BAR_FULL, render._BAR_EMPTY
 
 class F51GaugeTest(unittest.TestCase):
     def test_fixed_width_and_half_up(self):
-        """The legacy `width` argument never sizes the meter — six cells regardless (F-52b
-        keeps the usage side fixed and sizes only the context track, via `track=`)."""
-        self.assertEqual("".join(x[0] for x in render._gauge_segs(75, 99)), FULL * 5 + EMPTY)
+        """The legacy `width` argument never sizes the meter — `_GAUGE_W` cells regardless
+        (F-52b keeps the usage side fixed and sizes only the context track, via `track=`).
+        F-59 widened that constant 6→12 without touching this contract."""
+        W = render._GAUGE_W
+        self.assertEqual("".join(x[0] for x in render._gauge_segs(75, 99)),
+                         FULL * 9 + EMPTY * 3)
         for pct in (None, 0, -1):
-            self.assertEqual("".join(x[0] for x in render._gauge_segs(pct, 1)), EMPTY * 6)
-        self.assertEqual("".join(x[0] for x in render._gauge_segs(100, 1)), FULL * 6)
+            self.assertEqual("".join(x[0] for x in render._gauge_segs(pct, 1)), EMPTY * W)
+        self.assertEqual("".join(x[0] for x in render._gauge_segs(100, 1)), FULL * W)
 
     def test_acceptance_quantization_table_and_pct_boundaries(self):
-        expected = {None: 0, 0: 0, 1: 1, 8: 1, 16: 1, 50: 3,
-                    75: 5, 84: 5, 92: 5, 99: 5, 100: 6, 150: 6}
+        """F-59 acceptance table on the 12-cell meter. Same half-up rule as the 6-cell one:
+        `None`/<=0 → 0, `>=100` → 12, otherwise `clamp(half_up(pct*12/100), 1, 11)` — so 0
+        and 12 stay reserved for exactly "none" and "full". 12/13 and 87/88 are the first two
+        rung boundaries the wider meter newly resolves (both were a single step at 6)."""
+        expected = {None: 0, 0: 0, 1: 1, 8: 1, 12: 1, 13: 2, 16: 2, 50: 6,
+                    75: 9, 84: 10, 87: 10, 88: 11, 92: 11, 99: 11, 100: 12, 150: 12}
         for pct, filled in expected.items():
             with self.subTest(pct=pct):
                 segs = render._gauge_segs(pct, 6)
-                self.assertEqual(sum(len(value) for value, _key in segs), 6)
+                self.assertEqual(sum(len(value) for value, _key in segs), render._GAUGE_W)
                 self.assertEqual(sum(len(value) for value, _key in segs
                                      if FULL in value), filled)
         self.assertEqual(render._pct_key(50), render._pct_key(50.0))
@@ -37,7 +44,7 @@ class F51GaugeTest(unittest.TestCase):
     def test_width_shim_is_constant(self):
         self.assertEqual({render._compact_context_gauge_width(w, depth=d)
                           for w in (20, 40, 60, 100, 138, 168, 200, 400)
-                          for d in (0, 1, 2)}, {6})
+                          for d in (0, 1, 2)}, {render._GAUGE_W})
 
     def test_unknown_and_zero_values_are_distinct(self):
         text = lambda pct: "".join(x[0] for x in render._context_detail_row(
@@ -61,34 +68,33 @@ class F51GaugeTest(unittest.TestCase):
                     self.assertTrue(any(FULL in value or EMPTY in value or "·" in value
                                         for value, _key in headers[0]))
 
-    def test_header_row_fits_and_never_grew_past_the_old_wider_gauge(self):
-        """A3: five fixtures — wide@168/wide@138/narrow@100/stack@60, plus a plain (--once)
-        call with no term_width at all. Every row must fit its terminal, and the row's total
-        length must never exceed what the OLD (pre-F51) 8/12-cell gauge contract would have
-        produced — the new fixed six-cell battery (`_GAUGE_W`) is strictly narrower, so
-        substituting the old width in place of `_GAUGE_W` can only grow the row, never shrink
-        it, which is exactly the non-increase invariant this test locks in."""
-        old_gauge_w = 12
+    def test_header_row_is_layout_independent_and_costs_six_more_cells_per_meter(self):
+        """A3, re-stated for F-59. The old form asserted "never wider than the pre-F51 8/12
+        cell gauge"; at `_GAUGE_W`=12 that bound holds only with equality, so it no longer
+        asserts anything and is retired.
+
+        What is worth locking in instead is the shape of the surface. `_usage_header_rows`
+        accepts `layout` but never reads it and is never handed a terminal width, so there is
+        no drop or abbreviate ladder here at all: the row is byte-identical in wide, narrow
+        and stack, and each meter simply costs six more cells than it did at `_GAUGE_W`=6.
+        A two-window claude row measures 69 cells (was 57) — inside every wide/narrow
+        terminal, past the 60-column stack layout, where `_addline` clips it at the right
+        edge. F-59 deliberately adds no rule for that (see the cycle report)."""
         session = Session(harness="claude", pid=1, cwd="/x", liveness="idle",
                           rl_5h=92, rl_7d=30, mtime=1000)
-        fixtures = [(168, "wide"), (138, "wide"), (100, "narrow"), (60, "stack")]
-        for term_width, layout in fixtures:
-            with self.subTest(term_width=term_width, layout=layout):
-                rows = render._usage_header_rows([session], layout=layout)
-                self.assertTrue(rows)
-                for row in rows:
-                    text = "".join(v for v, _k in row)
-                    new_len = render._dw(text)
-                    self.assertLessEqual(new_len, term_width)
-                    num_gauges = text.count("[")
-                    old_len = new_len + num_gauges * (old_gauge_w - render._GAUGE_W)
-                    self.assertLessEqual(new_len, old_len)
-        # plain (--once) path: no term_width constraint, but the same fixed six-cell gauge
-        # applies unconditionally.
-        plain_rows = render._usage_header_rows([session])
-        self.assertTrue(plain_rows)
-        joined = "".join(v for row in plain_rows for v, _k in row)
-        self.assertIn("[" + render._BAR_FULL * 5 + render._BAR_EMPTY, joined)
+        texts = set()
+        for layout in ("wide", "narrow", "stack"):
+            rows = render._usage_header_rows([session], layout=layout)
+            self.assertTrue(rows)
+            texts.add("".join(v for row in rows for v, _k in row))
+        # plain (--once) path: no term_width constraint and no layout at all — same row.
+        texts.add("".join(v for row in render._usage_header_rows([session]) for v, _k in row))
+        self.assertEqual(len(texts), 1, "usage header must not vary by layout")
+        text = texts.pop()
+        n_meters = text.count("[")
+        self.assertEqual(n_meters, 2)
+        self.assertEqual(render._dw(text), 45 + n_meters * render._GAUGE_W)
+        self.assertIn("[" + render._BAR_FULL * 11 + render._BAR_EMPTY, text)
 
     def test_stale_window_keeps_dotted_track_but_preserves_fill_and_pct_colors(self):
         """A5: a stale usage window shows an empty `·` track while the fill segment and the
@@ -106,7 +112,8 @@ class F51GaugeTest(unittest.TestCase):
         self.assertIn("lvl_g", fill_keys)
         dotted_tracks = [v for v, k in row if k == "dim" and v and set(v) == {"·"}]
         self.assertTrue(dotted_tracks)
-        self.assertEqual(sorted(map(len, dotted_tracks)), [1, 4])
+        # 92% → 11 filled + 1 dotted, 30% → 4 filled + 8 dotted (was [1, 4] at _GAUGE_W=6).
+        self.assertEqual(sorted(map(len, dotted_tracks)), [1, 8])
         pct_keys = {k for v, k in row if "%" in v}
         self.assertIn("lvl_r", pct_keys)
         self.assertIn("lvl_g", pct_keys)
