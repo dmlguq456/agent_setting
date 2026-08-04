@@ -98,8 +98,12 @@ class F51GaugeTest(unittest.TestCase):
 
     def test_stale_window_keeps_dotted_track_but_preserves_fill_and_pct_colors(self):
         """A5: a stale usage window shows an empty `·` track while the fill segment and the
-        percent number both keep their `_pct_key` color (92% stays lvl_r, 30% stays lvl_g) —
-        stale means "don't trust the freshness", not "hide the level"."""
+        percent number both keep their `_pct_key` LEVEL (92% red, 30% green) — stale means
+        "don't trust the freshness", not "hide the level".
+
+        F-61 renders the header's red without the alarm bold, so the key is `lvl_r_flat`; the
+        threshold that chose red is unchanged and every non-header surface still gets `lvl_r`.
+        """
         session = Session(harness="claude", pid=1, cwd="/x", liveness="idle",
                           rl_5h=92, rl_7d=30, mtime=1000)
         session._usage_freshness = "stale"
@@ -108,14 +112,14 @@ class F51GaugeTest(unittest.TestCase):
         self.assertTrue(all(len(track) == render._GAUGE_W
                             for track in re.findall(r"[%s·]+" % re.escape(FULL), visible)))
         fill_keys = {k for v, k in row if render._BAR_FULL in v}
-        self.assertIn("lvl_r", fill_keys)
+        self.assertIn("lvl_r_flat", fill_keys)
         self.assertIn("lvl_g", fill_keys)
         dotted_tracks = [v for v, k in row if k == "dim" and v and set(v) == {"·"}]
         self.assertTrue(dotted_tracks)
         # 92% → 11 filled + 1 dotted, 30% → 4 filled + 8 dotted (was [1, 4] at _GAUGE_W=6).
         self.assertEqual(sorted(map(len, dotted_tracks)), [1, 8])
         pct_keys = {k for v, k in row if "%" in v}
-        self.assertIn("lvl_r", pct_keys)
+        self.assertIn("lvl_r_flat", pct_keys)
         self.assertIn("lvl_g", pct_keys)
 
     def test_unknown_window_is_dotted_track_and_em_dash(self):
@@ -174,3 +178,40 @@ class F51GaugeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class F61UsageBoldTest(unittest.TestCase):
+    """F-61: the usage header drops the alarm bold; no other `lvl_r` surface does."""
+
+    def _header(self, pct):
+        session = Session(harness="claude", pid=1, cwd="/x", liveness="idle",
+                          rl_5h=pct, rl_7d=pct, mtime=1000)
+        return render._usage_header_rows([session], layout="wide")[0]
+
+    def test_header_never_emits_the_bold_level_key(self):
+        for pct in (0, 30, 49, 50, 79, 80, 92, 100):
+            with self.subTest(pct=pct):
+                self.assertNotIn("lvl_r", [k for _v, k in self._header(pct)])
+
+    def test_header_red_stays_red_at_the_same_threshold(self):
+        self.assertNotIn("lvl_r_flat", [k for _v, k in self._header(79)])
+        self.assertIn("lvl_r_flat", [k for _v, k in self._header(80)])
+
+    def test_flat_key_is_the_same_hue_without_the_weight(self):
+        hue, attr = render._HUE_OF["lvl_r_flat"]
+        self.assertEqual(hue, render._HUE_OF["lvl_r"][0])
+        self.assertEqual(attr, 0)
+        self.assertNotEqual(render._HUE_OF["lvl_r"][1], 0)
+
+    def test_other_surfaces_keep_the_alarm_weight(self):
+        """The context gauge shares `_pct_key`; only the header maps onto the flat key."""
+        session = Session(harness="claude", pid=1, cwd="/x", liveness="idle", ctx_pct=92,
+                          context_window_tokens=1000000)
+        keys = [k for _v, k in render._context_detail_row(session, term_width=168)[0]]
+        self.assertIn("lvl_r", keys)
+        self.assertNotIn("lvl_r_flat", keys)
+
+    def test_flat_level_only_renames_the_red(self):
+        self.assertEqual(render._flat_level("lvl_r"), "lvl_r_flat")
+        for key in ("lvl_y", "lvl_g", "dim"):
+            self.assertEqual(render._flat_level(key), key)

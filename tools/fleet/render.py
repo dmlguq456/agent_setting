@@ -155,6 +155,11 @@ _HUE_OF = {
     # ●>○>◌ ink-weight gradient still reads.
     "g_unused_b": ("y", 0),
     "lvl_g": ("g", 0), "lvl_y": ("y", 0), "lvl_r": ("r", _A_B),
+    # F-61: the usage header's own red — same hue and threshold as `lvl_r`, without the bold.
+    # The header is always-on background information, so one meter crossing 80% must not make it
+    # the heaviest ink on screen. Only the header maps onto this key; every other `lvl_r` surface
+    # (context gauge, git divergence, failed route nodes) keeps the alarm weight.
+    "lvl_r_flat": ("r", 0),
     "grp_live": ("g", 0), "grp_hot": ("g", _A_B), "gate_t": ("g", _A_D), "gate_u": ("y", _A_D),
     "grp_cool": ("y", _A_D), "grp_cold": ("d", _A_D),   # Cooling is dim yellow; cold is dim grey.
     "eff_low": ("d", _A_D), "eff_medium": ("d", 0), "eff_high": ("l", 0),
@@ -256,6 +261,7 @@ def _init_colors():
     _COLOR["lvl_g"] = _COLOR.get("green", 0)
     _COLOR["lvl_y"] = _COLOR.get("yellow", 0)
     _COLOR["lvl_r"] = _COLOR.get("red", 0) | curses.A_BOLD
+    _COLOR["lvl_r_flat"] = _COLOR.get("red", 0)          # F-61: usage header, no alarm weight
     # per-MODEL family colors, in TWO intensities (2026-07-02: main↔dispatch contrast = whole-row
     # brightness): fam_* = BRIGHT (main session rows) / famd_* = DIM (dispatch rows recede).
     _hue = {h: _COLOR.get("h_" + h, 0) for h in ("claude", "codex", "opencode")}
@@ -462,6 +468,17 @@ def _pct_key(v):
     if v is None:
         return "dim"
     return "lvl_r" if v >= 80 else ("lvl_y" if v >= 50 else "lvl_g")
+
+
+def _flat_level(key):
+    """F-61: the usage header's non-bold rendering of a `_pct_key` level.
+
+    Only `lvl_r` carries weight, so this is a single rename rather than a parallel palette —
+    thresholds, hue, and every other level key stay exactly as `_pct_key` decided them. Kept as
+    a function (not a dict literal at the call site) so the one place that drops the alarm weight
+    is greppable from both the header and its test.
+    """
+    return "lvl_r_flat" if key == "lvl_r" else key
 
 
 _FAMILIES = ("opus", "sonnet", "haiku", "fable", "gpt")
@@ -3525,8 +3542,8 @@ def _usage_header_rows(sessions, layout="wide", now=None, api_disabled=False):
                 if freshness == "stale":
                     empty_cells = _GAUGE_W - _dw(gauge[0][0])
                     gauge[1] = ("·" * empty_cells, "dim")
-                row += gauge
-                row.append((" %3d%%" % value, _pct_key(value)))
+                row += [(text, _flat_level(key)) for text, key in gauge]
+                row.append((" %3d%%" % value, _flat_level(_pct_key(value))))
             row.append(("]", "dim"))
             if reset and reset > (now if now is not None else time.time()):
                 row.append((" ↻ " + fmt_min(int((reset - (now if now is not None else time.time())) / 60)), "dim"))
