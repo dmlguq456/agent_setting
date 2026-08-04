@@ -695,20 +695,21 @@ def _branch_suffix_segs(cwd, branch, dim=True, optional=False):
     # The title side reserves `_NAME_GAP`, so the visible suffix may use one cell
     # beyond its nominal reserve without moving the next column.
     shown = _clip_w(str(br or "—"), max(1, _BRANCH_SUFFIX_W - 2))
-    base = [(" (", "dim"), (shown, "dim" if dim else "branch_s"), (")", "dim")]
+    base = [(" (", "dim"), (shown, "dim" if dim else "branch_s")]
+    close = [(")", "dim")]
     counts = gitinfo.ahead_behind(cwd) if _GIT_TELEMETRY and br and cwd else None
     if not counts:
-        return base
+        return base + close
     ahead, behind = counts
     ahead_seg = [(" ↑%d" % ahead, "lvl_g")] if ahead else []
     behind_seg = [(" ↓%d" % behind, "lvl_r")] if behind else []
-    result = base + ahead_seg + behind_seg
+    result = base + ahead_seg + behind_seg + close
     # Preserve the branch identity; drop behind first, then ahead, when the fixed suffix
     # budget cannot carry both telemetry values.
     if sum(_dw(text) for text, _key in result) > _BRANCH_SUFFIX_W:
-        result = base + ahead_seg
+        result = base + ahead_seg + close
     if sum(_dw(text) for text, _key in result) > _BRANCH_SUFFIX_W:
-        result = base
+        result = base + close
     return result
 
 

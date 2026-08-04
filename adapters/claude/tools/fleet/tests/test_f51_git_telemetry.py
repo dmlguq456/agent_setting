@@ -285,7 +285,7 @@ class F51GitTelemetryTest(unittest.TestCase):
                         text = "".join(t for t, _k in l1)
                     self.assertLessEqual(render._dw(text), term_width)
                     # branch name always survives even under a long session title.
-                    self.assertIn("(feature/x)", text)
+                    self.assertIn("(feature/x", text)
             # drop order at a hostile width: oversized ahead/behind digits overflow the
             # fixed suffix budget together, but individually ahead alone still fits — so
             # behind sheds first, exactly as `_branch_suffix_segs`'s degradation ladder
@@ -293,7 +293,7 @@ class F51GitTelemetryTest(unittest.TestCase):
             gitinfo.ahead_behind = lambda cwd: (123, 456)
             visible = "".join(x[0] for x in render._branch_suffix_segs("/x", "main",
                                                                        dim=True))
-            self.assertIn("(main)", visible)
+            self.assertIn("(main ↑123)", visible)
             self.assertIn("↑123", visible)
             self.assertNotIn("↓456", visible)
         finally:
@@ -412,7 +412,7 @@ class F51GitTelemetryTest(unittest.TestCase):
             gitinfo.ahead_behind = lambda cwd: (2, 1)
             segs = render._branch_suffix_segs("/tmp", "main")
             text = "".join(x[0] for x in segs)
-            self.assertIn("(main)", text)
+            self.assertIn("(main ↑2 ↓1)", text)
             self.assertLess(text.index("↑2"), text.index("↓1"))
             self.assertIn((" ↑2", "lvl_g"), segs)
             self.assertIn((" ↓1", "lvl_r"), segs)
