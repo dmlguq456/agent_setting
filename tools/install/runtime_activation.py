@@ -1304,7 +1304,12 @@ def _snapshot_record(dest: Path, backup_root: Path, index: int) -> dict:
     return record
 
 
-def _copy_snapshot(dest: Path, backup_root: Path, index: int) -> dict:
+def _copy_snapshot(
+    dest: Path,
+    backup_root: Path,
+    index: int,
+    preserve_names: Sequence[str] = (),
+) -> dict:
     if not dest.exists() and not dest.is_symlink():
         return {"dest": str(dest), "state": "missing-copy", "backup": None, "target": None}
     if dest.is_symlink():
@@ -1317,10 +1322,29 @@ def _copy_snapshot(dest: Path, backup_root: Path, index: int) -> dict:
     backup = backup_root / f"protected-{index}"
     backup.parent.mkdir(parents=True, exist_ok=True)
     if dest.is_dir():
-        shutil.copytree(dest, backup, symlinks=True)
+        preserved = set(preserve_names)
+        for name in preserved:
+            candidate = dest / name
+            if candidate.is_symlink() or (candidate.exists() and not candidate.is_dir()):
+                raise ActivationError(
+                    f"preserved runtime state must be a real directory: {candidate}"
+                )
+
+        def ignore(directory: str, names: List[str]) -> List[str]:
+            if Path(directory) != dest:
+                return []
+            return sorted(preserved.intersection(names))
+
+        shutil.copytree(dest, backup, symlinks=True, ignore=ignore)
     else:
         shutil.copy2(dest, backup)
-    return {"dest": str(dest), "state": "copied", "backup": str(backup), "target": None}
+    return {
+        "dest": str(dest),
+        "state": "copied",
+        "backup": str(backup),
+        "target": None,
+        "preserve_names": sorted(preserved) if dest.is_dir() else [],
+    }
 
 
 def _restore(records: List[dict]) -> None:
@@ -1331,7 +1355,10 @@ def _restore(records: List[dict]) -> None:
             # Journal was flushed before the move and the process died between
             # those two operations.  The original destination is still intact.
             continue
-        _remove_path(dest)
+        preserve_names = set(record.get("preserve_names") or ())
+        preserve_in_place = state == "copied" and preserve_names and dest.is_dir()
+        if not preserve_in_place:
+            _remove_path(dest)
         if state in {"symlink", "symlink-copy"}:
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.symlink_to(record["target"])
@@ -1340,11 +1367,18 @@ def _restore(records: List[dict]) -> None:
             shutil.move(record["backup"], str(dest))
         elif state == "copied":
             backup = Path(record["backup"])
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            if backup.is_dir():
-                shutil.copytree(backup, dest, symlinks=True)
+            if backup.is_dir() and preserve_in_place:
+                for child in dest.iterdir():
+                    if child.name not in preserve_names:
+                        _remove_path(child)
+                shutil.copytree(backup, dest, symlinks=True, dirs_exist_ok=True)
             else:
-                shutil.copy2(backup, dest)
+                _remove_path(dest)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                if backup.is_dir():
+                    shutil.copytree(backup, dest, symlinks=True)
+                else:
+                    shutil.copy2(backup, dest)
 
 
 def _write_journal(path: Path, runtime: str, status_value: str, records: List[dict]) -> None:
@@ -1696,7 +1730,13 @@ def capture_runtime_state(
                 continue
             seen.add(key)
             _ensure_owned_destination(runtime, dest, scope)
-            records.append(_copy_snapshot(dest, backup_root, len(records)))
+            preserve_names = (
+                ("managed-sessions",)
+                if dest == paths.harness_state_dir(runtime, scope)
+                else ()
+            )
+            records.append(_copy_snapshot(
+                dest, backup_root, len(records), preserve_names=preserve_names))
         for dest in sorted(discovery, key=lambda item: str(item)):
             key = str(dest)
             if key in seen:
