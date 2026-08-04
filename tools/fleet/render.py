@@ -490,7 +490,9 @@ def _short_model_id(name):
 # needed). Filled carries the level color; the empty track is dim — the fill reads by color too.
 _BAR_FULL, _BAR_EMPTY = "━", "─"
 _GAUGE_W = 6                  # usage-header meter: fixed six cells (F-51a; F-52b does NOT touch it)
-_CTX_TRACK_MAX = 16           # F-52b: a 1M context window is 16 cells (= the harness-name column)
+_CTX_TRACK_MAX = 20           # F-52b/F-54: a 1M context window is 20 cells. Independent of the
+                              # harness column — v38 widened this for readability and dropped the
+                              # original "same width as the harness column" rationale.
 _CTX_TRACK_WINDOW = 1000000   # …and the track scales linearly against that reference window.
 _GIT_TELEMETRY = True
 
@@ -501,11 +503,11 @@ def _half_up(value):
 
 
 def _context_gauge_track(window):
-    """F-52b context-gauge track length: `clamp(half_up(16 * window / 1M), 1, 16)`.
+    """F-52b context-gauge track length: `clamp(half_up(20 * window / 1M), 1, 20)`.
 
     `window` is a MEASURED `context_window_tokens` telemetry value only — there is no model or
     harness lookup table here. With no measurement we cannot claim a proportion, so the track
-    falls back to the 16-cell baseline (the percent itself is still known, so the row stays)."""
+    falls back to the 20-cell baseline (the percent itself is still known, so the row stays)."""
     if (not isinstance(window, (int, float)) or isinstance(window, bool)
             or window != window or window in (float("inf"), float("-inf")) or window <= 0):
         return _CTX_TRACK_MAX

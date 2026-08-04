@@ -51,9 +51,9 @@ class ContextDetailTruthTableTest(unittest.TestCase):
     def test_context_now_truth_table(self):
         cases = [
             (ContextProjection(63, "normal", "claude"), "Doing work",
-             LEAD + FULL * 10 + EMPTY * 6 + " 63%"),
+             LEAD + FULL * 13 + EMPTY * 7 + " 63%"),
             (ContextProjection(63, "normal", "claude"), None,
-             LEAD + FULL * 10 + EMPTY * 6 + " 63%"),
+             LEAD + FULL * 13 + EMPTY * 7 + " 63%"),
             (ContextProjection(None, "unknown", "claude"), "Doing work",
              LEAD + EMPTY * BASE + "   —"),
             (None, None, LEAD + EMPTY * BASE + "   —"),
