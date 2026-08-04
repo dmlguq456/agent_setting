@@ -241,7 +241,7 @@ def main(argv=None):
                 from fleet import refresh_title
             else:
                 from . import refresh_title
-            refresh_title.schedule_sessions(sessions)
+            refresh_title.schedule_sessions(sessions, jobs)
         except Exception:
             pass                              # title refresh must never break observation
         return sessions, jobs

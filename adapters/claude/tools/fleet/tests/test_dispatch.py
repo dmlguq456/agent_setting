@@ -575,6 +575,41 @@ class CwdFallbackEnrichmentTest(unittest.TestCase):
             self.assertEqual(job.pid, 4242)
             self.assertEqual(job.model, "Opus 4.8")
 
+    def test_collect_backfills_attempt_log_for_proc_job_summary_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            worktree = os.path.join(tmp, "worktree")
+            artifact = os.path.join(tmp, "artifacts")
+            log_dir = os.path.join(artifact, "plans", "task", "_internal", "stage_logs")
+            os.makedirs(worktree)
+            os.makedirs(log_dir)
+            attempt = "att-proc-summary"
+            log_file = os.path.join(log_dir, "proc-slug.%s.codex.jsonl" % attempt)
+            with open(log_file, "w", encoding="utf-8") as stream:
+                stream.write('{"type":"item.completed","item":{"type":"agent_message",'
+                             '"text":"working"}}\n')
+            jobs_log = os.path.join(tmp, "jobs.log")
+            with open(jobs_log, "w", encoding="utf-8") as stream:
+                stream.write(
+                    "2026-07-05T01:00:00+00:00\topen\trepo\t%s\tproc-slug\t"
+                    "capability=autopilot-code,capability_mode=debug,worker_mode=qa/test,"
+                    "mode=debug,profile=light,harness=codex,attempt_id=%s,"
+                    "artifact_root=%s,log_file=%s\n"
+                    % (worktree, attempt, artifact, log_file)
+                )
+            proc_job = dispatch.DispatchJob(
+                key="code", slug="proc-slug", cwd=worktree, pid=4242,
+                harness="codex", source="proc", is_child=True, attempt_id=attempt,
+                mode="debug", capability_mode="debug", worker_mode="qa/test",
+                profile="light",
+            )
+            with mock.patch.object(dispatch, "_scan_processes", return_value=[proc_job]), \
+                 mock.patch.object(dispatch, "_dispatch_liveness", return_value="working"):
+                jobs = dispatch.collect(jobs_path=jobs_log)
+            self.assertEqual(len(jobs), 1)
+            self.assertEqual(jobs[0]._transcript_path, os.path.realpath(log_file))
+            self.assertEqual(jobs[0]._summary_sid, "dispatch-" + attempt)
+            self.assertEqual(jobs[0].artifact_root, artifact)
+
     def test_argv_matched_pid_excluded_from_cwd_scan(self):
         """Case 2 — an already argv-matched (proc-scanned) pid is passed into
         _live_claude_cwds's exclude_pids, so it is never re-resolved via cwd. A distinct

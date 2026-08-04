@@ -148,7 +148,15 @@ def _claude_text(data):
 
 
 def _codex_text(data):
-    if not isinstance(data, dict) or data.get("type") != "response_item":
+    if not isinstance(data, dict):
+        return []
+    # ``codex exec --json`` attempt logs wrap visible assistant text as an
+    # item-completed event, while native rollout files use response_item.
+    if data.get("type") == "item.completed":
+        item = data.get("item") or {}
+        text = item.get("text") if item.get("type") == "agent_message" else None
+        return [text] if isinstance(text, str) and text else []
+    if data.get("type") != "response_item":
         return []
     payload = data.get("payload") or {}
     if payload.get("type") != "message" or payload.get("role") not in ("user", "assistant"):
@@ -809,31 +817,50 @@ def maybe_spawn(harness, sid, transcript=None, now=None, debounce=DEBOUNCE_SEC,
         return False
 
 
-def schedule_sessions(sessions):
+def schedule_sessions(sessions, jobs=None):
     """Best-effort live fleet scheduler; returns the number of workers started.
 
     Dispatched child sessions are titled like main sessions (user 2026-07-16:
     the summary agent attaches to every dispatched session, spending haiku
     tokens instead of parent context). The refresher's own workers stay out
-    via the mem_worker tag (FLEET_TITLE_REFRESH=1), not via is_child.
+    via the mem_worker tag (FLEET_TITLE_REFRESH=1), not via is_child. Registered
+    jobs whose runtime Session is absent use their exact attempt log as a
+    fallback candidate; jobs already joined to a child Session are not doubled.
     """
-    def priority_key(session):
-        missing = not getattr(session, "summary", None)
-        child = bool(getattr(session, "is_child", False))
-        working = getattr(session, "liveness", None) == "working"
+    candidates = list(sessions)
+    for job in jobs or ():
+        if (getattr(job, "_summary_sid", None)
+                and getattr(job, "_transcript_path", None)
+                and not getattr(job, "_child_session_associated", False)
+                and not getattr(job, "afterglow", False)):
+            candidates.append(job)
+
+    def candidate_sid(candidate):
+        return (getattr(candidate, "_summary_sid", None)
+                or getattr(candidate, "session_id", None))
+
+    def priority_key(candidate):
+        missing = not getattr(candidate, "summary", None)
+        child = bool(getattr(candidate, "is_child", False))
+        working = getattr(candidate, "liveness", None) == "working"
         tier = 0 if child and missing else 1 if working and missing else 2 if missing else 3
-        sidecar = titles.read(getattr(session, "session_id", None),
-                              harness=getattr(session, "harness", "")) or {}
+        try:
+            sidecar = titles.read(candidate_sid(candidate),
+                                  harness=getattr(candidate, "harness", "")) or {}
+        except ValueError:
+            sidecar = {}
         ts = (sidecar.get("ts") if isinstance(sidecar.get("ts"), (int, float))
-              else getattr(session, "mtime", 0) or 0)
-        return tier, ts, str(getattr(session, "session_id", "") or "")
+              else getattr(candidate, "mtime", 0) or 0)
+        return tier, ts, str(candidate_sid(candidate) or "")
 
     started = 0
-    for session in sorted(sessions, key=priority_key):
+    for session in sorted(candidates, key=priority_key):
         if (
             getattr(session, "liveness", None) in ("dead", "stale")
             or getattr(session, "mem_worker", False)
             or getattr(session, "app_server", False)
+            or (getattr(session, "_summary_sid", None)
+                and getattr(session, "liveness", None) == "queued")
         ):
             continue
         is_child = getattr(session, "is_child", False)
@@ -841,7 +868,7 @@ def schedule_sessions(sessions):
         working = getattr(session, "liveness", None) == "working"
         spawn_args = {
             "harness": getattr(session, "harness", ""),
-            "sid": getattr(session, "session_id", None),
+            "sid": candidate_sid(session),
             "transcript": getattr(session, "_transcript_path", None),
             "debounce": (CHILD_DEBOUNCE_SEC if is_child else
                          WORKING_DEBOUNCE_SEC if working else DEBOUNCE_SEC),

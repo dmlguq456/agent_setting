@@ -840,28 +840,85 @@ _CLAUDE_SUBAGENT_SCAN_BYTES = 8 * 1024 * 1024
 _CLAUDE_STREAM_CACHE = {}       # path -> (mtime_ns, size, parsed)
 
 
-def _owned_claude_stream_path(job):
-    """Return one current-attempt Claude stream log, or fail closed.
+def _owned_attempt_log_path(job):
+    """Return one exact Claude/Codex attempt log, or fail closed.
 
-    ``log_file`` comes from jobs.log and is therefore treated as untrusted path data:
-    it must resolve below the canonical dispatch logs directory, carry this exact
-    attempt id in its basename, and use the Claude stream-json suffix.
+    ``--log-dir`` may place registered-worker streams either under the dispatch
+    registry or below the canonical artifact root.  ``log_file`` is registry data,
+    so accept only a real file below one of those roots whose basename binds both
+    the exact attempt id and the declared harness suffix.
     """
     raw = getattr(job, "_log_file", None)
     attempt_id = getattr(job, "attempt_id", None)
-    if getattr(job, "harness", None) != "claude" or not raw or not attempt_id:
+    harness = getattr(job, "harness", None)
+    if harness not in ("claude", "codex") or not raw or not attempt_id:
         return None
-    root = os.path.realpath(os.path.join(_registry_home(), ".dispatch", "logs"))
     path = os.path.realpath(raw)
-    try:
-        if os.path.commonpath((root, path)) != root:
-            return None
-    except (TypeError, ValueError):
+    roots = [os.path.realpath(os.path.join(_registry_home(), ".dispatch", "logs"))]
+    registry_path = getattr(job, "_registry_path", None)
+    if registry_path:
+        registry_dir = os.path.dirname(os.path.realpath(registry_path))
+        roots.append(os.path.join(registry_dir, "logs"))
+        # Installed runtime registries use `<runtime>/.harness/dispatch/jobs.log`,
+        # while a wrapper with that agent home still defaults logs to the sibling
+        # hidden `.dispatch/logs` directory.
+        if os.path.basename(registry_dir) == "dispatch":
+            roots.append(os.path.join(os.path.dirname(registry_dir), ".dispatch", "logs"))
+    artifact_root = getattr(job, "artifact_root", None)
+    if artifact_root:
+        roots.append(os.path.realpath(artifact_root))
+    allowed = False
+    for root in roots:
+        try:
+            if os.path.commonpath((root, path)) == root:
+                allowed = True
+                break
+        except (TypeError, ValueError):
+            continue
+    if not allowed:
         return None
     name = os.path.basename(path)
-    if not name.endswith(".claude.jsonl") or ("." + attempt_id + ".") not in name:
+    if not name.endswith(".%s.jsonl" % harness) or ("." + attempt_id + ".") not in name:
         return None
     return path if os.path.isfile(path) else None
+
+
+def _owned_claude_stream_path(job):
+    """Return one current-attempt Claude stream log, or fail closed."""
+    if getattr(job, "harness", None) != "claude":
+        return None
+    return _owned_attempt_log_path(job)
+
+
+def _attempt_summary_sid(job):
+    attempt_id = getattr(job, "attempt_id", None)
+    if not isinstance(attempt_id, str) or not re.fullmatch(r"[A-Za-z0-9._-]+", attempt_id):
+        return None
+    return "dispatch-" + attempt_id
+
+
+def _enrich_attempt_summary(job):
+    """Attach attempt-owned refresh input and any fresh fallback sidecar.
+
+    A registered job does not always materialize as a separately collectible
+    ``Session``.  The exact attempt log is still a conversational transcript, so
+    expose it to the shared scheduler under an attempt-scoped sidecar key.  This
+    never guesses by cwd or pid and therefore cannot borrow another child's NOW.
+    """
+    path = _owned_attempt_log_path(job)
+    sid = _attempt_summary_sid(job)
+    if path is None or sid is None:
+        return
+    job._transcript_path = path
+    job._summary_sid = sid
+    try:
+        from .. import titles
+        if not getattr(job, "title", None):
+            job.title = titles.fresh_title(sid, harness=job.harness)
+        if not getattr(job, "summary", None):
+            job.summary = titles.fresh_summary(sid, harness=job.harness)
+    except Exception:
+        pass
 
 
 def _parse_claude_stream_tail(path):
@@ -1772,6 +1829,7 @@ def _scan_jobs_log(path, seen_slugs, seen_keys=None, registry_priority=0):
             afterglow=afterglow,
         )
         job._log_file = meta.get("log_file")
+        job._registry_path = path
         job._registry_metadata = dict(meta)
         jobs.append(job)
     quick_groups = {}
@@ -1825,7 +1883,9 @@ def _jobs_log_fields(paths):
             if len(fields) != 6:
                 continue
             slug = fields[4]
-            path_fields[slug] = _parse_pipe_meta(fields[5] or "")
+            value = _parse_pipe_meta(fields[5] or "")
+            value["_registry_path"] = path
+            path_fields[slug] = value
         for slug, value in path_fields.items():
             if slug not in fields_by_slug:
                 fields_by_slug[slug] = value         # first registry wins across files
@@ -2003,6 +2063,7 @@ def collect(jobs_path=None, harness_filter=None):
     if any(
         j.mode is None or j.capability_mode is None
         or j.worker_mode is None or j.profile is None
+        or (j.attempt_id and not getattr(j, "_log_file", None))
         for j in proc_jobs
     ):
         log_fields = _jobs_log_fields(paths)
@@ -2017,6 +2078,12 @@ def collect(jobs_path=None, harness_filter=None):
                     j.worker_mode = metadata.get("worker_mode")
                 if j.profile is None:
                     j.profile = metadata.get("profile")
+                if (j.attempt_id and metadata.get("attempt_id") == j.attempt_id
+                        and not getattr(j, "_log_file", None)):
+                    j._log_file = metadata.get("log_file")
+                    j._registry_path = metadata.get("_registry_path")
+                    if not j.artifact_root:
+                        j.artifact_root = metadata.get("artifact_root")
                 cap_mode, worker_mode, conflict = _dispatch_mode_axes(
                     {
                         "capability_mode": j.capability_mode,
@@ -2067,6 +2134,7 @@ def collect(jobs_path=None, harness_filter=None):
     jobs = _reconcile_drill_rows(jobs, now, codex_index=codex_index)
     for j in jobs:
         _enrich_claude_stream_session(j)
+        _enrich_attempt_summary(j)
     for j in jobs:
         j.liveness = _dispatch_liveness(j, now, codex_index=codex_index)
     _annotate_orphan_conductors(jobs, now, jobs_path=jobs_path)

@@ -9,7 +9,9 @@ session rows. Stdlib unittest, no real ps/proc/home access.
 """
 import os
 import sys
+import tempfile
 import unittest
+from unittest import mock
 
 _TOOLS_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _TOOLS_DIR not in sys.path:
@@ -17,6 +19,8 @@ if _TOOLS_DIR not in sys.path:
 
 from fleet import collectors as fleet_collectors  # noqa: E402
 from fleet import render                          # noqa: E402
+from fleet import titles                          # noqa: E402
+from fleet.collectors import dispatch             # noqa: E402
 from fleet.model import DispatchJob, Session      # noqa: E402
 
 
@@ -97,6 +101,81 @@ class AdoptChildTitlesTest(unittest.TestCase):
                           is_child=True, liveness="working")
         fleet_collectors._adopt_child_titles([main], [job])
         self.assertIsNone(job.title)
+
+    def test_exact_attempt_summary_survives_empty_session_sidecar(self):
+        child = _child(42, "/work/fix-x", "Child title", proc_start="123")
+        child.summary = None
+        job = DispatchJob(key="autopilot-code", slug="fix-x", cwd="/work/fix-x",
+                          harness="claude", pid=42, proc_start="123", is_child=True,
+                          liveness="working", summary="Attempt-owned NOW")
+        job._summary_sid = "dispatch-att-fix-x"
+        fleet_collectors._adopt_child_titles([child], [job])
+        self.assertEqual(job.summary, "Attempt-owned NOW")
+        self.assertTrue(job._child_session_associated)
+
+
+class AttemptSummaryFallbackTest(unittest.TestCase):
+    def test_selected_registry_log_directory_is_accepted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            registry_dir = os.path.join(tmp, ".harness", "dispatch")
+            log_dir = os.path.join(registry_dir, "logs")
+            os.makedirs(log_dir)
+            registry_path = os.path.join(registry_dir, "jobs.log")
+            path = os.path.join(log_dir, "child.att-runtime.claude.jsonl")
+            with open(path, "w", encoding="utf-8") as stream:
+                stream.write("{}\n")
+            job = DispatchJob(
+                key="code-test", slug="child", cwd="/work", harness="claude",
+                is_child=True, liveness="working", attempt_id="att-runtime",
+            )
+            job._registry_path = registry_path
+            job._log_file = path
+            with mock.patch.object(dispatch, "_registry_home", return_value="/not/the/runtime"):
+                self.assertEqual(dispatch._owned_attempt_log_path(job), os.path.realpath(path))
+
+    def test_artifact_root_attempt_log_is_accepted_and_sidecar_is_adopted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            registry = os.path.join(tmp, "home")
+            artifact = os.path.join(tmp, "artifacts")
+            state = os.path.join(tmp, "state")
+            log_dir = os.path.join(artifact, "plans", "task", "_internal", "stage_logs")
+            os.makedirs(log_dir)
+            path = os.path.join(log_dir, "child.att-exact.codex.jsonl")
+            with open(path, "w", encoding="utf-8") as stream:
+                stream.write('{"type":"thread.started"}\n')
+            job = DispatchJob(
+                key="code-test", slug="child", cwd="/work", harness="codex",
+                is_child=True, liveness="working", attempt_id="att-exact",
+                artifact_root=artifact,
+            )
+            job._log_file = path
+            with mock.patch.object(dispatch, "_registry_home", return_value=registry), \
+                 mock.patch.dict(os.environ, {"FLEET_TITLE_STATE_DIR": state}):
+                titles.write("dispatch-att-exact", "Attempt title", harness="codex",
+                             summary="Attempt NOW")
+                dispatch._enrich_attempt_summary(job)
+            self.assertEqual(job._transcript_path, os.path.realpath(path))
+            self.assertEqual(job._summary_sid, "dispatch-att-exact")
+            self.assertEqual(job.title, "Attempt title")
+            self.assertEqual(job.summary, "Attempt NOW")
+
+    def test_attempt_log_outside_allowed_roots_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            registry = os.path.join(tmp, "home")
+            artifact = os.path.join(tmp, "artifacts")
+            outside = os.path.join(tmp, "outside")
+            os.makedirs(outside)
+            path = os.path.join(outside, "child.att-exact.claude.jsonl")
+            with open(path, "w", encoding="utf-8") as stream:
+                stream.write("{}\n")
+            job = DispatchJob(
+                key="code-test", slug="child", cwd="/work", harness="claude",
+                is_child=True, liveness="working", attempt_id="att-exact",
+                artifact_root=artifact,
+            )
+            job._log_file = path
+            with mock.patch.object(dispatch, "_registry_home", return_value=registry):
+                self.assertIsNone(dispatch._owned_attempt_log_path(job))
 
 
 class DispatchRowTitleTest(unittest.TestCase):

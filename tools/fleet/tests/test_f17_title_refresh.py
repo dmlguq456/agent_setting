@@ -19,7 +19,7 @@ if _TOOLS_DIR not in sys.path:
 
 from fleet import titles                       # noqa: E402
 from fleet import refresh_title as rt           # noqa: E402
-from fleet.model import Session                 # noqa: E402
+from fleet.model import DispatchJob, Session    # noqa: E402
 from fleet.collectors import claude             # noqa: E402
 
 _REPO_ROOT = os.path.dirname(_TOOLS_DIR)
@@ -400,6 +400,40 @@ class StormGuardTest(_ConfigHomeMixin, unittest.TestCase):
             rt.maybe_spawn = original
         self.assertEqual(seen[0]["debounce"], rt.WORKING_DEBOUNCE_SEC)
         self.assertTrue(seen[0]["priority"])
+
+    def test_registered_job_without_child_session_uses_attempt_log_fallback(self):
+        job = DispatchJob(
+            key="code-test", slug="child-test", cwd="/repo", harness="codex",
+            is_child=True, liveness="working", attempt_id="att-child-test",
+        )
+        job._summary_sid = "dispatch-att-child-test"
+        job._transcript_path = self.transcript
+        seen = []
+        original = rt.maybe_spawn
+        rt.maybe_spawn = lambda **kwargs: seen.append(kwargs) or True
+        try:
+            self.assertEqual(rt.schedule_sessions([], [job]), 1)
+        finally:
+            rt.maybe_spawn = original
+        self.assertEqual(seen[0]["sid"], "dispatch-att-child-test")
+        self.assertEqual(seen[0]["transcript"], self.transcript)
+        self.assertEqual(seen[0]["debounce"], rt.CHILD_DEBOUNCE_SEC)
+        self.assertTrue(seen[0]["priority"])
+
+    def test_attempt_log_fallback_does_not_double_an_associated_child(self):
+        job = DispatchJob(
+            key="code-test", slug="child-test", cwd="/repo", harness="claude",
+            is_child=True, liveness="working", attempt_id="att-child-test",
+        )
+        job._summary_sid = "dispatch-att-child-test"
+        job._transcript_path = self.transcript
+        job._child_session_associated = True
+        original = rt.maybe_spawn
+        rt.maybe_spawn = lambda **_kwargs: self.fail("associated job scheduled twice")
+        try:
+            self.assertEqual(rt.schedule_sessions([], [job]), 0)
+        finally:
+            rt.maybe_spawn = original
 
     def test_disable_marker_and_environment_fail_closed(self):
         os.makedirs(rt.disable_marker_path(), exist_ok=True)

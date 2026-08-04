@@ -148,6 +148,17 @@ class CrossHarnessWorkerTest(_EnvMixin, unittest.TestCase):
         self.assertIn("implement titles", text)
         self.assertIn("working on it", text)
         self.assertNotIn("secret instructions", text)
+
+    def test_codex_attempt_log_extracts_only_agent_messages(self):
+        rows = [
+            {"type": "thread.started", "thread_id": "sid"},
+            {"type": "item.completed", "item": {
+                "type": "command_execution", "aggregated_output": "private command output"}},
+            {"type": "item.completed", "item": {
+                "type": "agent_message", "text": "검증 단계를 실행 중입니다."}},
+        ]
+        text = rt._delta_text("\n".join(json.dumps(row) for row in rows), harness="codex")
+        self.assertEqual(text, "검증 단계를 실행 중입니다.")
         self.assertNotIn("ignored", text)
 
     def test_custom_provider_is_shell_free_argv_template(self):
@@ -190,7 +201,8 @@ class CrossHarnessWorkerTest(_EnvMixin, unittest.TestCase):
         original_run_live = render.run_live
         calls = []
         fleet_main.collect_all = lambda harness_filter=None: ([session], [])
-        rt.schedule_sessions = lambda sessions: calls.append(list(sessions)) or 0
+        rt.schedule_sessions = lambda sessions, jobs=None: calls.append(
+            (list(sessions), list(jobs or ()))) or 0
         render.run_live = lambda collector, hfilter, section, interval: collector(hfilter) and 0
         try:
             with contextlib.redirect_stdout(io.StringIO()):
@@ -198,6 +210,7 @@ class CrossHarnessWorkerTest(_EnvMixin, unittest.TestCase):
             self.assertEqual(calls, [])
             self.assertEqual(fleet_main.main([]), 0)
             self.assertEqual(len(calls), 1)
+            self.assertEqual(calls[0], ([session], []))
         finally:
             fleet_main.collect_all = original_collect
             rt.schedule_sessions = original_schedule

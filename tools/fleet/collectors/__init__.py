@@ -114,15 +114,20 @@ def _adopt_child_titles(sessions, jobs):
         if source is None:
             if ambiguity:
                 job.association_ambiguity = ambiguity
-                job.summary = None
+                # Refuse the ambiguous Session join, but retain an independently
+                # attempt-owned fallback summary when dispatch already supplied one.
+                if not getattr(job, "_summary_sid", None):
+                    job.summary = None
             continue
+        job._child_session_associated = True
         # Values cross the boundary as one association decision. Attempt-stream
         # sub-agents already attached to the job are stronger and stay authoritative.
         # Dispatch context is intentionally absent: headless runtimes expose no
         # session-owned window.
         if not getattr(job, 'title', None):
             job.title = getattr(source, 'title', None)
-        job.summary = getattr(source, 'summary', None)
+        if not getattr(job, 'summary', None):
+            job.summary = getattr(source, 'summary', None)
         if getattr(job, 'subagents', None) is None:
             job.subagents = getattr(source, 'subagents', None)
 
