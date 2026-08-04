@@ -60,8 +60,26 @@ def _evidence(entity):
     )
 
 
-def normalize_context(evidence, now=None):
-    """Return ``(public, private)`` context values with exact ordering/freshness checks."""
+LIVE_CONTEXT_STATES = frozenset(("working", "idle", "blocked", "unused", "queued"))
+
+
+def _is_live(entity):
+    """F-62: does this row still describe a session that exists right now?"""
+    return getattr(entity, "liveness", None) in LIVE_CONTEXT_STATES
+
+
+def normalize_context(evidence, now=None, live=False):
+    """Return ``(public, private)`` context values with exact ordering/freshness checks.
+
+    F-62: `live` rows are exempt from the ELAPSED-time check. Context occupancy does not decay
+    while a session sits quiet — a session at 33% is still at 33% until it runs another turn —
+    so `fresh_until` expiry describes a rate-limit window, not this value. Claude liveness comes
+    from the statusline registry while this evidence is stamped from transcript mtime, so a
+    session quiet for 15 minutes stayed `idle` while its context silently blanked to `—`
+    (2026-08-04 user report). Auto-compaction does not sneak past this: compaction writes to the
+    transcript, so a quiet transcript means nothing changed. Rows that are NOT live keep the old
+    expiry, and F-13 already drops the whole detail row for stale/dead sessions.
+    """
     now = time.time() if now is None else now
     ev = evidence if isinstance(evidence, ContextEvidence) else _evidence({"_context_evidence": evidence})
     reason = ev.invalid_reason
@@ -71,7 +89,9 @@ def normalize_context(evidence, now=None):
     if reason is None and (isinstance(pct, bool) or pct < 0 or pct > 100):
         reason = "malformed-context"
     if reason is None and ev.observed_at is not None and ev.fresh_until is not None:
-        if ev.observed_at > ev.fresh_until or now > ev.fresh_until:
+        # Observed after its own expiry is a self-contradictory record, not an aged one: that
+        # stays rejected for live rows too, because it says the stamp itself cannot be trusted.
+        if ev.observed_at > ev.fresh_until or (not live and now > ev.fresh_until):
             reason = "stale-context"
     if reason is None and ev.sequence is not None and ev.source_head_sequence is not None:
         try:
@@ -888,7 +908,7 @@ def attach_projections(sessions: Iterable[Session], jobs: Iterable[DispatchJob],
                  else capability_groundings)
     all_entities = sessions + jobs
     for session in sessions:
-        public, private = normalize_context(_evidence(session), now=now)
+        public, private = normalize_context(_evidence(session), now=now, live=_is_live(session))
         session.context = public
         session._context_evidence = private
     for job in jobs:
@@ -898,7 +918,8 @@ def attach_projections(sessions: Iterable[Session], jobs: Iterable[DispatchJob],
         # own rollout by an exact sid match, so it owns a real context window.  It still goes
         # through the same resolver — never a second, render-local context path.
         if job.source == "plugin-queue" and job._context_evidence is not None:
-            job.context, job._context_evidence = normalize_context(_evidence(job), now=now)
+            job.context, job._context_evidence = normalize_context(
+                _evidence(job), now=now, live=_is_live(job))
             continue
         job.context = None
         job._context_evidence = None

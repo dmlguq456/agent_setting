@@ -265,11 +265,12 @@ def collect_all(harness_filter=None, jobs_path=None, usage="cache-only"):
         pass
 
     try:
-        from ..projection import normalize_context, _evidence
+        from ..projection import normalize_context, _evidence, _is_live
         now = _time.time()
         for session in sessions:
+            # liveness is already classified above, so F-62's live exemption is decidable here.
             session.context, session._context_evidence = normalize_context(
-                _evidence(session), now=now)
+                _evidence(session), now=now, live=_is_live(session))
     except Exception:
         pass
 
