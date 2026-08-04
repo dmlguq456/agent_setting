@@ -47,6 +47,7 @@ _SUBAGENT_INDEX = {}                  # runtime home -> (read time, stamp, map, 
 _LIFECYCLE_CACHE_MAX = 512
 _LIFECYCLE_CACHE = OrderedDict()
 _LIFECYCLE_CACHE_EVICTIONS = 0
+_SUMMARY_BOUNDARY_SCAN = 1 << 20
 
 
 @dataclass
@@ -645,6 +646,45 @@ def _tail_token_count(path, chunk=65536):
     return last
 
 
+def _latest_user_message_offset(path, chunk=_SUMMARY_BOUNDARY_SCAN):
+    """Return the byte offset of the newest durable Codex user message.
+
+    UserPromptSubmit precedes rollout persistence.  A sidecar whose cursor has
+    not advanced beyond this boundary describes the preceding turn and must not
+    be rendered as the current NOW line.
+    """
+    try:
+        size = os.path.getsize(path)
+        start = max(0, size - max(1, int(chunk)))
+        with open(path, "rb") as handle:
+            if start:
+                handle.seek(start - 1)
+                if handle.read(1) != b"\n":
+                    start += len(handle.readline())
+                else:
+                    handle.seek(start)
+            else:
+                handle.seek(0)
+            offset = start
+            latest = None
+            for raw in handle:
+                row_offset = offset
+                offset += len(raw)
+                try:
+                    row = json.loads(raw.decode("utf-8", "replace"))
+                except (UnicodeDecodeError, ValueError):
+                    continue
+                payload = row.get("payload") if isinstance(row, dict) else None
+                if (row.get("type") == "response_item"
+                        and isinstance(payload, dict)
+                        and payload.get("type") == "message"
+                        and payload.get("role") == "user"):
+                    latest = row_offset
+            return latest
+    except (OSError, TypeError, ValueError):
+        return None
+
+
 _EXEC_CMD_RE = re.compile(r"""cmd:\s*['"]([^'"\n]+)""")
 
 
@@ -984,7 +1024,10 @@ def enrich(sess, tick=None):
         native_title = _thread_titles(home).get(sess.session_id)
         sidecar_title = titles.fresh_title(sess.session_id, harness="codex")
         sess.title = sidecar_title or native_title or sess.title
-        sess.summary = titles.fresh_summary(sess.session_id, harness="codex")
+        sess.summary = titles.fresh_summary(
+            sess.session_id, harness="codex",
+            after_offset=_latest_user_message_offset(path),
+        )
         runtime_home = _rollout_home(path) or home
         subagent_index = (
             _tick_subagents(tick, runtime_home)

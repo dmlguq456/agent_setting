@@ -2,6 +2,8 @@
 import os
 from pathlib import Path
 import tempfile
+import threading
+import time
 import unittest
 from unittest import mock
 
@@ -36,6 +38,52 @@ class SessionSummaryTriggerTest(unittest.TestCase):
             self.assertEqual(kwargs["quota_class"], "final")
             self.assertEqual(kwargs["debounce"], 0)
             self.assertTrue(kwargs["priority"])
+
+    def test_codex_initial_waits_for_post_hook_rollout_write(self):
+        with tempfile.TemporaryDirectory() as td:
+            transcript = Path(td) / "session.jsonl"
+            transcript.write_text("{}\n")
+            boundary = transcript.stat().st_mtime_ns
+
+            def append_prompt():
+                time.sleep(0.05)
+                transcript.write_text('{}\n{"role":"user"}\n')
+
+            writer = threading.Thread(target=append_prompt)
+            writer.start()
+            try:
+                with mock.patch("fleet.refresh_title.maybe_spawn", return_value=True) as spawn:
+                    self.assertTrue(T.trigger(
+                        "codex", "sid", "initial", str(transcript),
+                        wait_seconds=1, after_mtime_ns=boundary,
+                    ))
+            finally:
+                writer.join()
+            self.assertEqual(spawn.call_count, 1)
+
+    def test_codex_initial_does_not_spawn_before_rollout_advances(self):
+        with tempfile.TemporaryDirectory() as td:
+            transcript = Path(td) / "session.jsonl"
+            transcript.write_text("{}\n")
+            boundary = transcript.stat().st_mtime_ns
+            with mock.patch("fleet.refresh_title.maybe_spawn", return_value=True) as spawn:
+                self.assertFalse(T.trigger(
+                    "codex", "sid", "initial", str(transcript),
+                    wait_seconds=0.02, after_mtime_ns=boundary,
+                ))
+            spawn.assert_not_called()
+
+    def test_codex_initial_launcher_passes_post_hook_boundary(self):
+        with mock.patch.object(T.time, "time_ns", return_value=123456789), \
+             mock.patch.object(T.subprocess, "Popen") as popen:
+            self.assertTrue(T.launch_trigger("codex", "sid", "initial"))
+        argv = popen.call_args.args[0]
+        self.assertEqual(argv[argv.index("--after-mtime-ns") + 1], "123456789")
+
+    def test_final_launcher_has_no_post_hook_boundary(self):
+        with mock.patch.object(T.subprocess, "Popen") as popen:
+            self.assertTrue(T.launch_trigger("codex", "sid", "final"))
+        self.assertNotIn("--after-mtime-ns", popen.call_args.args[0])
 
 
 if __name__ == "__main__":

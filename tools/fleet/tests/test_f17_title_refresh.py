@@ -20,7 +20,7 @@ if _TOOLS_DIR not in sys.path:
 from fleet import titles                       # noqa: E402
 from fleet import refresh_title as rt           # noqa: E402
 from fleet.model import DispatchJob, Session    # noqa: E402
-from fleet.collectors import claude             # noqa: E402
+from fleet.collectors import claude, codex      # noqa: E402
 
 _REPO_ROOT = os.path.dirname(_TOOLS_DIR)
 _STATUSLINE = os.path.join(_REPO_ROOT, "adapters", "claude", "statusline.sh")
@@ -137,6 +137,26 @@ class TitlesHelperTest(_ConfigHomeMixin, unittest.TestCase):
 
     def test_fresh_summary_window_is_much_shorter_than_title_window(self):
         self.assertLess(titles._FRESH_SUMMARY_SEC, titles._FRESH_SEC)
+
+    def test_fresh_summary_must_cover_latest_user_boundary(self):
+        titles.write("sidB", "t", summary="previous turn", offset=42, now=1000.0)
+        self.assertIsNone(titles.fresh_summary(
+            "sidB", now=1001.0, after_offset=42))
+        self.assertEqual(titles.fresh_summary(
+            "sidB", now=1001.0, after_offset=41), "previous turn")
+
+    def test_codex_user_boundary_is_exact_byte_offset(self):
+        path = os.path.join(self._tmp.name, "rollout.jsonl")
+        first = json.dumps({"type": "session_meta", "payload": {}}).encode() + b"\n"
+        user = json.dumps({
+            "type": "response_item",
+            "payload": {"type": "message", "role": "user", "content": []},
+        }).encode() + b"\n"
+        with open(path, "wb") as handle:
+            handle.write(first + user)
+        self.assertEqual(codex._latest_user_message_offset(path), len(first))
+        self.assertEqual(
+            codex._latest_user_message_offset(path, chunk=len(user)), len(first))
 
 
 class PriorityTest(_ConfigHomeMixin, unittest.TestCase):

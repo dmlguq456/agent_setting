@@ -43,7 +43,7 @@ def _opencode_db() -> Path:
 
 
 def trigger(harness: str, sid: str, phase: str, transcript: str | None = None,
-            wait_seconds: float = 0.0) -> bool:
+            wait_seconds: float = 0.0, after_mtime_ns: int | None = None) -> bool:
     if harness not in HARNESSES or phase not in PHASES or not sid:
         return False
     deadline = time.monotonic() + max(0.0, wait_seconds)
@@ -65,6 +65,16 @@ def trigger(harness: str, sid: str, phase: str, transcript: str | None = None,
                     refresh_source={"kind": "opencode-db", "db_path": str(database)},
                 ))
         elif source is not None and source.is_file():
+            if after_mtime_ns is not None:
+                try:
+                    source_ready = source.stat().st_mtime_ns > after_mtime_ns
+                except OSError:
+                    source_ready = False
+                if not source_ready:
+                    if time.monotonic() >= deadline:
+                        return False
+                    time.sleep(0.1)
+                    continue
             from fleet import refresh_title
 
             return bool(refresh_title.maybe_spawn(
@@ -84,11 +94,17 @@ def launch_trigger(harness: str, sid: str, phase: str, transcript: str | None = 
     """Launch the bounded trigger without adding latency to a runtime hook."""
     if harness not in HARNESSES or phase not in PHASES or not sid:
         return False
+    # Codex UserPromptSubmit runs before the new user message is durable in the
+    # rollout.  Gate the detached initial refresh on a post-hook source mtime so
+    # it cannot summarize the preceding turn under the current session card.
+    after_mtime_ns = time.time_ns() if harness == "codex" and phase == "initial" else None
     argv = [
         sys.executable, str(Path(__file__).resolve()),
         "--harness", harness, "--sid", sid, "--phase", phase,
         "--wait", "5" if phase == "initial" else "1",
     ]
+    if after_mtime_ns is not None:
+        argv.extend(["--after-mtime-ns", str(after_mtime_ns)])
     if transcript:
         argv.extend(["--transcript", transcript])
     env = dict(os.environ)
@@ -111,8 +127,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--phase", choices=sorted(PHASES), required=True)
     parser.add_argument("--transcript")
     parser.add_argument("--wait", type=float, default=0.0)
+    parser.add_argument("--after-mtime-ns", type=int)
     args = parser.parse_args(argv)
-    trigger(args.harness, args.sid, args.phase, args.transcript, args.wait)
+    trigger(
+        args.harness, args.sid, args.phase, args.transcript, args.wait,
+        args.after_mtime_ns,
+    )
     return 0
 
 

@@ -95,12 +95,14 @@ def fresh_title(sid, now=None, max_age=_FRESH_SEC, harness="claude"):
     return title if isinstance(title, str) and title.strip() else None
 
 
-def fresh_summary(sid, harness="claude", now=None, max_age=_FRESH_SUMMARY_SEC):
+def fresh_summary(sid, harness="claude", now=None, max_age=_FRESH_SUMMARY_SEC,
+                  after_offset=None):
     """Return a non-empty live summary only while the sidecar timestamp is fresh.
 
     Same shape as ``fresh_title`` but with a much shorter default window: the
     subtitle describes what the session is doing RIGHT NOW, so a 24h-old value
-    (fine for a title) would be actively misleading here.
+    (fine for a title) would be actively misleading here.  ``after_offset``
+    additionally requires the sidecar cursor to cover a newer source boundary.
     """
     data = read(sid, harness=harness)
     if not data:
@@ -111,6 +113,11 @@ def fresh_summary(sid, harness="claude", now=None, max_age=_FRESH_SUMMARY_SEC):
     now = time.time() if now is None else now
     if now - ts > max_age:
         return None
+    if after_offset is not None:
+        offset = data.get("offset")
+        if (not isinstance(offset, int) or isinstance(offset, bool)
+                or offset <= after_offset):
+            return None
     summary = data.get("summary")
     return summary if isinstance(summary, str) and summary.strip() else None
 
