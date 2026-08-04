@@ -112,6 +112,16 @@ class AdoptChildTitlesTest(unittest.TestCase):
         fleet_collectors._adopt_child_titles([child], [job])
         self.assertEqual(job.summary, "Attempt-owned NOW")
         self.assertTrue(job._child_session_associated)
+        self.assertFalse(job._child_refresh_associated)
+
+    def test_persistent_child_marks_refresh_source_as_authoritative(self):
+        child = _child(42, "/work/fix-x", "Child title", proc_start="123")
+        child._transcript_path = "/runtime/child.jsonl"
+        job = DispatchJob(key="autopilot-code", slug="fix-x", cwd="/work/fix-x",
+                          harness="claude", pid=42, proc_start="123", is_child=True,
+                          liveness="working")
+        fleet_collectors._adopt_child_titles([child], [job])
+        self.assertTrue(job._child_refresh_associated)
 
 
 class AttemptSummaryFallbackTest(unittest.TestCase):

@@ -831,7 +831,7 @@ def schedule_sessions(sessions, jobs=None):
     for job in jobs or ():
         if (getattr(job, "_summary_sid", None)
                 and getattr(job, "_transcript_path", None)
-                and not getattr(job, "_child_session_associated", False)
+                and not getattr(job, "_child_refresh_associated", False)
                 and not getattr(job, "afterglow", False)):
             candidates.append(job)
 

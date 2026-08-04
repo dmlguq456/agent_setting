@@ -428,12 +428,31 @@ class StormGuardTest(_ConfigHomeMixin, unittest.TestCase):
         job._summary_sid = "dispatch-att-child-test"
         job._transcript_path = self.transcript
         job._child_session_associated = True
+        job._child_refresh_associated = True
         original = rt.maybe_spawn
         rt.maybe_spawn = lambda **_kwargs: self.fail("associated job scheduled twice")
         try:
             self.assertEqual(rt.schedule_sessions([], [job]), 0)
         finally:
             rt.maybe_spawn = original
+
+    def test_nonpersistent_child_identity_keeps_attempt_log_fallback(self):
+        job = DispatchJob(
+            key="code-test", slug="child-test", cwd="/repo", harness="claude",
+            is_child=True, liveness="working", attempt_id="att-child-test",
+        )
+        job._summary_sid = "dispatch-att-child-test"
+        job._transcript_path = self.transcript
+        job._child_session_associated = True
+        job._child_refresh_associated = False
+        seen = []
+        original = rt.maybe_spawn
+        rt.maybe_spawn = lambda **kwargs: seen.append(kwargs) or True
+        try:
+            self.assertEqual(rt.schedule_sessions([], [job]), 1)
+        finally:
+            rt.maybe_spawn = original
+        self.assertEqual(seen[0]["sid"], "dispatch-att-child-test")
 
     def test_disable_marker_and_environment_fail_closed(self):
         os.makedirs(rt.disable_marker_path(), exist_ok=True)

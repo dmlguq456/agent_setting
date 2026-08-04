@@ -120,6 +120,14 @@ def _adopt_child_titles(sessions, jobs):
                     job.summary = None
             continue
         job._child_session_associated = True
+        # Identity association alone is not enough to suppress the attempt-log
+        # fallback.  `claude -p --no-session-persistence` exposes a session id and
+        # process but no persistent transcript, so only a child with an actual
+        # refresh input can own title/NOW generation.
+        job._child_refresh_associated = bool(
+            getattr(source, "_transcript_path", None)
+            or getattr(source, "_refresh_source", None)
+        )
         # Values cross the boundary as one association decision. Attempt-stream
         # sub-agents already attached to the job are stronger and stay authoritative.
         # Dispatch context is intentionally absent: headless runtimes expose no
