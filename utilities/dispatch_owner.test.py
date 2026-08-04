@@ -18,6 +18,11 @@ from model_profile import resolve_profile
 ROOT = Path(__file__).resolve().parents[1]
 SELECTOR = ROOT / "utilities" / "dispatch-owner.py"
 
+import json  # noqa: E402
+_OWNER_SPEC = importlib.util.spec_from_file_location("dispatch_owner", SELECTOR)
+OWNER = importlib.util.module_from_spec(_OWNER_SPEC)
+_OWNER_SPEC.loader.exec_module(OWNER)
+
 
 class DispatchOwnerTests(unittest.TestCase):
     def setUp(self):
@@ -262,6 +267,54 @@ class DispatchOwnerTests(unittest.TestCase):
         self.assertNotIn("check=ok", stdout)
         self.assertEqual(calls, [])
         self.assertEqual(self._snapshot_side_effects(), before)
+
+
+class RouteEvidenceOwnerHarnessTest(unittest.TestCase):
+    """--route-evidence binds the adapter cascade to the probed harnesses.
+
+    Without it, a usage-limited configured owner falls through to another
+    harness and every dispatch-depth-2 launch then fails
+    `dispatch-evidence-parent-runtime-mismatch` -- the 2026-08-04 incident with
+    the harness field substituted for the transport field.
+    """
+
+    def _route(self, payload):
+        path = Path(tempfile.mkdtemp()) / "route.json"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        return str(path)
+
+    def test_standard_route_reports_its_sealed_parent_harnesses(self):
+        path = self._route({"effective_intensity": "standard", "dispatch_evidence": {"tuples": [
+            {"parent_harness": "claude", "status": "supported"},
+            {"parent_harness": "codex", "status": "unsupported"},
+        ]}})
+        self.assertEqual(OWNER._sealed_owner_harnesses(path), {"claude"})
+
+    def test_quick_route_uses_its_registered_headless_candidates(self):
+        # quick seals no depth-2 tuples; reading `dispatch_evidence` here would
+        # report "no supported owner harness" for a perfectly valid route.
+        path = self._route({"effective_intensity": "quick", "dispatch_evidence": None,
+                            "registered_headless_candidates": [
+                                {"harness": "codex", "status": "supported"},
+                                {"harness": "claude", "status": "unsupported"}]})
+        self.assertEqual(OWNER._sealed_owner_harnesses(path), {"codex"})
+
+    def test_direct_route_has_no_owner_to_bind(self):
+        path = self._route({"effective_intensity": "direct", "dispatch_evidence": None})
+        with self.assertRaises(OWNER.OwnerError) as caught:
+            OWNER._sealed_owner_harnesses(path)
+        self.assertEqual(str(caught.exception), "route-evidence-direct-route-has-no-owner")
+
+    def test_selector_only_option_never_reaches_the_wrapper(self):
+        _, _, forwarded, evidence = OWNER._parse([
+            "--route-evidence", "/tmp/r.json", "--worktree", "/w", "--slug", "s",
+            "--capability", "autopilot-code", "--capability-mode", "dev", "--qa", "standard",
+            "--intensity", "standard", "--dispatch-depth", "1", "--worker-type", "owner",
+            "--assigned-contract", "autopilot-code", "--owner", "autopilot-code",
+            "--model-profile", "deep", "--dry-run"])
+        self.assertEqual(evidence, "/tmp/r.json")
+        self.assertNotIn("--route-evidence", forwarded)
+        self.assertNotIn("/tmp/r.json", forwarded)
 
 
 if __name__ == "__main__":

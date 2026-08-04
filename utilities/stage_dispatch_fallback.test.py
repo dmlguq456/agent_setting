@@ -210,6 +210,20 @@ class FallbackTest(unittest.TestCase):
   dry=self.run_node(path,"plan-check","dry-run",**right)
   self.assertEqual(dry.returncode,0,dry.stdout+dry.stderr)
   self.assertIn("selected_hop=same-harness-headless",dry.stdout)
+ def test_registry_infrastructure_failure_is_not_a_candidate_failure(self):
+  # An unwritable registry is a hard stop at --start. Treating it as one more
+  # exhausted candidate would descend to inline and recreate the divergence
+  # the dry-run parent check exists to remove.
+  path=self.route(same_status="supported"); route=json.loads(path.read_text())
+  node=next(n for n in route["nodes"] if n["id"]=="plan-check")
+  row=node["fallback_hops"][0]["candidates"][0]
+  args=SimpleNamespace(action="dry-run",parent="owner",jobs=self.jobs,
+                       inherited_jobs=str(self.jobs))
+  with mock.patch.object(F,"resolve_live_parent_attempt",
+                         side_effect=F.DispatchContractError("global-registry-unwritable","x")):
+   reason=F.parent_runtime_failure(args,route,row,None)
+  self.assertEqual(reason,"global-registry-unwritable")
+  self.assertNotIn(reason,F.CANDIDATE_SCOPED_PARENT_FAILURES)
  def test_partial_parent_runtime_identity_fails_closed(self):
   path=self.route(same_status="supported")
   result=self.run_node(path,"plan-check","dry-run",

@@ -59,10 +59,20 @@ def _sealed_owner_harnesses(path):
         route = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise OwnerError(f"route-evidence-unreadable:{exc}") from exc
-    tuples = (route.get("dispatch_evidence") or {}).get("tuples") or []
+    intensity = route.get("effective_intensity")
+    if intensity == "direct":
+        raise OwnerError("route-evidence-direct-route-has-no-owner")
+    if intensity == "quick":
+        # A quick route seals no depth-2 tuples; its own registered-headless
+        # candidates name the harnesses that were probed. The wrapper already
+        # rejects a foreign harness there (`quick-headless-unavailable`), so
+        # this only moves the same verdict ahead of the launch.
+        rows, field = route.get("registered_headless_candidates") or [], "harness"
+    else:
+        rows, field = (route.get("dispatch_evidence") or {}).get("tuples") or [], "parent_harness"
     harnesses = {
-        row.get("parent_harness")
-        for row in tuples
+        row.get(field)
+        for row in rows
         if isinstance(row, dict) and row.get("status") == "supported"
     }
     harnesses &= _defaults.KNOWN_HARNESSES

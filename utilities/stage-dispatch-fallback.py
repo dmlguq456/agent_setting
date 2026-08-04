@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -46,8 +47,6 @@ from dispatch_contract import (  # noqa: E402
     resolve_live_parent_attempt,
     validate_attempt_metadata,
 )
-
-import importlib.util  # noqa: E402
 
 _NODE_SPEC = importlib.util.spec_from_file_location(
     "dispatch_node", ROOT / "utilities" / "dispatch-node.py"
@@ -292,6 +291,21 @@ def native_child_proof(args: argparse.Namespace, route: dict, node: dict) -> str
                 if item.get("attempt_id") == producer and valid_native_axes(item):
                     return "route-owned-artifact"
     return ""
+
+
+# Parent-resolution reasons that disqualify one candidate. Anything else the
+# resolver can raise is an infrastructure failure of the registry itself, which
+# `--start` reports as a hard stop; descending to the inline hop on it would
+# reintroduce the dry-run/start divergence this function exists to remove.
+CANDIDATE_SCOPED_PARENT_FAILURES = frozenset({
+    "parent-attempt-not-found",
+    "live-parent-not-found",
+    "parent-attempt-not-live",
+    "parent-attempt-ambiguous",
+    "parent-process-identity-missing",
+    "parent-repo-unreadable",
+    "dispatch-evidence-parent-runtime-mismatch",
+})
 
 
 def parent_runtime_failure(args, route: dict, row: dict, parent_identity) -> str:
@@ -873,6 +887,9 @@ def main() -> int:
                     attempts.append(f"{ordinal}:{key}:skipped-{reason}")
                     continue
                 parent_failure = parent_runtime_failure(args, route, row, parent_identity)
+                if parent_failure and parent_failure not in CANDIDATE_SCOPED_PARENT_FAILURES:
+                    return fail(parent_failure, 73, child_spawned="0",
+                                attempt_trace="|".join(attempts))
                 if parent_failure:
                     attempts.append(f"{ordinal}:{key}:skipped-{parent_failure}")
                     direct_failures.append({
