@@ -69,7 +69,10 @@ class SessionRowTitleTest(unittest.TestCase):
                         slug="s", title="한글제목입니다한글제목입니다한글제목입니다",
                         liveness="idle")
         segs = render._session_row(sess, narrow=False)
-        name_seg = segs[4][0]           # ("  ", gch, " ", harness, name) — index 4 = name text
+        # Select by segment KEY — index 4 is the harness-field padding, not the name
+        # (it merely happened to satisfy this bound while _HMW was 33).
+        name_seg = next(t for t, k in segs
+                        if k in ("name_idle", "name_work", "name_dim"))
         self.assertLessEqual(render._dw(name_seg), render._NW_S - 1)
 
     def test_session_row_2line_title_clipped_to_name2_max(self):

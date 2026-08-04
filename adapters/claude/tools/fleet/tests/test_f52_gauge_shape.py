@@ -157,10 +157,16 @@ class F52WidthLedgerTest(unittest.TestCase):
     def test_left_anchor_and_wide_slack_ledger_are_untouched(self):
         self.assertEqual(render._CONTEXT_INDENT_W, 4)
         self.assertEqual(render._CTX_W, 24)
+        # F-54 (_HMW 33→38) charges 5 more cells to `fixed_row`, so every slack entry drops by
+        # exactly 5 and the alloc ladder shifts right by 5 widths. What this test guards —
+        # the left anchor (_CONTEXT_INDENT_W) and the gauge base (_CTX_W) asserted above, plus
+        # the boost-first/name-to-cap/remainder-to-gauge priority — is untouched: 120 still
+        # sits at the (_NW_S, _CTX_W) floor, and 400 is still name-capped with all remaining
+        # slack in the gauge. Only 168 crossed back below the cap (36, was 40).
         self.assertEqual([render._wide_slack(w) for w in (60, 120, 168, 200, 400)],
-                         [-55, 5, 53, 85, 285])
+                         [-60, 0, 48, 80, 280])
         self.assertEqual([render._wide_alloc(w) for w in (120, 168, 400)],
-                         [(28, 24), (40, 37), (40, 269)])
+                         [(28, 24), (36, 36), (40, 264)])
 
     def test_row_starts_at_the_harness_name_column_and_fits_every_layout(self):
         session = Session(harness="claude", pid=1, cwd="/x", liveness="idle", ctx_pct=63,

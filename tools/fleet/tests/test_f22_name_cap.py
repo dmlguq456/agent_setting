@@ -21,7 +21,10 @@ class WideNameCapTest(unittest.TestCase):
     def test_acceptance_table(self):
         got = {w: render._wide_name_width(w) for w in (60, 120, 168, 200)}
         # 120: 29→28 — merge with the _STAGE_RESERVE breadcrumb tail room (2026-07-15)
-        self.assertEqual(got, {60: 28, 120: 28, 168: 40, 200: 40})
+        # 168: 40→36 — F-54 (_HMW 33→38) charges 5 more cells to the fixed row, so the whole
+        # ladder shifts right by 5 and 168 no longer reaches the cap (172 is the new first
+        # capped width). The floor (60/120 → _NW_S) and the cap value itself are unchanged.
+        self.assertEqual(got, {60: 28, 120: 28, 168: 36, 200: 40})
 
     def test_narrow_widths_are_untouched_by_the_cap(self):
         """60 and 120 sit below the cap (28 < 40), so v8 must not move them at all."""
@@ -29,7 +32,10 @@ class WideNameCapTest(unittest.TestCase):
             self.assertLess(render._wide_name_width(w), render._NAME_WIDE_MAX)
 
     def test_wide_widths_are_clamped_to_the_cap(self):
-        for w in (168, 200, 400, 10000):
+        # 168→172 for the first sample: F-54 shifted the ladder right by 5, so the cap is
+        # first reached at 172. The clamp rule is unchanged — every width at or past the
+        # first capped width still returns exactly _NAME_WIDE_MAX, however wide it gets.
+        for w in (172, 200, 400, 10000):
             self.assertEqual(render._wide_name_width(w), render._NAME_WIDE_MAX)
 
     def test_lower_bound_still_wins_on_tiny_terminals(self):
@@ -108,13 +114,16 @@ class RowWidthRegressionTest(unittest.TestCase):
                                    name_width=render._wide_name_width(term_width))
         return sum(render._dw(t) for t, _k in segs if t != render._RFLUSH)
 
-    def test_long_title_row_does_not_grow_between_168_and_200(self):
+    # Both endpoints must sit at or past the first capped width; F-54 (_HMW 33→38) moved that
+    # from 167 to 172, so the lower sample is 172 instead of 168. The rule under test — a row
+    # stops growing once the name zone is capped — is unchanged, only the sample moved.
+    def test_long_title_row_does_not_grow_between_172_and_200(self):
         """Pre-v8 the name zone grew 77 → 109 across these widths, dragging the row with it."""
         long_title = "y" * 200
-        self.assertEqual(self._row_width(168, long_title), self._row_width(200, long_title))
+        self.assertEqual(self._row_width(172, long_title), self._row_width(200, long_title))
 
     def test_short_title_row_is_unaffected_by_the_cap(self):
-        self.assertEqual(self._row_width(168, "short"), self._row_width(200, "short"))
+        self.assertEqual(self._row_width(172, "short"), self._row_width(200, "short"))
 
 
 if __name__ == "__main__":

@@ -317,7 +317,12 @@ class TitleCapTest(unittest.TestCase):
         sess = Session(harness="claude", pid=1, cwd="", slug="s",
                        title=long_title, liveness="idle")
         segs = render._session_row(sess, narrow=False)
-        name_seg = segs[4][0]
+        # Select the name by segment KEY, not position: index 4 is the harness-field
+        # PADDING, which used to be 22 cells (_HMW 33 - "claude code") and so slipped
+        # under _TITLE_MAX by accident. F-54 widened it to 27 and exposed the mis-index —
+        # the legacy 24-cell title cap itself never moved.
+        name_seg = next(t for t, k in segs
+                        if k in ("name_idle", "name_work", "name_dim"))
         self.assertLessEqual(render._dw(name_seg), render._TITLE_MAX)
 
     def test_wide_session_title_expands_with_terminal_width(self):
@@ -326,7 +331,8 @@ class TitleCapTest(unittest.TestCase):
                        title=long_title, liveness="idle")
         name_width = render._wide_name_width(168)
         segs = render._session_row(sess, narrow=False, name_width=name_width)
-        name_text = segs[4][0]
+        name_text = next(t for t, k in segs
+                         if k in ("name_idle", "name_work", "name_dim"))
         self.assertGreater(name_width, render._NW_S)
         self.assertGreater(render._dw(name_text), render._TITLE_MAX)
         self.assertLessEqual(render._dw(name_text), name_width)
@@ -336,7 +342,8 @@ class TitleCapTest(unittest.TestCase):
                        title="반응형세션제목" * 20, liveness="idle")
         name_width = render._wide_name_width(168)
         segs = render._session_row(sess, narrow=False, name_width=name_width)
-        name_text = segs[4][0]
+        name_text = next(t for t, k in segs
+                         if k in ("name_idle", "name_work", "name_dim"))
         self.assertLessEqual(render._dw(name_text), name_width)
         self.assertNotEqual(name_text[-1:], "")
 

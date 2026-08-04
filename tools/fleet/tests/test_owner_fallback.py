@@ -57,11 +57,11 @@ class OwnerFallbackTest(unittest.TestCase):
             model="sonnet", effort="high",
         )
 
-    def _render(self, sessions, jobs, process=False):
+    def _render(self, sessions, jobs, process=False, term_width=168):
         render.set_process_view(process)
         return text(render._build_lines(
             sessions, jobs, section="both", narrow=False, malformed=0,
-            layout="wide", term_width=168,
+            layout="wide", term_width=term_width,
         ))
 
     def test_exact_parent_sid_recovers_ownership_and_suppresses_only_duplicate_detail(self):
@@ -86,7 +86,14 @@ class OwnerFallbackTest(unittest.TestCase):
     def test_unmatched_parent_stays_orphaned(self):
         work = self._route_projection("rt-unmatched")
         stage = self._stage("sid-missing", work=work)
-        rendered = self._render([], [stage])
+        # 200 cols, not the suite default 168: an ORPHAN row pays for the section's extra
+        # indent plus the `` (orphan)`` suffix out of the same name budget, and after F-54
+        # (_HMW 33→38 cut the 168-col name zone 40→36) that no longer leaves room to spell
+        # `stage-execute` in full — it renders as `stage-ex…`. The subject here is ownership
+        # (orphan section + marker + worker identity), not the clip ledger, which
+        # test_f22_name_cap already owns, so widen past the cap instead of weakening the
+        # identity assertion.
+        rendered = self._render([], [stage], term_width=200)
         self.assertIn("orphaned dispatch rows", rendered)
         self.assertIn("(orphan)", rendered)
         self.assertIn("stage-execute", rendered)
