@@ -44,6 +44,7 @@ from . import gitinfo
 # The live TUI (run_live) still requires curses and guards for its absence explicitly.
 _A_BOLD = getattr(curses, "A_BOLD", 0)
 _A_DIM = getattr(curses, "A_DIM", 0)
+_A_REVERSE = getattr(curses, "A_REVERSE", 0)
 
 # Low-chroma xterm-256 palette. Semantic axes stay green/yellow/red and
 # cyan/magenta/blue, but the stock primaries are replaced with softer midtones.
@@ -144,6 +145,12 @@ _HUE_OF = {
     "g_work": ("g", _A_B), "g_work_off": ("g", _A_D),
     "g_spin": ("v", 0), "g_spin_dim": ("v", _A_D), "g_idle": ("y", 0),
     "g_stale": ("d", _A_D), "g_dead": ("r", _A_B), "g_unused": ("y", _A_D),
+    # F-60: `blocked` is RED, on its own key. It shares a hue with `g_dead` but never a key —
+    # keeping them separate is what lets one be retuned later without moving the other. The
+    # chip variant adds A_REVERSE and is used ONLY on the interaction badge; the glyph and the
+    # context lead word stay red+bold, because two reverse cells in one row cancel each other
+    # out as emphasis.
+    "g_blocked": ("r", _A_B), "g_blocked_chip": ("r", _A_B | _A_REVERSE),
     # Badge text, NOT the glyph: plain yellow, distinct from the dim g_unused glyph so the
     # ●>○>◌ ink-weight gradient still reads.
     "g_unused_b": ("y", 0),
@@ -232,6 +239,15 @@ def _init_colors():
     _COLOR["g_idle"] = _COLOR.get("yellow", 0)
     _COLOR["g_stale"] = curses.A_DIM
     _COLOR["g_dead"] = _COLOR.get("red", 0) | curses.A_BOLD
+    # F-60 (user 2026-08-04, "중단 표시가 눈에 잘 안 보인다"): blocked moves off the yellow
+    # `g_idle` onto red. Its own key, not `g_dead`'s, so the two red states stay independently
+    # tunable. The chip is the SAME key plus A_REVERSE — the `hdr_bar`/`hdr_warn` fallback
+    # idiom — and it is what carries the emphasis; no blink, because the working dot's 2 Hz
+    # toggle already means "in progress" and blocked is a static wait for input.
+    # Without color both keys collapse to attributes and STILL differ: blocked reads bold, and
+    # its badge reads reverse, while dead is bold only and never gets a chip.
+    _COLOR["g_blocked"] = _COLOR.get("red", 0) | curses.A_BOLD
+    _COLOR["g_blocked_chip"] = _COLOR["g_blocked"] | curses.A_REVERSE
     # unused (F-26): dim yellow — distinct from idle's dim GREEN (live-but-quiet) and from
     # stale's colorless dim. The shape carries the meaning on its own; color only reinforces.
     _COLOR["g_unused"] = _COLOR.get("yellow", 0) | curses.A_DIM
@@ -395,7 +411,7 @@ _LIVE_GLYPH = {"working": "●", "idle": "●", "unused": "◌", "blocked": "◑
                "stale": "·", "dead": "✕", "queued": "◦", "unknown": "·"}
 _DETACHED_GLYPH = "○"   # Ring means no attached client; idle uses a filled dim-green dot.
 _GLYPH_KEY = {"working": "g_work", "idle": "g_work_off", "unused": "g_unused",
-              "blocked": "g_idle", "done": "green",
+              "blocked": "g_blocked", "done": "green",   # F-60: red, on its own key
               "stale": "g_stale", "dead": "g_dead", "degraded": "lvl_y", "queued": "dim", "unknown": "dim"}
 _INTERACTION_LABEL = {
     "decision": "decision",
@@ -1335,6 +1351,24 @@ def _interaction_badge(s):
     return " " + label if label else ""
 
 
+def _interaction_chip(s):
+    """F-60: the blocked session's interaction badge, drawn as a REVERSE-VIDEO chip.
+
+    Returns `(segs, width)` — `([], 0)` when the session has no interaction kind to name.
+
+    The chip is where F-60's emphasis lives. The separator space stays OUTSIDE the reversed
+    run and the label is padded inside it, so the reversed cells form one solid block instead
+    of a run of inverted letters butting against the title. The glyph and the context lead
+    word deliberately do NOT get this treatment: they carry the same `g_blocked` red, and a
+    second reversed cell on the row would read as two competing chips rather than one.
+    """
+    label = _interaction_badge(s).strip()
+    if not label:
+        return [], 0
+    chip = " %s " % label
+    return [(" ", None), (chip, "g_blocked_chip")], 1 + _dw(chip)
+
+
 def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None,
                  show_projection_stage=True, stage_zone=None):
     live = s.liveness
@@ -1379,10 +1413,10 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None,
             suffix.append((ub, "g_unused_b"))
             suffix_w += _dw(ub)
     elif live == "blocked":
-        badge = _interaction_badge(s)
-        if badge and suffix_w + _dw(badge) < avail:
-            suffix.append((badge, "g_idle"))
-            suffix_w += _dw(badge)
+        chip, chip_w = _interaction_chip(s)
+        if chip and suffix_w + chip_w < avail:
+            suffix.extend(chip)
+            suffix_w += chip_w
     # Degradation ladder, tightest-last (the F-22 40-cell cap makes this reachable at every
     # width, so it cannot be left to chance): provenance drops first, then the badge's age,
     # and only then does the name itself clip. The name is what identifies the row — F-26
@@ -1892,9 +1926,7 @@ def _session_row_2line(s, is_parent=False, child_count=0, _split=False, term_wid
         unused_at = len(suffix)
         suffix.append((_unused_badge(s), "g_unused_b"))
     elif live == "blocked":
-        badge = _interaction_badge(s)
-        if badge:
-            suffix.append((badge, "g_idle"))
+        suffix.extend(_interaction_chip(s)[0])
     # provenance is optional here: in the narrow/stack layouts every suffix cell
     # is taken straight out of the name, so a 9-cell tag can clip a real name down to "age…".
     # A name the user can read outranks knowing who launched it — drop the tag instead.
@@ -4172,7 +4204,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     if "degraded" in _seen_glyphs:
         legend += [("◐", "lvl_y"), (" degraded node   ", "dim")]
     if "blocked" in _seen_glyphs:
-        legend += [("◑", "g_idle"), (" blocked session   ", "dim")]
+        legend += [("◑", "g_blocked"), (" blocked session   ", "dim")]
     if "child" in _seen_glyphs:
         legend += [("▾N", "dim"), (" child jobs   ", "dim")]
     if "subagent" in _seen_glyphs:

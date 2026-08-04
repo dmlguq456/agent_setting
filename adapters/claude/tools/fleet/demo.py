@@ -85,6 +85,17 @@ def collect(harness_filter=None):
           slug="demo-app", model="gpt-5.5", effort="high",
           ctx_pct=72, rl_5h=94, rl_7d=53, elapsed_min=41,
           branch="feat/streaming", liveness="idle"),
+        # F-60: blocked sessions — the whole point of the red key + reverse chip is that these
+        # rows are findable at a glance, so the demo board has to contain some. Two kinds, so
+        # the chip is exercised at two label lengths (`approval` 8, `perm` 4), and one of them
+        # sits in the same group as a stale row so the red-vs-red comparison is on screen.
+        S(harness="claude", pid=90011, cwd="/home/demo/demo-app", session_id="demo-blocked-1",
+          slug="demo-app-gate", model="Opus 5", effort="xhigh",
+          ctx_pct=37, rl_5h=33, rl_7d=12, cost=2.80, elapsed_min=7,
+          branch="feat/gate", liveness="blocked",
+          interaction_state={"kind": "approval", "source": "claude-transcript",
+                             "waiting_since": time.time() - 7 * 60},
+          summary="배포 승인 대기 중 — 사용자의 확인을 기다리고 있습니다"),
         # --- project 'demo-lib' ---
         S(harness="opencode", pid=90003, cwd="/home/demo/demo-lib", session_id="demo-oc-1",
           slug="witty-orchid", model="deepseek-v4-pro", effort="high",
@@ -99,6 +110,13 @@ def collect(harness_filter=None):
           slug="brave-comet", model="glm-5.2", effort="low",
           ctx_pct=31, cost=0.42, elapsed_min=200,
           branch="main", liveness="working"),
+        S(harness="codex", pid=90012, cwd="/home/demo/demo-svc", session_id="demo-blocked-2",
+          slug="demo-svc-perm", model="gpt-5.6-sol", effort="xhigh",
+          ctx_pct=64, rl_5h=94, rl_7d=53, elapsed_min=22,
+          branch="fix/perm", liveness="blocked",
+          interaction_state={"kind": "permission", "source": "codex-rollout",
+                             "waiting_since": time.time() - 22 * 60},
+          summary="쉘 명령 권한 승인을 기다리는 중"),
         # detached tmux session (no client attached) — idle but backgrounded, shown with ◌ not ○
         S(harness="claude", pid=90006, cwd="/home/demo/demo-app", session_id="demo-claude-3",
           slug="demo-app-detach", model="Opus 4.8", effort="high", detached=True,

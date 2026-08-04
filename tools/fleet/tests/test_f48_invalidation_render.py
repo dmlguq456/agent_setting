@@ -89,7 +89,11 @@ class InvalidationRenderTest(unittest.TestCase):
         self.assertEqual(render._HUE_OF[main_key], ("v", 0))
         self.assertEqual(render._HUE_OF[job_key], ("v", render._A_DIM))
         self.assertEqual(pulse[1][1], "g_spin")
-        self.assertEqual(render._GLYPH_KEY["blocked"], "g_idle")
+        # F-60 moved blocked off the shared yellow `g_idle` onto its own red key. The point
+        # this line has always made — blocked does not borrow the working axis' keys — is
+        # unchanged, and it is now also distinct from `g_dead`.
+        self.assertEqual(render._GLYPH_KEY["blocked"], "g_blocked")
+        self.assertNotEqual(render._GLYPH_KEY["blocked"], render._GLYPH_KEY["dead"])
 
     def test_public_json_contains_only_interaction_metadata(self):
         with mock.patch.object(fleetmod, "_collect_memory", return_value=None), \
