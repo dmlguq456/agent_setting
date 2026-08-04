@@ -47,11 +47,15 @@ SUMMARY_MAXLEN = 120
 MAX_SCAN = 1 << 20
 WORKER_TIMEOUT = 60
 DEBOUNCE_SEC = 600
-CHILD_DEBOUNCE_SEC = 150   # dispatched children move faster than main sessions (user 2026-07-19)
+WORKING_DEBOUNCE_SEC = 120
+CHILD_DEBOUNCE_SEC = 90
+SUMMARY_RETRY_DELAYS = (30, 60, 120)
 DEFAULT_CONCURRENCY = 3
 MAX_CONCURRENCY = 4
 DEFAULT_START_LIMIT = 4
 MAX_START_LIMIT = 4
+DEFAULT_PRIORITY_START_LIMIT = 2
+MAX_PRIORITY_START_LIMIT = 2
 START_WINDOW_SEC = 60      # 1-minute rolling window (was 600s; paired with the 16→3 limit above)
 DISABLE_MARKER = ".refresh-disabled"
 MODEL = os.environ.get("FLEET_TITLE_MODEL", "haiku")
@@ -465,6 +469,15 @@ def start_limit():
     return _bounded_env_int("FLEET_TITLE_MAX_STARTS", DEFAULT_START_LIMIT, MAX_START_LIMIT)
 
 
+def priority_start_limit():
+    """Recovery starts reserved for sessions that do not yet have a fresh NOW summary."""
+    return _bounded_env_int(
+        "FLEET_TITLE_PRIORITY_MAX_STARTS",
+        DEFAULT_PRIORITY_START_LIMIT,
+        MAX_PRIORITY_START_LIMIT,
+    )
+
+
 def disable_marker_path():
     return os.path.join(titles.state_root(), DISABLE_MARKER)
 
@@ -606,6 +619,32 @@ def _acquire_start_budget(now=None):
         return _new_lease(root, "start-", now)
 
 
+def _acquire_priority_start_budget(now=None):
+    """Claim the small recovery lane after the ordinary start budget is exhausted."""
+    if refresh_disabled() or priority_start_limit() == 0:
+        return None
+    now = time.time() if now is None else now
+    root = os.path.join(titles.state_root(), ".refresh-priority-budget")
+    try:
+        os.makedirs(root, exist_ok=True)
+    except OSError:
+        return None
+    with _state_guard() as acquired:
+        if not acquired:
+            return None
+        live = _lease_dirs(root, "start-", now, START_WINDOW_SEC)
+        if len(live) >= priority_start_limit():
+            return None
+        return _new_lease(root, "start-", now)
+
+
+def _summary_failures(sidecar):
+    value = sidecar.get("summary_failures", 0) if isinstance(sidecar, dict) else 0
+    if not isinstance(value, int) or isinstance(value, bool):
+        return 0
+    return max(0, min(len(SUMMARY_RETRY_DELAYS), value))
+
+
 def run_worker(prompt, model=None, timeout=WORKER_TIMEOUT, capacity_held=False):
     """Run the configured title provider with no shell; failures degrade to ``''``."""
     if refresh_disabled():
@@ -671,7 +710,7 @@ def _provider_source():
 
 
 def maybe_spawn(harness, sid, transcript=None, now=None, debounce=DEBOUNCE_SEC,
-                refresh_source=None):
+                refresh_source=None, priority=False):
     """Start one detached refresh when state is stale and the transcript grew."""
     if (
         refresh_disabled()
@@ -693,13 +732,15 @@ def maybe_spawn(harness, sid, transcript=None, now=None, debounce=DEBOUNCE_SEC,
     now = time.time() if now is None else now
     previous = titles.read(sid, harness=harness) or {}
     ts = previous.get("ts") if isinstance(previous.get("ts"), (int, float)) else 0
-    if ts and now - ts <= debounce:
+    failures = _summary_failures(previous)
+    retry_delay = SUMMARY_RETRY_DELAYS[failures - 1] if failures else debounce
+    if ts and now - ts <= retry_delay:
         return False
     try:
         transcript_mtime = os.path.getmtime(transcript) if transcript else now
     except OSError:
         return False
-    if ts and transcript_mtime <= ts:
+    if ts and transcript_mtime <= ts and not failures:
         return False
 
     lockdir = titles.lock_path(sid, harness=harness)
@@ -723,6 +764,8 @@ def maybe_spawn(harness, sid, transcript=None, now=None, debounce=DEBOUNCE_SEC,
         _remove_empty_dir(lockdir)
         return False
     budget_lease = _acquire_start_budget(now=now)
+    if not budget_lease and priority:
+        budget_lease = _acquire_priority_start_budget(now=now)
     if not budget_lease:
         _remove_empty_dir(slotdir)
         _remove_empty_dir(lockdir)
@@ -774,8 +817,19 @@ def schedule_sessions(sessions):
     tokens instead of parent context). The refresher's own workers stay out
     via the mem_worker tag (FLEET_TITLE_REFRESH=1), not via is_child.
     """
+    def priority_key(session):
+        missing = not getattr(session, "summary", None)
+        child = bool(getattr(session, "is_child", False))
+        working = getattr(session, "liveness", None) == "working"
+        tier = 0 if child and missing else 1 if working and missing else 2 if missing else 3
+        sidecar = titles.read(getattr(session, "session_id", None),
+                              harness=getattr(session, "harness", "")) or {}
+        ts = (sidecar.get("ts") if isinstance(sidecar.get("ts"), (int, float))
+              else getattr(session, "mtime", 0) or 0)
+        return tier, ts, str(getattr(session, "session_id", "") or "")
+
     started = 0
-    for session in sessions:
+    for session in sorted(sessions, key=priority_key):
         if (
             getattr(session, "liveness", None) in ("dead", "stale")
             or getattr(session, "mem_worker", False)
@@ -783,11 +837,15 @@ def schedule_sessions(sessions):
         ):
             continue
         is_child = getattr(session, "is_child", False)
+        missing_summary = not getattr(session, "summary", None)
+        working = getattr(session, "liveness", None) == "working"
         spawn_args = {
             "harness": getattr(session, "harness", ""),
             "sid": getattr(session, "session_id", None),
             "transcript": getattr(session, "_transcript_path", None),
-            "debounce": CHILD_DEBOUNCE_SEC if is_child else DEBOUNCE_SEC,
+            "debounce": (CHILD_DEBOUNCE_SEC if is_child else
+                         WORKING_DEBOUNCE_SEC if working else DEBOUNCE_SEC),
+            "priority": bool(missing_summary and (is_child or working)),
         }
         refresh_source = getattr(session, "_refresh_source", None)
         if refresh_source is not None:
@@ -807,6 +865,7 @@ def main(argv=None):
     parser.add_argument("--opencode-session")
     parser.add_argument("--lockdir")
     parser.add_argument("--slotdir")
+    parser.add_argument("--priority", action="store_true")
     args = parser.parse_args(argv)
 
     owned_slot = args.slotdir
@@ -819,7 +878,10 @@ def main(argv=None):
             owned_slot = _acquire_slot()
             if not owned_slot:
                 return 0
-            if not _acquire_start_budget():
+            budget_lease = _acquire_start_budget()
+            if not budget_lease and args.priority:
+                budget_lease = _acquire_priority_start_budget()
+            if not budget_lease:
                 return 0
         if args.harness == "opencode" and (not args.opencode_db or not args.opencode_session):
             return 0
@@ -829,6 +891,7 @@ def main(argv=None):
         offset = previous.get("offset", 0) if isinstance(previous.get("offset"), int) else 0
         previous_title = previous.get("title", "") if isinstance(previous.get("title"), str) else ""
         previous_summary = previous.get("summary") if isinstance(previous.get("summary"), str) else None
+        previous_failures = _summary_failures(previous)
         cursor_kind = None
         if args.opencode_db:
             # One private snapshot/connection supplies table selection and delta
@@ -855,6 +918,7 @@ def main(argv=None):
                 offset=new_offset,
                 harness=args.harness,
                 summary=previous_summary,
+                summary_failures=previous_failures,
                 cursor_kind=cursor_kind,
             )
             titles.sweep()
@@ -869,13 +933,16 @@ def main(argv=None):
         # is still a reasonable name for the session even a tick late (F-13 honest
         # degrade — silence over a misleading live claim).
         summary = validate_summary(_labeled_line(output, _NOW_LINE_RE))
+        summary_failures = (0 if summary else
+                            min(len(SUMMARY_RETRY_DELAYS), previous_failures + 1))
         titles.write(
             args.sid,
             title if title else previous_title,
             source=_provider_source() if title else source,
-            offset=new_offset,
+            offset=new_offset if summary else offset,
             harness=args.harness,
             summary=summary,
+            summary_failures=summary_failures,
             cursor_kind=cursor_kind,
         )
         titles.sweep()

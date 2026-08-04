@@ -117,7 +117,7 @@ if [ -n "$S_SID" ]; then
 fi
 
 # §4.7 F-17/F-21 공용 fleet 제목 refresher 트리거 — Claude statusline debounce surface.
-# 조건: (a) sidecar 부재 OR ts>10min AND (b) transcript 가 sidecar ts 이후 자람.
+# 조건: working main은 120s, NOW 실패는 30/60/120s backoff 뒤 재시도한다.
 # 재귀가드: refresher 의 claude -p 는 statusline 미실행 + FLEET_TITLE_REFRESH env 이중.
 # 전역 동시성/rolling-start budget은 refresh_title.py가 모든 진입점에 공통 적용한다.
 # kill switch는 shell에서도 먼저 확인해 비활성 상태에 Python조차 spawn하지 않는다.
@@ -133,10 +133,16 @@ if [ -n "$S_SID" ] && [ -n "${S_TRANSCRIPT:-}" ] && [ "${FLEET_TITLE_REFRESH:-}"
   now=$(date +%s)
   scts=0; [ -f "$sc" ] && scts=$(stat -c %Y "$sc" 2>/dev/null || echo 0)
   trm=$(stat -c %Y "$S_TRANSCRIPT" 2>/dev/null || echo 0)
-  # (a) 오래됨: sidecar 없음(scts=0) 또는 10min(600s) 초과
-  if [ "$scts" -eq 0 ] || [ $((now - scts)) -gt 600 ]; then
-    # (b) 자람: transcript mtime 이 sidecar ts 이후 (sidecar 없으면 무조건 자람)
-    if [ "$scts" -eq 0 ] || [ "$trm" -gt "$scts" ]; then
+  sf=0
+  if [ -f "$sc" ]; then
+    sf=$(sed -n 's/.*"summary_failures": *\([0-9][0-9]*\).*/\1/p' "$sc" 2>/dev/null | head -n 1)
+    case "$sf" in ''|*[!0-9]*) sf=0 ;; esac
+  fi
+  retry=120
+  case "$sf" in 1) retry=30 ;; 2) retry=60 ;; 3|4|5|6|7|8|9) retry=120 ;; esac
+  if [ "$scts" -eq 0 ] || [ $((now - scts)) -gt "$retry" ]; then
+    # 실패 상태는 cursor가 보존됐으므로 transcript mtime과 무관하게 같은 delta를 재시도한다.
+    if [ "$scts" -eq 0 ] || [ "$trm" -gt "$scts" ] || [ "$sf" -gt 0 ]; then
       lockdir="$title_dir/.lock-$S_SID"
       if [ -f "$refresher" ] && mkdir -p "$title_dir" 2>/dev/null \
          && mkdir "$lockdir" 2>/dev/null; then
@@ -147,8 +153,12 @@ if [ -n "$S_SID" ] && [ -n "${S_TRANSCRIPT:-}" ] && [ "${FLEET_TITLE_REFRESH:-}"
         # 파이프로 읽을 때(Claude Code 의 실제 statusLine 소비 방식) EOF 가 refresher 종료까지
         # 지연돼 "즉시 반환" 불변식이 깨진다.
         ( trap 'rmdir "$lockdir" 2>/dev/null || true' EXIT
+          priority_arg=
+          if [ "$scts" -eq 0 ] || [ "$sf" -gt 0 ]; then
+            priority_arg=--priority
+          fi
           FLEET_TITLE_REFRESH=1 setsid python3 "$refresher" \
-            --harness claude --sid "$S_SID" --transcript "$S_TRANSCRIPT" >/dev/null 2>&1 </dev/null
+            --harness claude --sid "$S_SID" --transcript "$S_TRANSCRIPT" $priority_arg >/dev/null 2>&1 </dev/null
         ) >/dev/null 2>&1 &
       fi
     fi

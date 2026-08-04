@@ -19,7 +19,8 @@ class QuotaTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.old = {k: os.environ.get(k) for k in (
             "FLEET_TITLE_STATE_DIR", "FLEET_TITLE_COMMAND", "FLEET_TITLE_CONCURRENCY",
-            "FLEET_TITLE_MAX_STARTS", "FLEET_TITLE_DISABLE", "AGENT_ARTIFACT_ROOT",
+            "FLEET_TITLE_MAX_STARTS", "FLEET_TITLE_PRIORITY_MAX_STARTS",
+            "FLEET_TITLE_DISABLE", "AGENT_ARTIFACT_ROOT",
             "AGENT_MODEL_GOVERNOR_ROOT", "AGENT_MODEL_WORKER_TOTAL",
             "AGENT_MODEL_WORKER_START_BUDGET", "AGENT_MODEL_WORKERS_DISABLED",
         )}
@@ -48,6 +49,7 @@ class QuotaTest(unittest.TestCase):
     def test_limits_and_fake_clock_bound_backlog_then_reopen_window(self):
         self.assertEqual((rt.DEFAULT_CONCURRENCY, rt.MAX_CONCURRENCY), (3, 4))
         self.assertEqual((rt.DEFAULT_START_LIMIT, rt.MAX_START_LIMIT, rt.START_WINDOW_SEC), (4, 4, 60))
+        self.assertEqual((rt.DEFAULT_PRIORITY_START_LIMIT, rt.MAX_PRIORITY_START_LIMIT), (2, 2))
         now = [1000.0]
         starts = []
         original = rt.subprocess.Popen
@@ -73,7 +75,49 @@ class QuotaTest(unittest.TestCase):
 
     def test_debounce_and_child_debounce_are_the_approved_values(self):
         self.assertEqual(rt.DEBOUNCE_SEC, 600)
-        self.assertEqual(rt.CHILD_DEBOUNCE_SEC, 150)
+        self.assertEqual(rt.WORKING_DEBOUNCE_SEC, 120)
+        self.assertEqual(rt.CHILD_DEBOUNCE_SEC, 90)
+        self.assertEqual(rt.SUMMARY_RETRY_DELAYS, (30, 60, 120))
+
+    def test_priority_recovery_adds_only_two_starts_after_regular_budget_is_full(self):
+        now = 2000.0
+        starts = []
+
+        def fake_popen(argv, **_kwargs):
+            starts.append(argv)
+            for flag in ("--slotdir", "--lockdir"):
+                rt._remove_empty_dir(argv[argv.index(flag) + 1])
+            return object()
+
+        with mock.patch.object(rt.subprocess, "Popen", side_effect=fake_popen):
+            regular = [rt.maybe_spawn("claude", "regular-%d" % i, self.transcript,
+                                      now=now) for i in range(4)]
+            priority = [rt.maybe_spawn("claude", "priority-%d" % i, self.transcript,
+                                       now=now, priority=True) for i in range(3)]
+        self.assertEqual(sum(regular), 4)
+        self.assertEqual(sum(priority), 2)
+        self.assertEqual(len(starts), 6)
+
+    def test_summary_failure_backoff_uses_30_60_120_seconds_and_keeps_same_delta_eligible(self):
+        starts = []
+
+        def fake_popen(argv, **_kwargs):
+            starts.append(argv)
+            for flag in ("--slotdir", "--lockdir"):
+                rt._remove_empty_dir(argv[argv.index(flag) + 1])
+            return object()
+
+        with mock.patch.object(rt.subprocess, "Popen", side_effect=fake_popen):
+            for index, delay in enumerate(rt.SUMMARY_RETRY_DELAYS, 1):
+                base = 1000.0 * index
+                sid = "retry-%d" % index
+                titles.write(sid, "Retry", offset=0, now=base,
+                             summary_failures=index)
+                self.assertFalse(rt.maybe_spawn("claude", sid, self.transcript,
+                                                now=base + delay, priority=True))
+                self.assertTrue(rt.maybe_spawn("claude", sid, self.transcript,
+                                               now=base + delay + 1, priority=True))
+        self.assertEqual(len(starts), 3)
 
     def test_direct_worker_uses_same_start_budget_and_provider_is_not_reached_after_limit(self):
         os.environ["FLEET_TITLE_CONCURRENCY"] = "1"

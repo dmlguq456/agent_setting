@@ -35,7 +35,8 @@ class _ConfigHomeMixin:
         self._old_title_state = os.environ.get("FLEET_TITLE_STATE_DIR")
         self._old_safety_env = {key: os.environ.get(key) for key in (
             "FLEET_TITLE_DISABLE", "FLEET_TITLE_CONCURRENCY", "FLEET_TITLE_MAX_STARTS",
-            "FLEET_TITLE_COMMAND", "AGENT_MODEL_GOVERNOR_ROOT",
+            "FLEET_TITLE_PRIORITY_MAX_STARTS", "FLEET_TITLE_COMMAND",
+            "AGENT_MODEL_GOVERNOR_ROOT",
         )}
         os.environ["CLAUDE_CONFIG_DIR"] = os.path.join(self._tmp.name, "claude")
         os.environ["FLEET_TITLE_STATE_DIR"] = os.path.join(self._tmp.name, "state")
@@ -362,30 +363,43 @@ class StormGuardTest(_ConfigHomeMixin, unittest.TestCase):
         ]
         seen = []
         original = rt.maybe_spawn
-        rt.maybe_spawn = lambda harness, sid, transcript, debounce=rt.DEBOUNCE_SEC: (
-            seen.append((sid, debounce)) or True)
+        rt.maybe_spawn = lambda harness, sid, transcript, debounce=rt.DEBOUNCE_SEC, priority=False: (
+            seen.append((sid, debounce, priority)) or True)
         try:
             self.assertEqual(rt.schedule_sessions(sessions), 2)
         finally:
             rt.maybe_spawn = original
-        self.assertEqual([sid for sid, _debounce in seen], ["normal", "child"])
+        self.assertEqual([sid for sid, _debounce, _priority in seen], ["child", "normal"])
+        self.assertEqual(seen[0], ("child", rt.CHILD_DEBOUNCE_SEC, True))
 
     def test_child_sessions_use_shorter_debounce(self):
         # 사용자 확정 2026-07-19: dispatched children move faster than main sessions,
-        # so their title/subtitle debounce is much shorter (150s vs 600s) while the
+        # so their title/subtitle debounce is much shorter (90s vs 600s) while the
         # shared storm-guard budget (concurrency/start limits) stays one pool for both.
         sessions = [self._session("normal"), self._session("child", is_child=True)]
         seen = {}
         original = rt.maybe_spawn
-        rt.maybe_spawn = lambda harness, sid, transcript, debounce=rt.DEBOUNCE_SEC: (
-            seen.__setitem__(sid, debounce) or True)
+        rt.maybe_spawn = lambda harness, sid, transcript, debounce=rt.DEBOUNCE_SEC, priority=False: (
+            seen.__setitem__(sid, (debounce, priority)) or True)
         try:
             rt.schedule_sessions(sessions)
         finally:
             rt.maybe_spawn = original
-        self.assertEqual(seen["normal"], rt.DEBOUNCE_SEC)
-        self.assertEqual(seen["child"], rt.CHILD_DEBOUNCE_SEC)
-        self.assertLess(rt.CHILD_DEBOUNCE_SEC, rt.DEBOUNCE_SEC)
+        self.assertEqual(seen["normal"], (rt.WORKING_DEBOUNCE_SEC, True))
+        self.assertEqual(seen["child"], (rt.CHILD_DEBOUNCE_SEC, True))
+        self.assertLess(rt.CHILD_DEBOUNCE_SEC, rt.WORKING_DEBOUNCE_SEC)
+
+    def test_working_main_without_summary_uses_priority_lane_and_120s_debounce(self):
+        session = self._session("working-main")
+        seen = []
+        original = rt.maybe_spawn
+        rt.maybe_spawn = lambda **kwargs: seen.append(kwargs) or True
+        try:
+            rt.schedule_sessions([session])
+        finally:
+            rt.maybe_spawn = original
+        self.assertEqual(seen[0]["debounce"], rt.WORKING_DEBOUNCE_SEC)
+        self.assertTrue(seen[0]["priority"])
 
     def test_disable_marker_and_environment_fail_closed(self):
         os.makedirs(rt.disable_marker_path(), exist_ok=True)
@@ -510,6 +524,32 @@ class DeltaOffsetTest(_ConfigHomeMixin, unittest.TestCase):
             self.assertEqual(d["title"], "New Title Only")
             self.assertNotIn("summary", d,
                              "NOW 파싱 실패는 이전 요약을 이어받지 않는다 (정직 강등, 실황 우선)")
+            self.assertEqual(d["offset"], 0)
+            self.assertEqual(d["summary_failures"], 1)
+
+    def test_missing_now_retries_same_delta_then_advances_cursor_on_success(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.jsonl")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"message": "summarize this exact delta"}) + "\n")
+            prompts = []
+            outputs = iter(("TITLE: First Pass", "TITLE: First Pass\nNOW: retry succeeded"))
+            original = rt.run_worker
+            rt.run_worker = lambda prompt, **_kwargs: prompts.append(prompt) or next(outputs)
+            try:
+                rt.main(["--sid", "sidRetry", "--transcript", path])
+                first = titles.read("sidRetry")
+                rt.main(["--sid", "sidRetry", "--transcript", path, "--priority"])
+            finally:
+                rt.run_worker = original
+            second = titles.read("sidRetry")
+            self.assertEqual(first["offset"], 0)
+            self.assertEqual(first["summary_failures"], 1)
+            self.assertEqual(second["offset"], os.path.getsize(path))
+            self.assertEqual(second["summary"], "retry succeeded")
+            self.assertNotIn("summary_failures", second)
+            self.assertEqual(len(prompts), 2)
+            self.assertTrue(all("summarize this exact delta" in prompt for prompt in prompts))
 
 
 class SecurityTest(_ConfigHomeMixin, unittest.TestCase):
@@ -650,6 +690,19 @@ class TriggerLogicTest(unittest.TestCase):
         with open(self.sentinel) as f:
             lines = [ln for ln in f.read().splitlines() if ln.strip()]
         self.assertEqual(len(lines), 1)
+
+    def test_trigger_summary_failure_retries_without_new_transcript_mtime(self):
+        sc_dir = os.path.join(self.root, "title-state", "claude")
+        os.makedirs(sc_dir, exist_ok=True)
+        sc_path = os.path.join(sc_dir, "sidT.json")
+        with open(sc_path, "w", encoding="utf-8") as f:
+            json.dump({"title": "x", "ts": 1, "source": "refresher", "offset": 0,
+                       "summary_failures": 1}, f)
+        now = time.time()
+        os.utime(self.transcript, (now - 300, now - 300))
+        os.utime(sc_path, (now - 31, now - 31))
+        self._run()
+        self.assertTrue(os.path.exists(self.sentinel))
 
     def test_trigger_lock_prevents_double_spawn(self):
         lockdir = os.path.join(self.root, "title-state", "claude", ".lock-sidT")

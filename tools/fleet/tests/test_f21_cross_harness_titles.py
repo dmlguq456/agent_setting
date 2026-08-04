@@ -29,6 +29,7 @@ class _EnvMixin:
             "CODEX_HOME", "CLAUDE_CONFIG_DIR", "FLEET_TITLE_STATE_DIR",
             "FLEET_TITLE_COMMAND", "FLEET_TITLE_MODEL", "FLEET_TITLE_REFRESH",
             "FLEET_TITLE_DISABLE", "FLEET_TITLE_CONCURRENCY", "FLEET_TITLE_MAX_STARTS",
+            "FLEET_TITLE_PRIORITY_MAX_STARTS",
         )}
         os.environ["CODEX_HOME"] = os.path.join(self.tmp.name, "codex")
         os.environ["CLAUDE_CONFIG_DIR"] = os.path.join(self.tmp.name, "claude")
@@ -36,6 +37,7 @@ class _EnvMixin:
         for key in (
             "FLEET_TITLE_COMMAND", "FLEET_TITLE_MODEL", "FLEET_TITLE_REFRESH",
             "FLEET_TITLE_DISABLE", "FLEET_TITLE_CONCURRENCY", "FLEET_TITLE_MAX_STARTS",
+            "FLEET_TITLE_PRIORITY_MAX_STARTS",
         ):
             os.environ.pop(key, None)
         codex._TITLE_INDEX.update(stamp=None, map={})
