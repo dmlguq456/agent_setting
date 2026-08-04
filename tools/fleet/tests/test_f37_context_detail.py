@@ -30,7 +30,9 @@ def text(lines):
 FULL, EMPTY = render._BAR_FULL, render._BAR_EMPTY
 # F-52c: the row leads with the session's own liveness mark, not the old 📚 icon. `idle` is the
 # one state whose glyph is stable across calls (`working` animates the spinner by wall clock).
-LEAD = render._LIVE_GLYPH["idle"] + " "
+# F-55 (v39): the lead cell is the padded state WORD, not the glyph. Taken from the producer so
+# this file tracks the F-55a padding ledger instead of re-deriving it.
+LEAD = render._context_lead_cell("idle")[0]
 # F-52b: no measured `context_window_tokens` on these fixtures → the 16-cell baseline track.
 BASE = render._CTX_TRACK_MAX
 # A context gauge is the only place a bar track is immediately followed by its right-justified

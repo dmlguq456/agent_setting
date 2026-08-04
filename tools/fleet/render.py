@@ -36,7 +36,7 @@ import re
 import sys
 import time
 
-from .model import fmt_min, dash, project_of
+from .model import (fmt_min, dash, project_of, LIVENESS_STATES, PLUGIN_QUEUE_STATES)
 from . import gitinfo
 
 # curses attribute constants — real values when curses is present, harmless 0 fallbacks
@@ -425,8 +425,21 @@ def _glyph(state, dim=False):
     the dispatch variant keeps a quieter weight so main and dispatch differ.
     idle = dim-green FILLED ●, detached = dim-green ring ○."""
     if state == "working":
-        return _SPIN[int(time.time() * 10) % len(_SPIN)], ("g_spin_dim" if dim else "g_spin")
-    return _LIVE_GLYPH.get(state, "·"), _GLYPH_KEY.get(state, "dim")
+        return _SPIN[int(time.time() * 10) % len(_SPIN)], _state_key(state, dim=dim)
+    return _LIVE_GLYPH.get(state, "·"), _state_key(state, dim=dim)
+
+
+def _state_key(state, dim=False):
+    """The ONE color key for a liveness state, whatever shape draws it.
+
+    F-55 puts the state WORD on the context detail row while the harness row keeps the
+    glyph; both must land on the same color or the two cells stop reading as the same
+    session. Splitting this decision across two call sites is exactly how that drifts, so
+    the glyph producer and the word producer both come through here.
+    """
+    if state == "working":
+        return "g_spin_dim" if dim else "g_spin"
+    return _GLYPH_KEY.get(state, "dim")
 
 
 def _pct_key(v):
@@ -2527,13 +2540,27 @@ def _dispatch_summary_detail_row(job, depth=1, term_width=None):
                         start_col=_NAME_COL)
 
 
-_CTX_LABEL_W = 2              # display cells: liveness glyph (1) + trailing space (1). F-52c
-                               # dropped the 📚 icon for the session's own liveness mark, so the
-                               # lead cell is whatever `_glyph()` returns — every `_LIVE_GLYPH`
-                               # and `_SPIN` frame is a single-cell BMP glyph (no emoji range),
-                               # which is why 1 is safe to hardcode. Still hardcoded (not
-                               # _dw(...)) — this constant is computed at module load, before
-                               # _dw/_WIDE are defined further down the file.
+# F-55a — the lead cell holds the state WORD, so its width is the longest word this row can
+# actually draw. That set is DERIVED, never a typed-in number: it is the union of the two
+# classifier vocabularies in model.py minus the states whose row is dropped outright.
+#   · `stale`/`dead` never reach here — F-13 omits the whole row (both callers return [] first).
+#   · `degraded` is a ROUTE-NODE state, not an entity liveness; neither classify_session nor
+#     classify_job can emit it, so its 8 cells must not buy a column. (`_LIVE_GLYPH` carries it
+#     for the route surface, which is why the domain is taken from model.py and not from there.)
+# Today the max is 7 (`working`/`blocked`/`unknown`). If a longer state is ever added to the
+# vocabulary this constant grows with it; if one arrives at RUNTIME from outside the vocabulary
+# the word is still printed whole and only that row shifts right (see `_context_lead_cell`).
+_CTX_LEAD_OMITTED_STATES = ("stale", "dead")   # F-13: the row itself is suppressed
+_CTX_LEAD_STATES = tuple(sorted(
+    (set(LIVENESS_STATES) | set(PLUGIN_QUEUE_STATES.values()))
+    - set(_CTX_LEAD_OMITTED_STATES)))
+_CTX_LEAD_W = max(len(state) for state in _CTX_LEAD_STATES)
+_CTX_LABEL_W = _CTX_LEAD_W + 1   # display cells: left-aligned state word + one trailing space.
+_CTX_GLYPH_LABEL_W = 2           # the F-55b fallback shape: single-cell glyph + trailing space.
+                                 # Every `_LIVE_GLYPH`/`_SPIN` frame is a single-cell BMP glyph
+                                 # (no emoji range), which is why 1 is safe here. Both widths are
+                                 # plain len()/literals, not `_dw(...)`: this block is evaluated
+                                 # at module load, before `_dw`/`_WIDE` are defined below.
 _CONTEXT_VALUE_W = 4
 _CONTEXT_NOW_GAP = 3          # minimum gap; F-42c widens it until NOW reaches the session column.
 _CONTEXT_INDENT_W = 4        # left inset that aligns the row under the HARNESS NAME (user
@@ -2587,12 +2614,30 @@ def _exec_detail_segs(entity):
     return []
 
 
+def _context_lead_cell(state, dim=False, degrade=False):
+    """F-55 lead cell: the state WORD, left-aligned, in the harness row's color key.
+
+    `degrade=True` is the F-55b fallback — the v36 glyph shape in the SAME color key, used only
+    when the word and the gauge track cannot share the row (never a clipped `worki…`).
+
+    A state outside `_CTX_LEAD_STATES` (an unknown word arriving at runtime, or no liveness at
+    all) is not truncated and not renamed: a real word prints whole and pushes only its own row
+    right, and a missing one falls back to the glyph rather than inventing a state name.
+    """
+    key = _state_key(state, dim=dim)
+    if degrade or not (isinstance(state, str) and state):
+        glyph, key = _glyph(state, dim=dim)
+        return glyph + " ", key
+    return state.ljust(_CTX_LEAD_W) + " ", key
+
+
 def _context_detail_row(entity, depth=0, term_width=None, dim=False):
     """One ``<liveness> <gauge> <value>   NOW`` row for every live card.
 
-    The lead cell is the SAME `_glyph()` producer the harness row uses (F-52c) — the two places
-    always name the same session in the same state, so no new glyph, color key or state word is
-    introduced here.  The gauge track is window-proportional (F-52b).
+    The lead cell names the session's state in words (F-55) using the SAME `_state_key()` color
+    the harness row's glyph uses — the two places always name the same session in the same
+    state, so no new vocabulary or color decision is introduced here.  The gauge track is
+    window-proportional (F-52b).
 
     The context block stays under the harness field; F-42c aligns the descriptive NOW text to
     the session column shared with dispatch subtitles.  Both anchors are stable across layouts.
@@ -2611,8 +2656,14 @@ def _context_detail_row(entity, depth=0, term_width=None, dim=False):
         shown_pct = int(round(pct))
     else:
         shown_pct = None
-    gch, gkey = _glyph(getattr(entity, "liveness", None), dim=dim)
-    segs = [(indent, None), (gch + " ", gkey)]
+    # F-55b drop order: NOW and the exec badge already yield first (they are sized from
+    # whatever is left below), and the track length is a MEASUREMENT (F-52b) that must not be
+    # shrunk to buy room. So the word is the last thing to give: it degrades to the glyph only
+    # when the word + track + value cannot fit the row at all, even with zero NOW room.
+    degrade = (_CTX_LABEL_W + track + _CONTEXT_VALUE_W) > available
+    lead_text, lead_key = _context_lead_cell(getattr(entity, "liveness", None),
+                                             dim=dim, degrade=degrade)
+    segs = [(indent, None), (lead_text, lead_key)]
     segs.extend(_gauge_segs(shown_pct, gauge_width, track=track))
     if shown_pct is None:
         value_text = "—"
