@@ -43,8 +43,19 @@ from dispatch_lifecycle import (  # noqa: E402
 from dispatch_contract import (  # noqa: E402
     DispatchContractError,
     attempt_process_quiescence,
+    resolve_live_parent_attempt,
     validate_attempt_metadata,
 )
+
+import importlib.util  # noqa: E402
+
+_NODE_SPEC = importlib.util.spec_from_file_location(
+    "dispatch_node", ROOT / "utilities" / "dispatch-node.py"
+)
+if _NODE_SPEC is None or _NODE_SPEC.loader is None:  # pragma: no cover - install corruption
+    raise RuntimeError("dispatch-node loader unavailable")
+DISPATCH_NODE = importlib.util.module_from_spec(_NODE_SPEC)
+_NODE_SPEC.loader.exec_module(DISPATCH_NODE)
 from dispatch_mode_contract import (  # noqa: E402
     DispatchModeContractError,
     normalize_dispatch_modes,
@@ -280,6 +291,58 @@ def native_child_proof(args: argparse.Namespace, route: dict, node: dict) -> str
             for item in registry_rows(args.jobs, route["route_id"], node["id"]):
                 if item.get("attempt_id") == producer and valid_native_axes(item):
                     return "route-owned-artifact"
+    return ""
+
+
+def parent_runtime_failure(args, route: dict, row: dict, parent_identity) -> str:
+    """Return the typed reason this candidate's sealed parent cannot be the real one.
+
+    Of the three dispatch-depth-2 launchers this one was the only surface with no
+    parent-identity check at all: `dispatch-node.py` compares the sealed tuple
+    against the launching wrapper's `AGENT_DISPATCH_CURRENT_*` export in every
+    action, and `dispatch-batch.py` additionally resolves the live depth-1 owner
+    attempt in its `dry-run` too. So on 2026-08-04 the same route, at the same
+    moment, was reported `blocked` by the batch dry-run and `check=ok,
+    selected_hop=same-harness-headless` here -- and the following `--start` spent
+    two real wrapper launches to reach `parent-attempt-not-found` and descend to
+    the inline hop.
+
+    Both halves of that gap close here. The identity comparison is static and
+    needs no registry, so it runs in every action and short-circuits a launch
+    that could not have succeeded. The live-attempt resolution is time-varying --
+    a parent alive at `dry-run` may be gone at `--start`, so exact parity is not
+    achievable in principle -- and it only runs in `dry-run`, where `--register`
+    and `--start` would otherwise get it from the wrapper itself. A failure is
+    not fatal to the chain: the candidate is skipped exactly as a failed wrapper
+    launch would be, so a genuinely unavailable runtime still descends to the
+    inline hop.
+    """
+
+    if parent_identity is not None:
+        try:
+            DISPATCH_NODE.validate_parent_identity(row, parent_identity)
+        except DISPATCH_NODE.DispatchNodeError as exc:
+            return exc.reason
+    if args.action != "dry-run" or not args.inherited_jobs:
+        return ""
+    try:
+        repo = subprocess.check_output(
+            ["git", "-C", str(route["cwd"]), "rev-parse", "--show-toplevel"], text=True
+        ).strip()
+        resolve_live_parent_attempt(
+            args.jobs,
+            parent_slug=args.parent,
+            repo=repo,
+            worktree=str(route["cwd"]),
+            expected_attempt_id=os.environ.get("AGENT_DISPATCH_ATTEMPT_ID") or None,
+            expected_harness=row["parent_harness"],
+            expected_transport=row["parent_transport"],
+            expected_sandbox=row["parent_sandbox"],
+        )
+    except DispatchContractError as exc:
+        return exc.reason
+    except (OSError, subprocess.SubprocessError):
+        return "parent-repo-unreadable"
     return ""
 
 
@@ -783,11 +846,17 @@ def main() -> int:
         )
 
     inherited_jobs = os.environ.get("AGENT_DISPATCH_JOBS")
+    args.inherited_jobs = inherited_jobs
     args.jobs = (args.jobs or Path(inherited_jobs or ROOT / ".dispatch/jobs.log")).resolve()
     if inherited_jobs and args.jobs != Path(inherited_jobs).resolve():
         return fail("noncanonical-nested-jobs", 73, explicit=str(args.jobs), inherited=str(Path(inherited_jobs).resolve()))
     if args.action in {"register", "start"} and not inherited_jobs:
         return fail("global-registry-unset", 73, child_spawned="0")
+
+    try:
+        parent_identity = DISPATCH_NODE.current_parent_identity()
+    except DISPATCH_NODE.DispatchNodeError as exc:
+        return fail(exc.reason, 73, child_spawned="0", **exc.fields)
 
     prior_failures = registry_failures(args.jobs, route["route_id"], node["id"])
     failed_tuples = set(args.failed_tuple) | set(prior_failures)
@@ -802,6 +871,16 @@ def main() -> int:
                 if unsupported or key in failed_tuples:
                     reason = "prior-unchanged-failure" if key in failed_tuples else row.get("failure_class") or row.get("status")
                     attempts.append(f"{ordinal}:{key}:skipped-{reason}")
+                    continue
+                parent_failure = parent_runtime_failure(args, route, row, parent_identity)
+                if parent_failure:
+                    attempts.append(f"{ordinal}:{key}:skipped-{parent_failure}")
+                    direct_failures.append({
+                        "attempt_id": "-",
+                        "exit": "73",
+                        "reason": parent_failure,
+                        "detail": "sealed parent identity is not the live dispatch-depth-1 owner",
+                    })
                     continue
                 pending_capacity = [
                     item for item in capacity_context(
@@ -1002,6 +1081,12 @@ def main() -> int:
                 print(f"last_direct_failure_exit={last['exit']}")
                 print(f"last_direct_failure_reason={last['reason']}")
                 print(f"last_direct_failure_detail={last['detail']}")
+            # `reason_enum` is a compile-time constant on the inline hop, so it
+            # says `runtime-unavailable` whatever actually exhausted the chain.
+            # On 2026-08-04 that laundered a misconfigured route -- the runtime
+            # was fine, the sealed evidence was not -- into a ledger entry
+            # blaming the runtime. Carry the real last direct failure alongside
+            # it; the schema already reserves the field.
             ledger = record_degradation(
                 route_id=route.get("route_id"), route_node=node.get("id"),
                 route_hash=route.get("route_hash"), dispatch_depth=node.get("dispatch_depth", 2),
@@ -1010,6 +1095,10 @@ def main() -> int:
                 attempt_trace="|".join(attempts), fallback_ordinal=ordinal,
                 fleet_visibility="none", registered_worker=0, route_file=str(args.route),
                 completion_gate=node.get("completion_gate"), parent=args.parent,
+                last_direct_failure=(
+                    f"{direct_failures[-1]['reason']}:exit-{direct_failures[-1]['exit']}"
+                    if direct_failures else None
+                ),
             )
             print("degradation_ledger=" + (str(ledger) if ledger else "-"))
             return 79

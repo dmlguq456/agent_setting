@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("route", ROOT / "utilities/capability-route.py")
 ROUTE = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ROUTE)
+WRAPPER_PARENT_SANDBOXES = ROUTE.WRAPPER_PARENT_SANDBOXES
 
 ADAPTERS = {
     "codex": ([sys.executable, str(ROOT / "adapters/codex/bin/dispatch-headless.py")], ["--model", "gpt-test", "--reasoning", "low"]),
@@ -50,7 +51,7 @@ class CompletionMarkerTest(unittest.TestCase):
             {
                 "parent_harness": harness,
                 "parent_transport": "headless",
-                "parent_sandbox": "fixture",
+                "parent_sandbox": WRAPPER_PARENT_SANDBOXES[harness][0],
                 "child_harness": harness,
                 "launch_authority": "conductor",
                 "status": "supported",

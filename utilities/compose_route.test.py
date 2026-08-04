@@ -33,7 +33,7 @@ R = _load("route", "capability-route.py")
 FIXTURE_EVIDENCE = {
     "tuples": [{
         "parent_harness": "claude", "parent_transport": "headless",
-        "parent_sandbox": "workspace-write", "child_harness": "claude",
+        "parent_sandbox": "adapter-default", "child_harness": "claude",
         "launch_authority": "conductor", "status": "supported",
         "probe_source": "fixture-probe", "probe_time": "2026-07-22T00:00:00Z",
         "failure_class": "",

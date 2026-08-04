@@ -1116,4 +1116,40 @@ class DispatchContractTest(unittest.TestCase):
    self.assertEqual(len(copied),2)
    self.assertTrue(all("reconciled_from=" in row for row in copied))
 
+ def test_parent_sandbox_table_matches_what_the_wrappers_export(self):
+  # WRAPPER_PARENT_SANDBOXES is a copy of literals owned by the adapters. It
+  # used to gate only the probe, so drift was cheap; it now also gates route
+  # compile, where a stale copy would reject correctly probed evidence.
+  import re
+  root=P.parent.parent
+  for harness in D.WRAPPER_PARENT_HARNESSES:
+   source=(root/"adapters"/harness/"bin"/"dispatch-headless.py").read_text(encoding="utf-8")
+   export=re.search(r'"AGENT_DISPATCH_CURRENT_SANDBOX":\s*([^,\n]+)',source)
+   self.assertIsNotNone(export,harness)
+   value=export.group(1).strip()
+   with self.subTest(harness=harness):
+    if value.startswith('"'):
+     self.assertEqual(set(D.WRAPPER_PARENT_SANDBOXES[harness]),{value.strip('"')})
+    else:
+     # codex resolves dynamically: the --sandbox choices plus the nested
+     # danger-full-access downgrade in effective_runtime_sandbox().
+     choices=re.search(r'"--sandbox",\s*\n\s*choices=\(([^)]*)\)',source)
+     self.assertIsNotNone(choices,harness)
+     labels=set(re.findall(r'"([a-z-]+)"',choices.group(1)))
+     body=source.split("def effective_runtime_sandbox",1)[1].split("\ndef ",1)[0]
+     labels |= set(re.findall(r'return\s+"([a-z-]+)"',body))
+     self.assertEqual(set(D.WRAPPER_PARENT_SANDBOXES[harness]),labels)
+
+ def test_depth2_parent_transport_must_be_registered_headless(self):
+  # The depth-2 parent is the depth-1 owner; `interactive` is canonical
+  # vocabulary for the depth-0 caller and a contradiction at this call site.
+  with self.assertRaises(D.DispatchContractError) as caught:
+   D.validate_nested_eligibility(dispatch_depth=2,action="start",parent_harness="claude",
+    parent_transport="interactive",parent_sandbox="adapter-default",child_harness="claude",
+    launch_authority="conductor",status="supported",source="fixture")
+  self.assertEqual(caught.exception.reason,"parent-transport-not-registered-headless")
+  D.validate_nested_eligibility(dispatch_depth=1,action="start",parent_harness="claude",
+   parent_transport="interactive",parent_sandbox="adapter-default",child_harness="claude",
+   launch_authority="conductor",status="supported",source="fixture")
+
 if __name__=="__main__": unittest.main()

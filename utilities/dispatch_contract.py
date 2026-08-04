@@ -61,6 +61,28 @@ PARENT_LIVENESS_METADATA_KEYS = (
 )
 WRAPPER_TRANSPORTS = {"headless", "interactive"}
 CANONICAL_PARENT_TRANSPORTS = WRAPPER_TRANSPORTS
+# The runtime a dispatch-depth-N node's PARENT runs under. A dispatch-depth-2
+# node is opened by the dispatch-depth-1 registered-headless capability owner,
+# so its sealed parent transport is always `headless`; only the user-facing
+# dispatch-depth-0 session is `interactive`. Every surface that probes, seals,
+# compiles, or launches a checked nested tuple resolves the expectation from
+# here instead of reading the probing caller's own runtime (2026-08-04
+# agent-note incident: a standard route sealed with the depth-0 caller's
+# `interactive` transport made every same/cross-harness candidate unresolvable
+# at launch and demoted the whole cycle to the inline hop).
+PARENT_TRANSPORT_BY_DISPATCH_DEPTH = {0: "interactive", 1: "headless"}
+# Canonical parent-sandbox labels each adapter wrapper actually exports as
+# AGENT_DISPATCH_CURRENT_SANDBOX; the first label is what `auto` resolves to
+# (2026-07-31 v2-audit incident: a route sealed with parent_sandbox=none).
+# utilities/dispatch_contract.test.py pins this table against the literals the
+# wrappers export, because a stale copy would now reject correctly probed
+# evidence at compile time, not merely at probe time.
+WRAPPER_PARENT_SANDBOXES = {
+    "claude": ("adapter-default",),
+    "codex": ("workspace-write", "danger-full-access", "read-only"),
+    "opencode": ("adapter-default",),
+}
+WRAPPER_PARENT_HARNESSES = tuple(sorted(WRAPPER_PARENT_SANDBOXES))
 EXECUTION_SURFACES = {
     "registered-headless",
     "codex-native-subagent",
@@ -2401,6 +2423,17 @@ def validate_nested_eligibility(
         raise DispatchContractError(
             "invalid-parent-transport",
             f"{parent_transport}; expected one of {sorted(CANONICAL_PARENT_TRANSPORTS)}",
+        )
+    # Canonical vocabulary is not enough: this call site is already inside a
+    # dispatch-depth-2 launch, whose parent is by construction the depth-1
+    # registered-headless owner. `interactive` is a well-formed word for the
+    # depth-0 session and a launch-time contradiction here.
+    expected_parent_transport = PARENT_TRANSPORT_BY_DISPATCH_DEPTH[1]
+    if parent_transport not in (expected_parent_transport, "unknown"):
+        raise DispatchContractError(
+            "parent-transport-not-registered-headless",
+            f"dispatch_depth={dispatch_depth} sealed parent_transport={parent_transport};"
+            f" a dispatch-depth-2 parent is the {expected_parent_transport} depth-1 owner",
         )
     missing = [
         name

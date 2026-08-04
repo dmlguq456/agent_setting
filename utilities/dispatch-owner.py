@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import json
 import os
 from pathlib import Path
 import re
@@ -38,6 +39,36 @@ _REQUIRED = {
 
 class OwnerError(ValueError):
     pass
+
+
+def _sealed_owner_harnesses(path):
+    """Return the parent harnesses a standard+ route's checked evidence supports.
+
+    An owner is not a route node, so this selector stays route-blind for
+    dispatch (`--route-file` to the wrapper is `route-metadata-missing`). But
+    the route's dispatch evidence names the harness its dispatch-depth-2 tuples
+    expect the owner to be, and nothing bound the two: with
+    `configured owners=[claude]` and claude usage `limited`, the eligibility
+    cascade would select codex and every depth-2 hop would then fail
+    `dispatch-evidence-parent-runtime-mismatch` -- the 2026-08-04 incident with
+    the harness field substituted for the transport field. Selector-only and
+    optional: without it the cascade is unchanged.
+    """
+
+    try:
+        route = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise OwnerError(f"route-evidence-unreadable:{exc}") from exc
+    tuples = (route.get("dispatch_evidence") or {}).get("tuples") or []
+    harnesses = {
+        row.get("parent_harness")
+        for row in tuples
+        if isinstance(row, dict) and row.get("status") == "supported"
+    }
+    harnesses &= _defaults.KNOWN_HARNESSES
+    if not harnesses:
+        raise OwnerError("route-evidence-no-supported-owner-harness")
+    return harnesses
 
 
 def _caller_harness(env):
@@ -77,6 +108,7 @@ def _parse(argv):
         raise SystemExit(0)
     forwarded = []
     explicit = None
+    route_evidence = None
     values = {}
     actions = []
     i = 0
@@ -90,6 +122,18 @@ def _parse(argv):
             continue
         if arg.startswith("--adapter="):
             explicit = arg.split("=", 1)[1]
+            i += 1
+            continue
+        # Selector-only, like --adapter: consumed here and never forwarded, so
+        # the wrapper still sees an owner launch with no route node.
+        if arg == "--route-evidence":
+            if i + 1 >= len(argv):
+                raise OwnerError("route-evidence-missing")
+            route_evidence = argv[i + 1]
+            i += 2
+            continue
+        if arg.startswith("--route-evidence="):
+            route_evidence = arg.split("=", 1)[1]
             i += 1
             continue
         name, equal, value = arg.partition("=")
@@ -135,8 +179,9 @@ def _parse(argv):
     if values["--model-profile"] not in {"deep", "balanced-deep", "light"}:
         raise OwnerError("invalid-model-profile")
     # Equal-form required options are forwarded unchanged; split-form options
-    # were appended above.  Selector-only --adapter never crosses the boundary.
-    return explicit, values, forwarded
+    # were appended above.  Selector-only --adapter/--route-evidence never
+    # cross the boundary.
+    return explicit, values, forwarded, route_evidence
 
 
 def _eligible(state):
@@ -199,11 +244,16 @@ def _error(reason, configured=(), explicit=None, states=None):
 
 def main(argv):
     try:
-        explicit, values, forwarded = _parse(argv)
+        explicit, values, forwarded, route_evidence = _parse(argv)
         config = _load_defaults()
         configured = list(_defaults.query_owners(config))
         if explicit is not None and explicit not in _defaults.KNOWN_HARNESSES:
             raise OwnerError("explicit-adapter-unauthorized")
+        sealed = _sealed_owner_harnesses(route_evidence) if route_evidence else None
+        if sealed is not None:
+            if explicit is not None and explicit not in sealed:
+                raise OwnerError("explicit-adapter-outside-route-evidence")
+            configured = [h for h in configured if h in sealed]
         jobs = values.get("--jobs", os.environ.get("AGENT_DISPATCH_JOBS", ""))
         states = _usage(jobs)
         rejected = [h for h in sorted(states) if not _eligible(states[h])]
@@ -218,13 +268,19 @@ def main(argv):
                     selected, source = harness, "configured-normal"
                     break
         if selected is None:
-            for harness in sorted(_defaults.KNOWN_HARNESSES):
+            # A sealed route constrains this last resort too: silently starting
+            # an owner whose harness the checked tuples never probed only moves
+            # the failure to every dispatch-depth-2 launch.
+            for harness in sorted(sealed if sealed is not None else _defaults.KNOWN_HARNESSES):
                 if _eligible(states[harness]):
                     selected, source, reason = harness, "eligibility-fallback", "configured-candidates-ineligible"
                     break
         if selected is None:
             print("\n".join(_audit("unavailable", None, "none", configured, explicit, states, rejected=rejected)))
-            print("check=failed\nreason=no-eligible-candidate\nchild_spawned=0")
+            print("check=failed\nreason=" + (
+                "no-eligible-route-evidence-candidate" if sealed is not None
+                else "no-eligible-candidate"
+            ) + "\nchild_spawned=0")
             return 65
         wrapper = ROOT / "adapters" / selected / "bin" / "dispatch-headless.py"
         if not os.access(wrapper, os.X_OK):

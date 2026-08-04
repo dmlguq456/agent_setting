@@ -160,6 +160,52 @@ class NestedEligibilityTest(unittest.TestCase):
         self.assertEqual(row["status"], "supported")
         self.assertEqual(row["parent_sandbox"], "adapter-default")
 
+    def test_callers_own_interactive_transport_fails_before_runtime_probe(self):
+        # 2026-08-04 agent-note: the depth-0 session filled in its own
+        # transport. Canonical vocabulary, wrong subject.
+        with tempfile.TemporaryDirectory() as worktree, \
+             mock.patch.object(N, "command_check") as checked:
+            args = self.args(worktree)
+            args.parent_transport = "interactive"
+            row = N.evaluate(args)
+        self.assertEqual(row["status"], "unsupported")
+        self.assertEqual(row["probe_source"], "parent-transport-vocabulary")
+        self.assertEqual(row["failure_class"], "parent-transport-not-registered-headless")
+        checked.assert_not_called()
+
+    def test_auto_parent_transport_resolves_the_depth1_owner_not_the_caller(self):
+        # No wrapper export means a depth-0 caller about to launch the depth-1
+        # owner; that owner is registered headless by construction.
+        self.assertEqual(N.resolve_parent_transport("auto", {}), ("headless", ""))
+        self.assertEqual(
+            N.resolve_parent_transport("auto", {"AGENT_DISPATCH_CURRENT_TRANSPORT": "headless"}),
+            ("headless", ""),
+        )
+        self.assertEqual(N.resolve_parent_transport("headless", {}), ("headless", ""))
+
+    def test_auto_parent_harness_needs_a_wrapper_export(self):
+        # Unlike transport, the owner's adapter is a later dispatch-owner
+        # decision, so `auto` fails closed instead of guessing the caller's.
+        self.assertEqual(
+            N.resolve_parent_harness("auto", {"AGENT_DISPATCH_CURRENT_HARNESS": "codex"}),
+            ("codex", ""),
+        )
+        self.assertEqual(
+            N.resolve_parent_harness("auto", {}), ("auto", "parent-harness-underivable")
+        )
+        self.assertEqual(N.resolve_parent_harness("claude", {}), ("claude", ""))
+
+    def test_underivable_parent_harness_is_reported_before_sandbox_lookup(self):
+        with tempfile.TemporaryDirectory() as worktree, \
+             mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch.object(N, "command_check") as checked:
+            args = self.args(worktree)
+            args.parent_harness = "auto"
+            row = N.evaluate(args)
+        self.assertEqual(row["probe_source"], "parent-harness-vocabulary")
+        self.assertEqual(row["failure_class"], "parent-harness-underivable")
+        checked.assert_not_called()
+
     def test_codex_dynamic_sandbox_labels_stay_accepted(self):
         for label in ("workspace-write", "danger-full-access", "read-only"):
             self.assertEqual(

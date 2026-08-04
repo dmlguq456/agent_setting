@@ -16,6 +16,8 @@ from dispatch_contract import (
     DispatchContractError,
     EXECUTION_SURFACES,
     FALLBACK_HOPS,
+    PARENT_TRANSPORT_BY_DISPATCH_DEPTH,
+    WRAPPER_PARENT_SANDBOXES,
     WRAPPER_TRANSPORTS,
     _atomic_registry_replace,
     ensure_global_registry_writable,
@@ -36,6 +38,9 @@ BROKER_FIELDS_V2 = {"broker_root"}                   # historical v2
 DISPATCH_CONTRACT_VERSION = 3
 FALLBACK_ORDER = ["same-harness-headless", "cross-harness-headless", "native-subagent", "inline"]
 ROUTE_SCHEMA_VERSION = 2
+# Only dispatch-depth-2 nodes receive a checked `fallback_hops` chain, so they are
+# the sole consumers of `dispatch_evidence.tuples`.
+EVIDENCE_CONSUMER_DISPATCH_DEPTH = 2
 REGISTERED_HEADLESS_EVIDENCE_FIELDS = {
     "harness", "transport", "surface", "status", "probe_source", "probe_time",
 }
@@ -115,7 +120,67 @@ def _scope_touches_spec(scope):
     root=scope[:-3] if scope.endswith("/**") else scope
     return root=="spec" or root.startswith("spec/")
 
-def _validate_dispatch_evidence(evidence, contract_version=DISPATCH_CONTRACT_VERSION):
+def _evidence_parent_dispatch_depth(nodes, owner_dispatch_depth):
+    """Derive whose runtime the checked tuples must describe, from the route itself.
+
+    `dispatch_evidence.tuples` are consumed by exactly the nodes that receive a
+    `fallback_hops` chain, and only dispatch-depth-2 nodes do. The parent of a
+    dispatch-depth-N node is the depth-(N-1) runtime, which for those nodes is
+    the route's own registered-headless capability owner. Deriving the value
+    here -- instead of hardcoding it at each call site -- keeps the check honest
+    if a recipe ever seals evidence at another depth, and cross-checks the two
+    structural facts the route already states about itself.
+    """
+    if not any(node.get("dispatch_depth") == EVIDENCE_CONSUMER_DISPATCH_DEPTH for node in nodes):
+        raise ValueError(
+            "dispatch-evidence-without-consumer-node: checked tuples were sealed but no "
+            f"dispatch-depth-{EVIDENCE_CONSUMER_DISPATCH_DEPTH} node consumes them"
+        )
+    parent_dispatch_depth = EVIDENCE_CONSUMER_DISPATCH_DEPTH - 1
+    if owner_dispatch_depth != parent_dispatch_depth:
+        raise ValueError(
+            "dispatch-evidence-parent-depth-mismatch: "
+            f"owner_dispatch_depth={owner_dispatch_depth} cannot parent a "
+            f"dispatch-depth-{EVIDENCE_CONSUMER_DISPATCH_DEPTH} node"
+        )
+    return parent_dispatch_depth
+
+def _validate_tuple_parent_identity(row, parent_dispatch_depth):
+    """Reject a checked tuple sealed for a parent runtime the route cannot have.
+
+    The tuple's parent fields are compared field-for-field against the launching
+    wrapper's `AGENT_DISPATCH_CURRENT_*` export at dispatch time
+    (`dispatch-node.validate_parent_identity`), so any value that no wrapper can
+    export is dead evidence. Two production incidents proved each unchecked
+    field costs a whole owner cycle -- 2026-07-31 on `parent_sandbox`, 2026-08-04
+    on `parent_transport` -- so all three fields fail closed at compile instead.
+    """
+    harness = row["parent_harness"]
+    if harness not in WRAPPER_PARENT_SANDBOXES:
+        raise ValueError(
+            f"dispatch-evidence-parent-harness-unknown: {harness!r} is not a wrapper harness"
+        )
+    if row["child_harness"] not in WRAPPER_PARENT_SANDBOXES:
+        raise ValueError(
+            f"dispatch-evidence-child-harness-unknown: {row['child_harness']!r} is not a wrapper harness"
+        )
+    expected_transport = PARENT_TRANSPORT_BY_DISPATCH_DEPTH[parent_dispatch_depth]
+    if row["parent_transport"] != expected_transport:
+        raise ValueError(
+            "dispatch-evidence-parent-transport-mismatch: a "
+            f"dispatch-depth-{parent_dispatch_depth} parent is {expected_transport}, "
+            f"tuple sealed {row['parent_transport']!r} "
+            "(probe the depth-2 node's parent, not the calling session)"
+        )
+    if row["parent_sandbox"] not in WRAPPER_PARENT_SANDBOXES[harness]:
+        raise ValueError(
+            "dispatch-evidence-parent-sandbox-unknown: the "
+            f"{harness} wrapper exports {sorted(WRAPPER_PARENT_SANDBOXES[harness])}, "
+            f"tuple sealed {row['parent_sandbox']!r}"
+        )
+
+def _validate_dispatch_evidence(evidence, contract_version=DISPATCH_CONTRACT_VERSION,
+                                parent_dispatch_depth=EVIDENCE_CONSUMER_DISPATCH_DEPTH - 1):
     contract_version = contract_version or 1
     if contract_version not in {1, 2, DISPATCH_CONTRACT_VERSION}:
         raise ValueError(f"unsupported dispatch contract version: {contract_version}")
@@ -137,6 +202,7 @@ def _validate_dispatch_evidence(evidence, contract_version=DISPATCH_CONTRACT_VER
                 raise ValueError("v3 dispatch evidence requires conductor launch authority")
             if row["parent_transport"] not in CANONICAL_PARENT_TRANSPORTS:
                 raise ValueError("v3 dispatch evidence requires canonical parent transport")
+            _validate_tuple_parent_identity(row, parent_dispatch_depth)
             if any(row.get(key) for key in BROKER_FIELDS):
                 raise ValueError("v3 dispatch evidence must not carry broker fields")
         elif contract_version==2:
@@ -170,9 +236,10 @@ def _validate_dispatch_evidence(evidence, contract_version=DISPATCH_CONTRACT_VER
         normalized_native.append({key:row[key] for key in sorted(NATIVE_EVIDENCE_FIELDS)})
     return {"tuples":normalized,"native_subagent":normalized_native}
 
-def _fallback_chain(evidence, contract_version=DISPATCH_CONTRACT_VERSION):
+def _fallback_chain(evidence, contract_version=DISPATCH_CONTRACT_VERSION,
+                    parent_dispatch_depth=EVIDENCE_CONSUMER_DISPATCH_DEPTH - 1):
     contract_version = contract_version or 1
-    evidence=_validate_dispatch_evidence(evidence, contract_version)
+    evidence=_validate_dispatch_evidence(evidence, contract_version, parent_dispatch_depth)
     tuples=evidence["tuples"]
     same=[row for row in tuples if row["child_harness"]==row["parent_harness"]]
     cross=[row for row in tuples if row["child_harness"]!=row["parent_harness"]]
@@ -464,8 +531,12 @@ def _compile_from_recipe(registry, recipe, capability, capability_mode, requeste
     evidence=_validate_tracking_evidence(tracking, tracked_gate_evidence)
     checked_dispatch=None
     if effective not in ("direct","quick"):
-        checked_dispatch=_validate_dispatch_evidence(dispatch_evidence, DISPATCH_CONTRACT_VERSION)
-        chain=_fallback_chain(checked_dispatch, DISPATCH_CONTRACT_VERSION)
+        parent_dispatch_depth=_evidence_parent_dispatch_depth(
+            nodes, recipe["standard_plus"]["owner_dispatch_depth"])
+        checked_dispatch=_validate_dispatch_evidence(
+            dispatch_evidence, DISPATCH_CONTRACT_VERSION, parent_dispatch_depth)
+        chain=_fallback_chain(
+            checked_dispatch, DISPATCH_CONTRACT_VERSION, parent_dispatch_depth)
         for node in nodes:
             if node.get("dispatch_depth")==2:
                 node["fallback_hops"]=json.loads(json.dumps(chain))
@@ -697,8 +768,11 @@ def verify_route(route, expected_cwd=None):
         if route.get("selection",{}).get("transport") != "headless":
             raise ValueError("standard+ routes require checked headless transport")
         contract_version=route.get("dispatch_contract_version") or route.get("broker_contract_version") or 1
-        checked_dispatch=_validate_dispatch_evidence(route.get("dispatch_evidence"), contract_version)
-        expected_chain=_fallback_chain(checked_dispatch, contract_version)
+        parent_dispatch_depth=_evidence_parent_dispatch_depth(
+            route.get("nodes",[]), route.get("owner_dispatch_depth"))
+        checked_dispatch=_validate_dispatch_evidence(
+            route.get("dispatch_evidence"), contract_version, parent_dispatch_depth)
+        expected_chain=_fallback_chain(checked_dispatch, contract_version, parent_dispatch_depth)
         for node in route.get("nodes",[]):
             if node.get("dispatch_depth")==2:
                 chain=_verify_fallback_chain(node, contract_version)
