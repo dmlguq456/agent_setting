@@ -240,6 +240,30 @@ class MaterialRouteGuardTest(unittest.TestCase):
         self.assertEqual(tampered.returncode, 2)
         self.assertIn("route-record-verification-failed", tampered.stderr)
 
+    def test_crashing_verifier_is_not_reported_as_a_bad_route_record(self) -> None:
+        """A half-written verifier is not evidence that the record is invalid.
+
+        `~/.claude/utilities` symlinks back to the repo, so a parallel session
+        editing the harness can be observed mid-write.  Reporting that as
+        `route-record-verification-failed` sent one debugging pass chasing a route
+        record that was in fact correct (2026-08-04).
+        """
+        self.assertEqual(self.bind().returncode, 0)
+        verifier = self.home / "utilities" / "capability-route.py"
+        intact = verifier.read_text()
+        # A truncated module: imports fine, dies at run time — exactly the torn read.
+        verifier.write_text("import sys\nraise NameError('torn read')\n", encoding="utf-8")
+        try:
+            crashed = self.guard("--tool", "Edit", "--file", str(self.repo / "app.py"))
+            self.assertEqual(crashed.returncode, 2)
+            self.assertIn("route-verifier-crashed", crashed.stderr)
+            self.assertNotIn("route-record-verification-failed", crashed.stderr)
+        finally:
+            verifier.write_text(intact, encoding="utf-8")
+        # The same record verifies once the file is whole again — no retry poisoning.
+        self.assertEqual(
+            self.guard("--tool", "Edit", "--file", str(self.repo / "app.py")).returncode, 0)
+
     def test_route_symlink_is_not_accepted_as_authority(self) -> None:
         linked_route = self.artifacts / "linked-route.json"
         linked_route.symlink_to(self.route)

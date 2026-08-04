@@ -862,6 +862,15 @@ def maybe_spawn(harness, sid, transcript=None, now=None, debounce=DEBOUNCE_SEC,
 def schedule_sessions(sessions, jobs=None):
     """Best-effort live fleet scheduler; returns the number of workers started.
 
+    NO PRODUCTION CALLER.  `189b6823` moved summary production out of Fleet, which
+    is now a pure observer, and removed the only call site.  This survives solely as
+    the monkeypatch target of `test_fleet_never_schedules_summary_providers`, the
+    tripwire proving Fleet does not schedule providers.  Do not read it as the live
+    scheduler: when a session's summary is missing, the producer is statusline
+    (interactive Claude), the Codex lifecycle hooks, or `utilities/dispatch_summary.py`
+    (registered dispatch) — not this function.  Chasing it here has already cost one
+    misdiagnosis (2026-08-04).
+
     Dispatched child sessions are titled like main sessions (user 2026-07-16:
     the summary agent attaches to every dispatched session, spending haiku
     tokens instead of parent context). The refresher's own workers stay out

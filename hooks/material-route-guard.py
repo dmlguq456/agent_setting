@@ -329,6 +329,17 @@ def _load_route(path: Path) -> dict[str, Any]:
     return value
 
 
+def _verifier_crashed(result: subprocess.CompletedProcess[str]) -> bool:
+    """True when the verifier died instead of reaching a verdict.
+
+    A contract rejection exits with a documented code and prints one
+    ``capability-route: <reason>`` line; an interpreter-level failure prints a
+    traceback.  Only the latter is worth retrying, and only the latter must not be
+    reported to the user as a bad route record.
+    """
+    return "Traceback (most recent call last)" in (result.stderr or "")
+
+
 def verify_route(
     route_file: Path,
     expected_root: Path,
@@ -356,16 +367,24 @@ def verify_route(
     verifier = agent_home / "utilities" / "capability-route.py"
     if not verifier.is_file():
         raise RouteError("route-verifier-unavailable")
-    result = _run(
-        [
-            sys.executable,
-            str(verifier),
-            "verify",
-            "--route", str(route_file),
-            "--cwd", str(expected_root),
-        ]
-    )
+    # The verifier is the live repo file, not an installed copy (`~/.claude/utilities`
+    # symlinks straight back here), so a parallel session editing the harness can be
+    # observed mid-write.  That surfaces as an interpreter-level crash, which is not
+    # evidence that this route record is bad — retry once, then say which of the two
+    # actually happened instead of blaming the record.
+    command = [
+        sys.executable,
+        str(verifier),
+        "verify",
+        "--route", str(route_file),
+        "--cwd", str(expected_root),
+    ]
+    result = _run(command)
+    if result.returncode and _verifier_crashed(result):
+        result = _run(command)
     if result.returncode:
+        if _verifier_crashed(result):
+            raise RouteError("route-verifier-crashed")
         raise RouteError("route-record-verification-failed")
     if route.get("source_commit") != current_commit(expected_root):
         raise RouteError("route-source-commit-stale")
