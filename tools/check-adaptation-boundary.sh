@@ -3826,6 +3826,14 @@ check_language_neutrality_contract() {
     || ! grep -Fq "default to the language the user is currently using to communicate" roles/response-policy.md; then
     fail_msg "roles/response-policy.md must define the audience-language-first artifact contract"
   fi
+  if ! grep -Fq '**Terminal-safe enumeration**' roles/response-policy.md \
+    || ! grep -Fq 'never use circled or otherwise enclosed' roles/response-policy.md; then
+    fail_msg "roles/response-policy.md must define the terminal-safe enumeration contract"
+  fi
+  if rg -n '[\x{2460}-\x{2473}\x{24EA}\x{24F5}-\x{24FE}\x{2776}-\x{2793}\x{3251}-\x{325F}\x{32B1}-\x{32BF}]' \
+    roles/response-policy.md skills/autopilot-spec/references/prd-authoring.md >/dev/null 2>&1; then
+    fail_msg "terminal-facing response policy and choice templates must not contain enclosed numeral glyphs"
+  fi
   # 재홈 2026-07-22: the retired editorial-team router's audience-language contract now
   # lives in the unit catalog's shared editorial voice fragment.
   if ! grep -Fq '## Audience language (highest-priority principle)' roles/units/editorial/_voice.md \

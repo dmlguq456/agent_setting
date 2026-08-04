@@ -117,13 +117,13 @@ Approve? (proceed / modify / back-jump to Step 3a / stop)
 
 1. Review the PRD for passages requiring meaning, context, appropriateness, or naturalness. Detect these semantically; terms such as `meaning`, `judgment`, `appropriate`, `contextual`, `semantic`, or `natural` are examples, not a fixed trigger list.
 2. Inspect the corresponding implementation plan. Flag a conflict when the spec asks for semantically appropriate behavior but the implementation reduces it to fixed rules, regexes, or token matching alone.
-3. For each conflict, mark the PRD, record why, and offer three choices from §0.7: ① redefine the spec, ② use an LLM judgment stage, or ③ state an LLM fallback after deterministic rules.
+3. For each conflict, mark the PRD, record why, and offer three choices from §0.7: 1. redefine the spec, 2. use an LLM judgment stage, or 3. state an LLM fallback after deterministic rules.
 
 ```
 === Semantic-judgment boundary check ===
 Semantic passages: <list with PRD line references>
 Conflicts: <none / N — each passage and whether it was reduced to rules>
-(when conflicts exist) Choices: ① redefine spec / ② add LLM judgment / ③ deterministic rules + LLM fallback
+(when conflicts exist) Choices: 1. redefine spec / 2. add LLM judgment / 3. deterministic rules + LLM fallback
 
 Approve? (proceed / modify / stop)
 ```

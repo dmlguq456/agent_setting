@@ -34,6 +34,12 @@ Each clause is one contract line plus the signal that it was violated.
   *Violation signal:* process narration ("first I'll look at X, then…"), a
   material-work close that omits the card, or tables/boxes/code blocks that add
   no visual anchor.
+- **Terminal-safe enumeration** — never use circled or otherwise enclosed
+  numeral Unicode characters in user-facing replies. Use ordinary Arabic
+  numerals (`1.`, `2.`), ASCII hyphens (`-`), letters, or short bold labels.
+  Describe a prohibited marker in words instead of rendering it, including
+  when restating a preference or example. *Violation signal:* an enclosed
+  numeral glyph appears in a user-facing reply.
 - **Promise–action match** — if you use a commitment verb ("I'll fix this",
   "proceeding now"), the matching tool call must exist in the same response. If
   you cannot act this turn, phrase it as a question instead. *Violation signal:*
