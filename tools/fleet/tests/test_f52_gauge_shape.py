@@ -37,18 +37,20 @@ class F52aGlyphTest(unittest.TestCase):
 
 class F52bTrackLengthTest(unittest.TestCase):
     def test_reference_windows_map_to_the_documented_track_lengths(self):
-        cases = {1000000: 20, 256000: 5, 262144: 5, 200000: 4, 500000: 10, 2000000: 20}
+        # F-57b (v41) restored the 1M reference track to 16 cells (F-54 had widened it to 20);
+        # every entry is `clamp(half_up(16 * window / 1M), 1, 16)` against that new base.
+        cases = {1000000: 16, 256000: 4, 262144: 4, 200000: 3, 500000: 8, 2000000: 16}
         for window, cells in cases.items():
             with self.subTest(window=window):
                 self.assertEqual(render._context_gauge_track(window), cells)
 
     def test_half_up_at_the_boundary_and_clamped_to_at_least_one_cell(self):
-        # 20 * w / 1M == 2.5 exactly → half-up lands on 3, not banker's 2.
-        self.assertEqual(render._context_gauge_track(125000), 3)
-        for tiny in (1, 1000, 24999):
+        # 16 * w / 1M == 2.5 exactly → half-up lands on 3, not banker's 2.
+        self.assertEqual(render._context_gauge_track(156250), 3)
+        for tiny in (1, 1000, 31249):
             self.assertEqual(render._context_gauge_track(tiny), 1)
 
-    def test_unmeasured_window_falls_back_to_the_twenty_cell_baseline(self):
+    def test_unmeasured_window_falls_back_to_the_baseline_track(self):
         for missing in (None, 0, -1, True, "1000000", float("nan"), float("inf")):
             with self.subTest(missing=missing):
                 self.assertEqual(render._context_gauge_track(missing), render._CTX_TRACK_MAX)
@@ -59,9 +61,9 @@ class F52bTrackLengthTest(unittest.TestCase):
         return render._context_detail_row(session, term_width=168)
 
     def test_row_track_follows_the_measured_window(self):
-        self.assertEqual(len(track_of(self._row(1000000, 50))), 20)
-        self.assertEqual(len(track_of(self._row(256000, 50))), 5)
-        self.assertEqual(len(track_of(self._row(None, 50))), 20)   # unknown → baseline, row stays
+        self.assertEqual(len(track_of(self._row(1000000, 50))), 16)
+        self.assertEqual(len(track_of(self._row(256000, 50))), 4)
+        self.assertEqual(len(track_of(self._row(None, 50))), 16)   # unknown → baseline, row stays
         self.assertIn("50%", "".join(v for v, _k in self._row(None, 50)[0]))
 
     def test_no_depth_dependent_shrink_survives(self):
@@ -70,7 +72,7 @@ class F52bTrackLengthTest(unittest.TestCase):
                           context_window_tokens=1000000)
         for depth in (0, 1, 2, 3):
             row = render._context_detail_row(session, depth=depth, term_width=200)
-            self.assertEqual(len(track_of(row)), 20)
+            self.assertEqual(len(track_of(row)), 16)
 
     def test_fill_is_half_up_over_the_track_with_reserved_ends(self):
         for pct, filled in ((None, 0), (0, 0), (1, 1), (2, 1), (3, 1), (50, 10),
@@ -221,9 +223,10 @@ class F55bNarrowDegradeTest(unittest.TestCase):
         self.assertEqual(self._lead_text(self._row(48)), "working ")
 
     def test_the_word_degrades_to_the_glyph_only_when_it_cannot_share_the_row(self):
-        # 4 indent + 8 word + 20 track + 4 value = 36 cells is the last width that fits.
-        self.assertEqual(self._lead_text(self._row(36)), "working ")
-        degraded = self._lead_text(self._row(35))
+        # 4 indent + 8 word + 16 track + 4 value = 32 cells is the last width that fits
+        # (F-57b's 20→16 track pulls this boundary in from 36).
+        self.assertEqual(self._lead_text(self._row(32)), "working ")
+        degraded = self._lead_text(self._row(31))
         self.assertEqual(render._dw(degraded), render._CTX_GLYPH_LABEL_W)
         self.assertIn(degraded[0], set(render._SPIN))
 
@@ -243,20 +246,17 @@ class F55bNarrowDegradeTest(unittest.TestCase):
 
 
 class F52WidthLedgerTest(unittest.TestCase):
-    def test_left_anchor_and_wide_slack_ledger_are_untouched(self):
+    def test_left_anchor_is_untouched_and_the_wide_slack_ledger_holds(self):
+        # F-52's left anchor is independent of every wide-row width edit and never moves.
         self.assertEqual(render._CONTEXT_INDENT_W, 4)
-        self.assertEqual(render._CTX_W, 24)
-        # F-54 (_HMW 33→38→42) charges 9 more cells to `fixed_row` than the v35 ledger, so every
-        # slack entry drops by exactly that much and the alloc ladder shifts right by the same
-        # number of widths. What this test guards — the left anchor (_CONTEXT_INDENT_W) and the
-        # gauge base (_CTX_W) asserted above, plus the boost-first/name-to-cap/remainder-to-gauge
-        # priority — is untouched: 120 still sits at the (_NW_S, _CTX_W) floor, and 400 is still
-        # name-capped with all remaining slack in the gauge. The v40 +4 pushed the cap's first
-        # width 172→176, so 168 dropped one more step (32, was 36 at _HMW=38).
+        # F-57 (v41) removed the dead `_CTX_W` (24) term from `fixed_row` and the `_CTX_BOOST`
+        # (12) skim from the allocator, so every slack entry gains 24 and the name ladder
+        # shifts left by 36 widths — 120 still sits on the `_NW_S` floor, but the cap is now
+        # first reached at 140 (was 176 at v40), so 168 and 400 are both at the cap.
         self.assertEqual([render._wide_slack(w) for w in (60, 120, 168, 200, 400)],
-                         [-64, -4, 44, 76, 276])
-        self.assertEqual([render._wide_alloc(w) for w in (120, 168, 400)],
-                         [(28, 24), (32, 36), (40, 260)])
+                         [-40, 20, 68, 100, 300])
+        self.assertEqual([render._wide_name_width(w) for w in (120, 140, 168, 400)],
+                         [28, 40, 40, 40])
 
     def test_row_starts_at_the_harness_name_column_and_fits_every_layout(self):
         session = Session(harness="claude", pid=1, cwd="/x", liveness="idle", ctx_pct=63,

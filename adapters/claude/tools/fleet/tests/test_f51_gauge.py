@@ -123,32 +123,38 @@ class F51GaugeTest(unittest.TestCase):
         self.assertIn("—", joined)
         self.assertNotIn(render._BAR_FULL, joined)
 
-    def test_wide_alloc_matches_the_frozen_ledger_fixture_exactly(self):
-        """A8: `f51_wide_ledger_v40.json` records `_wide_slack`/`_wide_name_width`/
-        `_wide_ctx_width` for every terminal width 60..400 — recompute all three and diff
-        against the frozen ledger so a future edit to the wide slack ladder cannot silently
-        regress without this fixture failing.
+    def test_wide_ledger_matches_the_frozen_fixture_exactly(self):
+        """A8: `f51_wide_ledger_v41.json` records `_wide_slack`/`_wide_name_width` for every
+        terminal width 60..400 — recompute both and diff against the frozen ledger so a
+        future edit to the wide slack ladder cannot silently regress without this fixture
+        failing.
 
-        Re-frozen for the F-54 v40 correction (`_HMW` 38→42, ledger renamed from
-        `..._v38.json`; v38 itself had renamed `..._v35.json` for 33→38). The 4 extra harness
-        cells are charged to `fixed_row`, so every entry shifts right by exactly 4: the v40
-        ledger satisfies `v40[w] == v38[w-4]` for all w in 64..400 (verified 337/337 at
-        re-freeze). The ladder's SHAPE is therefore unchanged — same `_NW_S` floor (28), same
-        `_CTX_BOOST`-first priority, same `_NAME_WIDE_MAX` cap, same past-cap remainder to the
-        gauge. Only the width at which each rung is reached moved (e.g. the 40-col name cap is
-        first reached at 176 cols, was 172 at _HMW=38 and 167 at 33)."""
-        path = os.path.join(os.path.dirname(__file__), "fixtures", "f51_wide_ledger_v40.json")
+        Re-frozen for F-57 (v41; renamed from `..._v40.json`, itself `..._v38.json` ←
+        `..._v35.json`). This re-freeze is NOT a single translation, because F-57 changed two
+        things at once, and each is individually exact:
+
+          * `wide_slack` — the dead `_CTX_W` (24) term left `fixed_row`, so every entry
+            gains exactly 24 cells: `v41[w] == v40[w] + 24` for all w in 60..400
+            (verified 341/341 at re-freeze). A VERTICAL shift.
+          * `wide_name_width` — losing `_CTX_W` (24) *and* the `_CTX_BOOST` (12) skim means
+            36 more cells reach the title before anything else: `v41[w] == v40[w+36]` for
+            all w in 60..364 (verified 305/305), and w>364 is flat at the cap either way.
+            A HORIZONTAL shift, so the ladder's SHAPE is unchanged — same `_NW_S` floor
+            (28), same `_NAME_WIDE_MAX` cap (40), still monotonic. Only the width at which
+            each rung is reached moved: the 40-col name cap is now first reached at 140
+            cols (was 176 at v40, 172 at `_HMW`=38, 167 at 33).
+          * `wide_ctx_width` — the series is GONE, not shifted. It described the inline
+            gauge reservation F-37a had already made unrenderable; F-57 removed the
+            producer (`_wide_ctx_width`/`_wide_alloc`), so there is nothing to freeze."""
+        path = os.path.join(os.path.dirname(__file__), "fixtures", "f51_wide_ledger_v41.json")
         with open(path, encoding="utf-8") as fh:
             ledger = json.load(fh)
         self.assertEqual(len(ledger), 341)
         for w in range(60, 401):
             expected = ledger[str(w)]
-            name_w, ctx_w = render._wide_alloc(w)
-            slack = render._wide_slack(w)
             with self.subTest(w=w):
-                self.assertEqual(name_w, expected["wide_name_width"])
-                self.assertEqual(ctx_w, expected["wide_ctx_width"])
-                self.assertEqual(slack, expected["wide_slack"])
+                self.assertEqual(render._wide_name_width(w), expected["wide_name_width"])
+                self.assertEqual(render._wide_slack(w), expected["wide_slack"])
 
     def test_gauge_surfaces_never_emit_tilde(self):
         session = Session(harness="claude", pid=1, cwd="/x", liveness="working",

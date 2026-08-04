@@ -309,11 +309,13 @@ class DegradationLadderTest(unittest.TestCase):
         Full badge ` unused 3h45m` (13) plus the 1-cell gap leaves the name `zone - 14` cells;
         the compact ` unused` (7) leaves it `zone - 8`. A name in between therefore has to clip
         with the age present, and survives whole once the age yields. The sample is SIZED FROM
-        the zone rather than typed in, so F-54's `_HMW` widenings (which shrink the 168-col
-        zone: 40 → 36 → 32) move it automatically instead of silently leaving the window.
+        the zone rather than typed in, so every 168-col zone change moves it automatically
+        instead of silently leaving the window (F-54's `_HMW` widenings shrank the zone
+        40 → 36 → 32; F-57's reservation reclaim put it back at the 40-cell cap). The source
+        literal must stay at least `_NAME_WIDE_MAX - 8` cells long for the slice to bite.
         """
         zone = render._wide_name_width(168)
-        name = "agent-setting-17-beta123456"[:zone - 8]   # top of the (zone-14, zone-8] window
+        name = "agent-setting-17-beta1234567890abcdef"[:zone - 8]  # top of (zone-14, zone-8]
         self.assertEqual(render._dw(name), zone - 8)
         s = self._ghost(registry_name=name, provenance=None)
         segs = render._session_row(s, narrow=False,

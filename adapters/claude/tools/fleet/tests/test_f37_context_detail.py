@@ -51,11 +51,13 @@ class ContextDetailTruthTableTest(unittest.TestCase):
         return self._session(**kwargs)
 
     def test_context_now_truth_table(self):
+        # 63% over the F-57b 16-cell baseline track: half_up(63 * 16 / 100) = half_up(10.08)
+        # = 10 filled, 6 empty (was 13/7 while the base track was 20).
         cases = [
             (ContextProjection(63, "normal", "claude"), "Doing work",
-             LEAD + FULL * 13 + EMPTY * 7 + " 63%"),
+             LEAD + FULL * 10 + EMPTY * 6 + " 63%"),
             (ContextProjection(63, "normal", "claude"), None,
-             LEAD + FULL * 13 + EMPTY * 7 + " 63%"),
+             LEAD + FULL * 10 + EMPTY * 6 + " 63%"),
             (ContextProjection(None, "unknown", "claude"), "Doing work",
              LEAD + EMPTY * BASE + "   —"),
             (None, None, LEAD + EMPTY * BASE + "   —"),

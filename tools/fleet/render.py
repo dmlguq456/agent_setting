@@ -503,9 +503,9 @@ def _short_model_id(name):
 # needed). Filled carries the level color; the empty track is dim — the fill reads by color too.
 _BAR_FULL, _BAR_EMPTY = "━", "─"
 _GAUGE_W = 6                  # usage-header meter: fixed six cells (F-51a; F-52b does NOT touch it)
-_CTX_TRACK_MAX = 20           # F-52b/F-54: a 1M context window is 20 cells. Independent of the
-                              # harness column — v38 widened this for readability and dropped the
-                              # original "same width as the harness column" rationale.
+_CTX_TRACK_MAX = 16           # F-52b/F-57b: a 1M context window is 16 cells. Independent of the
+                              # harness column — v38 widened this 16→20 for readability, and F-57b
+                              # (v41) restores 16 (user 2026-08-04: "게이지 폭을 좀 줄이자").
 _CTX_TRACK_WINDOW = 1000000   # …and the track scales linearly against that reference window.
 _GIT_TELEMETRY = True
 
@@ -516,11 +516,11 @@ def _half_up(value):
 
 
 def _context_gauge_track(window):
-    """F-52b context-gauge track length: `clamp(half_up(20 * window / 1M), 1, 20)`.
+    """F-52b context-gauge track length: `clamp(half_up(16 * window / 1M), 1, 16)`.
 
     `window` is a MEASURED `context_window_tokens` telemetry value only — there is no model or
     harness lookup table here. With no measurement we cannot claim a proportion, so the track
-    falls back to the 20-cell baseline (the percent itself is still known, so the row stays)."""
+    falls back to the 16-cell baseline (the percent itself is still known, so the row stays)."""
     if (not isinstance(window, (int, float)) or isinstance(window, bool)
             or window != window or window in (float("inf"), float("-inf")) or window <= 0):
         return _CTX_TRACK_MAX
@@ -579,7 +579,7 @@ _HMW = 42                     # F-33 (v19 spacing hotfix): WIDE-layout harness f
                               # `opencode (claude-sonnet-4-5·high)` at 33 cells, so 42 leaves 9
                               # cells of margin. The extra cells
                               # shift the whole wide row right and are charged to the _wide_slack
-                              # budget; _NW_S/_NAME_WIDE_MAX/_CTX_W allocation rules are unchanged
+                              # budget; the _NW_S/_NAME_WIDE_MAX allocation rules are unchanged
                               # and the context track (_CTX_TRACK_MAX) is independent of this
                               # field's width. Model/effort stay
                               # folded in as a parenthetical ('claude code (Fable 5
@@ -616,7 +616,9 @@ _WIDE_TIME_GAP = 1            # Extra owned spacer before the right-flushed time
 _MW = 23                      # model cell: name + FULL effort word ('Opus 4.8 xhigh' — no abbrev)
 _EFW = 7                      # effort subfield ("medium"=6 +1 gap) — FIXED width so every row's
                               # effort lands in the same column, under its own 'effort' header
-_CTX_W = 24                   # context gauge (kept wide; 16→24 2026-07-15 user: 진행이 안 보임)
+# (F-57, v41) `_CTX_W = 24` lived here: the wide main row's INLINE context gauge. F-37a (v16)
+# replaced that gauge with the dedicated context detail row, but the reservation stayed in the
+# ledger and kept 24 cells of the main row permanently blank. Removed, not zeroed.
 _CLOCK = ""                   # Bare elapsed value; icons caused width and readability issues.
 
 # known pipeline stage sequences → the stage breadcrumb (process viz). Unknown keys/stages fall
@@ -675,17 +677,17 @@ _STAGE_RESERVE = 20           # trailing room for the dispatch stage breadcrumb 
 def _wide_slack(term_width):
     """Terminal slack available to the wide-layout name column past its fixed
     columns and framing, or None when `term_width` is unknown (hermetic callers).
-    Shared by `_wide_name_width` and `_wide_ctx_width` below so the fixed_row/
-    framing reservation is computed in exactly one place (user 2026-07-16: the
-    ctx-gauge width ask reuses the same reservation math F-22's name-cap already
-    established, rather than duplicating it)."""
+    Consumed by `_wide_name_width` below — the one place the fixed_row/framing
+    reservation is computed."""
     if not term_width:
         return None
     # F-33 (v11): no more separate model column (_MW) — model/effort now ride inside
     # _NAME_COL's harness-model field (_HMW), so the column merge's freed width flows
-    # straight into this reservation and out to the name/ctx-gauge slack below.
+    # straight into this reservation and out to the name slack below.
+    # F-57 (v41): the dead `_CTX_W` (24) inline-gauge term is gone from this sum, so every
+    # terminal width now reports 24 more cells of real slack than it did through v40.
     fixed_row = (_NAME_COL + _BRANCH_SUFFIX_W + _WIDE_STAGE_GAP + _WIDE_TIME_GAP
-                 + _CTX_W + 5 + _STAGE_RESERVE)
+                 + 5 + _STAGE_RESERVE)
     if _TINT_OK:
         framing = (_INSET + _PAD_IN) + _INSET + (2 + _PAD_IN) + 6 + 2
     else:
@@ -693,36 +695,20 @@ def _wide_slack(term_width):
     return int(term_width) - fixed_row - framing
 
 
-_CTX_BOOST = 12               # (user 2026-07-20: "context를 좀 더 꽉차게 확장") — the FIRST
-                              # cells of wide-layout slack past the base name column widen the
-                              # ctx gauge, BEFORE the name starts growing toward its F-22 cap.
-                              # At a 160-col terminal this puts the gauge at 36 instead of 30.
+def _wide_name_width(term_width):
+    """Responsive wide-layout name column, between `_NW_S` and `_NAME_WIDE_MAX`
+    (F-22 minor, v8). Every cell of slack past the `_NW_S` floor goes to the name
+    until the cap; slack past the cap stays as end-of-row padding (F-22).
 
-
-def _wide_alloc(term_width):
-    """(name_width, ctx_width) for the wide layout — ONE slack ledger for both
-    columns, so their budgets can never double-spend the same cells. Priority
-    (user 2026-07-20): gauge boost (_CTX_BOOST) → name growth to _NAME_WIDE_MAX
-    (F-22) → everything past the cap back to the gauge (user 2026-07-16: right
-    edges keep lining up per width, no blank padding before the time column)."""
+    F-57 (v41) removed the `_CTX_BOOST` (12) step that used to spend the first
+    surplus cells on the inline gauge reservation before the name grew at all.
+    With both that boost and the `_CTX_W` (24) reservation gone the name reaches
+    its 40-cell cap 36 columns earlier than it did through v40 (176 → 140)."""
     raw = _wide_slack(term_width)
     if raw is None:
-        return _NW_S, _CTX_W
+        return _NW_S
     surplus = max(0, raw - _NW_S)
-    boost = min(_CTX_BOOST, surplus)
-    grow = min(_NAME_WIDE_MAX - _NW_S, surplus - boost)
-    return _NW_S + grow, _CTX_W + boost + (surplus - boost - grow)
-
-
-def _wide_name_width(term_width):
-    """Responsive wide-layout name column, between _NW_S and _NAME_WIDE_MAX
-    (F-22 minor, v8) — see `_wide_alloc` for the slack priority."""
-    return _wide_alloc(term_width)[0]
-
-
-def _wide_ctx_width(term_width):
-    """Wide-layout ctx-gauge width — see `_wide_alloc` for the slack priority."""
-    return _wide_alloc(term_width)[1]
+    return _NW_S + min(_NAME_WIDE_MAX - _NW_S, surplus)
 
 
 def _col_head(name_width):
@@ -1339,7 +1325,7 @@ def _interaction_badge(s):
     return " " + label if label else ""
 
 
-def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None, ctx_width=None,
+def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None,
                  show_projection_stage=True, stage_zone=None):
     live = s.liveness
     slug = s.slug or (s.cwd.rsplit("/", 1)[-1] if s.cwd else "?")
@@ -3606,7 +3592,6 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     wide_name_width = _wide_name_width(term_width) if layout == "wide" else None
     wide_route_zone = (_route_zone_width(term_width, wide_name_width)
                        if layout == "wide" else None)
-    wide_ctx_width = _wide_ctx_width(term_width) if layout == "wide" else None
     n_mem_total = sum(1 for s in sessions if getattr(s, "mem_worker", False))
     mem_by_group = {}
     for s in sessions:
@@ -4076,7 +4061,6 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 lines.append(_session_row(s, narrow, is_parent=bool(nested_n),
                                           child_count=nested_n,
                                           name_width=wide_name_width,
-                                          ctx_width=wide_ctx_width,
                                           show_projection_stage=not suppress_session_stage,
                                           stage_zone=wide_route_zone))
             if not (s.liveness in ("stale", "dead") or s.app_server or s.detached):

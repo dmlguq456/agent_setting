@@ -277,8 +277,7 @@ class F51GitTelemetryTest(unittest.TestCase):
                 with self.subTest(term_width=term_width, layout=layout):
                     if layout == "wide":
                         name_w = render._wide_name_width(term_width)
-                        segs = render._session_row(s, narrow=False, name_width=name_w,
-                                                   ctx_width=render._wide_ctx_width(term_width))
+                        segs = render._session_row(s, narrow=False, name_width=name_w)
                         text = "".join(t for t, _k in segs if t != render._RFLUSH)
                     else:
                         l1, _l2 = render._session_row_2line(s, term_width=term_width)
