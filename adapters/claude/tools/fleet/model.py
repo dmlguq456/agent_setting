@@ -483,6 +483,38 @@ class DispatchJob:
         return _public_value(self)
 
 
+@dataclass
+class ResourceJob:
+    """One detached lab resource, deliberately separate from dispatch jobs."""
+    run_id: str
+    cwd: str = ""
+    project: str = "(unknown)"
+    job_type: str = "resource"
+    resource_class: str = "lab"
+    elapsed_min: Optional[int] = None
+    liveness: str = "stale"
+    pid: Optional[int] = None
+    starttime: Optional[str] = None
+    command_hash: Optional[str] = None
+    process_group: Optional[int] = None
+    registry_status: Optional[str] = None
+    registry_path: Optional[str] = None
+    log_path: Optional[str] = None
+    log_updated_at: Optional[float] = None
+    route: Optional[str] = None
+    node: Optional[str] = None
+    config_ref: Optional[str] = None
+    config_sha256: Optional[str] = None
+    source_commit: Optional[str] = None
+    source_dirty: Optional[bool] = None
+    source_git_state: Optional[str] = None
+    started_at: Optional[float] = None
+    state_evidence: Optional[dict] = None
+
+    def to_dict(self):
+        return _public_value(self)
+
+
 # =============================================================================
 # F-25 — single state classifier (PRD v8 §4.8). The ONLY place a fleet liveness
 # string is decided. Collectors gather evidence; they do not judge.

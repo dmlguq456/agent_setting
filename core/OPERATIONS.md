@@ -234,3 +234,20 @@ After validating changes to instructions, rules, hooks, preflight, or runtime st
 All repo-launched model-backed workers pass through `utilities/model-worker-governor.py`, which applies a global cap, per-class caps, rolling start budget, kill switch, and PID/starttime stale-lease cleanup. Its shared state lives under the canonical artifact root so the main checkout and linked workers use one writable governor. A registered dispatch launch reserves its slots atomically before any registry row or model process is created; a parallel batch reserves its exact declared N legs in one locked operation on first start, so insufficient total/class/start-budget capacity creates zero partial rows and zero model processes. An idempotent recovery may reserve one missing leg only after all other N-1 manifest-bound rows are proven active or completed. Each reserved dispatch runner claims one opaque reservation and releases it after its command exits; parallel-group provenance survives reservation-to-claim transfer and is copied into the immutable attempt row. Unused reservations are cancelled or pruned with their exact owner PID/start identity. Governor PID and group scans preserve `inaccessible`/`incomplete` as an occupied, unreleasable state instead of pruning a lease or reservation as dead; only a complete empty group releases descendant-held capacity. Other worker classes atomically acquire their lease in the governed runner. The legacy non-consuming `check` remains diagnostic only and is never a launch authorization. A launched worker inherits the same governor root before it can dispatch a child. This does not modify runtime-owned native subagent limits.
 
 Registered model-backed jobs remain owned by the dispatching session even when the runtime launcher uses a background OS process. The main or dispatch-depth-1 conductor launches, polls, harvests, and integrates the job in the same task flow; an absent OS parent does not grant an independent lifecycle or permit the orchestrator to end early. Only long-running non-model resource jobs use the independent `utilities/resource-runner.py` lifecycle. Reattachment and signals for those resource jobs require PID, process start time, process group, command identity, absolute cwd, log, and run-registry identity rather than PID alone.
+
+Detached resource runs are first-class lab/resource jobs, not registered agent
+dispatches and not members of `jobs.log`. Every `resource-runner start`
+atomically registers its absolute run-registry path in the harness-owned global
+index `<agent-home>/.dispatch/resource-runs.index.json`; an existing registry is
+imported without restarting its processes through `resource-runner index
+--registry <resource-runs.json>`. Fleet and status surfaces discover every
+indexed registry and fail soft per index, registry, and row. They never trust a
+stored `status=running`: current liveness is recomputed as `working` only when
+the recorded `pid`, `/proc` start time, and command-line hash all match;
+verified process absence is `exited`, and identity mismatch or incomplete
+identity is `stale`. Each run remains a separate row even when cwd/project is
+shared. Default views hide `exited` and `stale` resource rows while `--all`
+restores them. Stop or any other signal-capable control must revalidate that
+same exact identity plus the recorded process-group leader immediately before
+signalling. This contract was promoted after live GPU training was invisible
+to Fleet on 2026-08-04 despite a complete experiment-local registry.

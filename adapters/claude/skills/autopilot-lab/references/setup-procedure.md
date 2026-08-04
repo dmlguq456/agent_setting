@@ -109,6 +109,15 @@ At the same point, create `experiments/{date}_{slug}/run.json` with `status: "ru
 
 **S3-3. Mandatory hash-bound smoke before full-run entry.** Run one epoch or the minimum batch through `tools/smoke-attestation.py attest`, binding the exact config, source, input/checkpoint signature, working directory, and command. Validate data loading, forward/backward, loss, and optimizer step, not convergence. A detached full run must verify that attestation immediately before launch and reject missing, failed, or stale hashes. If a one-batch probe is impossible, the capability registry must name the bounded substitute; there is no free-form skip.
 
+**S3-3b. Verify Fleet visibility after full-run start.** Setup is not complete
+until the newly started `resource-runner` row appears in Fleet JSON and TUI as
+`job_type=resource`, `resource_class=lab`, with the expected `run_id`,
+`liveness=working`, route/node, log, and config/source provenance. Verify the
+exact PID/starttime/command hash; do not restart an existing run to repair
+visibility. If the run predates automatic indexing, import its registry with
+`resource-runner index --registry <existing-resource-runs.json>` and repeat
+the visibility check.
+
 **S3-4. Escalate convergence failures on user request.** For prompts such as `loss 가 안 떨어져`, `NaN`, or `수렴 이상`, dispatch the `qa/ml-debug` unit. Provide the experiment directory, symptom, available logs, and `experiment_spec.md`. Check data shape/range/NaN/balance, model initialization/freezing/gradient flow, loss scale/sign/stability, optimizer learning rate/weight decay/warmup, and batch/device/mixed precision. Return the one or two most likely causes plus commands that distinguish them.
 
 After `experiment_spec.md`, scaffold files, pending `_RUNLOG.md`, and running `run.json` are durable, the owner evaluates the route-sealed optional artifact-sink extension. An available registered sink receives the canonical experiment artifact through the app-neutral receipt contract; an unavailable probe records `skipped/extension-unavailable`. Eval repeats the same extension check at its durable terminal.
