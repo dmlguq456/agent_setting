@@ -30,7 +30,7 @@ else:
 def parse_args(argv):
     p = argparse.ArgumentParser(
         prog="fleet",
-        description="Cross-harness live agent-session + dispatch dashboard (external observer).",
+        description="Cross-harness live agent-session, dispatch, and lab-resource dashboard.",
     )
     p.add_argument("--interval", type=float, default=2.0,
                    help="live tick interval in seconds (default 2)")
@@ -40,7 +40,7 @@ def parse_args(argv):
                    help="run the TUI directly (this flag is honored by fleet.sh, not fleet.py)")
     p.add_argument("--section", choices=["fleet", "dispatch", "both"], default="both",
                    help="row-type filter within each project group: fleet=session rows only, "
-                        "dispatch=dispatch rows only, both=full group (default both)")
+                        "dispatch=job rows (dispatch + resource), both=full group (default both)")
     p.add_argument("--harness", default=None,
                    help="comma list to restrict harnesses, e.g. claude,codex")
     p.add_argument("--json", action="store_true",
@@ -48,7 +48,7 @@ def parse_args(argv):
     p.add_argument("--no-usage-api", action="store_true",
                    help="disable live usage API refreshes")
     p.add_argument("--all", dest="show_all", action="store_true",
-                   help="include stale/dead sessions in the fleet list (hidden by default)")
+                   help="include stale/dead sessions and exited/stale resources (hidden by default)")
     p.add_argument("--demo", action="store_true",
                    help="render synthetic fixture data (all harnesses + states) for rendering checks")
     p.add_argument("--view", choices=["group", "process"], default=None,
@@ -91,17 +91,26 @@ def _collect_memory():
         return None
 
 
-def _snapshot_json(sessions, jobs, usage=None, disabled=None):
+def _snapshot_json(sessions, jobs, resource_jobs=None, usage=None, disabled=None, show_all=False):
+    resource_jobs = list(resource_jobs or [])
+    visible_resources = resource_jobs if show_all else [
+        row for row in resource_jobs if row.liveness == "working"
+    ]
     counts = {}
     for s in sessions:
         counts[s.harness] = counts.get(s.harness, 0) + 1
     out = {
         "sessions": [s.to_dict() for s in sessions],
         "jobs": [j.to_dict() for j in jobs],
+        "resource_jobs": [j.to_dict() for j in visible_resources],
         "summary": {
             "session_count": len(sessions),
             "by_harness": counts,
             "dispatch_count": len(jobs),
+            "resource_count": len(visible_resources),
+            "resource_working": sum(j.liveness == "working" for j in resource_jobs),
+            "resource_stale": sum(j.liveness == "stale" for j in resource_jobs),
+            "resource_exited": sum(j.liveness == "exited" for j in resource_jobs),
         },
     }
     mem = _collect_memory()
@@ -180,10 +189,18 @@ def main(argv=None):
             # regresses to "pending" (see projection.py's resolve_work_projection).
             node_evidence = getattr(_dispatch.collect, "last_route_nodes", None)
             degradations = getattr(_dispatch.collect, "last_degradations", None)
-            return attach_projections(sessions, jobs, artifact_root=os.environ.get("AGENT_ARTIFACT_ROOT"),
-                                      node_evidence=node_evidence, degradations=degradations)
+            result = attach_projections(sessions, jobs, artifact_root=os.environ.get("AGENT_ARTIFACT_ROOT"),
+                                        node_evidence=node_evidence, degradations=degradations)
         except Exception:
-            return sessions, jobs
+            result = (sessions, jobs)
+        projected_collector.last_resource_jobs = list(
+            getattr(collect_all, "last_resource_jobs", []))
+        projected_collector.last_resource_malformed = getattr(
+            collect_all, "last_resource_malformed", 0)
+        return result
+
+    projected_collector.last_resource_jobs = []
+    projected_collector.last_resource_malformed = 0
 
     if args.json:
         sessions, jobs = projected_collector(harness_filter=hfilter)
@@ -197,8 +214,10 @@ def main(argv=None):
         usage_json["observed_at"] = max(observed) if observed else None
         usage_json["api_disabled"] = disabled["api_disabled"]
         print(_snapshot_json(sessions, jobs,
+                             resource_jobs=projected_collector.last_resource_jobs,
                              usage=usage_json,
-                             disabled=disabled))
+                             disabled=disabled,
+                             show_all=args.show_all))
         return 0
 
     # curses / --once path (render module) — resolved lazily so --json needs no curses.
@@ -235,8 +254,15 @@ def main(argv=None):
             live = render.live_harnesses(previous_sessions) & effective & {"claude", "codex"}
         usage = "refresh" if live else "cache-only"
         sessions, jobs = base_collector(harness_filter=harness_filter, usage=usage)
+        live_collector.last_resource_jobs = list(
+            getattr(base_collector, "last_resource_jobs", []))
+        live_collector.last_resource_malformed = getattr(
+            base_collector, "last_resource_malformed", 0)
         previous_sessions = list(sessions)
         return sessions, jobs
+
+    live_collector.last_resource_jobs = []
+    live_collector.last_resource_malformed = 0
 
     return render.run_live(live_collector, hfilter, args.section, args.interval)
 

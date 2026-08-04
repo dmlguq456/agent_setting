@@ -56,18 +56,22 @@ class MutedPaletteTest(unittest.TestCase):
             236: (169, 182, 235),
         })
         init_color = mock.Mock()
-        with mock.patch.multiple(
-            render.curses,
-            create=True,
-            COLORS=256,
-            start_color=mock.Mock(),
-            use_default_colors=mock.Mock(),
-            init_pair=mock.Mock(),
-            color_pair=mock.Mock(return_value=0),
-            can_change_color=mock.Mock(return_value=True),
-            init_color=init_color,
-        ):
-            render._init_colors()
+        old_tint = render._TINT_OK
+        try:
+            with mock.patch.multiple(
+                render.curses,
+                create=True,
+                COLORS=256,
+                start_color=mock.Mock(),
+                use_default_colors=mock.Mock(),
+                init_pair=mock.Mock(),
+                color_pair=mock.Mock(return_value=0),
+                can_change_color=mock.Mock(return_value=True),
+                init_color=init_color,
+            ):
+                render._init_colors()
+        finally:
+            render._TINT_OK = old_tint
         expected = [
             mock.call(render._MUTED_256[name], *rgb)
             for name, rgb in render._RICHER_RGB_1000.items()

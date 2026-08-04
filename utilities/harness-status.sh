@@ -212,4 +212,16 @@ if [ -n "${orphaned_resume_boundary:-}" ]; then
   printf 'orphaned_resume_boundary=%s\n' "$orphaned_resume_boundary"
 fi
 
+# F-59: the same exact-identity classifier used by Fleet. A malformed index or
+# registry is diagnostic data, never a reason for the status snapshot to fail.
+resource_counts=$(python3 "$self_dir/resource_run_registry.py" counts --format shell 2>/dev/null || true)
+resource_live=$(printf '%s\n' "$resource_counts" | awk -F= '$1=="working"{print $2; exit}')
+resource_stale=$(printf '%s\n' "$resource_counts" | awk -F= '$1=="stale"{print $2; exit}')
+resource_exited=$(printf '%s\n' "$resource_counts" | awk -F= '$1=="exited"{print $2; exit}')
+resource_malformed=$(printf '%s\n' "$resource_counts" | awk -F= '$1=="malformed"{print $2; exit}')
+printf 'resource_run_live=%s\n' "${resource_live:-0}"
+printf 'resource_run_stale=%s\n' "${resource_stale:-0}"
+printf 'resource_run_exited=%s\n' "${resource_exited:-0}"
+printf 'resource_run_malformed=%s\n' "${resource_malformed:-0}"
+
 printf 'note=read-only snapshot; runtime-native status UI remains authoritative for model/context/token/session fields\n'

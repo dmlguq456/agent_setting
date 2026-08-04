@@ -182,9 +182,11 @@ Evaluation uses the runtime snapshot or manifest and never infers current
 config from checkpoint directory names; historical compatibility requires an
 explicit migration map or provenance manifest. Config lineage is visible
 through the resource-run registry JSON and `resource-runner status`/`tail`,
-plus lab-owned `run.json`/`_RUNLOG` — Fleet schema-validates `resource-runner`
-route nodes but does not render resource-run rows or config metadata today;
-ordinary processes are never presented as separate training runs.
+plus lab-owned `run.json`/`_RUNLOG`. Fleet consumes the harness-owned
+resource-run global index as a first-class source and renders each exact
+`resource-runner` row as a separate `LAB resource` job with config/source
+provenance. It recomputes liveness from `pid+starttime+command_hash`; ordinary
+unregistered processes are never presented as training runs.
 
 ### In-flight compatibility, termination, and promotion
 

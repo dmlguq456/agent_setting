@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """Detached process runner with PID reuse-safe reattachment."""
-import argparse, fcntl, hashlib, importlib.util, json, os, re, signal, subprocess, sys, time
+import argparse, fcntl, importlib.util, json, os, re, signal, subprocess, sys, time
 from pathlib import Path
+from resource_run_registry import (
+    classify_identity,
+    is_alive,
+    proc_identity,
+    register_registry,
+)
 
 SAFE_RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 RETRY = re.compile(r"^(?P<base>.+)__a(?P<n>[1-9][0-9]*)$")
 
-def proc_identity(pid):
-    stat=Path(f"/proc/{pid}/stat"); cmd=Path(f"/proc/{pid}/cmdline")
-    if not stat.exists() or not cmd.exists(): return None
-    fields=stat.read_text().split(); return {"pid":pid,"starttime":fields[21],"command_hash":hashlib.sha256(cmd.read_bytes()).hexdigest()}
 def alive(run):
-    cur=proc_identity(run["pid"]); return bool(cur and all(str(cur[k])==str(run[k]) for k in ("pid","starttime","command_hash")))
+    return is_alive(run)
 def fail(message):
     print("resource-runner:", message, file=sys.stderr)
     raise SystemExit(65)
@@ -21,11 +23,19 @@ def locked_update(path, fn):
         fcntl.flock(lock,fcntl.LOCK_EX); data=json.loads(path.read_text()) if path.exists() else {"schema_version":1,"runs":{}}
         result=fn(data); tmp=path.with_suffix(path.suffix+".tmp"); tmp.write_text(json.dumps(data,indent=2)+"\n"); os.replace(tmp,path); return result
 def main():
-    p=argparse.ArgumentParser(); p.add_argument("--registry",required=True); s=p.add_subparsers(dest="cmd",required=True)
+    p=argparse.ArgumentParser(); p.add_argument("--registry"); s=p.add_subparsers(dest="cmd",required=True)
     a=s.add_parser("start"); a.add_argument("--run-id",required=True); a.add_argument("--cwd",required=True); a.add_argument("--log",required=True); a.add_argument("--route",required=True); a.add_argument("--node",required=True); a.add_argument("--smoke-attestation"); a.add_argument("--config-manifest"); a.add_argument("command",nargs=argparse.REMAINDER)
     for name in ("status","stop","tail"):
         x=s.add_parser(name); x.add_argument("--run-id",required=True)
-    args=p.parse_args(); registry=Path(args.registry).resolve()
+    index_cmd=s.add_parser("index"); index_cmd.add_argument("--registry",required=True)
+    args=p.parse_args()
+    if args.cmd=="index":
+        registry=Path(args.registry).resolve(strict=True)
+        indexed=register_registry(registry)
+        print(json.dumps({"registry":str(registry),**indexed},sort_keys=True))
+        return
+    if not args.registry: fail("--registry is required")
+    registry=Path(args.registry).resolve()
     if args.cmd=="start":
         cwd=Path(args.cwd).resolve(strict=True)
         command=args.command[1:] if args.command[:1]==["--"] else args.command
@@ -78,28 +88,62 @@ def main():
                           "source_commit": manifest["source_commit"], "source_dirty": manifest["source_dirty"],
                           "source_git_state": manifest.get("source_git_state", "unknown-no-git"),
                           "config_layout": manifest.get("config_layout", "unknown")}
-        log=Path(args.log).resolve(); log.parent.mkdir(parents=True,exist_ok=True)
-        out=open(log,"ab",buffering=0); proc=subprocess.Popen(command,cwd=cwd,stdout=out,stderr=subprocess.STDOUT,start_new_session=True)
+        log=Path(args.log).resolve()
+        placeholder={"run_id":args.run_id,"cwd":str(cwd),"log":str(log),"command":command,
+                     **provenance,"route":args.route,"node":args.node,"status":"launching",
+                     "started_at":time.time()}
+        def reserve(data):
+            if args.run_id in data["runs"]: raise ValueError("run id already exists")
+            data["runs"][args.run_id]=placeholder
+        locked_update(registry,reserve)
+        try:
+            register_registry(registry)
+        except Exception:
+            locked_update(registry,lambda data:data["runs"].pop(args.run_id,None))
+            raise
+        log.parent.mkdir(parents=True,exist_ok=True)
+        out=open(log,"ab",buffering=0)
+        try:
+            proc=subprocess.Popen(command,cwd=cwd,stdout=out,stderr=subprocess.STDOUT,start_new_session=True)
+        except Exception:
+            out.close()
+            locked_update(registry,lambda data:data["runs"].pop(args.run_id,None))
+            raise
         ident=None
         for _ in range(20):
             ident=proc_identity(proc.pid)
             if ident: break
             time.sleep(.01)
-        if not ident: proc.kill(); fail("could not establish process identity")
+        if not ident:
+            proc.kill()
+            locked_update(registry,lambda data:data["runs"].pop(args.run_id,None))
+            fail("could not establish process identity")
         run={**ident,"run_id":args.run_id,"process_group":os.getpgid(proc.pid),"cwd":str(cwd),"log":str(log),"command":command,**provenance,
-             "route":args.route,"node":args.node,"status":"running"}
+             "route":args.route,"node":args.node,"status":"running","started_at":placeholder["started_at"]}
         def add(data):
-            if args.run_id in data["runs"]: raise ValueError("run id already exists")
             data["runs"][args.run_id]=run
         locked_update(registry,add); print(json.dumps(run)); return
     data=json.loads(registry.read_text()); run=data["runs"].get(args.run_id)
     if not run: fail("unknown run id")
     if args.cmd=="tail": print(Path(run["log"]).read_text(errors="replace"),end=""); return
-    is_alive=alive(run)
+    liveness,_,_=classify_identity(run)
     if args.cmd=="stop":
-        if not is_alive: fail("process identity is stale")
-        os.killpg(run["process_group"],signal.SIGTERM)
-    print(json.dumps({**run,"status":"running" if is_alive else "exited"},sort_keys=True))
+        if liveness!="working": fail("process identity is stale")
+        try:
+            pid=int(run["pid"]); group=int(run["process_group"])
+            if os.getpgid(pid)!=group or group!=pid: fail("process group identity is stale")
+        except (OSError,TypeError,ValueError,KeyError):
+            fail("process group identity is stale")
+        # Close the TOCTOU window as far as userspace allows: identity is
+        # re-read immediately before signalling the exact group leader.
+        if classify_identity(run)[0]!="working": fail("process identity changed before signal")
+        try:
+            if os.getpgid(pid)!=group: fail("process group changed before signal")
+        except OSError:
+            fail("process group changed before signal")
+        os.killpg(group,signal.SIGTERM)
+    status={"working":"running","exited":"exited","stale":"stale"}[liveness]
+    print(json.dumps({**run,"status":status,"liveness":liveness},sort_keys=True))
 if __name__=="__main__":
  try: main()
  except ValueError as e: print("resource-runner:",e,file=sys.stderr); raise SystemExit(65)

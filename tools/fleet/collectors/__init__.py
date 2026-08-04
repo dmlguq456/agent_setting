@@ -297,6 +297,18 @@ def collect_all(harness_filter=None, jobs_path=None, usage="cache-only"):
             if getattr(entity, "work_projection", None) is None:
                 entity.work_projection = WorkProjection(source="none", ambiguity="projection-error")
 
+    # F-59: resource/lab jobs are a separate source and never enter dispatch
+    # association, projections, or jobs.log counts.
+    resource_jobs = []
+    try:
+        from . import resource_runs
+        resource_jobs = resource_runs.collect()
+    except Exception:
+        resource_jobs = []
+    collect_all.last_resource_jobs = resource_jobs
+    collect_all.last_resource_malformed = getattr(
+        resource_runs.collect, "last_malformed", 0) if "resource_runs" in locals() else 0
+
     # F-25: drop cross-tick hysteresis entries for rows that no longer exist. Runs after
     # BOTH sessions and jobs are classified — sweeping earlier would evict live job keys.
     try:
@@ -306,3 +318,7 @@ def collect_all(harness_filter=None, jobs_path=None, usage="cache-only"):
         pass
 
     return sessions, jobs
+
+
+collect_all.last_resource_jobs = []
+collect_all.last_resource_malformed = 0

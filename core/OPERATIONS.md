@@ -237,3 +237,20 @@ All repo-launched model-backed workers pass through `utilities/model-worker-gove
 Registered model-backed jobs remain owned by the dispatching session even when the runtime launcher uses a background OS process. The main or dispatch-depth-1 conductor launches, polls, harvests, and integrates the job in the same task flow; an absent OS parent does not grant an independent lifecycle or permit the orchestrator to end early. Only long-running non-model resource jobs use the independent `utilities/resource-runner.py` lifecycle. Reattachment and signals for those resource jobs require PID, process start time, process group, command identity, absolute cwd, log, and run-registry identity rather than PID alone.
 
 Each registered dispatch attempt also owns its summary lifecycle. While the governed worker remains behind its launch fence, the selected adapter starts one non-model summary supervisor bound to the exact attempt id, log path, and worker PID/start identity; the same registry transaction publishes that owner identity before releasing the worker. The supervisor requests one early summary, ordinary debounced updates while the exact worker lives, and one final update after log quiescence, then exits without completion, signal, retry, or launch authority. Initial and final requests may each use one durable `(harness, session, phase)` admission ticket when the ordinary rolling refresh budget is exhausted, but never bypass the provider kill switch, per-session lock, governor, or global concurrency cap. `dispatch-reconcile --apply` may idempotently restore a missing supervisor only for one open, exact, live attempt. Fleet is a pure observer of registry and stored summary sidecars: starting, refreshing, or closing Fleet never creates provider work. Interactive sessions use their runtime lifecycle bridge as the summary producer and follow the same bounded admission rules.
+
+Detached resource runs are first-class lab/resource jobs, not registered agent
+dispatches and not members of `jobs.log`. Every `resource-runner start`
+atomically registers its absolute run-registry path in the harness-owned global
+index `<agent-home>/.dispatch/resource-runs.index.json`; an existing registry is
+imported without restarting its processes through `resource-runner index
+--registry <resource-runs.json>`. Fleet and status surfaces discover every
+indexed registry and fail soft per index, registry, and row. They never trust a
+stored `status=running`: current liveness is recomputed as `working` only when
+the recorded `pid`, `/proc` start time, and command-line hash all match;
+verified process absence is `exited`, and identity mismatch or incomplete
+identity is `stale`. Each run remains a separate row even when cwd/project is
+shared. Default views hide `exited` and `stale` resource rows while `--all`
+restores them. Stop or any other signal-capable control must revalidate that
+same exact identity plus the recorded process-group leader immediately before
+signalling. This contract was promoted after live GPU training was invisible
+to Fleet on 2026-08-04 despite a complete experiment-local registry.

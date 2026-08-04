@@ -3551,8 +3551,51 @@ def _usage_header_rows(sessions, layout="wide", now=None, api_disabled=False):
     return rows
 
 
+def _resource_rows(resources, section):
+    if section not in ("dispatch", "both"):
+        return []
+    visible = [r for r in (resources or [])
+               if _SHOW_ALL or getattr(r, "liveness", None) == "working"]
+    if not visible:
+        return []
+    rows = [[("  LAB RESOURCES", "head"), (_RFLUSH, None),
+             ("%d visible  " % len(visible), "head")]]
+    for project in sorted({getattr(r, "project", "(unknown)") for r in visible}):
+        rows.append([("  LAB resource", "lvl_b"), (" · %s" % project, "grp")])
+        project_rows = sorted(
+            (r for r in visible if getattr(r, "project", "(unknown)") == project),
+            key=lambda r: (getattr(r, "run_id", ""), getattr(r, "registry_path", "")))
+        for run in project_rows:
+            state = getattr(run, "liveness", "stale")
+            key = {"working": "working", "exited": "dim", "stale": "lvl_y"}.get(state, "dim")
+            marker = {"working": "●", "exited": "✓", "stale": "⚠"}.get(state, "?")
+            rows.append([
+                ("    %s " % marker, key), ("LAB resource", "lvl_b"),
+                ("  %s" % getattr(run, "run_id", "—"), key),
+                ("  %s" % state, key), (_RFLUSH, None),
+                (fmt_min(getattr(run, "elapsed_min", None)) + "  ", "dim"),
+            ])
+            route = getattr(run, "route", None) or "—"
+            node = getattr(run, "node", None) or "—"
+            rows.append([("      project %s · cwd %s" % (
+                project, getattr(run, "cwd", None) or "—"), "dim"),
+                (_RFLUSH, None), ("route %s · node %s  " % (route, node), "dim")])
+            updated = getattr(run, "log_updated_at", None)
+            updated_text = (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(updated))
+                            if isinstance(updated, (int, float)) else "—")
+            rows.append([("      log %s · updated %s" % (
+                getattr(run, "log_path", None) or "—", updated_text), "dim")])
+            dirty = getattr(run, "source_dirty", None)
+            dirty_text = "—" if dirty is None else ("true" if dirty else "false")
+            rows.append([("      config %s · sha256 %s · commit %s · dirty %s" % (
+                getattr(run, "config_ref", None) or "—",
+                getattr(run, "config_sha256", None) or "—",
+                getattr(run, "source_commit", None) or "—", dirty_text), "dim")])
+    return rows
+
+
 def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memory=None,
-                 term_width=None, live_order=None):
+                 term_width=None, live_order=None, resources=None):
     """Return a flat list of segment-lines for the whole screen (None = blank line).
 
     Side effect: refreshes the module-level `_SELECTABLE` stash (F-27) — see its definition.
@@ -3643,8 +3686,11 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
         # reused unmodified below this branch. `_node_evidence` is threaded through too (code-test
         # verification_round_2.md §10) — the degrade-pool's covered-conductor exclusion needs it,
         # the same way route resolution itself needed it for defect 1.
-        return _build_process_lines(sessions, display_jobs, _route_views_by_id, malformed, memory,
-                                    term_width, layout, node_evidence=_node_evidence)
+        process_lines = _build_process_lines(
+            sessions, display_jobs, _route_views_by_id, malformed, memory,
+            term_width, layout, node_evidence=_node_evidence)
+        resource_lines = _resource_rows(resources, section)
+        return resource_lines + ([None] if resource_lines else []) + process_lines
     # F-18b: mem-worker (distiller/curator/F-17 refresher) census — computed on the ORIGINAL
     # session list, before is_child/mem filtering, so folded/mem-only groups still surface a
     # total in the legend even when no group header badge fires.
@@ -3739,6 +3785,9 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
     # `_real` stays a LOCAL here too — the alert strip below (ctx_items) still needs it.
     _real = [s for s in sessions if not s.app_server and not getattr(s, "mem_worker", False)]
     lines.append(_pulse_segs(sessions, display_jobs))  # Aggregate cost rollup intentionally removed.
+    resource_lines = _resource_rows(resources, section)
+    if resource_lines:
+        lines.extend(resource_lines)
     _governor = _governor_segs()               # F-28c — pulse-adjacent, never merged into pulse
     if _governor is not None:                  # counts (I8); None = source absent or quiet.
         lines.append(_governor)
@@ -4267,6 +4316,7 @@ def _collect_memory():
 def render_once(collect_all, hfilter, section):
     global _GIT_TELEMETRY
     sessions, jobs = collect_all(harness_filter=hfilter)
+    resources = list(getattr(collect_all, "last_resource_jobs", []))
     malformed = _malformed()
     mem_snapshot = _collect_memory()
     try:
@@ -4278,7 +4328,8 @@ def render_once(collect_all, hfilter, section):
     _GIT_TELEMETRY = False
     try:
         lines = _build_lines(sessions, jobs, section, narrow=False, malformed=malformed,
-                             layout=_layout_mode(tw), memory=mem_snapshot, term_width=tw)
+                             layout=_layout_mode(tw), memory=mem_snapshot, term_width=tw,
+                             resources=resources)
     finally:
         _GIT_TELEMETRY = previous_git_telemetry
     out = "\n".join(_plain(l) for l in lines) + "\n"
@@ -4296,7 +4347,9 @@ def render_once(collect_all, hfilter, section):
 def _malformed():
     try:
         from .collectors import dispatch
-        return getattr(dispatch.collect, "last_malformed", 0)
+        from .collectors import resource_runs
+        return (getattr(dispatch.collect, "last_malformed", 0)
+                + getattr(resource_runs.collect, "last_malformed", 0))
     except Exception:
         return 0
 
@@ -5034,7 +5087,8 @@ def reset_scroll():
     _OFFSET = 0
 
 
-def _draw(stdscr, sessions, jobs, section, malformed, memory=None, live_order=None):
+def _draw(stdscr, sessions, jobs, section, malformed, memory=None, live_order=None,
+          resources=None):
     global _OFFSET, _TOGGLE_ROWS, _CLICK_ROWS, _FOLD_ROWS, _PROMPT_HITS, _CURSOR_ID
     # reset before any early-return so a stale map never survives a click (§4.1 pattern) —
     # _PROMPT_HITS in particular must never carry the PRIOR stage's coordinates into this
@@ -5048,7 +5102,8 @@ def _draw(stdscr, sessions, jobs, section, malformed, memory=None, live_order=No
     stdscr.erase()
     narrow = w < _NARROW_CUTOFF
     lines = _build_lines(sessions, jobs, section, narrow, malformed, layout=_layout_mode(w),
-                         memory=memory, term_width=w, live_order=live_order)
+                         memory=memory, term_width=w, live_order=live_order,
+                         resources=resources)
     body_h = max(1, h - 1)   # reserve 1 footer row
 
     # F-27: the cursor tracks a ROW, so the viewport follows it (not the reverse). Done before
@@ -5140,10 +5195,12 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
             pass
     stdscr.timeout(200)                     # getch blocks ≤200ms → responsive keys
     sessions, jobs = collect_all(harness_filter=hfilter)
+    resources = list(getattr(collect_all, "last_resource_jobs", []))
     malformed = _malformed()
     mem_snapshot = _collect_memory()
     last = time.time()
-    _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot, live_order=live_order)
+    _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot,
+          live_order=live_order, resources=resources)
     while True:
         # wake exactly at the next 0.5s blink boundary (regular period) but stay key-responsive (≤200ms)
         _nb = (int(time.time() * 10) + 1) / 10.0   # 10fps wake — the spinner cadence
@@ -5167,18 +5224,21 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
                     _handle_mouse(mx, my)
             else:
                 _handle_prompt_key(ch)
-            _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot, live_order=live_order)
+            _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot,
+                  live_order=live_order, resources=resources)
             continue
         if _SELECT_MODE:
             if _handle_select_key(ch):
-                _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot, live_order=live_order)
+                _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot,
+                      live_order=live_order, resources=resources)
                 continue
         elif ch in (ord("s"), ord("S"), ord("x"), ord("X")):
             # Enter selection mode. `x` doubles as the enter shortcut so the "press x to kill"
             # intent works from a cold start; it selects, it never kills on the first press.
             if not _enter_select(_live_targets()):
                 _set_action("no selectable rows")
-            _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot, live_order=live_order)
+            _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot,
+                  live_order=live_order, resources=resources)
             continue
 
         # --- base mode: scroll keys UNCHANGED (F-27 regression budget = 0) ---
@@ -5195,13 +5255,15 @@ def _loop(stdscr, collect_all, hfilter, section, interval):
         now = time.time()
         if force or (now - last) >= interval:
             sessions, jobs = collect_all(harness_filter=hfilter)
+            resources = list(getattr(collect_all, "last_resource_jobs", []))
             malformed = _malformed()
             mem_snapshot = _collect_memory()
             last = now
         _poll_pending_kill()     # F-27 grace window — non-blocking; may raise a re-prompt
         _BLINK_ON = (int(now * 2) % 2 == 0)     # ~2 Hz working-dot blink (manual — A_BLINK unreliable)
         # redraw every wake (covers KEY_RESIZE, blink and tick) — _draw clamps _OFFSET internally.
-        _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot, live_order=live_order)
+        _draw(stdscr, sessions, jobs, section, malformed, memory=mem_snapshot,
+              live_order=live_order, resources=resources)
 
 
 def run_live(collect_all, hfilter, section, interval):

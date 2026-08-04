@@ -61,6 +61,7 @@ class TestRunner(unittest.TestCase):
         ], text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.registry = self.base / "registry.json"
+        self.index = self.base / "resource-runs.index.json"
         self.log = self.base / "logs" / "run.log"
         self.launch = self.base / "launched"
         self.attestation = self.base / "smoke.json"
@@ -72,7 +73,8 @@ class TestRunner(unittest.TestCase):
     def cli(self, *args, cwd=None):
         return subprocess.run([
             sys.executable, str(RUNNER), "--registry", str(self.registry), *args,
-        ], cwd=cwd, text=True, capture_output=True)
+        ], cwd=cwd, text=True, capture_output=True,
+           env={**CLEAN_ENV, "AGENT_RESOURCE_RUN_INDEX": str(self.index)})
 
     def start_args(self, route=None, node="full-run", smoke=None, run_id="case", config_manifest=None):
         return ("start", "--run-id", run_id, "--cwd", str(self.repo), "--log", str(self.log),
@@ -178,6 +180,57 @@ class TestRunner(unittest.TestCase):
         self.assertFalse(R.proc_identity(run["pid"]))
         self.assertEqual(os.getpgid(run["pid"]) if Path(f"/proc/{run['pid']}").exists() else None, None)
 
+    def test_stop_rejects_changed_process_group_identity(self):
+        result = self.cli(*self.start_args(smoke=self.attestation))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        run = json.loads(result.stdout.strip().splitlines()[-1])
+        R.locked_update(
+            self.registry,
+            lambda data: data["runs"]["case"].update(process_group=run["process_group"] + 1),
+        )
+        stop = self.cli("stop", "--run-id", "case")
+        self.assertNotEqual(stop.returncode, 0)
+        self.assertIsNotNone(R.proc_identity(run["pid"]))
+        R.locked_update(
+            self.registry,
+            lambda data: data["runs"]["case"].update(process_group=run["process_group"]),
+        )
+        self.assertEqual(self.cli("stop", "--run-id", "case").returncode, 0)
+
+    def test_stop_rejects_command_identity_mismatch_without_signal(self):
+        result = self.cli(*self.start_args(smoke=self.attestation))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        run = json.loads(result.stdout.strip().splitlines()[-1])
+        R.locked_update(
+            self.registry,
+            lambda data: data["runs"]["case"].update(command_hash="0" * 64),
+        )
+        stop = self.cli("stop", "--run-id", "case")
+        self.assertNotEqual(stop.returncode, 0)
+        self.assertIsNotNone(R.proc_identity(run["pid"]))
+        R.locked_update(
+            self.registry,
+            lambda data: data["runs"]["case"].update(command_hash=run["command_hash"]),
+        )
+        self.assertEqual(self.cli("stop", "--run-id", "case").returncode, 0)
+
+    def test_index_existing_registry_does_not_restart_process(self):
+        legacy = self._legacy_row("existing")
+        R.locked_update(self.registry, lambda data: data["runs"].update(existing=legacy))
+        before = R.proc_identity(os.getpid())
+        result = subprocess.run(
+            [sys.executable, str(RUNNER), "index", "--registry", str(self.registry)],
+            text=True, capture_output=True,
+            env={**CLEAN_ENV, "AGENT_RESOURCE_RUN_INDEX": str(self.index)},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(R.proc_identity(os.getpid()), before)
+        payload = json.loads(self.index.read_text())
+        self.assertEqual(
+            [row["path"] for row in payload["registries"].values()],
+            [str(self.registry.resolve())],
+        )
+
     def _legacy_row(self, run_id):
         identity = R.proc_identity(os.getpid())
         return {**identity, "run_id": run_id, "process_group": os.getpgid(os.getpid()),
@@ -233,6 +286,11 @@ class TestRunner(unittest.TestCase):
         data = json.loads(self.registry.read_text())
         self.assertEqual(len(data["runs"]), 1)
         self.assertNotIn("config_ref", data["runs"]["case"])
+        indexed = json.loads(self.index.read_text())
+        self.assertEqual(
+            [record["path"] for record in indexed["registries"].values()],
+            [str(self.registry.resolve())],
+        )
 
     # B3 regression -- a config manifest whose run_id disagrees with --run-id
     # (and isn't a valid --attempt suffix of it) is rejected before Popen.
