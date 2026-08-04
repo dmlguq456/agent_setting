@@ -107,6 +107,22 @@ main/orchestrator chooses portable roles and concrete model settings per job,
 and preserves model role, intensity, depth, tests, safety, and validation on
 fallback.
 
+## Tracked-Workflow Continuation
+
+Process exit is not workflow completion (`core/WORKFLOW.md §0.6`): a workflow is
+complete only when every declared terminal node holds its completion gate. Every
+non-terminal stage declares `inline-next`, `supervised`, `human-gate`, or
+`monitor`; a detached resource run must be `supervised` and can never be
+terminal. Route compile and launch refuse a graph that breaks this.
+
+Do not end a turn while a stage has no registered continuation: arm
+`utilities/workflow-supervisor.py`, dispatch the next stage, or record the human
+gate in the same turn, and otherwise say plainly that automatic follow-up is
+impossible and name the checked fallback. OpenCode remains ineligible for
+registered standard+ dispatch-depth-2, so its continuations use the shared
+external supervisor rather than a runtime bridge. `OPERATIONS §5.12` owns the
+mechanics.
+
 ## Memory and Context
 
 Main prompts receive capsule headline/IDs; read relevant records fully.

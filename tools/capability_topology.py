@@ -294,9 +294,154 @@ def _validate_conditional_extensions(recipe, registry, by_id, deps):
                 )
 
 
+def _validate_workflow_vocabulary(registry):
+    """The portable tracked-workflow state machine (WORKFLOW §0.6) is registry-owned."""
+    states = registry.get("workflow_states")
+    failures = registry.get("workflow_failure_states")
+    if states != ["CREATED", "READY", "RUNNING", "STAGE_SUCCEEDED", "NEXT_REGISTERED",
+                  "NEXT_RUNNING", "TERMINAL_VERIFY", "COMPLETE"]:
+        raise TopologyError("workflow_states must declare the portable ordered lifecycle")
+    if failures != ["BLOCKED_HUMAN_GATE", "FAILED_RETRYABLE", "FAILED_TERMINAL", "CANCELLED"]:
+        raise TopologyError("workflow_failure_states must declare the portable failure set")
+    transitions = registry.get("workflow_transitions")
+    known = set(states) | set(failures)
+    if not isinstance(transitions, dict) or set(transitions) != known:
+        raise TopologyError("workflow_transitions must cover every state exactly once")
+    for state, targets in transitions.items():
+        if not isinstance(targets, list) or len(targets) != len(set(targets)) \
+                or not set(targets) <= known:
+            raise TopologyError(f"workflow transition targets invalid for {state}")
+    # COMPLETE reachable only through TERMINAL_VERIFY is the mechanical form of "a workflow
+    # never completes before its terminal node" (2026-08-04 BC_ResNet_tf).
+    reaching_complete = {s for s, t in transitions.items() if "COMPLETE" in t}
+    if reaching_complete != {"TERMINAL_VERIFY"}:
+        raise TopologyError("COMPLETE must be reachable only from TERMINAL_VERIFY")
+    if transitions["BLOCKED_HUMAN_GATE"] != ["RUNNING", "CANCELLED", "FAILED_TERMINAL"]:
+        raise TopologyError("a human gate may only be released to RUNNING or abandoned")
+    for terminal in ("COMPLETE", "FAILED_TERMINAL", "CANCELLED"):
+        if transitions[terminal]:
+            raise TopologyError(f"{terminal} must be absorbing")
+    kinds = registry.get("continuation_kinds")
+    if not isinstance(kinds, dict) or set(kinds) != {
+        "inline-next", "supervised", "human-gate", "monitor"
+    }:
+        raise TopologyError("continuation_kinds must declare the four portable continuations")
+    for name, row in kinds.items():
+        if not isinstance(row, dict) or set(row) != {"doc", "requires_supervisor"} \
+                or not row["doc"] or not isinstance(row["requires_supervisor"], bool):
+            raise TopologyError(f"continuation kind {name} contract shape mismatch")
+    if kinds["supervised"]["requires_supervisor"] is not True \
+            or kinds["monitor"]["requires_supervisor"] is not True:
+        raise TopologyError("supervised and monitor continuations require a supervisor")
+    if registry.get("human_gate_positions") != ["entry", "terminal"]:
+        raise TopologyError("human_gate_positions must be entry and terminal")
+
+
+def _validate_continuations(recipe, registry, nodes, by_id):
+    """Refuse a graph that can stall: every non-terminal node names its continuation.
+
+    A stage graph whose last node is a detached process, or whose middle node has no
+    declared way to reach the next one, is the exact 2026-08-04 BC_ResNet_tf failure:
+    training finished and nothing owned what came after it. The refusal happens at
+    registry validation and therefore at route compile, because a graph repaired at
+    runtime has already lost the run.
+    """
+    capability = recipe["capability"]
+    kinds = registry["continuation_kinds"]
+    ids = [node["id"] for node in nodes]
+    dependents = {node_id: [] for node_id in ids}
+    for node in nodes:
+        for dep in node.get("depends_on", []):
+            dependents[dep].append(node["id"])
+
+    bindings = recipe.get("human_gate_bindings")
+    if not isinstance(bindings, list):
+        raise TopologyError(f"{capability}: human_gate_bindings must be a list")
+    declared = list(recipe["human_gates"])
+    if len(declared) != len(set(declared)):
+        raise TopologyError(f"{capability}: duplicate human gate")
+    bound, entry_gate_of, terminal_gated = [], {}, set()
+    for row in bindings:
+        if not isinstance(row, dict) or set(row) != {"gate", "node", "position"}:
+            raise TopologyError(f"{capability}: human gate binding shape mismatch")
+        if row["gate"] not in declared:
+            raise TopologyError(f"{capability}: bound gate {row['gate']} is not declared")
+        if row["node"] not in by_id:
+            raise TopologyError(f"{capability}: human gate {row['gate']} binds unknown node")
+        if row["position"] not in registry["human_gate_positions"]:
+            raise TopologyError(f"{capability}: human gate {row['gate']} has invalid position")
+        bound.append(row["gate"])
+        if row["position"] == "entry":
+            if row["node"] in entry_gate_of:
+                raise TopologyError(f"{capability}: node {row['node']} carries two entry gates")
+            entry_gate_of[row["node"]] = row["gate"]
+        else:
+            terminal_gated.add(row["node"])
+    if sorted(bound) != sorted(declared) or len(bound) != len(set(bound)):
+        raise TopologyError(
+            f"{capability}: every declared human gate must bind to exactly one node"
+        )
+
+    for node in nodes:
+        node_id = node["id"]
+        continuation = node.get("continuation")
+        if not dependents[node_id]:
+            if continuation is not None:
+                raise TopologyError(f"{capability}:{node_id}: a terminal node has no continuation")
+            if node.get("terminal") is not True:
+                raise TopologyError(f"{capability}:{node_id}: sink must declare terminal: true")
+            if node.get("terminal_gate") != node.get("completion_gate"):
+                raise TopologyError(
+                    f"{capability}:{node_id}: terminal_gate must equal the node completion gate"
+                )
+            if node.get("kind") == "resource-runner":
+                raise TopologyError(
+                    f"{capability}:{node_id}: a detached resource run can never be the workflow "
+                    "terminal — declare the stage that verifies and hands it off"
+                )
+            continue
+        if node.get("terminal") is not None or node.get("terminal_gate") is not None:
+            raise TopologyError(f"{capability}:{node_id}: only a sink may declare terminal")
+        if not isinstance(continuation, dict) or continuation.get("kind") not in kinds:
+            raise TopologyError(
+                f"{capability}:{node_id}: non-terminal node requires a continuation of "
+                f"{sorted(kinds)}"
+            )
+        kind = continuation["kind"]
+        expected = {"kind"} | ({"gate"} if kind == "human-gate" else set()) \
+            | ({"monitor"} if kind == "monitor" else set())
+        if set(continuation) != expected:
+            raise TopologyError(f"{capability}:{node_id}: continuation shape mismatch")
+        if node.get("kind") == "resource-runner" and kind != "supervised":
+            raise TopologyError(
+                f"{capability}:{node_id}: a detached resource run cannot continue itself; "
+                "declare continuation kind supervised"
+            )
+        gated = {entry_gate_of[dep] for dep in dependents[node_id] if dep in entry_gate_of}
+        if kind == "human-gate":
+            if continuation["gate"] not in gated:
+                raise TopologyError(
+                    f"{capability}:{node_id}: human-gate continuation must name the entry gate "
+                    "of a direct dependent"
+                )
+        elif gated:
+            raise TopologyError(
+                f"{capability}:{node_id}: a dependent carries entry gate {sorted(gated)[0]}, so "
+                "this continuation must be human-gate"
+            )
+        if kind == "monitor" and not str(continuation.get("monitor") or "").strip():
+            raise TopologyError(f"{capability}:{node_id}: monitor continuation requires a name")
+    for node_id in terminal_gated:
+        if dependents[node_id]:
+            raise TopologyError(
+                f"{capability}: a terminal-position human gate must bind the terminal node"
+            )
+
+
 def _validate_recipe(recipe, registry, standard_plus_owner_profile):
     required = {"capability", "modes", "topology_class", "direct_predicates", "promotion_signals",
-                "quick", "standard_plus", "completion_gates", "human_gates", "resume_retry_boundaries"}
+                "quick", "standard_plus", "completion_gates", "human_gates",
+                "human_gate_bindings", "resume_retry_boundaries"}
     missing = required - recipe.keys()
     if missing:
         raise TopologyError(f"{recipe.get('capability')}: missing {sorted(missing)}")
@@ -541,14 +686,16 @@ def _validate_recipe(recipe, registry, standard_plus_owner_profile):
             if any(_overlap(a, b) for a in left["write_scope"] for b in right["write_scope"]):
                 raise TopologyError(f"{recipe['capability']}: concurrent scope overlap {left['id']}/{right['id']}")
     _validate_conditional_extensions(recipe, registry, by_id, deps)
+    _validate_continuations(recipe, registry, nodes, by_id)
     if not recipe["resume_retry_boundaries"] or not set(recipe["resume_retry_boundaries"]) <= set(ids):
         raise TopologyError(f"{recipe['capability']}: invalid retry boundaries")
 
 
 def validate_registry(registry, manifest=None):
-    if registry.get("schema_version") != 7:
+    if registry.get("schema_version") != 8:
         raise TopologyError("legacy topology registry is read-only")
     _validate_activation_conditions(registry)
+    _validate_workflow_vocabulary(registry)
     expected_profiles = {
         "deep": {"rank": 4, "tier": "deep", "effort": "xhigh", "registered_topology": True},
         "balanced-deep": {"rank": 3, "tier": "deep", "effort": "medium", "registered_topology": True},

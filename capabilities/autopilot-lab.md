@@ -56,8 +56,30 @@ Adapters must preserve the portable invariants relevant to this capability:
 
 | Mode | Required coverage |
 |---|---|
-| `setup` | Experiment spec, scaffold, run commands, pending `_RUNLOG` row, birth `run.json`. |
+| `setup` | Experiment spec, scaffold, run commands, pending `_RUNLOG` row, birth `run.json`, post-run verification, and a recorded handoff naming the successor workflow. |
 | `eval` | Eval spec, evaluation execution or guidance, metrics and per-array analysis, figures/media, report, `_RUNLOG` completion, lineage finalization. |
+
+### Setup does not end at the training process
+
+The `setup` stage graph is `scaffold → smoke → full-run → run-verify → handoff`.
+`full-run` is a detached resource run, so it declares the `supervised`
+continuation and can never be the workflow terminal: the continuation supervisor
+observes its exact termination and advances to `run-verify`, and only `handoff`
+is terminal. `handoff`'s gate is satisfied by *recording the successor* — a
+registered evaluation route or attempt, or an explicit human gate — so a run that
+finishes with "evaluate it later" written in prose is not complete. The
+`full-run-authorization` human gate binds to `full-run` as an entry gate, which
+makes `smoke`'s continuation a human gate: a full run is never started
+automatically.
+
+This replaced a graph whose last node was the training process itself. On
+2026-08-04 the BC_ResNet_tf run finished training and its hard-negative loop, the
+wrapper contained no evaluation stage, the resource runner had no completion
+callback, and the session ended with no follow-up mechanism registered. See
+`core/WORKFLOW.md §0.6` and `core/OPERATIONS.md §5.12`.
+
+For `eval`, `eval-run` is likewise a supervised detached run whose termination
+advances `metrics`, and `sync` is the terminal node.
 
 ### Eval execution topology (`standard+`)
 

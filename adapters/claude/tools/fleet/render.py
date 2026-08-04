@@ -3591,6 +3591,15 @@ def _resource_rows(resources, section):
                 getattr(run, "config_ref", None) or "—",
                 getattr(run, "config_sha256", None) or "—",
                 getattr(run, "source_commit", None) or "—", dirty_text), "dim")])
+            # Tracked-workflow line (OPERATIONS §5.12): a finished process must show why
+            # it ended and which registered attempt owns it, not just that it is gone.
+            exit_code = getattr(run, "exit_code", None)
+            rows.append([("      workflow %s · exit %s · owner %s%s" % (
+                getattr(run, "workflow_state", None) or "—",
+                "—" if exit_code is None else exit_code,
+                getattr(run, "parent_attempt_id", None) or "—",
+                (" · failure %s" % run.failure_class)
+                if getattr(run, "failure_class", None) else ""), "dim")])
     return rows
 
 

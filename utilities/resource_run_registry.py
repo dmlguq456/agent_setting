@@ -213,6 +213,14 @@ def normalize_run(run_id: str, run: dict, registry: Path, identity_reader=proc_i
         "config_ref": run.get("config_ref"), "config_sha256": run.get("config_sha256"),
         "source_commit": run.get("source_commit"), "source_dirty": run.get("source_dirty"),
         "source_git_state": run.get("source_git_state"), "started_at": started_at,
+        # Tracked-workflow projection (OPERATIONS §5.12): a resource row must expose why
+        # it ended and who owns it, not just whether a PID is still there.
+        "workflow_state": run.get("workflow_state"),
+        "exit_code": run.get("exit_code"),
+        "ended_at": run.get("ended_at") if isinstance(run.get("ended_at"), (int, float)) else None,
+        "failure_class": run.get("failure_class"),
+        "parent_attempt_id": run.get("parent_attempt_id"),
+        "sentinel": run.get("sentinel"),
         "state_evidence": {"reason": reason, "current_identity": current},
     }
 

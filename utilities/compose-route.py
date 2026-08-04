@@ -122,6 +122,20 @@ def _derive_gate(node_id: str, unit: str, gate_index: dict) -> str:
     )
 
 
+def _parse_human_gates(values):
+    """Parse `--human-gate GATE:NODE:POSITION` into binding rows."""
+    rows = []
+    for raw in values or []:
+        parts = str(raw).split(":")
+        if len(parts) != 3 or not all(part.strip() for part in parts):
+            raise ValueError(f"--human-gate expects GATE:NODE:entry|terminal, got {raw!r}")
+        rows.append({"gate": parts[0].strip(), "node": parts[1].strip(),
+                     "position": parts[2].strip()})
+    if len({row["gate"] for row in rows}) != len(rows):
+        raise ValueError("each composed human gate binds exactly once")
+    return rows
+
+
 def build_recipe(
     capability,
     capability_mode,
@@ -131,6 +145,7 @@ def build_recipe(
     quick_write_scope,
     quick_model_profile,
     gate_index,
+    human_gate_bindings=None,
 ):
     """Turn the unit list into a full-shape composed recipe (compile validates it)."""
     if not isinstance(unit_specs, list) or not unit_specs:
@@ -188,6 +203,42 @@ def build_recipe(
             node["guard_preconditions"] = list(spec["guard_preconditions"])
         nodes.append(node)
 
+    # A composed graph obeys the same continuation contract as an enumerated recipe:
+    # every non-terminal node names how the next one starts, and a sink declares its
+    # terminal gate. Composition may change route *shape*, never what finishing means.
+    bindings = [dict(row) for row in (human_gate_bindings or [])]
+    for row in bindings:
+        if set(row) != {"gate", "node", "position"}:
+            raise ValueError("human gate binding requires gate, node, and position")
+        if row["node"] not in set(ids):
+            raise ValueError(f"human gate {row['gate']} binds unknown node {row['node']}")
+        if row["position"] not in ("entry", "terminal"):
+            raise ValueError(f"human gate {row['gate']} has invalid position {row['position']}")
+    entry_gate_of = {row["node"]: row["gate"] for row in bindings if row["position"] == "entry"}
+    dependents = {node["id"]: [] for node in nodes}
+    for node in nodes:
+        for dep in node["depends_on"]:
+            dependents[dep].append(node["id"])
+    spec_by_id = {spec["id"]: spec for spec in unit_specs}
+    for node in nodes:
+        node_id = node["id"]
+        declared = spec_by_id[node_id].get("continuation")
+        if not dependents[node_id]:
+            if declared:
+                raise ValueError(f"node {node_id} is terminal and cannot declare a continuation")
+            node["terminal"] = True
+            node["terminal_gate"] = node["completion_gate"]
+            continue
+        gated = {entry_gate_of[dep] for dep in dependents[node_id] if dep in entry_gate_of}
+        if gated:
+            node["continuation"] = {"kind": "human-gate", "gate": sorted(gated)[0]}
+        elif declared:
+            node["continuation"] = dict(declared)
+        elif node["kind"] == "resource-runner":
+            node["continuation"] = {"kind": "supervised"}
+        else:
+            node["continuation"] = {"kind": "inline-next"}
+
     if not quick_write_scope:
         quick_write_scope = sorted(
             {s for node in nodes for s in node["write_scope"] if not _scope_touches_spec(s)}
@@ -215,7 +266,8 @@ def build_recipe(
             "nodes": nodes,
         },
         "completion_gates": sorted({node["completion_gate"] for node in nodes}),
-        "human_gates": [],
+        "human_gates": sorted({row["gate"] for row in bindings}),
+        "human_gate_bindings": bindings,
         "resume_retry_boundaries": list(ids),
     }
 
@@ -322,6 +374,9 @@ def main() -> int:
     parser.add_argument("--artifact-root", required=True)
     parser.add_argument("--intensity", default="standard")
     parser.add_argument("--topology-class", default="staged")
+    parser.add_argument("--human-gate", action="append", default=[],
+                        metavar="GATE:NODE:entry|terminal",
+                        help="declare an explicit human gate on a composed node")
     parser.add_argument("--quick-write-scope", action="append", default=[])
     parser.add_argument("--signal", action="append", default=[])
     parser.add_argument("--predicate", action="append", default=[])
@@ -357,6 +412,7 @@ def main() -> int:
         quick_write_scope=args.quick_write_scope,
         quick_model_profile=registry["owner_profile_by_intensity"]["quick"],
         gate_index=unit_io_gate_index(registry),
+        human_gate_bindings=_parse_human_gates(args.human_gate),
     )
     evidence = assemble_dispatch_evidence(args)
     route_json = run_compile(args, recipe, evidence)

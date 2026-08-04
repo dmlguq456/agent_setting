@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Detached process runner with PID reuse-safe reattachment."""
-import argparse, fcntl, importlib.util, json, os, re, signal, subprocess, sys, time
+import argparse, contextlib, fcntl, importlib.util, json, os, re, signal, subprocess, sys, time
 from pathlib import Path
 from resource_run_registry import (
     classify_identity,
@@ -11,6 +11,18 @@ from resource_run_registry import (
 
 SAFE_RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 RETRY = re.compile(r"^(?P<base>.+)__a(?P<n>[1-9][0-9]*)$")
+TERMINAL_STATUSES = {"succeeded", "failed"}
+
+# The payload runs under a tiny POSIX-sh sentinel wrapper so its exit status survives
+# every observer. A detached run whose launcher, supervisor, and session are all gone
+# must still be able to prove *how* it ended; without this, "the process is not there"
+# is indistinguishable from "the process finished successfully" (2026-08-04 BC_ResNet_tf).
+SENTINEL_SCRIPT = (
+    '"$@"; ec=$?; '
+    'printf %s "$ec" > "$AGENT_RESOURCE_SENTINEL.partial" 2>/dev/null && '
+    'mv "$AGENT_RESOURCE_SENTINEL.partial" "$AGENT_RESOURCE_SENTINEL" 2>/dev/null; '
+    'exit $ec'
+)
 
 def alive(run):
     return is_alive(run)
@@ -22,11 +34,60 @@ def locked_update(path, fn):
     with open(str(path)+".lock","a+") as lock:
         fcntl.flock(lock,fcntl.LOCK_EX); data=json.loads(path.read_text()) if path.exists() else {"schema_version":1,"runs":{}}
         result=fn(data); tmp=path.with_suffix(path.suffix+".tmp"); tmp.write_text(json.dumps(data,indent=2)+"\n"); os.replace(tmp,path); return result
+
+def read_sentinel(path):
+    """Return the payload's recorded exit code, or None when it left no proof."""
+    if not path:
+        return None
+    try:
+        raw=Path(path).read_text(encoding="utf-8",errors="replace").strip()
+    except OSError:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+def settle(registry, run_id, run):
+    """Persist the terminal row once the process is verifiably gone.
+
+    Any observer may call this — `reap`, `status`, `list`, a continuation supervisor, or
+    a Fleet-adjacent status pass — and they converge on the same row. A stored
+    `running` that outlives its process is a defect, not a state, so termination is
+    recorded by whoever notices it first and is idempotent afterwards.
+    """
+    liveness,_current,reason=classify_identity(run)
+    if liveness=="working":
+        return run, False
+    exit_code=read_sentinel(run.get("sentinel"))
+    if exit_code==0:
+        status,state,failure="succeeded","STAGE_SUCCEEDED",None
+    elif exit_code is not None:
+        status,state,failure="failed","FAILED_RETRYABLE",f"exit-{exit_code}"
+    elif liveness=="stale":
+        # PID reuse or an identity mismatch: the recorded process is gone, and it left
+        # no exit proof. Absence of evidence is never success.
+        status,state,failure="failed","FAILED_RETRYABLE",reason
+    else:
+        status,state,failure="failed","FAILED_RETRYABLE","no-exit-sentinel"
+    def apply(data):
+        row=data["runs"].get(run_id)
+        if row is None: raise ValueError("unknown run id")
+        if row.get("status") in TERMINAL_STATUSES:
+            return row, False
+        row.update({"status":status,"exit_code":exit_code,"ended_at":time.time(),
+                    "workflow_state":state,"failure_class":failure,
+                    "liveness_reason":reason})
+        return row, True
+    return locked_update(registry,apply)
 def main():
     p=argparse.ArgumentParser(); p.add_argument("--registry"); s=p.add_subparsers(dest="cmd",required=True)
-    a=s.add_parser("start"); a.add_argument("--run-id",required=True); a.add_argument("--cwd",required=True); a.add_argument("--log",required=True); a.add_argument("--route",required=True); a.add_argument("--node",required=True); a.add_argument("--smoke-attestation"); a.add_argument("--config-manifest"); a.add_argument("command",nargs=argparse.REMAINDER)
-    for name in ("status","stop","tail"):
+    a=s.add_parser("start"); a.add_argument("--run-id",required=True); a.add_argument("--cwd",required=True); a.add_argument("--log",required=True); a.add_argument("--route",required=True); a.add_argument("--node",required=True); a.add_argument("--smoke-attestation"); a.add_argument("--config-manifest")
+    a.add_argument("--parent-attempt-id",help="registered headless attempt that owns this resource child")
+    a.add_argument("command",nargs=argparse.REMAINDER)
+    for name in ("status","stop","tail","reap"):
         x=s.add_parser(name); x.add_argument("--run-id",required=True)
+    s.add_parser("list")
     index_cmd=s.add_parser("index"); index_cmd.add_argument("--registry",required=True)
     args=p.parse_args()
     if args.cmd=="index":
@@ -89,9 +150,12 @@ def main():
                           "source_git_state": manifest.get("source_git_state", "unknown-no-git"),
                           "config_layout": manifest.get("config_layout", "unknown")}
         log=Path(args.log).resolve()
+        sentinel=Path(str(log)+".exit")
         placeholder={"run_id":args.run_id,"cwd":str(cwd),"log":str(log),"command":command,
                      **provenance,"route":args.route,"node":args.node,"status":"launching",
-                     "started_at":time.time()}
+                     "sentinel":str(sentinel),
+                     "parent_attempt_id":args.parent_attempt_id,
+                     "workflow_state":"READY","started_at":time.time()}
         def reserve(data):
             if args.run_id in data["runs"]: raise ValueError("run id already exists")
             data["runs"][args.run_id]=placeholder
@@ -102,9 +166,15 @@ def main():
             locked_update(registry,lambda data:data["runs"].pop(args.run_id,None))
             raise
         log.parent.mkdir(parents=True,exist_ok=True)
+        with contextlib.suppress(OSError):
+            sentinel.unlink()
+        with contextlib.suppress(OSError):
+            Path(str(sentinel)+".partial").unlink()
+        launch_argv=["/bin/sh","-c",SENTINEL_SCRIPT,"resource-runner",*command]
+        environment={**os.environ,"AGENT_RESOURCE_SENTINEL":str(sentinel)}
         out=open(log,"ab",buffering=0)
         try:
-            proc=subprocess.Popen(command,cwd=cwd,stdout=out,stderr=subprocess.STDOUT,start_new_session=True)
+            proc=subprocess.Popen(launch_argv,cwd=cwd,env=environment,stdout=out,stderr=subprocess.STDOUT,start_new_session=True)
         except Exception:
             out.close()
             locked_update(registry,lambda data:data["runs"].pop(args.run_id,None))
@@ -118,14 +188,31 @@ def main():
             proc.kill()
             locked_update(registry,lambda data:data["runs"].pop(args.run_id,None))
             fail("could not establish process identity")
-        run={**ident,"run_id":args.run_id,"process_group":os.getpgid(proc.pid),"cwd":str(cwd),"log":str(log),"command":command,**provenance,
-             "route":args.route,"node":args.node,"status":"running","started_at":placeholder["started_at"]}
+        run={**ident,"run_id":args.run_id,"process_group":os.getpgid(proc.pid),"cwd":str(cwd),"log":str(log),"command":command,
+             "launch_argv":launch_argv,"sentinel":str(sentinel),
+             "parent_attempt_id":args.parent_attempt_id,**provenance,
+             "route":args.route,"node":args.node,"status":"running","workflow_state":"RUNNING",
+             "started_at":placeholder["started_at"]}
         def add(data):
             data["runs"][args.run_id]=run
         locked_update(registry,add); print(json.dumps(run)); return
-    data=json.loads(registry.read_text()); run=data["runs"].get(args.run_id)
+    data=json.loads(registry.read_text())
+    if args.cmd=="list":
+        rows=[]
+        for run_id,row in sorted(data.get("runs",{}).items()):
+            if isinstance(row,dict):
+                row,_settled=settle(registry,run_id,row)
+                liveness=classify_identity(row)[0]
+                rows.append({**row,"liveness":liveness})
+        print(json.dumps(rows,sort_keys=True)); return
+    run=data["runs"].get(args.run_id)
     if not run: fail("unknown run id")
     if args.cmd=="tail": print(Path(run["log"]).read_text(errors="replace"),end=""); return
+    if args.cmd in ("status","reap"):
+        run,settled=settle(registry,args.run_id,run)
+        if args.cmd=="reap":
+            liveness=classify_identity(run)[0]
+            print(json.dumps({**run,"liveness":liveness,"settled":settled},sort_keys=True)); return
     liveness,_,_=classify_identity(run)
     if args.cmd=="stop":
         if liveness!="working": fail("process identity is stale")
@@ -142,7 +229,8 @@ def main():
         except OSError:
             fail("process group changed before signal")
         os.killpg(group,signal.SIGTERM)
-    status={"working":"running","exited":"exited","stale":"stale"}[liveness]
+    status=run.get("status") if run.get("status") in TERMINAL_STATUSES else \
+        {"working":"running","exited":"exited","stale":"stale"}[liveness]
     print(json.dumps({**run,"status":status,"liveness":liveness},sort_keys=True))
 if __name__=="__main__":
  try: main()

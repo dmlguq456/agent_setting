@@ -40,6 +40,22 @@ Filenames stay ASCII. Display names may pair a human-readable name with the iden
 
 The overnight order is 05:03 `note`, then 05:37 `oncall` to avoid overlap. `runtime-watch` is state-based and manual rather than mandatory every day because it checks network and policy currentness; this follows the 2026-07-13 Codex-window currentness incident.
 
+## Loop Continuation Uses the Common Workflow Contract
+
+A loop that opens or observes tracked work is bound by `core/WORKFLOW.md §0.6`
+like every other surface: process exit is not workflow completion, and a
+non-terminal stage must carry `inline-next`, `supervised`, `human-gate`, or
+`monitor`. `oncall`, `note`, `study`, `drill`, and `runtime-watch` all follow
+that state machine — a loop that detects a condition and proposes work either
+registers the successor, records the human gate that owns it, or arms
+`utilities/workflow-supervisor.py`.
+
+“Automatic follow-up is impossible” is a real, allowed outcome, but only when no
+supervisor exists for that surface; it is never a way to end a turn with an open
+stage. An arbitrary detached shell is not a continuation and must not be
+presented as one — an unsupervised background process is untracked work, whatever
+its output says. `OPERATIONS §5.12` owns the supervisor mechanics.
+
 ## Backlog
 
 | Candidate | Type | Start condition |

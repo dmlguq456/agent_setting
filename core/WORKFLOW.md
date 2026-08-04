@@ -301,6 +301,81 @@ branch, a spec `pipeline_state.yaml` still naming a live phase, and a memory
 handoff still `pending` after its obligation is met. Close what the attempt
 opened, or the next session pays for it in reconstruction.
 
+### 0.6. Tracked-Workflow Lifecycle and Continuation
+
+A process exiting is not a workflow completing. **Workflow completion is the
+state in which every terminal node of the approved stage DAG holds its
+completion gate and no human gate remains open.** An intermediate stage that
+succeeded — a training run that reached its last epoch, a green CI check, a
+worker that returned `PASS` — is stage evidence, never workflow completion. No
+acting agent, dispatch-depth-1 owner, supervisor, or runtime lifecycle hook may
+declare completion from an intermediate success.
+
+This section is capability-independent. `autopilot-lab`, `autopilot-code`,
+`autopilot-ship`, spec/research, CI and GitHub check cycles, external-state
+monitors, detached resource processes, registered workers, and loop-driven work
+all use the one state machine below. A capability's stage graph *extends* this
+contract by declaring nodes, gates, and continuations; it never redefines what
+continuation or completion mean.
+
+**Common states.** `capabilities/topologies.json` is the machine-readable
+vocabulary and `utilities/workflow_state.py` is its executable form:
+
+```text
+CREATED → READY → RUNNING → STAGE_SUCCEEDED → NEXT_REGISTERED
+        → NEXT_RUNNING → TERMINAL_VERIFY → COMPLETE
+```
+
+Failure states are `BLOCKED_HUMAN_GATE`, `FAILED_RETRYABLE`,
+`FAILED_TERMINAL`, and `CANCELLED`. `COMPLETE` is reachable only from
+`TERMINAL_VERIFY`, and `TERMINAL_VERIFY` only once every declared terminal node
+carries its completion marker — so a workflow cannot become `COMPLETE` before
+its terminal node. `BLOCKED_HUMAN_GATE` never advances automatically; only an
+explicit human release returns it to `RUNNING`. `FAILED_*` never advances a
+downstream stage.
+
+**Every non-terminal stage declares exactly one continuation.** A stage graph
+that leaves a stage with no way to reach the next one is the defect this
+contract exists to prevent, so the declaration is mechanical, not editorial:
+
+| Continuation | Meaning |
+|---|---|
+| `inline-next` | the same checked payload runs the next stage before it returns |
+| `supervised` | a registered continuation supervisor observes child termination and starts the next stage exactly once |
+| `human-gate` | an explicit human gate named in the recipe's `human_gates` blocks the successor |
+| `monitor` | a checked monitor waits on an external state change and reports a typed condition match |
+
+A detached resource process can never continue itself, so a `resource-runner`
+node must declare `supervised` and may never be a terminal node. A node with no
+dependents must declare `terminal: true` with its `terminal_gate`; a node with
+dependents must declare a continuation and must not declare `terminal`. Every
+declared human gate binds to the exact node it gates (`entry` before that node,
+`terminal` after the terminal node). **A recipe or composed graph that violates
+any of these is rejected at route compile, and a launch bound to such a graph is
+rejected before the process starts** — the refusal is the point, because the
+alternative is silent abandonment.
+
+Grounded by the 2026-08-04 BC_ResNet_tf incident: training and its hard-negative
+loop finished, the wrapper contained no evaluation stage, the documentation
+named "separate eval" with no owner or trigger, the resource runner had no
+completion callback, the resource row was invisible to Fleet, and the acting
+agent ended its turn with no follow-up mechanism registered. Each of those five
+is now a mechanically checked condition rather than a convention.
+
+**Acting-agent obligation.** Do not end a turn while a tracked workflow has a
+non-terminal stage with no registered continuation. Before the turn ends,
+either the continuation is registered (supervisor armed, next stage dispatched,
+human gate recorded, or monitor armed) or the same turn states plainly that
+automatic follow-up is impossible and names the checked fallback the user can
+run. A promise to act "when it finishes" is not a continuation. Status claims
+cross-check PID identity, sentinel/exit evidence, log modification time, and
+declared artifacts; a registry status word alone is not state. Reaching a
+terminal condition never widens authority: stop only for a human gate or a
+genuinely new external permission.
+
+`OPERATIONS §5.12` owns the supervisor, resource-lifecycle, and Fleet
+projection mechanics; `CONVENTIONS §3` carries the cross-document invariants.
+
 ## 1. Four Tracks
 
 ```text

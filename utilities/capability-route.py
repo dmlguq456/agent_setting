@@ -386,6 +386,53 @@ def _realized_parallel_groups(nodes):
     return list(groups.values())
 
 
+WORKFLOW_CONTRACT_VERSION = 1
+
+
+def _workflow_contract(registry, nodes, human_gate_bindings):
+    """Seal the tracked-workflow shape the route commits to (`WORKFLOW §0.6`).
+
+    Sealing terminal nodes and continuation kinds beside the graph is what lets a
+    supervisor, a status surface, or a later session answer "is this finished?" from
+    the route alone, instead of inferring completion from a process that exited.
+    """
+    ids = [node["id"] for node in nodes]
+    dependents = {node_id: [] for node_id in ids}
+    for node in nodes:
+        for dep in node.get("depends_on", []) or []:
+            if dep in dependents:
+                dependents[dep].append(node["id"])
+    terminal, continuations = [], {}
+    for node in nodes:
+        node_id = node["id"]
+        if not dependents[node_id]:
+            if node.get("terminal") is not True or not node.get("terminal_gate"):
+                raise ValueError(f"terminal node {node_id} lacks a sealed terminal gate")
+            if node.get("kind") == "resource-runner":
+                raise ValueError(
+                    f"terminal node {node_id} is a detached resource run; a workflow cannot "
+                    "end on a process exit"
+                )
+            terminal.append(node_id)
+            continue
+        continuation = node.get("continuation")
+        if not isinstance(continuation, dict) or continuation.get("kind") not in registry[
+            "continuation_kinds"
+        ]:
+            raise ValueError(f"non-terminal node {node_id} declares no valid continuation")
+        continuations[node_id] = continuation["kind"]
+    if not terminal:
+        raise ValueError("route declares no terminal node")
+    return {
+        "schema_version": WORKFLOW_CONTRACT_VERSION,
+        "states": list(registry["workflow_states"]),
+        "failure_states": list(registry["workflow_failure_states"]),
+        "terminal_nodes": sorted(terminal),
+        "continuations": continuations,
+        "human_gate_bindings": json.loads(json.dumps(human_gate_bindings or [])),
+    }
+
+
 def _realize_conditional_extensions(recipe, effective_intensity):
     """Seal owner postconditions without turning them into dispatch nodes."""
     rows = json.loads(json.dumps(recipe.get("conditional_extensions", [])))
@@ -493,7 +540,8 @@ def _compile_from_recipe(registry, recipe, capability, capability_mode, requeste
         nodes=[{"id":"inline","kind":"capability-owner","dispatch_depth":0,"role":"orchestrator",
                 "write_scope":recipe["quick"]["write_scope"],"resource_class":"normal",
                 "execution_surface":"inline","registered_worker":False,
-                "completion_gate":"inline-complete"}]
+                "completion_gate":"inline-complete",
+                "terminal":True,"terminal_gate":"inline-complete"}]
         gates=["inline-complete"]
         selection_basis=[{"axis":"direct-predicate","signal":p,"source":"caller"} for p in predicates]
     elif effective=="quick":
@@ -509,7 +557,8 @@ def _compile_from_recipe(registry, recipe, capability, capability_mode, requeste
                 "model_profile":owner_model_profile,
                 "write_scope":recipe["quick"]["write_scope"],"resource_class":"normal",
                 "execution_surface":"registered-headless","registered_worker":True,
-                "completion_gate":"quick-complete"}]
+                "completion_gate":"quick-complete",
+                "terminal":True,"terminal_gate":"quick-complete"}]
         gates=["quick-complete"]
         selection_basis=[{"axis":"direct-predicate-gap","signal":p,"source":"compiler"} for p in sorted(known_pred-set(predicates))]
     else:
@@ -560,6 +609,11 @@ def _compile_from_recipe(registry, recipe, capability, capability_mode, requeste
       "nodes":nodes,"parallel_groups":_realized_parallel_groups(nodes),
       "conditional_extensions":_realize_conditional_extensions(recipe, effective),
       "completion_gates":gates,"human_gates":recipe["human_gates"],
+      "human_gate_bindings":json.loads(json.dumps(
+          recipe["human_gate_bindings"] if effective not in ("direct","quick") else [])),
+      "workflow_contract":_workflow_contract(
+          registry, nodes,
+          recipe["human_gate_bindings"] if effective not in ("direct","quick") else []),
       "resume_retry_boundaries":recipe["resume_retry_boundaries"],
       "dispatch_evidence":checked_dispatch,
       "dispatch_contract_version":DISPATCH_CONTRACT_VERSION,
@@ -618,6 +672,16 @@ def verify_route(route, expected_cwd=None):
     route_node_ids={node.get("id") for node in route.get("nodes", [])}
     if any(not set(row["after"]) <= route_node_ids for row in expected_extensions):
         raise ValueError("route conditional extension anchor is not realized")
+    expected_bindings=json.loads(json.dumps(
+        route_recipe["human_gate_bindings"]
+        if route.get("effective_intensity") not in ("direct","quick") else []))
+    if route.get("human_gate_bindings") != expected_bindings:
+        raise ValueError("route human gate bindings differ from the sealed recipe")
+    if route.get("workflow_contract") != _workflow_contract(
+            registry, route.get("nodes",[]), expected_bindings):
+        raise ValueError("route workflow contract differs from the realized stage graph")
+    if {row["gate"] for row in expected_bindings} - set(route.get("human_gates") or []):
+        raise ValueError("route binds an undeclared human gate")
     if route.get("owner_dispatch_depth") not in {0, 1} or route.get("max_dispatch_depth") not in {0, 1, 2}:
         raise ValueError("invalid qualified dispatch depth")
     if any(key in route for key in ("depth", "owner_depth", "max_depth")):

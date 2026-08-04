@@ -38,6 +38,21 @@ Use portable role names from `roles/README.md` and `core/CONVENTIONS.md`. Concre
 
 Pipeline intensity follows `core/CONVENTIONS.md §1`: `direct` has no plan stage or durable plan artifact; `quick` is one registered-headless dispatch-depth-1 one-shot conductor with its inline micro-plan plus plan-check-lite; `standard+` uses the capability's durable work-cycle plan when applicable. `plan-check` is required for every non-`direct` graph, but independent QA is not repeated after every stage by default. Verification rigor for plan-check, selected independent reviews, and final verify is derived from intensity; it does not name a model or introduce a separate stage graph.
 
+## Stage Graph and Deploy Authorization
+
+The `standard+` graph is `release-setup → {security-review, release-review} →
+deploy → post-deploy-verify`. Both readiness reviews declare a `human-gate`
+continuation naming `deploy-authorization`, which binds to `deploy` as an entry
+gate: readiness passing never starts a deployment by itself. `deploy` records the
+authorized deployment, and `post-deploy-verify` is the terminal node — the
+workflow is not complete when the deploy command returns, only when the
+post-deploy verification gate holds.
+
+Before this graph existed, `deploy-authorization` was declared with no node that
+realized it and both readiness reviews were terminal, so a ship route could
+"complete" with nothing deployed and nothing verified. `core/WORKFLOW.md §0.6`
+now rejects a declared human gate that binds to no node.
+
 ## Guard Requirements
 
 Adapters must preserve the portable invariants relevant to this capability:

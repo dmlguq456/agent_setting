@@ -173,6 +173,19 @@ For standard+ code stage dispatch, role and profile are explicit: ordinary frame
     inferred from hooks, silently omitted while their readiness condition is
     true, or represented as an extra dispatch depth. A false condition records
     the declared skip without changing primary completion.
+14. Process exit is not workflow completion (`WORKFLOW §0.6`). One portable
+    state machine governs every tracked workflow; a capability declares stage
+    graph, terminal nodes, and human gates but never redefines continuation or
+    completion. `COMPLETE` is reachable only after every declared terminal node
+    holds its completion gate, `BLOCKED_HUMAN_GATE` never advances
+    automatically, and no failed stage advances a downstream one.
+15. Every non-terminal stage declares exactly one continuation — `inline-next`,
+    `supervised`, `human-gate`, or `monitor`. A detached resource node must be
+    `supervised` and may never be terminal. A graph that violates this is
+    rejected at route compile and at launch, not repaired at runtime. The
+    continuation supervisor is one shared implementation
+    (`OPERATIONS §5.12`); exactly-once advance is claim-based and restart-safe,
+    and no model sleep loop or arbitrary detached shell substitutes for it.
 
 Token-budget accounting is observation, not attribution. Hook invocations,
 zero/emission outcomes, exact inserted-directive UTF-8 bytes, and monotonic

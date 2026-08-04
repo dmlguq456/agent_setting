@@ -509,6 +509,14 @@ class ResourceJob:
     source_dirty: Optional[bool] = None
     source_git_state: Optional[str] = None
     started_at: Optional[float] = None
+    # Tracked-workflow projection (OPERATIONS §5.12): a resource row exposes why it
+    # ended, which registered attempt owns it, and what the workflow thinks it is.
+    workflow_state: Optional[str] = None
+    exit_code: Optional[int] = None
+    ended_at: Optional[float] = None
+    failure_class: Optional[str] = None
+    parent_attempt_id: Optional[str] = None
+    sentinel: Optional[str] = None
     state_evidence: Optional[dict] = None
 
     def to_dict(self):

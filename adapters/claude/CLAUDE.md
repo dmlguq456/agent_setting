@@ -62,6 +62,23 @@ stable attempt before spawn; the retired broker only supports `status`/`stop`.
 
 Keep native agents distinct from registered headless worker dispatch; a restriction on one surface never silently extends to the other. Preserve model role, intensity, depth, tests, safety, and validation on fallback. Do not run drill automatically. A Codex job the openai-codex plugin detaches after its foreground timeout runs in the plugin's own queue, never in jobs.log; Fleet shows it only as a read-only plugin-queue row. Launch substantial Codex delegation that needs attempt-grade tracking or gates through registered dispatch instead.
 
+## Tracked-Workflow Continuation
+
+Process exit is not workflow completion (`core/WORKFLOW.md §0.6`). A workflow is
+complete only when every declared terminal node holds its completion gate. Every
+non-terminal stage declares `inline-next`, `supervised`, `human-gate`, or
+`monitor`; a detached resource run must be `supervised` and can never be
+terminal. A graph that breaks this is refused at `capability-route.py compile`
+and at launch.
+
+Do not end a turn while a tracked workflow has a stage with no registered
+continuation. Arm the shared supervisor
+(`utilities/workflow-supervisor.py arm|poll|watch|status|complete`), dispatch the
+next stage, or record the human gate in the same turn; when none is possible,
+say so plainly and name the checked fallback. Report state from PID identity,
+sentinel/exit evidence, log modification time, and declared artifacts, never from
+a registry status word alone. `OPERATIONS §5.12` owns the mechanics.
+
 ## Runtime Lifecycle
 
 Claude hooks realize portable invariants for workflow signals, write/spec/core gates, memory, and design checks. Use explicit wrappers when a hook cannot be trusted. Main-session memory lifecycle and distillation do not run for workers. Session end never owns destructive worktree cleanup.

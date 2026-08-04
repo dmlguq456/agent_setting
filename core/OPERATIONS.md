@@ -229,6 +229,68 @@ section; those shapes are migration history only.
 
 After validating changes to instructions, rules, hooks, preflight, or runtime status surfaces under `<agent-home>`, commit and push them in the same turn without a separate user signal. This policy was ratified on 2026-06-12. A work repository's push is separate and remains subject to its deployment gate.
 
+### §5.12. Continuation Supervisor and Tracked-Workflow Completion
+
+`WORKFLOW §0.6` defines the portable state machine and the four continuation
+kinds. This section owns the mechanics, and it applies to every tracked
+workflow — lab, code, ship, spec/research, CI and check cycles, external-state
+monitors, loops, registered workers, and detached resource jobs alike.
+
+**One supervisor, not per-capability copies.** `utilities/workflow-supervisor.py`
+is the single continuation implementation. A capability declares its stage
+graph, terminal nodes, and human gates in `capabilities/topologies.json`; it
+never reimplements continuation. The supervisor is a non-model process: it
+holds no model turn, opens no dispatch depth, and has no launch authority
+beyond the successor its sealed route already declares.
+
+**Advance evidence is four-part and fail-closed.** Before a supervisor may
+start a successor it proves, for the predecessor: exact process identity
+(recorded `pid` plus `/proc` start time plus command-line hash, so a reused PID
+is a mismatch rather than liveness), a terminal exit result, a sentinel or
+typed terminal handoff carrying that result, and the existence of the
+predecessor's declared output artifacts. Missing, unreadable, or
+namespace-unverifiable evidence is not success. A nonzero exit, a `FAIL`/
+`BLOCKED` verdict, or an absent declared artifact records `FAILED_RETRYABLE` or
+`FAILED_TERMINAL` and starts nothing downstream.
+
+**Exactly-once is claim-based, not schedule-based.** The successor key is
+derived from the sealed `route_hash`, the predecessor node, the predecessor's
+exact terminal identity, and the successor node. The supervisor takes the
+route-scoped lock and creates that claim with `O_CREAT|O_EXCL`; the creator
+starts the successor and every other observer — a concurrent duplicate
+supervisor, a restarted one, an operator-run poll — reads the existing claim and
+starts nothing. Claim files are durable, so restart recovery is replay from the
+append-only journal plus the on-disk claim set: a supervisor resumes at the last
+confirmed stage and never re-fires a stage it already claimed. Two supervisors
+watching the same route therefore create one downstream job, not two.
+
+**Resource-job lifecycle is registry-owned.** `resource-runner start` records
+the run under a sentinel wrapper that persists the payload's exit status even if
+every observer dies, and records the launching registered attempt as
+`parent_attempt_id` so the parent/child relation between a registered headless
+worker and its detached resource child is explicit. Any observation that finds
+the process gone — `reap`, `status`, a supervisor poll, or a Fleet scan through
+the shared classifier — atomically persists the terminal row: `succeeded` or
+`failed`, `exit_code`, `ended_at`, and the workflow state. A stale `running`
+row is a defect, not a state; `working` is only ever recomputed from exact
+identity and is never read from the stored status word.
+
+**Managed completion resumes a parent thread once per batch.** A registered
+batch's parent thread is resumed exactly one time when the whole batch is
+semantically terminal and execution-quiescent, under the existing
+completion-delivery contract above. When no managed completion surface is
+available, the workflow uses a checked external supervisor rather than a model
+sleep loop, a fixed delay, or an arbitrary detached shell that claims to finish
+the work.
+
+**Visibility is a requirement, not a nicety.** Independently of capability,
+Fleet and the status surfaces expose the workflow, its current stage, its child
+resource jobs, resource class and identity, last update, next stage, and
+failure reason. Where a runtime cannot render a resource row directly, it shows
+the supervising owner and links the child registry;
+`workflow-supervisor.py status` is the portable projection that any surface may
+read. An ordinary detached process is never run invisibly on the user's behalf.
+
 ---
 # Governed workers and detached resources
 

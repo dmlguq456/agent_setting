@@ -122,6 +122,18 @@ Each clause is one contract line plus the signal that it was violated.
   gate. A worker handoff alone never closes material work. *Violation signal:*
   a completion card is emitted while dispatched or long-running work is still
   pending, unharvested, unintegrated when authorized, or unverified.
+- **Continuation registered before the turn ends** — do not end a turn while a
+  tracked workflow still has a non-terminal stage with no registered
+  continuation (`core/WORKFLOW.md §0.6`). Either the continuation exists in the
+  same turn — supervisor armed, next stage dispatched, human gate recorded, or
+  monitor armed — or the reply says plainly that automatic follow-up is
+  impossible and names the checked fallback the user can run. "I'll do the next
+  step when this finishes" is a promise, not a continuation. State claims are
+  cross-checked against process identity, sentinel/exit evidence, log
+  modification time, and declared artifacts rather than a registry status word,
+  and reaching a terminal condition never widens authority: stop only for a
+  human gate or a genuinely new external permission. *Violation signal:* a turn
+  ends with a stage "done" and the next stage owned by nobody.
 - **Auto-continue in-flow follow-ups** — inside an explicit "do X" flow, do not
   re-confirm each follow-up step (commit, stage, push, save, cleanup);
   auto-proceed without another confirmation, then use the applicable concise

@@ -6,44 +6,44 @@ P = Path(__file__).with_name("capability_topology.py")
 S = importlib.util.spec_from_file_location("topology", P); T = importlib.util.module_from_spec(S); S.loader.exec_module(T)
 
 PRESERVED_FULL_FIELD_DIGESTS = {
-    ("autopilot-apply", ("default",)): (
-        "8a9f8b6ed8947359dde0f5c524a08fbcd023ad517f50b01d4e9bc778a00ba240",
+    ("autopilot-apply", ('default',)): (
+        "181a53d919618cabda3bc90dfcd459c15bbacc037e92dd52a51bcd46c9faf721",
         "ef01f5c116d199aaee0f86d845921face1f7a7a5095ac73d30ad9a40d4b0233f",
     ),
-    ("autopilot-code", ("audit", "debug", "dev")): (
-        "3307317d2c647620e4408870a08d8a293a2c2649c37baf2cf7418221b44c0fbf",
+    ("autopilot-code", ('audit', 'debug', 'dev')): (
+        "c7a07196b631be5b4063d592b23e9aa0191b9cc4eca32b863e929a16ea177c33",
         "1eb37bfd5ab71fc7e9edc437503624f991cc585d7806dc46af7e2910911fb9f4",
     ),
-    ("autopilot-design", ("default",)): (
-        "c6436bab0cc4e1262be118f17d2b24f435984d68f5704a26ca55d7a75fa6a2a9",
+    ("autopilot-design", ('default',)): (
+        "7fcb263ef5da17fbc9e5ae8aa286ed0e3a580a5dae7e8c323a511057369207d5",
         "55e3c44a67bba7579e3805464b8ba464951c9edc2cb05356aa696bfcb864281b",
     ),
-    ("autopilot-draft", ("doc", "paper", "presentation")): (
-        "2ff4688c5963ba0a63d21acfeed0f762503142187597aa5d1744e858193bc8d3",
+    ("autopilot-draft", ('doc', 'paper', 'presentation')): (
+        "962db29f856dd3f6a9a8aa9743fc57bc8aa691dad014a9cef7a432e50cea32c5",
         "24338ba81e05c0bc6ccad3ee5af02dfb9a1ec6b49dbd9e2302ae49147296ce13",
     ),
-    ("autopilot-lab", ("setup",)): (
-        "0afe453d9d0373f932b0cdf9ef4606581de132f1a6c665f49c61b1aa9c04d5a2",
+    ("autopilot-lab", ('setup',)): (
+        "98b2752354e90c9bfd91a4c47a2971679d10a2614a6762dca02596b5f82ebb74",
         "9a26c0fea9a635d94f784379941c90a25d35ad7d2bcf1c3f21a1fcd5fad57183",
     ),
-    ("autopilot-lab", ("eval",)): (
-        "f5b459f6ff8fa7cbd7c83e220504b157cccd33dffbf58d63ebc70efd2bb038ad",
+    ("autopilot-lab", ('eval',)): (
+        "87cb0301ac17bab3f9171feea8711120537277fe892d92f9b35a58988444cfc1",
         "47160a6d9acf73cf29ff137dcb90c1af3036148530af2a1628162692078f1e24",
     ),
-    ("autopilot-refine", ("default",)): (
-        "e94e06c314ace9bd06b4acb705811af9d179acaa331ef628138c1f2376d3c91b",
+    ("autopilot-refine", ('default',)): (
+        "5682843aa8bcc514c8598e6af477809fbb84cca0b4232cb5c11e099bd0524d42",
         "d39b4446e7c7fca7def4629560d9ee10a342b536fa644ffee8023c5f06326203",
     ),
-    ("autopilot-research", ("academic", "market", "technology")): (
-        "786e54143e67bb126a2d8459c2bb66ca284562a51f27fc65463de14552d29621",
+    ("autopilot-research", ('academic', 'market', 'technology')): (
+        "e7af8b5568a15d2341803674488224a8815a69b6d0a3bfd418987ea2cccc4c16",
         "1c314d9a1c578256757109a35b0f08548d22391b3f079df0a790fe3534bfc057",
     ),
-    ("autopilot-ship", ("default",)): (
-        "2b26f9570e5e09a0bae0d7a58eb03133638e062a5edba3cd1a000e38d70512ca",
+    ("autopilot-ship", ('default',)): (
+        "ee52421fef32145fba8d87e60b89c9d6fec72c5786207ac8ab0bdc47e56ad206",
         "57f7c9ab1e362f246f0056927122c19163479334380cf84ab9a8785e620dcbf4",
     ),
-    ("autopilot-spec", ("api", "app", "cli", "library", "research", "update")): (
-        "fc9d3fc4daec7b5ce38a313c807db844d3ad437a77df9287de189b9e2085394e",
+    ("autopilot-spec", ('api', 'app', 'cli', 'library', 'research', 'update')): (
+        "74d8cf3d261488e55ac6243b0c94ab2fad103e7fa41d75965bc445b1ec7f3eda",
         "8b421239d9a414c5d0ce1b91e9314ceee13b9fa9ac075d374fb92eb59e8437af",
     ),
 }
@@ -105,14 +105,17 @@ class TestTopology(unittest.TestCase):
         self.assertRaisesRegex(T.TopologyError,"enforced",T.validate_registry,r)
         r=copy.deepcopy(self.r); r["rollout"]["legacy_low_level_dispatch"]=True
         self.assertRaisesRegex(T.TopologyError,"retired",T.validate_registry,r)
-        for legacy in (2,3,4,5,6):
+        for legacy in (2,3,4,5,6,7):
             r=copy.deepcopy(self.r); r["schema_version"]=legacy
             self.assertRaisesRegex(T.TopologyError,"read-only",T.validate_registry,r)
     def test_conditional_artifact_sink_coverage(self):
         expected={
             ("autopilot-code",("audit","debug","dev")):("report","report","final_report.md"),
             ("autopilot-draft",("doc","paper","presentation")):("finalize","finalize","final-artifact"),
-            ("autopilot-lab",("setup",)):("full-run","full-run","experiment-artifact"),
+            # The setup sink moved off the detached run: a training process exiting is
+            # not a workflow completing, so the sink offer anchors on the handoff that
+            # records what happens next (2026-08-04 BC_ResNet_tf).
+            ("autopilot-lab",("setup",)):("handoff","full-run","experiment-artifact"),
             ("autopilot-lab",("eval",)):("sync","report","experiment-artifact"),
             ("autopilot-refine",("default",)):("transaction","transaction","revised-artifact"),
             ("autopilot-research",("academic","market","technology")):("claim-verify","report","research-artifact"),
@@ -249,8 +252,9 @@ class TestTopology(unittest.TestCase):
         expected = {
             ("autopilot-apply", ("default",)): ["handback"],
             ("autopilot-lab", ("eval",)): ["sync"],
+            ("autopilot-lab", ("setup",)): ["handoff"],
             ("autopilot-refine", ("default",)): ["transaction"],
-            ("autopilot-ship", ("default",)): ["release-setup"],
+            ("autopilot-ship", ("default",)): ["release-setup", "deploy"],
             ("autopilot-spec", ("api", "app", "cli", "library", "research", "update")): [
                 "prd-transaction"
             ],
