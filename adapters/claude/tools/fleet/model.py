@@ -666,7 +666,33 @@ def exec_child_evidence(exec_child):
     return exec_child
 
 
-def _session_status_state(status, exec_child=None):
+def exec_child_is_background(exec_child, updated_at, now):
+    """Whether later registry activity proves that an old child is background work.
+
+    Claude can retain a background Bash process while later model turns continue.  Its
+    registry then stays at ``shell`` even though that particular child no longer describes
+    the foreground turn.  ``etime_s`` gives the child's approximate start and registry
+    ``updatedAt`` gives the latest session activity.  A full work-window gap avoids treating
+    ordinary status-write/process-start skew as a later turn.
+
+    This realizes F-47's existing ``background child -> idle + dim badge`` contract.  Missing
+    or malformed clocks preserve the older fail-open classification.
+    """
+    child = exec_child_evidence(exec_child)
+    if child is None:
+        return False
+    if (
+        not isinstance(updated_at, (int, float))
+        or isinstance(updated_at, bool)
+        or not isinstance(now, (int, float))
+        or isinstance(now, bool)
+    ):
+        return False
+    child_started_at = now - child["etime_s"]
+    return updated_at > child_started_at + SESSION_WORK_SEC
+
+
+def _session_status_state(status, exec_child=None, background_child=False):
     """tier-1 registry status → activity-axis state. None = registry is silent.
 
     F-47 (v30, prd.md:612): `shell` is "the Bash tool is running", not an idle synonym. On
@@ -677,15 +703,22 @@ def _session_status_state(status, exec_child=None):
     """
     if status == "busy":
         return "working"
-    if status == "shell" and exec_child_evidence(exec_child):
+    if status == "shell" and exec_child_evidence(exec_child) and not background_child:
         return "working"
     if status in ("idle", "shell"):
         return "idle"
     return None
 
 
-def _status_desc(status, state, exec_child):
+def _status_desc(status, state, exec_child, background_child=False):
     """(source, rule) for a tier-1 registry verdict — honest about the combined F-47 case."""
+    if status == "shell" and background_child:
+        child = exec_child_evidence(exec_child)
+        return (
+            "claude-registry+proc",
+            "registry status=shell + long-lived child %s, but later registry activity proves background"
+            % child.get("comm"),
+        )
     if status == "shell" and state == "working":
         child = exec_child_evidence(exec_child)
         return ("claude-registry+proc",
@@ -901,7 +934,7 @@ def classify_session(ev_in, now, stale_min=SESSION_STALE_MIN, key=None):
     """(state, evidence). ev_in = collected evidence, never a live probe (hermetic).
 
     Recognized keys: pid_alive, proc_start_match, orphan, interaction_wait, status,
-    task_lifecycle, mtime, transcript, started_at, updated_at, activity_ms,
+    task_lifecycle, exec_child, mtime, transcript, started_at, updated_at, activity_ms,
     harness, pid, proc_start, fd_owner, is_worker.
     """
     def out(state, tier, source, rule):
@@ -938,8 +971,15 @@ def classify_session(ev_in, now, stale_min=SESSION_STALE_MIN, key=None):
         )
 
     status = ev_in.get("status")
-    st = _session_status_state(status, exec_child=ev_in.get("exec_child"))
-    st_source, st_rule = _status_desc(status, st, ev_in.get("exec_child"))
+    background_child = exec_child_is_background(
+        ev_in.get("exec_child"), ev_in.get("updated_at"), now
+    )
+    st = _session_status_state(
+        status, exec_child=ev_in.get("exec_child"), background_child=background_child
+    )
+    st_source, st_rule = _status_desc(
+        status, st, ev_in.get("exec_child"), background_child=background_child
+    )
     m = ev_in.get("mtime")
 
     lifecycle = ev_in.get("task_lifecycle")

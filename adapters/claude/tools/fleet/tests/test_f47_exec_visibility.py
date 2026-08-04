@@ -156,6 +156,27 @@ class ShellCorrection(unittest.TestCase):
         self.assertEqual(ev["source"], "claude-registry")
         self.assertEqual(ev["rule"], "registry status=shell")
 
+    def test_shell_child_predating_later_registry_activity_is_background(self):
+        # Observed 2026-08-04: a 21h-old `tail -f` survived while later model turns
+        # continued.  Claude kept registry status=shell, which must not make that old
+        # background monitor the current foreground task.
+        now = 5000.0
+        child = {"pid": 200, "comm": "tail", "etime_s": 720}
+        state, ev = self.classify(
+            self.evidence("shell", child, updated_at=4401.0, mtime=4401.0), now=now
+        )
+        self.assertEqual(state, "idle")
+        self.assertEqual(ev["source"], "claude-registry+proc")
+        self.assertIn("later registry activity proves background", ev["rule"])
+
+    def test_process_start_skew_does_not_demote_current_shell_child(self):
+        now = 5000.0
+        child = {"pid": 200, "comm": "python3", "etime_s": 720}
+        state, _ev = self.classify(
+            self.evidence("shell", child, updated_at=4330.0, mtime=4330.0), now=now
+        )
+        self.assertEqual(state, "working")
+
     def test_idle_with_child_is_not_promoted(self):
         # Background case: the turn ended, the child outlived it. Model-side waiting is a
         # fact, so classification holds at idle and only the DISPLAY distinguishes it.
