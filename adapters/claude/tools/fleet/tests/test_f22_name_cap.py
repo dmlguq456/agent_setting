@@ -19,26 +19,29 @@ class WideNameCapTest(unittest.TestCase):
     """The acceptance table (plan §5) — measured values, not asserted intent."""
 
     def test_acceptance_table(self):
-        got = {w: render._wide_name_width(w) for w in (60, 120, 168, 200)}
-        # 120: 29→28 — merge with the _STAGE_RESERVE breadcrumb tail room (2026-07-15)
+        got = {w: render._wide_name_width(w) for w in (60, 118, 168, 200)}
+        # 120→118 for the floor sample: F-58 (_HMW 42→32) returns 10 more cells to the ladder,
+        # so 120 now sits one rung ABOVE the floor (30). The floor itself did not move — the
+        # width at which the ladder leaves it did (128→118), which is the same -10 horizontal
+        # translation the frozen ledger proves. 118 is the last floor width.
         # 168: 40→36→32→40 — F-54 (_HMW 33→38, then the v40 correction 38→42) charged 9 more
         # cells to the fixed row and pushed 168 off the cap; F-57 (v41) then reclaimed the
         # dead `_CTX_W` (24) reservation and the `_CTX_BOOST` (12) skim, moving the ladder
-        # 36 widths back the other way, so 168 is capped again with room to spare (140 is the
-        # new first capped width). The floor (60/120 → _NW_S) and the cap value are unchanged.
-        self.assertEqual(got, {60: 28, 120: 28, 168: 40, 200: 40})
+        # 36 widths back the other way, and F-58 moved it 10 further (140→130 first capped
+        # width). The floor (60/118 → _NW_S) and the cap value are unchanged.
+        self.assertEqual(got, {60: 28, 118: 28, 168: 40, 200: 40})
 
     def test_narrow_widths_are_untouched_by_the_cap(self):
-        """60 and 120 sit below the cap (28 < 40), so v8 must not move them at all."""
-        for w in (60, 120):
+        """60 and 118 sit below the cap (28 < 40), so v8 must not move them at all."""
+        for w in (60, 118):
             self.assertLess(render._wide_name_width(w), render._NAME_WIDE_MAX)
 
     def test_wide_widths_are_clamped_to_the_cap(self):
-        # 168→172→176→140 for the first sample: F-54 shifted the ladder right by 5 then 4
-        # (v40), and F-57 (v41) shifted it 36 back left, so the cap is first reached at 140.
-        # The clamp rule is unchanged — every width at or past the first capped width still
-        # returns exactly _NAME_WIDE_MAX, however wide it gets.
-        for w in (140, 176, 200, 400, 10000):
+        # 168→172→176→140→130 for the first sample: F-54 shifted the ladder right by 5 then 4
+        # (v40), F-57 (v41) shifted it 36 back left, and F-58 (v44) another 10, so the cap is
+        # first reached at 130. The clamp rule is unchanged — every width at or past the first
+        # capped width still returns exactly _NAME_WIDE_MAX, however wide it gets.
+        for w in (130, 176, 200, 400, 10000):
             self.assertEqual(render._wide_name_width(w), render._NAME_WIDE_MAX)
 
     def test_lower_bound_still_wins_on_tiny_terminals(self):

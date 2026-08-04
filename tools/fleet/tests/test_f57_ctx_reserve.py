@@ -55,11 +55,13 @@ class WideNameWidthLedgerTest(unittest.TestCase):
             expected = render._NW_S + min(render._NAME_WIDE_MAX - render._NW_S, surplus)
             self.assertEqual(render._wide_name_width(w), expected, "term_width=%d" % w)
 
-    def test_the_cap_is_reached_36_columns_earlier_than_v40(self):
+    def test_the_cap_is_reached_earlier_than_before_the_reclaim(self):
         """The reclaimed budget is exactly `_CTX_W` (24) + `_CTX_BOOST` (12) = 36, so the
-        40-cell cap that used to need 176 columns now arrives at 140."""
-        self.assertLess(render._wide_name_width(139), render._NAME_WIDE_MAX)
-        self.assertEqual(render._wide_name_width(140), render._NAME_WIDE_MAX)
+        40-cell cap that used to need 176 columns arrived at 140 — and F-58's `_HMW` 42→32
+        moved it 10 further, to 130. The reclaim itself is what this asserts; the exact
+        column is restated here only so a silent re-reservation cannot hide behind it."""
+        self.assertLess(render._wide_name_width(129), render._NAME_WIDE_MAX)
+        self.assertEqual(render._wide_name_width(130), render._NAME_WIDE_MAX)
 
 
 class SessionRowContextTest(unittest.TestCase):

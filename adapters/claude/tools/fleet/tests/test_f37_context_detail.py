@@ -136,6 +136,17 @@ class ContextDetailTruthTableTest(unittest.TestCase):
             self.assertEqual(render._dw(row_text[:row_text.index(LEAD)]), render._CONTEXT_INDENT_W)
 
     def test_description_column_is_stable_for_value_width_and_depth(self):
+        """The description column never moves with the VALUE width (`—`/`0%`/`63%`/`100%` all
+        occupy `_CONTEXT_VALUE_W`), and it anchors to `_NAME_COL` whenever the row's prefix
+        leaves at least `_CONTEXT_NOW_GAP` cells to get there.
+
+        F-58 narrowed `_NAME_COL` 46→36, which is only 4 cells past a depth-0 prefix
+        (4 indent + 8 word + 16 track + 4 value = 32). Each depth level adds 2 cells of
+        indent, so at depth ≥1 the `max(_CONTEXT_NOW_GAP, _NAME_COL - prefix)` floor takes
+        over and the nested row sits 1 (depth 1) / 3 (depth 2) cells right of the session
+        column. That is the F-42c rule working as written — legibility gap first, alignment
+        second — not a new behavior, so it is asserted here rather than pinned to a constant.
+        """
         for pct in (None, 0, 63, 100):
             context = ContextProjection(pct, "unknown", "x")
             for depth in (0, 1, 2):
@@ -144,9 +155,11 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                         self._idle(context=context, summary="Doing work"),
                         depth=depth, term_width=168)
                     visible = text(row)
+                    prefix = render._CONTEXT_INDENT_W + 2 * depth + render._CTX_LABEL_W \
+                        + render._CTX_TRACK_MAX + render._CONTEXT_VALUE_W
                     self.assertEqual(
                         render._dw(visible[:visible.index("Doing work")]),
-                        render._NAME_COL)
+                        max(prefix + render._CONTEXT_NOW_GAP, render._NAME_COL))
                     track = re.search(r"[%s%s]+" % (re.escape(FULL), re.escape(EMPTY)),
                                       visible).group(0)
                     self.assertEqual(len(track), BASE)

@@ -216,11 +216,15 @@ class F55bNarrowDegradeTest(unittest.TestCase):
 
     def test_now_yields_before_the_word(self):
         """Shrinking past the point where NOW fits must not touch the lead cell."""
+        # 48→36 for the tight sample: the F-42c gap is `max(_CONTEXT_NOW_GAP, _NAME_COL -
+        # prefix)`, and F-58's narrower `_NAME_COL` (46→36) shrank that gap by 10, so NOW now
+        # survives 10 columns further down. The ORDER under test is unchanged: NOW is still
+        # gone (room 0 at 36) while the word is still whole (it degrades only below 32).
         wide = "".join(v for v, _k in self._row(168))
-        tight = "".join(v for v, _k in self._row(48))
+        tight = "".join(v for v, _k in self._row(36))
         self.assertIn("NOW", wide)
         self.assertNotIn("NOW", tight)
-        self.assertEqual(self._lead_text(self._row(48)), "working ")
+        self.assertEqual(self._lead_text(self._row(36)), "working ")
 
     def test_the_word_degrades_to_the_glyph_only_when_it_cannot_share_the_row(self):
         # 4 indent + 8 word + 16 track + 4 value = 32 cells is the last width that fits
@@ -250,12 +254,13 @@ class F52WidthLedgerTest(unittest.TestCase):
         # F-52's left anchor is independent of every wide-row width edit and never moves.
         self.assertEqual(render._CONTEXT_INDENT_W, 4)
         # F-57 (v41) removed the dead `_CTX_W` (24) term from `fixed_row` and the `_CTX_BOOST`
-        # (12) skim from the allocator, so every slack entry gains 24 and the name ladder
-        # shifts left by 36 widths — 120 still sits on the `_NW_S` floor, but the cap is now
-        # first reached at 140 (was 176 at v40), so 168 and 400 are both at the cap.
+        # (12) skim from the allocator; F-58 (v44) then narrowed `_HMW` 42→32, which shrinks
+        # `_NAME_COL` — and therefore `fixed_row` — by another 10. Every slack entry gains 10
+        # and the name ladder shifts 10 widths further left: 118 is the last `_NW_S` floor
+        # width and the cap is first reached at 130 (was 140 at v41, 176 at v40).
         self.assertEqual([render._wide_slack(w) for w in (60, 120, 168, 200, 400)],
-                         [-40, 20, 68, 100, 300])
-        self.assertEqual([render._wide_name_width(w) for w in (120, 140, 168, 400)],
+                         [-30, 30, 78, 110, 310])
+        self.assertEqual([render._wide_name_width(w) for w in (118, 130, 168, 400)],
                          [28, 40, 40, 40])
 
     def test_row_starts_at_the_harness_name_column_and_fits_every_layout(self):
