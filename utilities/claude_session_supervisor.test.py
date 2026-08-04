@@ -190,6 +190,38 @@ class ClaudeSessionSupervisorTest(unittest.TestCase):
         self.assertEqual(inspected.returncode, 0, inspected.stderr + inspected.stdout)
         self.assertIn("\tvalid\texact-claude-result\tPASS\tnone\tnone", inspected.stdout)
 
+    def test_session_announcement_precedes_every_turn_and_leaks_nothing(self):
+        """The receipt log must name the child session it never transcribes.
+
+        Regression: with no announcement the summary owner had only this log to
+        read, and a log of control rows plus one `result` yields no conversational
+        text at all — so supervised owners rendered in Fleet with no title and no
+        NOW line for their entire run.
+        """
+        self.jobs.write_text(owner_row() + child_row(), encoding="utf-8")
+        result = self.run_supervisor()
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        rows = [json.loads(line) for line in result.stdout.splitlines()]
+        announcements = [
+            row for row in rows if row.get("type") == "dispatch.supervisor.session"
+        ]
+        self.assertEqual(len(announcements), 1)
+        self.assertEqual(rows[0], announcements[0])
+        trace = [json.loads(line) for line in self.trace.read_text().splitlines()]
+        turns = [row for row in trace if row["event"] == "turn-start"]
+        self.assertTrue(turns)
+        for turn in turns:
+            self.assertEqual(announcements[0]["session_id"], turn["session"])
+        self.assertEqual(announcements[0]["cwd"], str(self.base))
+        # Announcing identity must not become a channel for model or prompt content.
+        self.assertEqual(
+            set(announcements[0]),
+            {"type", "parent_attempt_id", "session_id", "cwd"},
+        )
+        self.assertNotIn("RAW_PARENT_CONTEXT_SENTINEL", result.stdout)
+        self.assertNotIn("RAW_CLAUDE_SENTINEL", result.stdout)
+        self.assertEqual(sum(row.get("type") == "result" for row in rows), 1)
+
     def test_no_child_finishes_without_resume(self):
         self.jobs.write_text(owner_row(), encoding="utf-8")
         result = self.run_supervisor(FAKE_NO_CHILD="1")

@@ -312,6 +312,22 @@ def main(argv: list[str] | None = None) -> int:
         emit({"type": "dispatch.supervisor.error", "reason": "initial-prompt-empty"})
         return 64
     session_id = str(uuid.uuid4())
+    # This attempt log is a receipt log, never a transcript: it carries control rows
+    # plus exactly one final `result`, and deliberately never echoes model text. A
+    # summary producer reading only this file therefore has no conversational input
+    # and can never name the run (observed 2026-08-04: every supervised owner rendered
+    # with no title and no NOW line for its whole lifetime). Announce the child's own
+    # session id — control metadata, not model content — so the summary owner can
+    # follow the real transcript instead. Emitted before the first turn so the
+    # follower has a source from the start rather than only at completion.
+    emit(
+        {
+            "type": "dispatch.supervisor.session",
+            "parent_attempt_id": args.parent_attempt_id,
+            "session_id": session_id,
+            "cwd": args.worktree,
+        }
+    )
     state_path = Path(args.state_file) if args.state_file else None
     delivered: set[str] = set()
     remediated: set[tuple[str, ...]] = set()

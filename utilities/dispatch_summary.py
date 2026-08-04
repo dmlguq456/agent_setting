@@ -50,6 +50,7 @@ DEFAULT_INITIAL_DELAY = 3.0
 DEFAULT_PERIODIC_DEBOUNCE = 90
 DEFAULT_FINAL_GRACE = 75.0
 DEFAULT_LOG_QUIET = 1.0
+SESSION_ANNOUNCE_SCAN = 1 << 16
 
 
 def summary_sid(attempt_id: str) -> str:
@@ -266,6 +267,103 @@ def _log_signature(path: Path) -> tuple[int, int]:
         return 0, 0
 
 
+def _claude_projects_root() -> Path:
+    home = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
+    return Path(home) / "projects"
+
+
+def _encoded_cwd(cwd: str) -> str:
+    # projects dir encoding: '/', '.', '_' -> '-' (same rule as the fleet collector).
+    return "".join("-" if ch in "/._" else ch for ch in cwd)
+
+
+def announced_session(
+    path: Path, scan: int = SESSION_ANNOUNCE_SCAN,
+) -> tuple[bool, dict[str, str] | None]:
+    """Return ``(decided, announcement)`` for the Claude supervisor's session row.
+
+    A supervised owner's attempt log is a receipt log: control rows plus one final
+    ``result``, with model text deliberately withheld.  ``dispatch.supervisor.session``
+    names the runtime session whose own transcript is the real summary input.
+
+    The summary owner is launched while the governed worker is still behind its
+    launch fence, so an empty log means "not yet", not "not supervised" — caching
+    that as unsupervised would pin the follower to the receipt log for the whole
+    run.  The announcement is emitted before the first turn, so a first row that is
+    anything else is a decisive negative.
+    """
+    try:
+        with open(path, "rb") as handle:
+            head = handle.read(max(1, int(scan)))
+    except OSError:
+        return False, None
+    for raw in head.split(b"\n"):
+        if not raw.strip():
+            continue
+        try:
+            row = json.loads(raw.decode("utf-8", "replace"))
+        except ValueError:
+            # A torn trailing line is not evidence either way; keep waiting.
+            return False, None
+        if not isinstance(row, dict) or row.get("type") != "dispatch.supervisor.session":
+            return True, None
+        session_id = row.get("session_id")
+        if isinstance(session_id, str) and ATTEMPT_RE.fullmatch(session_id):
+            return True, {"session_id": session_id, "cwd": row.get("cwd") or ""}
+        return True, None
+    return False, None
+
+
+def session_transcript(announced: dict[str, str]) -> Path | None:
+    """Resolve one exact runtime transcript for an announced child session.
+
+    Exact ``<session id>.jsonl`` only.  A missing transcript returns None rather
+    than borrowing a same-cwd neighbour, which would stamp another session's text
+    onto this attempt's NOW line.
+    """
+    session_id = announced.get("session_id") or ""
+    if not ATTEMPT_RE.fullmatch(session_id):
+        return None
+    root = _claude_projects_root()
+    cwd = announced.get("cwd") or ""
+    candidates = []
+    if cwd:
+        candidates.append(root / _encoded_cwd(cwd) / f"{session_id}.jsonl")
+    # The runtime may resolve the project dir from a realpath that differs from the
+    # launch cwd (symlinked worktrees), so fall back to an exact session-id match.
+    candidates.extend(sorted(root.glob(f"*/{session_id}.jsonl")))
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _summary_source(log_path: Path, cache: dict[str, Any]) -> Path | None:
+    """Return the file whose bytes feed this attempt's title/NOW refresh.
+
+    Supervised owners follow the announced child transcript and wait for it: the
+    receipt log holds no conversational text, so refreshing against it would burn
+    the cursor and record an empty title instead of degrading honestly.  Only
+    settled answers are cached, so an announcement that has not been written yet is
+    re-checked on the next poll instead of being frozen into the wrong source.
+    """
+    if "source" in cache:
+        return cache["source"]
+    if "announced" not in cache:
+        decided, announced = announced_session(log_path)
+        if not decided:
+            return None
+        cache["announced"] = announced
+    announced = cache["announced"]
+    if announced is None:
+        cache["source"] = log_path
+        return log_path
+    transcript = session_transcript(announced)
+    if transcript is not None:
+        cache["source"] = transcript
+    return transcript
+
+
 def _refresh(
     harness: str, sid: str, transcript: Path, *,
     phase: str, debounce: int, priority: bool,
@@ -327,20 +425,27 @@ def supervise(
 
         first_eligible = time.monotonic() + max(0.0, initial_delay)
         initial_requested = False
+        source_cache: dict[str, Any] = {}
+        source = log_path
         while True:
             live, terminal_reason = _proc_live(target_pid, target_start)
-            size, _mtime = _log_signature(log_path)
+            resolved = _summary_source(log_path, source_cache)
+            if resolved is not None and resolved != source:
+                source = resolved
+                state.update(summary_source=str(source))
+                _atomic_write(state_path, state)
+            size = _log_signature(source)[0] if resolved is not None else 0
             if size and time.monotonic() >= first_eligible:
                 previous = _read_sidecar(harness, sid)
                 if not initial_requested and not previous.get("summary"):
                     initial_requested = _refresh(
-                        harness, sid, log_path, phase="initial", debounce=0, priority=True)
+                        harness, sid, source, phase="initial", debounce=0, priority=True)
                     if initial_requested:
                         state.update(last_refresh_phase="initial", last_refresh_at=time.time())
                         _atomic_write(state_path, state)
                 else:
                     if _refresh(
-                        harness, sid, log_path, phase="periodic",
+                        harness, sid, source, phase="periodic",
                         debounce=periodic_debounce, priority=not previous.get("summary"),
                     ):
                         state.update(last_refresh_phase="periodic", last_refresh_at=time.time())
@@ -349,19 +454,23 @@ def supervise(
                 break
             time.sleep(max(0.05, poll))
 
+        # The child transcript, not the receipt log, is what settles for a supervised
+        # owner; both resolve through the same source so the quiet window watches the
+        # bytes the final refresh will actually read.
+        source = _summary_source(log_path, source_cache) or source
         quiet_since = time.monotonic()
-        last_signature = _log_signature(log_path)
+        last_signature = _log_signature(source)
         quiet_deadline = time.monotonic() + max(log_quiet * 4, 2.0)
         while time.monotonic() < quiet_deadline:
             time.sleep(min(max(0.05, poll), 0.25))
-            signature = _log_signature(log_path)
+            signature = _log_signature(source)
             if signature != last_signature:
                 last_signature = signature
                 quiet_since = time.monotonic()
             if time.monotonic() - quiet_since >= max(0.0, log_quiet):
                 break
 
-        final_size = _log_signature(log_path)[0]
+        final_size = _log_signature(source)[0]
         final_deadline = time.monotonic() + max(0.0, final_grace)
         final_started = False
         final_complete = False
@@ -373,7 +482,7 @@ def supervise(
                 break
             if not final_started:
                 final_started = _refresh(
-                    harness, sid, log_path, phase="final", debounce=0, priority=True)
+                    harness, sid, source, phase="final", debounce=0, priority=True)
                 if final_started:
                     state.update(last_refresh_phase="final", last_refresh_at=time.time())
                     _atomic_write(state_path, state)
