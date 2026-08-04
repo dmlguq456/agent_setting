@@ -41,7 +41,7 @@ class MutedPaletteTest(unittest.TestCase):
         self.assertNotIn(60, render._TINT_LVL.values())
         self.assertNotIn(95, render._TINT_LVL.values())
 
-    def test_changeable_palette_only_nudges_saturation(self):
+    def test_changeable_palette_nudges_foreground_saturation_and_panel_depth(self):
         self.assertEqual(render._RICHER_RGB_1000, {
             "green": (678, 859, 506),
             "yellow": (859, 859, 506),
@@ -51,9 +51,9 @@ class MutedPaletteTest(unittest.TestCase):
             "blue": (663, 663, 1000),
         })
         self.assertEqual(render._TINT_RGB_1000, {
-            233: (67, 75, 102),
-            234: (114, 133, 188),
-            236: (176, 188, 235),
+            233: (63, 71, 102),
+            234: (108, 127, 188),
+            236: (169, 182, 235),
         })
         init_color = mock.Mock()
         with mock.patch.multiple(

@@ -73,12 +73,12 @@ _RICHER_RGB_1000 = {
     "blue": (663, 663, 1000),    # #a9a9ff
 }
 
-# Keep each panel rung at effectively the same brightness while giving the
-# near-black backgrounds a very small shared slate cast.
+# Keep each panel rung dark and restrained while giving the near-black
+# backgrounds a slightly richer shared slate cast.
 _TINT_RGB_1000 = {
-    233: (67, 75, 102),    # #11131a
-    234: (114, 133, 188),  # #1d2230
-    236: (176, 188, 235),  # #2d303c
+    233: (63, 71, 102),    # #10121a
+    234: (108, 127, 188),  # #1c2030
+    236: (169, 182, 235),  # #2b2e3c
 }
 
 
