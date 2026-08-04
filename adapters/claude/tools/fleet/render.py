@@ -559,9 +559,12 @@ _wt_count = gitinfo.worktree_count
 # stay aligned for comparison. Job flow never sits under branch/gate.
 _HW = 16                      # Bare harness-badge width — narrow/stack L1 badges and the
                               # dispatch-prefix budget math still use this unmerged value.
-_HMW = 38                     # F-33 (v19 spacing hotfix): WIDE-layout harness field with one
-                              # extra trailing cell before the session column. 33→38 (F-54, v38,
-                              # 2026-08-04 user: "harness 폭을 좀 더 늘리자") — the extra 5 cells
+_HMW = 42                     # F-33 (v19 spacing hotfix): WIDE-layout harness field with one
+                              # extra trailing cell before the session column. 33→38→42 (F-54,
+                              # v38 then the v40 correction, 2026-08-04 user: "harness 폭을 조금
+                              # 더 늘리긴 해야겠네") — the widest measured payload is
+                              # `opencode (claude-sonnet-4-5·high)` at 33 cells, so 42 leaves 9
+                              # cells of margin. The extra cells
                               # shift the whole wide row right and are charged to the _wide_slack
                               # budget; _NW_S/_NAME_WIDE_MAX/_CTX_W allocation rules are unchanged
                               # and the context track (_CTX_TRACK_MAX) is independent of this

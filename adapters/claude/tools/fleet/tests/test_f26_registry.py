@@ -306,12 +306,15 @@ class DegradationLadderTest(unittest.TestCase):
     def test_badge_age_yields_before_the_name(self):
         """A name sized into the window where shedding the age is exactly what saves it.
 
-        Zone = 40, gap = 1. Full badge ` unused 3h45m` (13) leaves the name 26 cells; the
-        compact ` unused` (7) leaves it 32. A 27-cell name therefore has to clip with the
-        age present, and survives whole once the age yields.
+        Full badge ` unused 3h45m` (13) plus the 1-cell gap leaves the name `zone - 14` cells;
+        the compact ` unused` (7) leaves it `zone - 8`. A name in between therefore has to clip
+        with the age present, and survives whole once the age yields. The sample is SIZED FROM
+        the zone rather than typed in, so F-54's `_HMW` widenings (which shrink the 168-col
+        zone: 40 → 36 → 32) move it automatically instead of silently leaving the window.
         """
-        name = "agent-setting-17-beta123456"     # 27 cells → inside the 27..32 window
-        self.assertEqual(render._dw(name), 27)
+        zone = render._wide_name_width(168)
+        name = "agent-setting-17-beta123456"[:zone - 8]   # top of the (zone-14, zone-8] window
+        self.assertEqual(render._dw(name), zone - 8)
         s = self._ghost(registry_name=name, provenance=None)
         segs = render._session_row(s, narrow=False,
                                    name_width=render._wide_name_width(168))

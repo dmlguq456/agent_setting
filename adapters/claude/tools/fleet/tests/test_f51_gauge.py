@@ -124,19 +124,20 @@ class F51GaugeTest(unittest.TestCase):
         self.assertNotIn(render._BAR_FULL, joined)
 
     def test_wide_alloc_matches_the_frozen_ledger_fixture_exactly(self):
-        """A8: `f51_wide_ledger_v38.json` records `_wide_slack`/`_wide_name_width`/
+        """A8: `f51_wide_ledger_v40.json` records `_wide_slack`/`_wide_name_width`/
         `_wide_ctx_width` for every terminal width 60..400 — recompute all three and diff
         against the frozen ledger so a future edit to the wide slack ladder cannot silently
         regress without this fixture failing.
 
-        Re-frozen for F-54 (v38, `_HMW` 33→38, ledger renamed from `..._v35.json`). The 5
-        extra harness cells are charged to `fixed_row`, so every entry shifts right by
-        exactly 5: the v38 ledger satisfies `v38[w] == v35[w-5]` for all w in 65..400
-        (verified 336/336 at re-freeze). The ladder's SHAPE is therefore unchanged — same
-        `_NW_S` floor (28), same `_CTX_BOOST`-first priority, same `_NAME_WIDE_MAX` cap,
-        same past-cap remainder to the gauge. Only the width at which each rung is reached
-        moved (e.g. the 40-col name cap is first reached at 172 cols, was 167)."""
-        path = os.path.join(os.path.dirname(__file__), "fixtures", "f51_wide_ledger_v38.json")
+        Re-frozen for the F-54 v40 correction (`_HMW` 38→42, ledger renamed from
+        `..._v38.json`; v38 itself had renamed `..._v35.json` for 33→38). The 4 extra harness
+        cells are charged to `fixed_row`, so every entry shifts right by exactly 4: the v40
+        ledger satisfies `v40[w] == v38[w-4]` for all w in 64..400 (verified 337/337 at
+        re-freeze). The ladder's SHAPE is therefore unchanged — same `_NW_S` floor (28), same
+        `_CTX_BOOST`-first priority, same `_NAME_WIDE_MAX` cap, same past-cap remainder to the
+        gauge. Only the width at which each rung is reached moved (e.g. the 40-col name cap is
+        first reached at 176 cols, was 172 at _HMW=38 and 167 at 33)."""
+        path = os.path.join(os.path.dirname(__file__), "fixtures", "f51_wide_ledger_v40.json")
         with open(path, encoding="utf-8") as fh:
             ledger = json.load(fh)
         self.assertEqual(len(ledger), 341)
