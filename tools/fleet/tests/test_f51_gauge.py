@@ -10,12 +10,17 @@ from fleet import render
 from fleet.model import ContextProjection, Session
 
 
+FULL, EMPTY = render._BAR_FULL, render._BAR_EMPTY
+
+
 class F51GaugeTest(unittest.TestCase):
     def test_fixed_width_and_half_up(self):
-        self.assertEqual("".join(x[0] for x in render._gauge_segs(75, 99)), "█████░")
+        """The legacy `width` argument never sizes the meter — six cells regardless (F-52b
+        keeps the usage side fixed and sizes only the context track, via `track=`)."""
+        self.assertEqual("".join(x[0] for x in render._gauge_segs(75, 99)), FULL * 5 + EMPTY)
         for pct in (None, 0, -1):
-            self.assertEqual("".join(x[0] for x in render._gauge_segs(pct, 1)), "░░░░░░")
-        self.assertEqual("".join(x[0] for x in render._gauge_segs(100, 1)), "██████")
+            self.assertEqual("".join(x[0] for x in render._gauge_segs(pct, 1)), EMPTY * 6)
+        self.assertEqual("".join(x[0] for x in render._gauge_segs(100, 1)), FULL * 6)
 
     def test_acceptance_quantization_table_and_pct_boundaries(self):
         expected = {None: 0, 0: 0, 1: 1, 8: 1, 16: 1, 50: 3,
@@ -25,7 +30,7 @@ class F51GaugeTest(unittest.TestCase):
                 segs = render._gauge_segs(pct, 6)
                 self.assertEqual(sum(len(value) for value, _key in segs), 6)
                 self.assertEqual(sum(len(value) for value, _key in segs
-                                     if "█" in value), filled)
+                                     if FULL in value), filled)
         self.assertEqual(render._pct_key(50), render._pct_key(50.0))
         self.assertEqual(render._pct_key(80), render._pct_key(80.0))
 
@@ -53,7 +58,7 @@ class F51GaugeTest(unittest.TestCase):
                 self.assertLessEqual(render._dw(visible), width)
                 headers = render._usage_header_rows([session], layout=layout)
                 if headers:
-                    self.assertTrue(any("█" in value or "░" in value or "·" in value
+                    self.assertTrue(any(FULL in value or EMPTY in value or "·" in value
                                         for value, _key in headers[0]))
 
     def test_header_row_fits_and_never_grew_past_the_old_wider_gauge(self):
@@ -95,7 +100,7 @@ class F51GaugeTest(unittest.TestCase):
         row = render._usage_header_rows([session], layout="wide")[0]
         visible = "".join(v for v, _k in row)
         self.assertTrue(all(len(track) == render._GAUGE_W
-                            for track in re.findall(r"[█·]+", visible)))
+                            for track in re.findall(r"[%s·]+" % re.escape(FULL), visible)))
         fill_keys = {k for v, k in row if render._BAR_FULL in v}
         self.assertIn("lvl_r", fill_keys)
         self.assertIn("lvl_g", fill_keys)

@@ -485,21 +485,49 @@ def _short_model_id(name):
     return "%s %s" % (fam, major + ("." + minor if minor else ""))
 
 
-# Fixed six-cell battery. Filled carries the level color; the empty track is dim.
-_BAR_FULL, _BAR_EMPTY = "█", "░"
-_GAUGE_W = 6
+# mid-height bar (━ filled / ─ empty): the glyphs sit at the cell's vertical centre, so gauges on
+# adjacent rows keep an above/below gap and never merge into a solid vertical wall (no blank line
+# needed). Filled carries the level color; the empty track is dim — the fill reads by color too.
+_BAR_FULL, _BAR_EMPTY = "━", "─"
+_GAUGE_W = 6                  # usage-header meter: fixed six cells (F-51a; F-52b does NOT touch it)
+_CTX_TRACK_MAX = 16           # F-52b: a 1M context window is 16 cells (= the harness-name column)
+_CTX_TRACK_WINDOW = 1000000   # …and the track scales linearly against that reference window.
 _GIT_TELEMETRY = True
 
 
-def _gauge_segs(pct, width):
-    """Return a fixed six-cell battery using half-up quantization."""
+def _half_up(value):
+    """Half-up rounding (Python's round() is banker's rounding — 0.5 would fall DOWN)."""
+    return int(math.floor(float(value) + 0.5))
+
+
+def _context_gauge_track(window):
+    """F-52b context-gauge track length: `clamp(half_up(16 * window / 1M), 1, 16)`.
+
+    `window` is a MEASURED `context_window_tokens` telemetry value only — there is no model or
+    harness lookup table here. With no measurement we cannot claim a proportion, so the track
+    falls back to the 16-cell baseline (the percent itself is still known, so the row stays)."""
+    if (not isinstance(window, (int, float)) or isinstance(window, bool)
+            or window != window or window in (float("inf"), float("-inf")) or window <= 0):
+        return _CTX_TRACK_MAX
+    return max(1, min(_CTX_TRACK_MAX, _half_up(_CTX_TRACK_MAX * float(window) / _CTX_TRACK_WINDOW)))
+
+
+def _gauge_segs(pct, width, track=None):
+    """Gauge segments using half-up quantization over `track` cells (default: the fixed
+    six-cell usage meter). `width` is the legacy available-width argument and never sizes the
+    meter — pass `track` to size it (F-52b's window-proportional context gauge)."""
+    cells = _GAUGE_W if track is None else max(1, int(track))
     if not isinstance(pct, (int, float)) or isinstance(pct, bool) or pct <= 0:
         filled = 0
     elif pct >= 100:
-        filled = _GAUGE_W
+        filled = cells
+    elif cells <= 1:
+        # A one-cell track has no cell left to spend on an in-between state: lighting it below
+        # 100% would read as full. Under-report rather than over-report.
+        filled = 0
     else:
-        filled = max(1, min(_GAUGE_W - 1, int(math.floor(float(pct) * _GAUGE_W / 100.0 + 0.5))))
-    return [(_BAR_FULL * filled, _pct_key(pct)), (_BAR_EMPTY * (_GAUGE_W - filled), "dim")]
+        filled = max(1, min(cells - 1, _half_up(float(pct) * cells / 100.0)))
+    return [(_BAR_FULL * filled, _pct_key(pct)), (_BAR_EMPTY * (cells - filled), "dim")]
 
 
 def _pad(s, w):
@@ -2479,7 +2507,9 @@ def _dispatch_summary_detail_row(job, depth=1, term_width=None):
         # joined exact-1 on `threadId`). It reuses the session gauge row unchanged, so a
         # failed/ambiguous join renders the same honest `—` every other source does. A
         # finished row keeps the F-13/F-46 "no live telemetry" lane instead.
-        return _context_detail_row(job, depth=depth, term_width=term_width)
+        # Dispatch rows carry the dim glyph weight (see _dispatch_row) — the lead liveness mark
+        # must match the row it belongs to, not the brighter main-session one.
+        return _context_detail_row(job, depth=depth, term_width=term_width, dim=True)
     summary = getattr(job, "summary", None)
     if not summary:
         return []
@@ -2487,10 +2517,13 @@ def _dispatch_summary_detail_row(job, depth=1, term_width=None):
                         start_col=_NAME_COL)
 
 
-_CTX_LABEL = "📚 "            # context-gauge row label (icon, not the word "context" — user 2026-07-24)
-_CTX_LABEL_W = 3              # display cells: 📚 (2, emoji range) + trailing space (1).
-                               # Hardcoded (not _dw(_CTX_LABEL)) — this constant is computed at
-                               # module load, before _dw/_WIDE are defined further down the file.
+_CTX_LABEL_W = 2              # display cells: liveness glyph (1) + trailing space (1). F-52c
+                               # dropped the 📚 icon for the session's own liveness mark, so the
+                               # lead cell is whatever `_glyph()` returns — every `_LIVE_GLYPH`
+                               # and `_SPIN` frame is a single-cell BMP glyph (no emoji range),
+                               # which is why 1 is safe to hardcode. Still hardcoded (not
+                               # _dw(...)) — this constant is computed at module load, before
+                               # _dw/_WIDE are defined further down the file.
 _CONTEXT_VALUE_W = 4
 _CONTEXT_NOW_GAP = 3          # minimum gap; F-42c widens it until NOW reaches the session column.
 _CONTEXT_INDENT_W = 4        # left inset that aligns the row under the HARNESS NAME (user
@@ -2500,7 +2533,8 @@ _CONTEXT_INDENT_W = 4        # left inset that aligns the row under the HARNESS 
 
 
 def _compact_context_gauge_width(available, depth=0):
-    """Compatibility shim: every context gauge is six cells."""
+    """Compatibility shim: the legacy available-width knob no longer sizes any gauge.
+    F-52b sizes the context track from the session's measured window (`_context_gauge_track`)."""
     return _GAUGE_W
 
 
@@ -2543,8 +2577,12 @@ def _exec_detail_segs(entity):
     return []
 
 
-def _context_detail_row(entity, depth=0, term_width=None):
-    """One ``📚 <gauge> <value>   NOW`` row for every live card.
+def _context_detail_row(entity, depth=0, term_width=None, dim=False):
+    """One ``<liveness> <gauge> <value>   NOW`` row for every live card.
+
+    The lead cell is the SAME `_glyph()` producer the harness row uses (F-52c) — the two places
+    always name the same session in the same state, so no new glyph, color key or state word is
+    introduced here.  The gauge track is window-proportional (F-52b).
 
     The context block stays under the harness field; F-42c aligns the descriptive NOW text to
     the session column shared with dispatch subtitles.  Both anchors are stable across layouts.
@@ -2557,13 +2595,15 @@ def _context_detail_row(entity, depth=0, term_width=None):
     indent = " " * _CONTEXT_INDENT_W + "  " * max(0, depth)
     available = max(0, (term_width or _SUMMARY_FALLBACK_W) - _dw(indent))
     gauge_width = _compact_context_gauge_width(available, depth=depth)
+    track = _context_gauge_track(getattr(entity, "context_window_tokens", None))
     if (isinstance(pct, (int, float)) and not isinstance(pct, bool)
             and 0 <= pct <= 100):
         shown_pct = int(round(pct))
     else:
         shown_pct = None
-    segs = [(indent, None), (_CTX_LABEL, "dim")]
-    segs.extend(_gauge_segs(shown_pct, gauge_width))
+    gch, gkey = _glyph(getattr(entity, "liveness", None), dim=dim)
+    segs = [(indent, None), (gch + " ", gkey)]
+    segs.extend(_gauge_segs(shown_pct, gauge_width, track=track))
     if shown_pct is None:
         value_text = "—"
     else:

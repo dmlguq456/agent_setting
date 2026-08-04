@@ -133,7 +133,10 @@ class SummaryRowRenderTest(unittest.TestCase):
         self.assertEqual(len(lines_with), len(lines_without))
         joined_without = "\n".join("".join(t for t, _k in ln) for ln in lines_without if ln)
         self.assertNotIn("지금 무언가 하는 중", joined_without)
-        self.assertIn("📚 ░░░░░░   —", joined_without)
+        # F-52b/c: the row now leads with the session's liveness mark (a `working` session's
+        # spinner frame moves, so it is not part of this literal) and carries the 16-cell
+        # baseline track — no measured window on this fixture.
+        self.assertIn(render._BAR_EMPTY * render._CTX_TRACK_MAX + "   —", joined_without)
 
     def test_dead_row_omits_summary(self):
         s = self._session(liveness="dead", mtime=None, summary="지금 뭔가 하는 중")

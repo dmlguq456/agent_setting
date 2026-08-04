@@ -27,26 +27,41 @@ def text(lines):
     return "\n".join("".join(part for part, _ in line) for line in lines if line)
 
 
+FULL, EMPTY = render._BAR_FULL, render._BAR_EMPTY
+# F-52c: the row leads with the session's own liveness mark, not the old 📚 icon. `idle` is the
+# one state whose glyph is stable across calls (`working` animates the spinner by wall clock).
+LEAD = render._LIVE_GLYPH["idle"] + " "
+# F-52b: no measured `context_window_tokens` on these fixtures → the 16-cell baseline track.
+BASE = render._CTX_TRACK_MAX
+# A context gauge is the only place a bar track is immediately followed by its right-justified
+# value cell (`—` or `NN%`); panel separators are bare `─` runs, so this never matches them.
+CTX_GAUGE_RE = re.compile(r"[%s%s]{2,} *(?:—|\d+%%)" % (re.escape(FULL), re.escape(EMPTY)))
+
+
 class ContextDetailTruthTableTest(unittest.TestCase):
     def _session(self, **kwargs):
         base = dict(harness="claude", pid=1, cwd="/x", liveness="working")
         base.update(kwargs)
         return Session(**base)
 
+    def _idle(self, **kwargs):
+        kwargs.setdefault("liveness", "idle")
+        return self._session(**kwargs)
+
     def test_context_now_truth_table(self):
         cases = [
             (ContextProjection(63, "normal", "claude"), "Doing work",
-             "📚 ████░░ 63%"),
+             LEAD + FULL * 10 + EMPTY * 6 + " 63%"),
             (ContextProjection(63, "normal", "claude"), None,
-             "📚 ████░░ 63%"),
+             LEAD + FULL * 10 + EMPTY * 6 + " 63%"),
             (ContextProjection(None, "unknown", "claude"), "Doing work",
-             "📚 ░░░░░░   —"),
-            (None, None, "📚 ░░░░░░   —"),
+             LEAD + EMPTY * BASE + "   —"),
+            (None, None, LEAD + EMPTY * BASE + "   —"),
             (ContextProjection(0, "normal", "claude"), None,
-             "📚 ░░░░░░  0%"),
+             LEAD + EMPTY * BASE + "  0%"),
         ]
         for context, now, context_text in cases:
-            row = render._context_detail_row(self._session(context=context, summary=now), term_width=168)
+            row = render._context_detail_row(self._idle(context=context, summary=now), term_width=168)
             expected = " " * render._CONTEXT_INDENT_W + context_text
             if now:
                 expected += " " * (render._NAME_COL - render._dw(expected)) + now
@@ -71,14 +86,14 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                 row = render._dispatch_summary_detail_row(
                     job, depth=1, term_width=width)
                 visible = text(row)
-                self.assertNotIn("📚", visible)
+                self.assertIsNone(CTX_GAUGE_RE.search(visible))   # no context gauge at all
                 self.assertEqual(visible.index("NOW"), render._NAME_COL)
                 self.assertLessEqual(render._dw(visible), width)
 
                 rendered = text(render._build_lines(
                     [], [job], "both", False, 0,
                     layout=layout, term_width=width))
-                self.assertNotIn("📚", rendered)
+                self.assertIsNone(CTX_GAUGE_RE.search(rendered))
                 self.assertIn("NOW", rendered)
 
         job.summary = None
@@ -88,9 +103,9 @@ class ContextDetailTruthTableTest(unittest.TestCase):
         for malformed in (-1, 101, True, "63"):
             with self.subTest(malformed=malformed):
                 row = render._context_detail_row(
-                    self._session(ctx_pct=malformed), term_width=168)
+                    self._idle(ctx_pct=malformed), term_width=168)
                 self.assertEqual(text(row), " " * render._CONTEXT_INDENT_W +
-                                 "📚 ░░░░░░   —")
+                                 LEAD + EMPTY * BASE + "   —")
 
     def test_context_alert_uses_the_full_visible_label(self):
         session = self._session(slug="hot", ctx_pct=85)
@@ -102,18 +117,19 @@ class ContextDetailTruthTableTest(unittest.TestCase):
     def test_context_row_is_cell_safe_at_all_required_widths(self):
         for width in (168, 120, 100, 60):
             row = render._context_detail_row(
-                self._session(context=ContextProjection(63, "normal", "x"),
-                              summary="한글 상태 설명이 아주 길게 이어지는 중"), term_width=width)
+                self._idle(context=ContextProjection(63, "normal", "x"),
+                           summary="한글 상태 설명이 아주 길게 이어지는 중"), term_width=width)
             self.assertLessEqual(render._dw(text(row)), width)
-            track = re.search(r"[█░]+", text(row)).group(0)
-            self.assertEqual(len(track), 6)
-            self.assertIn("📚 ", text(row))
-            self.assertLess(text(row).index("📚 "), text(row).index("한글"))
+            track = re.search(r"[%s%s]+" % (re.escape(FULL), re.escape(EMPTY)),
+                              text(row)).group(0)
+            self.assertEqual(len(track), BASE)
+            self.assertIn(LEAD, text(row))
+            self.assertLess(text(row).index(LEAD), text(row).index("한글"))
             self.assertNotIn(": ", text(row))
             self.assertIn("   한글", text(row))
             row_text = text(row)
             # The context row starts under the harness name in every layout (2026-07-24).
-            self.assertEqual(render._dw(row_text[:row_text.index("📚")]), render._CONTEXT_INDENT_W)
+            self.assertEqual(render._dw(row_text[:row_text.index(LEAD)]), render._CONTEXT_INDENT_W)
 
     def test_description_column_is_stable_for_value_width_and_depth(self):
         for pct in (None, 0, 63, 100):
@@ -121,14 +137,15 @@ class ContextDetailTruthTableTest(unittest.TestCase):
             for depth in (0, 1, 2):
                 with self.subTest(pct=pct, depth=depth):
                     row = render._context_detail_row(
-                        self._session(context=context, summary="Doing work"),
+                        self._idle(context=context, summary="Doing work"),
                         depth=depth, term_width=168)
                     visible = text(row)
                     self.assertEqual(
                         render._dw(visible[:visible.index("Doing work")]),
                         render._NAME_COL)
-                    track = re.search(r"[█░]+", visible).group(0)
-                    self.assertEqual(len(track), 6)
+                    track = re.search(r"[%s%s]+" % (re.escape(FULL), re.escape(EMPTY)),
+                                      visible).group(0)
+                    self.assertEqual(len(track), BASE)
 
     def test_context_band_is_not_rendered(self):
         for band in ("normal", "tight", "critical"):
@@ -147,7 +164,7 @@ class ContextDetailTruthTableTest(unittest.TestCase):
             self._session(context=ContextProjection(85, "critical", "x")),
             term_width=168)[0]
         self.assertEqual([key for value, key in row if value == " 85%"], ["dim"])
-        self.assertIn("lvl_r", [key for value, key in row if "█" in value])
+        self.assertIn("lvl_r", [key for value, key in row if FULL in value])
 
     def test_linear_dispatch_owner_owns_projection_stage_once_at_all_widths(self):
         rid = route.load(REAL)["route_id"]
@@ -254,7 +271,9 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                                             term_width=width)
                 visible = text(lines)
                 with self.subTest(width=width):
-                    self.assertIn("📚 ", visible)             # context icon
+                    # F-52c: the context row leads with the session's liveness mark; its
+                    # 16-cell baseline track is the stable marker that the row rendered.
+                    self.assertIn(EMPTY * render._CTX_TRACK_MAX, visible)
                     self.assertIn("stage exec", visible)      # stage rides the row's own column
                     # An INFERRED inline stage carries NO dedicated detail row (2026-07-24): a
                     # main session must not show the `plan › exec › test` breadcrumb line.
@@ -585,7 +604,7 @@ class ChildAssociationTest(unittest.TestCase):
         finally:
             render.set_process_view(False)
         visible = "\n".join("".join(part for part, _ in line) for line in lines if line)
-        self.assertNotIn("📚", visible)
+        self.assertIsNone(CTX_GAUGE_RE.search(visible))
         self.assertLess(visible.index("└▸🚀"), visible.index("NOW"))
         self.assertLess(visible.index("NOW"), visible.index("⚡tool"))
         now_line = next(line for line in visible.splitlines() if "NOW" in line)
