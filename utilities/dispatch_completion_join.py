@@ -1417,6 +1417,48 @@ def _row_worktree(row: ChildRow) -> str:
     return fields[3] if len(fields) == 6 else ""
 
 
+def route_completion_evidence(
+    metadata: dict[str, str], *, worktree: str
+) -> tuple[str | None, str]:
+    """Derive a readable in-root artifact path from a route-bound child's own
+    terminal envelope, or ``(None, reason)`` when it cannot legally complete.
+
+    Shared by `close_finished_child` (supervisor path) and
+    `dispatch-harvest.py --mark-done` (SD-70/78, round_1 finding 5) so both
+    derive completion evidence through the identical fail-closed predicate:
+    a valid envelope, a PASS verdict, and a readable in-root artifact. Never
+    a raw untrusted path — the inspector hands back only a bounded url-safe
+    base64 form.
+
+    The reason distinguishes a bad base64 payload (`evidence-undecodable`)
+    from an empty or non-absolute decoded path (`evidence-absent`) — both
+    used to collapse into one bare `None`, which lost the distinction a
+    reader debugging a stuck row needs (round_1 review advisory 4).
+    """
+
+    terminal = inspect_terminal_attempt(
+        metadata.get("log_file"),
+        worktree=worktree,
+        artifact_root_metadata=metadata.get("artifact_root"),
+    )
+    if terminal.get("state") != "valid":
+        return None, "evidence-not-valid"
+    if str(terminal.get("verdict")) != "PASS":
+        return None, "evidence-not-pass"
+    if terminal.get("artifact_state") != "readable":
+        return None, "evidence-not-readable"
+    encoded = str(terminal.get("artifact_path_b64") or "")
+    try:
+        artifact = base64.urlsafe_b64decode(
+            encoded + "=" * (-len(encoded) % 4)
+        ).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return None, "evidence-undecodable"
+    if not artifact or not Path(artifact).is_absolute():
+        return None, "evidence-absent"
+    return artifact, ""
+
+
 def close_finished_child(row: ChildRow, *, jobs: str | Path) -> str:
     """Close one finished-but-open child from its own terminal evidence.
 
@@ -1459,24 +1501,39 @@ def close_finished_child(row: ChildRow, *, jobs: str | Path) -> str:
         ):
             return ""
         return reason
+    verdict = str(terminal.get("verdict"))
+    if verdict in ("BLOCKED", "FAIL"):
+        # SD-72/SD-78 (round_1 finding 1): a valid terminal handoff carrying
+        # BLOCKED or FAIL closes typed IMMEDIATELY on the verdict alone — this
+        # must run before the artifact_state branch below, because the
+        # inspector accepts a readable artifact independently of verdict
+        # (codex_dispatch_terminal.py). Without this ordering a readable
+        # BLOCKED/FAIL envelope would fall through to route completion and
+        # manufacture a PASS for a worker that never passed. Route completion
+        # is reachable only for a PASS verdict, never for BLOCKED/FAIL.
+        note = "dead-worker-blocked" if verdict == "BLOCKED" else "dead-worker-fail"
+        reason = "typed-%s" % verdict.lower()
+        if _close_invalid_envelope_child(
+            row,
+            jobs=jobs,
+            reason=reason,
+            note=note,
+            classifier_source="completion-join-terminal-verdict-v1",
+        ):
+            return ""
+        return reason
     if terminal.get("artifact_state") != "readable":
         reason = "evidence-%s" % (terminal.get("artifact_state") or "absent")
-        if str(terminal.get("verdict")) == "PASS" and _close_invalid_envelope_child(
+        if verdict == "PASS" and _close_invalid_envelope_child(
             row, jobs=jobs, reason=reason
         ):
             return ""
         return reason
-    # The inspector never returns a raw path — it hands back a bounded
-    # url-safe base64 form so no control byte can reach a command line.
-    encoded = str(terminal.get("artifact_path_b64") or "")
-    try:
-        artifact = base64.urlsafe_b64decode(
-            encoded + "=" * (-len(encoded) % 4)
-        ).decode("utf-8")
-    except (ValueError, UnicodeDecodeError):
-        return "evidence-undecodable"
-    if not artifact or not Path(artifact).is_absolute():
-        return "evidence-absent"
+    artifact, evidence_reason = route_completion_evidence(
+        metadata, worktree=_row_worktree(row)
+    )
+    if artifact is None:
+        return evidence_reason
     command = [
         sys.executable,
         str(ROOT / "utilities" / "capability-route.py"),
@@ -1501,7 +1558,12 @@ def close_finished_child(row: ChildRow, *, jobs: str | Path) -> str:
 
 
 def _close_invalid_envelope_child(
-    row: ChildRow, *, jobs: str | Path, reason: str
+    row: ChildRow,
+    *,
+    jobs: str | Path,
+    reason: str,
+    note: str = "dead-invalid-envelope",
+    classifier_source: str = "completion-join-invalid-envelope-v1",
 ) -> bool:
     """Close a quiescent child whose terminal envelope can never legally complete.
 
@@ -1523,9 +1585,9 @@ def _close_invalid_envelope_child(
         return close_attempt_row(
             Path(jobs),
             row.attempt_id,
-            "dead-invalid-envelope",
+            note,
             evidence={
-                "classifier_source": "completion-join-invalid-envelope-v1",
+                "classifier_source": classifier_source,
                 "reconcile_reason": reason,
             },
         )

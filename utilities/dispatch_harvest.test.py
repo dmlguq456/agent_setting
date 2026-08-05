@@ -181,6 +181,187 @@ class HarvestTest(unittest.TestCase):
                 self.assertIn("\tdone\t", row)
                 self.assertIn("note=completed-marker", row)
 
+    # -- Phase 5 (plan.md, round_1 finding 5): derived route completion -----
+
+    def test_derived_completion_succeeds_with_no_completion_flag(self):
+        for adapter in ("codex", "opencode"):
+            with self.subTest(adapter=adapter):
+                attempt = f"att-derived-pass-{adapter}"
+                artifact = self.artifact / f"derived-{adapter}.md"
+                artifact.write_text("evidence\n", encoding="utf-8")
+                jobs = self.base / f"{adapter}.derived.jobs.log"
+                row = self.terminal_row(
+                    attempt, "PASS", "none", artifact=str(artifact),
+                    name=f"derived-{adapter}.codex.jsonl",
+                )
+                jobs.write_text(row, encoding="utf-8")
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(ROOT / f"adapters/{adapter}/bin/dispatch-harvest.py"),
+                        "--jobs", str(jobs), "--slug", "worker", "--status", "open",
+                        "--mark-done",
+                    ],
+                    text=True, capture_output=True, env=self.env(),
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                after = jobs.read_text(encoding="utf-8")
+                self.assertIn("\tdone\t", after)
+                self.assertIn("note=completed-marker", after)
+
+    def test_derived_completion_still_refused_for_blocked_verdict(self):
+        for adapter in ("codex", "opencode"):
+            with self.subTest(adapter=adapter):
+                attempt = f"att-derived-blocked-{adapter}"
+                artifact = self.artifact / f"derived-blocked-{adapter}.md"
+                artifact.write_text("evidence\n", encoding="utf-8")
+                jobs = self.base / f"{adapter}.derived-blocked.jobs.log"
+                row = self.terminal_row(
+                    attempt, "BLOCKED", "stuck", artifact=str(artifact),
+                    name=f"derived-blocked-{adapter}.codex.jsonl",
+                )
+                before = row
+                jobs.write_text(row, encoding="utf-8")
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(ROOT / f"adapters/{adapter}/bin/dispatch-harvest.py"),
+                        "--jobs", str(jobs), "--slug", "worker", "--status", "open",
+                        "--mark-done",
+                    ],
+                    text=True, capture_output=True, env=self.env(),
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("route-completion-required", result.stdout)
+                self.assertEqual(jobs.read_text(encoding="utf-8"), before)
+
+    def test_derived_completion_refused_for_out_of_root_artifact(self):
+        for adapter in ("codex", "opencode"):
+            with self.subTest(adapter=adapter):
+                attempt = f"att-derived-outroot-{adapter}"
+                outside = self.base / f"outside-{adapter}.md"
+                outside.write_text("evidence\n", encoding="utf-8")
+                jobs = self.base / f"{adapter}.derived-outroot.jobs.log"
+                row = self.terminal_row(
+                    attempt, "PASS", "none", artifact=str(outside),
+                    name=f"derived-outroot-{adapter}.codex.jsonl",
+                )
+                before = row
+                jobs.write_text(row, encoding="utf-8")
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(ROOT / f"adapters/{adapter}/bin/dispatch-harvest.py"),
+                        "--jobs", str(jobs), "--slug", "worker", "--status", "open",
+                        "--mark-done",
+                    ],
+                    text=True, capture_output=True, env=self.env(),
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("route-completion-required", result.stdout)
+                self.assertEqual(jobs.read_text(encoding="utf-8"), before)
+
+    def test_explicit_completion_missing_file_is_hard_error(self):
+        # Advisory (round 2, reviewer A #3): an explicit --completion that is
+        # not a readable file must hard-error, not silently fall through to
+        # the derived path — a typo'd or since-deleted marker path should not
+        # be masked by an unrelated derived PASS succeeding instead.
+        for adapter in ("codex", "opencode"):
+            with self.subTest(adapter=adapter):
+                attempt = f"att-explicit-missing-{adapter}"
+                artifact = self.artifact / f"explicit-missing-{adapter}.md"
+                artifact.write_text("evidence\n", encoding="utf-8")
+                jobs = self.base / f"{adapter}.explicit-missing.jobs.log"
+                row = self.terminal_row(
+                    attempt, "PASS", "none", artifact=str(artifact),
+                    name=f"explicit-missing-{adapter}.codex.jsonl",
+                )
+                before = row
+                jobs.write_text(row, encoding="utf-8")
+                missing_completion = self.base / f"does-not-exist-{adapter}.json"
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(ROOT / f"adapters/{adapter}/bin/dispatch-harvest.py"),
+                        "--jobs", str(jobs), "--slug", "worker", "--status", "open",
+                        "--mark-done", "--completion", str(missing_completion),
+                    ],
+                    text=True, capture_output=True, env=self.env(),
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("route-completion-required", result.stdout)
+                self.assertEqual(jobs.read_text(encoding="utf-8"), before)
+
+    def test_stale_explicit_completion_still_refused(self):
+        attempt = "att-harvest-stale"
+        old = os.environ.get("AGENT_HOME")
+        os.environ["AGENT_HOME"] = str(self.home)
+        try:
+            with self.assertRaisesRegex(ValueError, "attempt-row-absent"):
+                ROUTE.complete_node(
+                    self.route, self.node, "plan", self.evidence,
+                    jobs=self.base / "stale-missing.jobs.log",
+                    attempt_id="att-other-attempt",
+                    explicit_attempt_metadata={
+                        "attempt_schema_version": 2,
+                        "dispatch_depth": 2,
+                        "transport": "headless",
+                        "execution_surface": "registered-headless",
+                        "registered_worker": True,
+                        "fallback_hop": "same-harness-headless",
+                    },
+                )
+        finally:
+            if old is None:
+                os.environ.pop("AGENT_HOME", None)
+            else:
+                os.environ["AGENT_HOME"] = old
+        # A completion marker minted for a DIFFERENT attempt id — reused
+        # against this row it must fail the identity check, not complete it.
+        completion = (
+            self.home / ".dispatch/completion" / self.route["route_id"] / "plan.json"
+        )
+        self.assertTrue(completion.is_file())
+        jobs = self.base / "stale.jobs.log"
+        jobs.write_text(self.current_row(attempt), encoding="utf-8")
+        before = jobs.read_text(encoding="utf-8")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "adapters/codex/bin/dispatch-harvest.py"),
+                "--jobs", str(jobs), "--slug", "worker", "--status", "open",
+                "--mark-done", "--completion", str(completion),
+            ],
+            text=True, capture_output=True, env=self.env(),
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("stale-route-completion", result.stdout)
+        self.assertEqual(jobs.read_text(encoding="utf-8"), before)
+
+    def test_sibling_row_stays_byte_identical_after_derived_harvest(self):
+        attempt = f"att-derived-sibling-target"
+        artifact = self.artifact / "derived-sibling.md"
+        artifact.write_text("evidence\n", encoding="utf-8")
+        target_row = self.terminal_row(
+            attempt, "PASS", "none", artifact=str(artifact),
+            name="derived-sibling.codex.jsonl",
+        )
+        sibling_row = self.current_row("att-derived-sibling-other", "other-worker")
+        jobs = self.base / "codex.derived-sibling.jobs.log"
+        jobs.write_text(sibling_row + target_row, encoding="utf-8")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "adapters/codex/bin/dispatch-harvest.py"),
+                "--jobs", str(jobs), "--slug", "worker", "--status", "open",
+                "--mark-done",
+            ],
+            text=True, capture_output=True, env=self.env(),
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        after_lines = jobs.read_text(encoding="utf-8").splitlines()
+        self.assertIn(sibling_row.strip(), after_lines, "sibling row must stay untouched (SD-70)")
+
     def test_native_stop_done_harvest_consumes_exact_delivered_receipt(self):
         attempt = "att-native-stop-harvest"
         session = "thread-native-stop-harvest"

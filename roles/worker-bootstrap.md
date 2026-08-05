@@ -9,6 +9,11 @@ You are a bounded worker, not the user-facing main session.
   the one worker-type fragment supplied with this kernel.
 - Preserve permission, safety, git-state, artifact-root, liveness, and
   verification guards. Write only inside the assigned scope.
+- A spec-backed canonical write needs a current governing-prd read registered under your own guard
+  identity. Where a runtime requires you to name that identity explicitly on a CLI surface (codex
+  `preflight.sh` read/write/skill-gate) it is `$AGENT_DISPATCH_ATTEMPT_ID` — the same value as
+  `guard_session_id` in the dispatch metadata; never pass a shared literal. On Claude the runtime
+  session identity is used automatically and no explicit guard session id is passed.
 - Write durable artifacts only under the canonical artifact root; the task
   worktree's tracked `.agent_reports`/`.claude_reports` snapshot is read-only shadow state.
 - Put changed files, commands, results, warnings, reasoning, and unsupported

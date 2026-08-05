@@ -37,6 +37,21 @@ is_worker_session() {
     || [ "${MEM_DISTILL:-}" = "1" ]
 }
 
+# SD-45/round_1 finding 4: the guard identity default falls back to the
+# canonical dispatch attempt id, never a shared literal. `${x:-default}`
+# collapses both an unset and an empty AGENT_DISPATCH_ATTEMPT_ID onto the
+# `codex` default identically (POSIX), so the one case that must never
+# silently pass is a worker session that lands on that shared default —
+# whether the variable was never exported or was exported empty. An
+# interactive, non-worker session legitimately keeps the `codex` default.
+guard_identity_hard_fail_if_worker() {
+  sid_value=$1
+  if [ "$sid_value" = codex ] && is_worker_session; then
+    printf 'check=failed\nreason=guard-identity-unavailable\n' >&2
+    exit 65
+  fi
+}
+
 usage() {
   cat <<'EOF'
 usage: preflight.sh write <file> [session-id] [turn-id]
@@ -241,7 +256,8 @@ case "$cmd" in
   write)
     [ "$#" -ge 2 ] || { echo "codex preflight: write requires a file path" >&2; exit 64; }
     file=$2
-    sid=${3:-codex}
+    sid=${3:-${AGENT_DISPATCH_ATTEMPT_ID:-codex}}
+    guard_identity_hard_fail_if_worker "$sid"
     turn=${4:-}
     "$ROOT/hooks/git-state-guard.sh" --file "$file"
     "$ROOT/hooks/core-first-guard.sh" --file "$file" --session "$sid"
@@ -256,9 +272,13 @@ case "$cmd" in
     # gate script, same per-cwd marker written by posttooluse-read-marker. Editing
     # an existing artifact while ungrounded is denied; creating the first prd.md is
     # not (no prd.md yet → not spec-backed → gate passes, artifact-order still runs).
+    # SD-45: hand the route record to the gate as an additional evidence path
+    # (round_1-corrected plan.md Step 1.4). Only appended when set — the gate
+    # itself falls through to the marker when no route is resolved.
+    set -- ; [ -n "${AGENT_ROUTE_FILE:-}" ] && set -- --route "$AGENT_ROUTE_FILE"
     case "$file" in
       */.agent_reports/plans/*|*/.claude_reports/plans/*)
-        "$ROOT/hooks/spec-skill-gate.sh" --skill autopilot-code --cwd "$(dirname "$file")" --session "$sid" ;;
+        "$ROOT/hooks/spec-skill-gate.sh" --skill autopilot-code --cwd "$(dirname "$file")" --session "$sid" "$@" ;;
       */.agent_reports/spec/prd.md|*/.claude_reports/spec/prd.md|\
       */.agent_reports/spec/stack.md|*/.claude_reports/spec/stack.md|\
       */.agent_reports/spec/stack_decision.md|*/.claude_reports/spec/stack_decision.md|\
@@ -266,7 +286,7 @@ case "$cmd" in
       */.agent_reports/spec/api_contract.md|*/.claude_reports/spec/api_contract.md|\
       */.agent_reports/spec/data_model.md|*/.claude_reports/spec/data_model.md|\
       */.agent_reports/spec/ui_flow.md|*/.claude_reports/spec/ui_flow.md)
-        "$ROOT/hooks/spec-skill-gate.sh" --skill autopilot-spec --cwd "$(dirname "$file")" --session "$sid" ;;
+        "$ROOT/hooks/spec-skill-gate.sh" --skill autopilot-spec --cwd "$(dirname "$file")" --session "$sid" "$@" ;;
     esac
     if [ -n "$turn" ]; then
       "$0" material-route check --tool Write --file "$file" --cwd "$(dirname "$file")" --session "$sid" --turn "$turn"
@@ -277,7 +297,8 @@ case "$cmd" in
   read)
     [ "$#" -ge 2 ] || { echo "codex preflight: read requires a file path" >&2; exit 64; }
     file=$2
-    sid=${3:-codex}
+    sid=${3:-${AGENT_DISPATCH_ATTEMPT_ID:-codex}}
+    guard_identity_hard_fail_if_worker "$sid"
     "$ROOT/hooks/core-read-marker.sh" --file "$file" --session "$sid"
     "$ROOT/hooks/spec-read-marker.sh" --file "$file" --session "$sid"
     ;;
@@ -329,12 +350,14 @@ case "$cmd" in
     [ "$#" -ge 2 ] || { echo "codex preflight: $cmd requires a capability name" >&2; exit 64; }
     name=$2
     cwd=${3:-$PWD}
-    sid=${4:-codex}
+    sid=${4:-${AGENT_DISPATCH_ATTEMPT_ID:-codex}}
+    guard_identity_hard_fail_if_worker "$sid"
     if ! "$ROOT/adapters/codex/bin/capability-map.sh" "$name" >/dev/null 2>/dev/null; then
       printf 'check=failed\nreason=unknown-capability\ncapability=%s\n' "$name"
       exit 64
     fi
-    "$ROOT/hooks/spec-skill-gate.sh" --skill "$name" --cwd "$cwd" --session "$sid"
+    set -- ; [ -n "${AGENT_ROUTE_FILE:-}" ] && set -- --route "$AGENT_ROUTE_FILE"
+    "$ROOT/hooks/spec-skill-gate.sh" --skill "$name" --cwd "$cwd" --session "$sid" "$@"
     ;;
   session-end)
     cwd=${2:-$PWD}

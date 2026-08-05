@@ -11,8 +11,8 @@ ARTIFACT_ROOT_RESOLVER="$SCRIPT_DIR/../utilities/artifact-root.sh"
 
 usage() {
   cat <<'EOF'
-usage: spec-skill-gate.sh --skill <name> [--cwd <dir>] [--session <id>] [--agent-home <dir>]
-       spec-skill-gate.sh --capability <name> [--cwd <dir>] [--session <id>] [--agent-home <dir>]
+usage: spec-skill-gate.sh --skill <name> [--cwd <dir>] [--session <id>] [--route <file>] [--agent-home <dir>]
+       spec-skill-gate.sh --capability <name> [--cwd <dir>] [--session <id>] [--route <file>] [--agent-home <dir>]
 
 Without arguments, reads Claude hook JSON from stdin.
 EOF
@@ -55,6 +55,7 @@ check_gate() {
   skill=$1
   cwd=$2
   sid=$3
+  route_file=${4:-}
 
   if [ -d "$cwd" ]; then
     cwd=$(CDPATH= cd -- "$cwd" && pwd -P)
@@ -69,6 +70,32 @@ check_gate() {
   [ -z "$candidates" ] && return 0   # Not a spec-backed project.
 
   key=$(printf '%s' "$root" | sed 's#[/ ]#_#g')
+
+  # SD-45: the route record is a fail-open-safe ADDITIONAL pass path. It can
+  # only ever add a pass; it never adds a new deny reason and never turns a
+  # marker pass into a deny. Any resolution failure — no route file, no
+  # python3, non-zero probe exit — falls straight through to the existing
+  # marker loop below, so the worst case is exactly today's marker-only
+  # behaviour (plan.md §9, round_1 finding 2 trust-boundary note).
+  route_resolved="${route_file:-${AGENT_ROUTE_FILE:-}}"
+  if [ -n "$route_resolved" ] && command -v python3 >/dev/null 2>&1; then
+    IFS_OLD_ROUTE=$IFS
+    IFS='
+'
+    for candidate in $candidates; do
+      IFS=$IFS_OLD_ROUTE
+      if python3 "$SCRIPT_DIR/../utilities/spec_gate_evidence.py" \
+          --route "$route_resolved" --prd "$candidate" \
+          --project-root "$root" --artifact-root "$artifact_root" \
+          --route-id "${AGENT_ROUTE_ID:-}" >/dev/null 2>&1; then
+        IFS=$IFS_OLD_ROUTE
+        return 0
+      fi
+      IFS='
+'
+    done
+    IFS=$IFS_OLD_ROUTE
+  fi
 
   any_marker=0
   unsatisfied=""
@@ -136,6 +163,7 @@ if [ "$#" -gt 0 ]; then
   skill=""
   cwd=$PWD
   sid="nosession"
+  route_arg=""
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --skill|--capability)
@@ -151,6 +179,11 @@ if [ "$#" -gt 0 ]; then
       --session)
         [ "$#" -ge 2 ] || { echo "spec-skill-gate: --session requires an id" >&2; exit 64; }
         sid=$2
+        shift 2
+        ;;
+      --route)
+        [ "$#" -ge 2 ] || { echo "spec-skill-gate: --route requires a file" >&2; exit 64; }
+        route_arg=$2
         shift 2
         ;;
       --agent-home)
@@ -171,7 +204,7 @@ if [ "$#" -gt 0 ]; then
   done
   [ -n "$skill" ] || { echo "spec-skill-gate: --skill is required" >&2; exit 64; }
   reason=""
-  check_gate "$skill" "$cwd" "$sid"
+  check_gate "$skill" "$cwd" "$sid" "$route_arg"
   rc=$?
   if [ "$rc" -eq 0 ]; then
     exit 0
@@ -188,7 +221,7 @@ sid=$(printf '%s' "$input" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]
 [ -z "$sid" ] && sid="nosession"
 
 reason=""
-check_gate "$skill" "$PWD" "$sid"
+check_gate "$skill" "$PWD" "$sid" ""
 rc=$?
 if [ "$rc" -eq 0 ]; then
   exit 0
