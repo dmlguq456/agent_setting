@@ -32,11 +32,18 @@ class BlockedKeyTest(unittest.TestCase):
 
     def test_the_key_is_separate_from_both_idle_and_dead(self):
         """Red is shared with `dead`; the KEY is not, so either can be retuned alone. And it
-        is off `g_idle` entirely — that was the whole complaint F-60 answers."""
+        is off `g_idle` entirely — that was the whole complaint F-60 answers. v47 retuned
+        exactly that way: same red hue, but blocked dropped its bold while dead kept it."""
         self.assertNotIn(render._GLYPH_KEY["blocked"], ("g_idle", "g_dead"))
         self.assertEqual(render._HUE_OF["g_blocked"][0], "r")
-        self.assertEqual(render._HUE_OF["g_blocked"], render._HUE_OF["g_dead"])
+        self.assertEqual(render._HUE_OF["g_blocked"][0], render._HUE_OF["g_dead"][0])
         self.assertNotEqual(render._GLYPH_KEY["blocked"], render._GLYPH_KEY["dead"])
+
+    def test_blocked_carries_no_bold_anywhere(self):
+        """v47 (user 2026-08-05, "blocked가 볼드더라"): the chip owns the emphasis, so the
+        glyph, the lead word and even the chip itself stay off A_BOLD."""
+        for key in ("g_blocked", "g_blocked_chip"):
+            self.assertFalse(render._HUE_OF[key][1] & render._A_BOLD, key)
 
     def test_the_chip_reverses_and_the_glyph_and_word_do_not(self):
         """Emphasis lives in exactly one cell run. Two reversed runs on a row cancel out."""
@@ -113,13 +120,14 @@ class BlockedVersusDeadTest(unittest.TestCase):
         self.assertNotIn("g_blocked_chip", [k for _v, k in dead])
 
     def test_without_color_the_chip_is_still_the_only_reversed_run(self):
-        """Both keys are red|BOLD, so on a terminal that gives back no color pair at all the
-        two glyph keys collapse to the SAME attribute — colour cannot separate them there.
-        The chip can: REVERSE is an attribute, not a pair, so it survives the collapse. This
-        reads the decomposition `_HUE_OF` publishes rather than restating the composition."""
+        """v47: with blocked's bold gone, the two glyph keys separate on attributes alone —
+        blocked reads plain, dead reads bold — and the chip still carries REVERSE as the one
+        emphasis. This reads the decomposition `_HUE_OF` publishes rather than restating the
+        composition."""
         no_color = lambda key: render._HUE_OF[key][1]      # hue dropped = no color available
-        self.assertEqual(no_color("g_blocked"), no_color("g_dead"))
-        self.assertNotEqual(no_color("g_blocked_chip"), no_color("g_dead"))
+        self.assertNotEqual(no_color("g_blocked"), no_color("g_dead"))
+        self.assertTrue(no_color("g_dead") & render._A_BOLD)
+        self.assertFalse(no_color("g_blocked") & render._A_BOLD)
         self.assertTrue(no_color("g_blocked_chip") & render._A_REVERSE)
 
     def test_legend_uses_the_new_key(self):

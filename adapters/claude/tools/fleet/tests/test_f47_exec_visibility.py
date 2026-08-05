@@ -357,6 +357,62 @@ class ExecDetailRender(unittest.TestCase):
         self.assertEqual(render._context_detail_row(sess, term_width=200), [])
 
 
+class WaitPrimitiveCorrection(unittest.TestCase):
+    """v47 — a wait-primitive child (`sleep` & co) is WAITING: no promotion, dim ⏳ badge.
+
+    A poll loop's instantaneous sample almost always lands on its `sleep`, so promoting
+    on it painted sleeping sessions green. The evidence stays visible; only the reading
+    changes."""
+
+    def setUp(self):
+        model.reset_state_tracker()
+
+    def evidence(self, status, exec_child=None, **over):
+        ev = {"harness": "claude", "pid": 100, "pid_alive": True, "status": status,
+              "mtime": 1000.0, "transcript": True, "exec_child": exec_child}
+        ev.update(over)
+        return ev
+
+    def test_shell_with_sleep_child_stays_idle_with_an_honest_rule(self):
+        child = {"pid": 200, "comm": "sleep", "etime_s": 240}
+        state, ev = model.classify_session(self.evidence("shell", child), 1200.0)
+        self.assertEqual(state, "idle")
+        self.assertEqual(ev["source"], "claude-registry+proc")
+        self.assertIn("waiting, not promoted", ev["rule"])
+        self.assertIn("sleep", ev["rule"])
+
+    def test_every_wait_primitive_suppresses_promotion(self):
+        for comm in model.EXEC_WAIT_COMMS:
+            model.reset_state_tracker()
+            child = {"pid": 200, "comm": comm, "etime_s": 720}
+            state, _ev = model.classify_session(self.evidence("shell", child), 1200.0)
+            self.assertEqual(state, "idle", comm)
+
+    def test_busy_mapping_is_untouched_by_a_sleep_child(self):
+        child = {"pid": 200, "comm": "sleep", "etime_s": 720}
+        state, _ev = model.classify_session(self.evidence("busy", child), 1200.0)
+        self.assertEqual(state, "working")
+
+    def test_wait_badge_is_hourglass_and_dim_even_on_a_working_row(self):
+        # Working via some other evidence (busy status) — the badge must still not
+        # read as work: the child is a wait, whatever the row's state.
+        sess = Session(harness="claude", pid=100, liveness="working", ctx_pct=40,
+                       exec_child={"pid": 200, "comm": "sleep", "etime_s": 240})
+        rows = render._context_detail_row(sess, term_width=200)
+        text = "".join(t for row in rows for t, _k in row)
+        self.assertIn("⏳ sleep 4m", text)
+        self.assertNotIn("⚙", text)
+        keys = [k for row in rows for t, k in row if "⏳" in t]
+        self.assertEqual(keys, ["dim"])
+
+    def test_wait_badge_under_idle_row_is_dim(self):
+        sess = Session(harness="claude", pid=100, liveness="idle", ctx_pct=40,
+                       exec_child={"pid": 200, "comm": "sleep", "etime_s": 240})
+        rows = render._context_detail_row(sess, term_width=200)
+        keys = [k for row in rows for t, k in row if "⏳" in t]
+        self.assertEqual(keys, ["dim"])
+
+
 class CensusFollowsClassification(unittest.TestCase):
     """The badge is display only — it never inflates the working census (prd.md:263)."""
 

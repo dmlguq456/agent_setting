@@ -706,6 +706,21 @@ def exec_child_evidence(exec_child):
     return exec_child
 
 
+# F-47 (v47) — wait primitives. A session whose descended child is one of these is
+# WAITING, not working: a poll loop's instantaneous sample almost always lands on its
+# `sleep`, so promoting on it painted sleeping sessions green. The evidence is still
+# shown (dim `⏳` badge, render.py) — only the promotion is suppressed. Deliberately a
+# tiny POSIX-primitive list, not a helper list that rots (F-26): these names are the
+# OS's fixed vocabulary, not this harness's.
+EXEC_WAIT_COMMS = ("sleep", "wait", "inotifywait", "flock")
+
+
+def exec_child_is_wait(exec_child):
+    """True when the exec-child evidence names a wait primitive (F-47 v47)."""
+    return (isinstance(exec_child, dict)
+            and exec_child.get("comm") in EXEC_WAIT_COMMS)
+
+
 def exec_child_is_background(exec_child, updated_at, now):
     """Whether later registry activity proves that an old child is background work.
 
@@ -740,10 +755,14 @@ def _session_status_state(status, exec_child=None, background_child=False):
     tier-2 evidence that the session owns a long-lived child it resolves to `working` — the
     registry says WHAT the session is doing and the process tree confirms it is still doing
     it, so the two tiers agree rather than compete. `busy`/`idle` are untouched.
+
+    v47 exception: a wait-primitive child (`sleep` & co) never promotes — the process
+    tree confirms the session is WAITING, and calling that working is the misread.
     """
     if status == "busy":
         return "working"
-    if status == "shell" and exec_child_evidence(exec_child) and not background_child:
+    if (status == "shell" and exec_child_evidence(exec_child)
+            and not exec_child_is_wait(exec_child) and not background_child):
         return "working"
     if status in ("idle", "shell"):
         return "idle"
@@ -759,6 +778,11 @@ def _status_desc(status, state, exec_child, background_child=False):
             "registry status=shell + long-lived child %s, but later registry activity proves background"
             % child.get("comm"),
         )
+    if status == "shell" and exec_child_is_wait(exec_child) and exec_child_evidence(exec_child):
+        child = exec_child_evidence(exec_child)
+        return ("claude-registry+proc",
+                "registry status=shell + wait primitive %s (%ds) — waiting, not promoted"
+                % (child.get("comm"), int(child.get("etime_s"))))
     if status == "shell" and state == "working":
         child = exec_child_evidence(exec_child)
         return ("claude-registry+proc",

@@ -36,7 +36,8 @@ import re
 import sys
 import time
 
-from .model import (fmt_min, dash, project_of, LIVENESS_STATES, PLUGIN_QUEUE_STATES)
+from .model import (fmt_min, dash, project_of, exec_child_is_wait,
+                    LIVENESS_STATES, PLUGIN_QUEUE_STATES)
 from . import gitinfo
 
 # curses attribute constants — real values when curses is present, harmless 0 fallbacks
@@ -148,9 +149,9 @@ _HUE_OF = {
     # F-60: `blocked` is RED, on its own key. It shares a hue with `g_dead` but never a key —
     # keeping them separate is what lets one be retuned later without moving the other. The
     # chip variant adds A_REVERSE and is used ONLY on the interaction badge; the glyph and the
-    # context lead word stay red+bold, because two reverse cells in one row cancel each other
-    # out as emphasis.
-    "g_blocked": ("r", _A_B), "g_blocked_chip": ("r", _A_B | _A_REVERSE),
+    # context lead word stay plain red — no bold (v47, user 2026-08-05): the chip owns the
+    # emphasis, and without color the missing bold is what separates blocked from dead (bold).
+    "g_blocked": ("r", 0), "g_blocked_chip": ("r", _A_REVERSE),
     # Badge text, NOT the glyph: plain yellow, distinct from the dim g_unused glyph so the
     # ●>○>◌ ink-weight gradient still reads.
     "g_unused_b": ("y", 0),
@@ -249,9 +250,10 @@ def _init_colors():
     # tunable. The chip is the SAME key plus A_REVERSE — the `hdr_bar`/`hdr_warn` fallback
     # idiom — and it is what carries the emphasis; no blink, because the working dot's 2 Hz
     # toggle already means "in progress" and blocked is a static wait for input.
-    # Without color both keys collapse to attributes and STILL differ: blocked reads bold, and
-    # its badge reads reverse, while dead is bold only and never gets a chip.
-    _COLOR["g_blocked"] = _COLOR.get("red", 0) | curses.A_BOLD
+    # v47 (user 2026-08-05, "blocked가 볼드더라"): no bold on the glyph/word — the chip owns
+    # the emphasis. Without color the keys still differ: blocked reads plain and its badge
+    # reads reverse, while dead is bold and never gets a chip.
+    _COLOR["g_blocked"] = _COLOR.get("red", 0)
     _COLOR["g_blocked_chip"] = _COLOR["g_blocked"] | curses.A_REVERSE
     # unused (F-26): dim yellow — distinct from idle's dim GREEN (live-but-quiet) and from
     # stale's colorless dim. The shape carries the meaning on its own; color only reinforces.
@@ -2621,6 +2623,10 @@ def _compact_context_gauge_width(available, depth=0):
 
 
 _EXEC_GLYPH = "⚙"
+# F-47 v47 — a wait-primitive child (`sleep` & co) renders as ⏳ and ALWAYS dim: the
+# session is waiting on purpose, and the badge must not read as work even when the row
+# is working for some other reason (busy status, fresh transcript).
+_WAIT_GLYPH = "⏳"
 
 
 def _fmt_exec_age(seconds):
@@ -2645,7 +2651,10 @@ def _exec_detail_segs(entity):
     child = getattr(entity, "exec_child", None)
     if isinstance(child, dict) and child.get("comm"):
         etime = child.get("etime_s")
-        text = "%s %s" % (_EXEC_GLYPH, child["comm"])
+        glyph = _EXEC_GLYPH
+        if exec_child_is_wait(child):            # v47: waiting, never bright
+            glyph, key = _WAIT_GLYPH, "dim"
+        text = "%s %s" % (glyph, child["comm"])
         if isinstance(etime, (int, float)) and not isinstance(etime, bool):
             text += " %s" % _fmt_exec_age(etime)
         return [(text, key)]
