@@ -97,6 +97,40 @@ class DoneAfterglowRenderTest(unittest.TestCase):
         text = "".join(part for part, _key in l2)
         self.assertIn("✓ done 4m", text)
 
+    def _depth2_job(self, **kw):
+        return model.DispatchJob(key="code-execute", slug="stage-leg", depth=2,
+                                 harness="claude", elapsed_min=4, cwd="", **kw)
+
+    def test_depth2_afterglow_swaps_the_running_token_for_a_bare_check_done(self):
+        # F-64a (v49 정정, user 2026-08-05 "depth=2에서 running 점멸만 done으로 바꾸고
+        # 체크표시 하나"): the finished depth-2 worker shows a steady `✓ done` in the
+        # micro-status slot — no elapsed duplication (the time column carries it) and
+        # never a blinking frame.
+        job = self._depth2_job(status="done", afterglow=True, liveness="done")
+        segs = render._dispatch_row(job)
+        text = "".join(part for part, _key in segs)
+        self.assertIn("✓ done", text)
+        self.assertNotIn("✓ done 4m", text)
+        self.assertEqual([key for part, key in segs if "done" in part], ["dim"])
+
+    def test_depth2_stale_takes_the_same_minimal_check_done(self):
+        job = self._depth2_job(status="running", liveness="stale")
+        segs = render._dispatch_row(job)
+        text = "".join(part for part, _key in segs)
+        self.assertIn("✓ done", text)
+        self.assertNotIn("done 4m", text)
+
+    def test_depth1_afterglow_keeps_its_elapsed(self):
+        segs = render._dispatch_row(self._job())
+        self.assertIn("✓ done 4m", "".join(part for part, _key in segs))
+
+    def test_depth2_narrow_card_drops_the_elapsed_too(self):
+        job = self._depth2_job(status="done", afterglow=True, liveness="done")
+        _l1, l2 = render._dispatch_row_2line(job)
+        text = "".join(part for part, _key in l2)
+        self.assertIn("✓ done", text)
+        self.assertNotIn("✓ done 4m", text)
+
     def test_afterglow_is_excluded_from_the_pulse_census(self):
         live = model.DispatchJob(key="autopilot-code", slug="live", liveness="working",
                                  harness="claude")

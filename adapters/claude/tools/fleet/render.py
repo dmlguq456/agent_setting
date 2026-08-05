@@ -1902,16 +1902,29 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
         # status zone, no blink, no telemetry. The elapsed value is measured from the `done`
         # registry row's own timestamp, so it counts UP to the 15-min window and the row then
         # disappears on the next tick.
+        # F-64a (v49 정정, user 2026-08-05 "depth=2에서 running 점멸만 done으로 바꾸고
+        # 체크표시 하나"): a depth-2 stage worker finishes by swapping the blinking `running`
+        # micro-token for a steady `✓ done` in the same slot — no elapsed here, the
+        # right-flushed time column already carries it.
         segs.append((" " * _WIDE_STAGE_GAP, None))
-        segs += [("-", "dim"), ("  ", None),
-                 ("%s done %s" % (_LIVE_GLYPH["done"], fmt_min(j.elapsed_min)), "dim")]
+        if int(getattr(j, "depth", 1) or 1) >= 2:
+            segs += [("-", "dim"), ("  ", None),
+                     ("%s done" % _LIVE_GLYPH["done"], "dim")]
+        else:
+            segs += [("-", "dim"), ("  ", None),
+                     ("%s done %s" % (_LIVE_GLYPH["done"], fmt_min(j.elapsed_min)), "dim")]
     elif j.liveness == "stale":
         # F-13: a stale job has no live model/effort/stage worth showing — collapse the whole
         # telemetry zone (model cell + stage breadcrumb) into one `done <age>` cell
         # (F-64 v49: "last seen" → "done", symmetric with the live "running" vocabulary).
+        # Depth-2 workers take the same minimal `✓ done` micro-token as afterglow (F-64a).
         segs.append((" " * _WIDE_STAGE_GAP, None))
-        segs += [("-", "dim"), ("  ", None),
-                 ("done %s" % fmt_min(j.elapsed_min), "dim")]
+        if int(getattr(j, "depth", 1) or 1) >= 2:
+            segs += [("-", "dim"), ("  ", None),
+                     ("%s done" % _LIVE_GLYPH["done"], "dim")]
+        else:
+            segs += [("-", "dim"), ("  ", None),
+                     ("done %s" % fmt_min(j.elapsed_min), "dim")]
     else:
         # F-15a options column (fixed-ish gap, dim mode/qa/profile) — a declutter move OUT of
         # the name zone, not a new axis. model/effort now live in the harness field (F-4/SD-F3).
@@ -2078,8 +2091,12 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     if afterglow_j:
         # F-46: the L2 telemetry line collapses to the same dim `✓ done <since completion>`
         # cell the wide row shows — no model/effort/options/breadcrumb for finished work.
-        l2 = [("    ", None),
-              ("%s done %s" % (_LIVE_GLYPH["done"], fmt_min(j.elapsed_min)), "dim")]
+        # F-64a: depth-2 workers keep the minimal `✓ done` (elapsed already rides L2's ⏱).
+        if int(getattr(j, "depth", 1) or 1) >= 2:
+            l2 = [("    ", None), ("%s done" % _LIVE_GLYPH["done"], "dim")]
+        else:
+            l2 = [("    ", None),
+                  ("%s done %s" % (_LIVE_GLYPH["done"], fmt_min(j.elapsed_min)), "dim")]
     else:
         eff = j.effort or parent_effort or None
         l2 = [("    ", None), (_pad(fmt_min(j.elapsed_min), _HW), "dim")]
