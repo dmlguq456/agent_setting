@@ -170,7 +170,7 @@ def _validate_tuple_parent_identity(row, parent_dispatch_depth):
             "dispatch-evidence-parent-transport-mismatch: a "
             f"dispatch-depth-{parent_dispatch_depth} parent is {expected_transport}, "
             f"tuple sealed {row['parent_transport']!r} "
-            "(probe the depth-2 node's parent, not the calling session)"
+            "(probe the dispatch-depth-2 node's parent, not the calling session)"
         )
     if row["parent_sandbox"] not in WRAPPER_PARENT_SANDBOXES[harness]:
         raise ValueError(

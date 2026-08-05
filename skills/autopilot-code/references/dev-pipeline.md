@@ -24,7 +24,7 @@ for CHILD in claude codex; do
 done   # collect into {"tuples": [...], "native_subagent": []} for --dispatch-evidence
 ```
 
-`--parent-transport` and `--parent-sandbox` default to `auto`. A depth-2 tuple's parent is
+`--parent-transport` and `--parent-sandbox` default to `auto`. A dispatch-depth-2 tuple's parent is
 always a registered-headless owner, so passing your own `interactive` transport is rejected at
 the probe, again at `capability-route.py compile`, and again at launch. `--parent-harness` must
 be the adapter the owner will actually run as; bind that decision by passing the compiled route

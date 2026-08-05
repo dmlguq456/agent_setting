@@ -1035,7 +1035,7 @@ def _dispatch_stage_segs(j, key, stage, slug_name, working=False, route_seq=None
                          route_zone=None):
     if getattr(j, "source", None) == "plugin-queue":
         # F-50e: a plugin-queue row has no fleet pipeline at all — its micro-status is the
-        # plugin's verbatim phase (same display rank as a depth-2 worker's "running"), and
+        # plugin's verbatim phase (same display rank as a dispatch-depth-2 worker's "running"), and
         # nothing else may occupy this slot.
         phase = _plugin_phase(j)
         return [(phase, "dim")] if phase else []
@@ -1297,7 +1297,7 @@ _LEGACY_STAGE_COLOR_INDEX = {
 
 
 def _dispatch_stage_color_index(entity, key=None, stage=None):
-    """F-42b — color a depth-2 micro-status with its own stage.
+    """F-42b — color a dispatch-depth-2 micro-status with its own stage.
 
     A validated route owns the index, including a collapsed parallel group.  Legacy rows fall
     back to their stage contract/key; zero is only the final no-evidence fallback.  The helper

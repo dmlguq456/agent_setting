@@ -58,11 +58,21 @@ class DispatchV20ConformanceTest(unittest.TestCase):
             "codex": ["--model", "gpt-test", "--reasoning", "low"],
             "opencode": ["--model", "provider/test", "--variant", "low"],
         }[adapter]
-        model = (
-            ["--model-profile", "light"]
-            if "--route-file" in extra
-            else explicit_model
-        )
+        # A route-bound registration must present the profile the route actually
+        # sealed. Pinning a literal here silently drifts the moment the portable
+        # owner policy changes — a quick owner is `balanced-deep`, so a hardcoded
+        # `light` made the guard reject its own fixture.
+        model = explicit_model
+        if "--route-file" in extra:
+            options = dict(zip(extra[::2], extra[1::2]))
+            sealed = json.loads(
+                Path(options["--route-file"]).read_text(encoding="utf-8")
+            )
+            node = next(
+                item for item in sealed["nodes"]
+                if item["id"] == options["--route-node"]
+            )
+            model = ["--model-profile", node["model_profile"]]
         return [
             sys.executable,
             str(ROOT / f"adapters/{adapter}/bin/dispatch-headless.py"),
@@ -195,7 +205,10 @@ class DispatchV20ConformanceTest(unittest.TestCase):
                     metadata["execution_surface"], "registered-headless"
                 )
                 self.assertEqual(metadata["registered_worker"], "1")
-                self.assertEqual(metadata["model_profile"], "light")
+                self.assertEqual(
+                    metadata["model_profile"], node["model_profile"]
+                )
+                self.assertEqual(node["model_profile"], "balanced-deep")
                 self.assertEqual(
                     metadata["fallback_hop"], "same-harness-headless"
                 )
