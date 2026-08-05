@@ -10,7 +10,7 @@ The output is not the final document. It is a draft cheatsheet—a mutation or e
 - `draft-refine` and `autopilot-refine` improve the cheatsheet, not the final source document.
 - In the code analogy, draft corresponds to `code-plan` and apply corresponds to `code-execute`.
 
-> **Output convention**: Follow CONVENTIONS §5 (`<agent-home>/core/CONVENTIONS.md#5-skill-output-convention--t1t2t3`). Store reviewer logs under `_internal/strategy_reviews/` and `_internal/draft_reviews/`, and snapshots under `_internal/versions/v{N}/strategy/` and `_internal/versions/v{N}/draft/`.
+> **Output convention**: Follow CONVENTIONS §5 (`<agent-home>/core/CONVENTIONS.md#5-skill-output-convention--t1t2t3`). Store reviewer logs under `_internal/strategy_reviews/` and `_internal/draft_reviews/`, and snapshots under `_internal/versions/v{N}/strategy/` and `_internal/versions/v{N}/draft/`. Before `draft-refine` rewrites an existing file, the route write preflight must obtain the deterministic `artifact-snapshot.py` receipt; do not allocate versions or copy snapshots manually.
 
 ## Invocation
 

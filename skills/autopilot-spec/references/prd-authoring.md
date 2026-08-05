@@ -2,7 +2,7 @@
 
 > **Default behavior: multiple intermediate confirmations.** A spec is where user intent is decided, so interaction is essential. Offer review points at Steps 1, 2, 3a, 3b, 3c, 4a, 4b, and 5: usually six to eight confirmations. If the user asks to move quickly—quoted examples include "쭉 진행", "ok 다 진행", and "다 알아서"—collapse them into batch confirmations: group 3a–3c and 4a–4b, leaving three to four confirmation points.
 
-> **Concurrency guard for a shared `<artifact-root>`.** Immediately before a write stage—Step 3 or update-mode writes to `prd.md`, `pipeline_state.yaml`, or `pipeline_summary.md`—acquire `.pipeline-lock`. Release it on both normal completion and interruption; the protocol and snippet are defined in **OPERATIONS.md §5.8**. If acquisition is BLOCKED (`exit 3`) because another worktree is editing the spec, stop writing, report it, and decide whether to wait or override. This lock is also the single detect-only signal that this skill is editing a spec.
+> **Concurrency guard for a shared `<artifact-root>`.** Immediately before a write stage—Step 3 or update-mode writes to `prd.md`, `pipeline_state.yaml`, or `pipeline_summary.md`—enter `utilities/spec-transaction.py run`; do not acquire the lock or copy a snapshot separately. The helper holds `.pipeline-lock`, prepares the exact PRD pre-image before the child command, and retains it whenever the PRD changes. Release and contention semantics are defined in **OPERATIONS.md §5.8**. If acquisition is BLOCKED (`exit 3`) because another worktree is editing the spec, stop writing, report it, and decide whether to wait or override. This lock is also the single detect-only signal that this skill is editing a spec.
 
 ### Blueprint Summary Block (every `prd.md`, 2026-07-30)
 

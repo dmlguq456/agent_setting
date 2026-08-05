@@ -2,7 +2,7 @@
 
 Post-creation refinement entrypoint for existing document and research artifacts. Preserve snapshots and change history while correcting or updating content. This file defines major/minor routing, invocation forms, and stage contracts; load a reference only when its detailed procedure is needed.
 
-> **Output convention**: Follow CONVENTIONS §5 (`<agent-home>/core/CONVENTIONS.md#5-skill-output-convention--t1t2t3`). Store modern document and research snapshots under `_internal/versions/v{N}/`; recognize legacy sibling `_v{N}.md` snapshots when already present.
+> **Output convention**: Follow CONVENTIONS §5 (`<agent-home>/core/CONVENTIONS.md#5-skill-output-convention--t1t2t3`). Store modern document and research snapshots under `_internal/versions/v{N}/`; recognize legacy sibling `_v{N}.md` snapshots when already present. The route write guard and `utilities/artifact-snapshot.py` own version allocation and exact pre-image copying.
 
 ## Position in the Autopilot Family
 
@@ -76,7 +76,7 @@ After artifact resolution, run Stages A-E. Read `process-stages.md` for complete
 3. **Stage B — Plan changes**: read only affected files, build a per-file change list, and classify each change as `MECH`, `SEM`, or `STRUCT`. Halt on STRUCT and recommend the owning heavier flow.
 4. **Stage B.5 — Factual and style detectors**: run for every change, including quick. Compare factual claims against artifact-local ground truth and run the style lint. Mark unresolved findings as `⚠ Unverified` or `⚠ Style`. Only the two explicit opt-out flags may skip these checks.
 5. **Stage C — Diff preview**: show the proposed change. Continue automatically by default, pause with `--confirm`, or stop with `--review-only`.
-6. **Stage D — Apply**: choose the version, snapshot before editing, apply the change, and update all five `pipeline_summary.md` sections: metadata, version history, changes, migrated minor log, and in-file changelog.
+6. **Stage D — Apply**: obtain the deterministic route-bound snapshot receipt before editing, apply the change, and update all five `pipeline_summary.md` sections: metadata, version history, changes, migrated minor log, and in-file changelog. Never choose the version or copy the snapshot manually.
 7. **Stage E — Memo form**: when `--memo <file>` is present, use the memo as proposal input before running Stages B-D.
 
 ## Reference Index

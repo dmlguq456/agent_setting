@@ -44,7 +44,12 @@ Adapters must preserve the portable invariants relevant to this capability:
 ## Routing Boundary
 
 `autopilot-refine` corrects and updates existing document and research
-artifacts. It never owns new empirical work: under `WORKFLOW §0.2`, a request
+artifacts. A direct minor edit updates history without a snapshot. Every
+non-direct major rewrite of an existing file is pre-snapshotted by the artifact
+write guard into one route-bound `_internal/versions/v{N}/` directory; the
+model does not allocate or copy versions. The abstract `target-artifact` write
+scope resolves only to `documents/<artifact>/**` and `research/<artifact>/**`.
+It never owns new empirical work: under `WORKFLOW §0.2`, a request
 that also requires reevaluation, new metrics, or new figure/media generation
 routes that work to `autopilot-lab` (or the owning execution capability) as
 primary, with refine as a secondary document pass over the finalized results.

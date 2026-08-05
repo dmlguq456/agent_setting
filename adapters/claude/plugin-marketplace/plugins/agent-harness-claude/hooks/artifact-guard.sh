@@ -145,12 +145,16 @@ case "$fp" in
       if ! python3 - "$route_file" "$route_id" "$route_node" "$cr" "$fp" <<'PY'
 import fnmatch,json,sys
 from pathlib import Path
-WORKTREE_ONLY={"source-scoped","target-artifact"}
-def pattern(scope):
+WORKTREE_ONLY={"source-scoped"}
+def patterns(scope):
+    if scope=="target-artifact":
+        return ["^documents/*/*","^research/*/*"]
     root=scope[:-3] if scope.endswith("/**") else scope
-    if scope in WORKTREE_ONLY or root=="source" or root.startswith("source/"): return None
-    return scope.replace("<cycle>","*").replace("<topic>","*").replace("/**","/*")
+    if scope in WORKTREE_ONLY or root=="source" or root.startswith("source/"): return []
+    return [scope.replace("<cycle>","*").replace("<topic>","*").replace("/**","/*")]
 def bound(rel,pat):
+    if pat.startswith("^"):
+        return fnmatch.fnmatch(rel,pat[1:])
     segments=rel.split("/")
     return any(fnmatch.fnmatch("/".join(segments[i:]),pat) for i in range(len(segments)))
 try:
@@ -158,14 +162,21 @@ try:
     if route.get("route_id")!=sys.argv[2]: raise ValueError("route id mismatch")
     node=next(row for row in route["nodes"] if row["id"]==sys.argv[3])
     rel=Path(sys.argv[5]).relative_to(Path(sys.argv[4])).as_posix()
-    ok=any(part.startswith(".") for part in rel.split("/")) or any(
-        bound(rel,pat) for pat in filter(None,map(pattern,node["write_scope"])))
+    pats=[pat for scope in node["write_scope"] for pat in patterns(scope)]
+    ok=any(part.startswith(".") for part in rel.split("/")) or any(bound(rel,pat) for pat in pats)
 except Exception:
     ok=False
 raise SystemExit(0 if ok else 1)
 PY
       then
         route_failure "artifact-write-outside-node-scope"
+        exit 2
+      fi
+      if ! python3 "$SCRIPT_DIR/../utilities/artifact-snapshot.py" prepare \
+        --artifact-root "$cr" --target "$fp" --route "$route_file" \
+        --route-id "$route_id" --node "$route_node" >/dev/null
+      then
+        route_failure "artifact-snapshot-failed"
         exit 2
       fi
     fi ;;

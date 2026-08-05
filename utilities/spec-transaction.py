@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import importlib.util
 import json
 import os
@@ -35,13 +36,67 @@ def next_version(spec_root: Path) -> int:
     return max(found,default=0)+1
 
 
+def read_regular_file(path: Path, *, allow_missing: bool) -> bytes | None:
+    if not path.exists():
+        if allow_missing:
+            return None
+        raise ValueError("missing")
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("not-regular")
+    return path.read_bytes()
+
+
+def persist_snapshot(spec_root: Path, version: int, preimage: bytes) -> tuple[str, Path]:
+    """Create the exact pre-image once, or verify an idempotent existing copy."""
+    internal=spec_root/"_internal"
+    versions=internal/"versions"
+    for parent in (internal,versions):
+        if parent.exists() and (parent.is_symlink() or not parent.is_dir()):
+            raise ValueError("snapshot-parent-not-directory")
+        parent.mkdir(exist_ok=True)
+    version_dir=versions/f"v{version}"
+    if version_dir.exists() and (version_dir.is_symlink() or not version_dir.is_dir()):
+        raise ValueError("snapshot-version-not-directory")
+    version_dir.mkdir(exist_ok=True)
+    snapshot=version_dir/"prd.md"
+    if snapshot.exists():
+        if snapshot.is_symlink() or not snapshot.is_file():
+            raise ValueError("snapshot-not-regular")
+        if snapshot.read_bytes()!=preimage:
+            raise ValueError("snapshot-mismatch")
+        return "matched",snapshot
+    flags=os.O_WRONLY|os.O_CREAT|os.O_EXCL
+    if hasattr(os,"O_NOFOLLOW"):
+        flags|=os.O_NOFOLLOW
+    fd=os.open(snapshot,flags,0o644)
+    try:
+        with os.fdopen(fd,"wb",closefd=True) as fh:
+            fh.write(preimage); fh.flush(); os.fsync(fh.fileno())
+    except Exception:
+        snapshot.unlink(missing_ok=True)
+        raise
+    return "created",snapshot
+
+
+def discard_unused_snapshot(spec_root: Path, version: int, snapshot: Path) -> None:
+    snapshot.unlink(missing_ok=True)
+    version_dir=spec_root/"_internal"/"versions"/f"v{version}"
+    try:
+        version_dir.rmdir()
+        version_dir.parent.rmdir()
+        version_dir.parent.parent.rmdir()
+    except OSError:
+        pass
+
+
 def main():
     parser=argparse.ArgumentParser(); sub=parser.add_subparsers(dest="command",required=True); run=sub.add_parser("run")
     run.add_argument("--artifact-root",required=True); run.add_argument("--worktree",required=True)
     run.add_argument("--route",required=True); run.add_argument("--node",required=True)
     run.add_argument("--spec-root",help="component spec root under <artifact-root>/spec")
     run.add_argument("--wait-timeout",type=float,default=600); run.add_argument("--poll",type=float,default=.05)
-    run.add_argument("--events"); run.add_argument("--require-snapshot",action="store_true")
+    run.add_argument("--events")
+    run.add_argument("--require-snapshot",action="store_true",help=argparse.SUPPRESS)
     run.add_argument("transaction",nargs=argparse.REMAINDER)
     args=parser.parse_args()
     command=args.transaction[1:] if args.transaction[:1]==["--"] else args.transaction
@@ -80,12 +135,47 @@ def main():
         owner={"route_id":route["route_id"],"node_id":node["id"],"worktree":str(worktree.resolve()),"pid":os.getpid(),"next_version":version}
         lock.seek(0); lock.truncate(); lock.write(json.dumps(owner,sort_keys=True)+"\n"); lock.flush(); os.fsync(lock.fileno())
         emit({"status":"acquired","action":"latest-reread","route_id":route["route_id"],"next_version":version,"waited":waited},args.events)
+        prd=spec_root/"prd.md"
+        try:
+            preimage=read_regular_file(prd,allow_missing=True)
+        except ValueError as exc:
+            emit({"status":"blocked","reason":"prd-preimage-invalid","detail":str(exc),"route_id":route["route_id"]},args.events)
+            lock.seek(0); lock.truncate(); lock.flush(); os.fsync(lock.fileno())
+            return 65
+        prepared_status="not-required-new"
+        prepared_path=None
+        if preimage is not None:
+            try:
+                prepared_status,prepared_path=persist_snapshot(spec_root,version,preimage)
+            except (OSError,ValueError) as exc:
+                reason="version-snapshot-mismatch" if str(exc)=="snapshot-mismatch" else "version-snapshot-invalid"
+                emit({"status":"blocked","reason":reason,"detail":str(exc),"route_id":route["route_id"],"version":version},args.events)
+                lock.seek(0); lock.truncate(); lock.flush(); os.fsync(lock.fileno())
+                return 65
+            emit({"status":"snapshot-prepared","snapshot":prepared_status,"route_id":route["route_id"],"version":version,"path":str(prepared_path),"preimage_sha256":hashlib.sha256(preimage).hexdigest()},args.events)
         env={**os.environ,"AGENT_SPEC_LOCK_HELD":"1","AGENT_SPEC_NEXT_VERSION":str(version),"AGENT_SPEC_ROOT":str(spec_root),"AGENT_ROUTE_FILE":str(Path(args.route).resolve()),"AGENT_ROUTE_ID":route["route_id"],"AGENT_ROUTE_NODE":node["id"]}
         result=subprocess.run(command,cwd=str(worktree),env=env)
-        version_dir=spec_root/"_internal"/"versions"/f"v{version}"
-        if result.returncode==0 and args.require_snapshot and not version_dir.is_dir():
-            emit({"status":"blocked","reason":"version-snapshot-missing","route_id":route["route_id"],"version":version},args.events); result=subprocess.CompletedProcess(command,65)
-        emit({"status":"released","route_id":route["route_id"],"version":version,"result":result.returncode},args.events)
+        try:
+            postimage=read_regular_file(prd,allow_missing=True)
+        except ValueError as exc:
+            emit({"status":"blocked","reason":"prd-result-invalid","detail":str(exc),"route_id":route["route_id"]},args.events)
+            result=subprocess.CompletedProcess(command,65); postimage=None
+        snapshot_status="not-required-new" if preimage is None else "not-required-unchanged"
+        if preimage is not None and postimage!=preimage:
+            try:
+                snapshot_status,snapshot_path=persist_snapshot(spec_root,version,preimage)
+            except (OSError,ValueError) as exc:
+                reason="version-snapshot-mismatch" if str(exc)=="snapshot-mismatch" else "version-snapshot-invalid"
+                emit({"status":"blocked","reason":reason,"detail":str(exc),"route_id":route["route_id"],"version":version},args.events)
+                result=subprocess.CompletedProcess(command,65)
+            else:
+                emit({"status":"snapshot","snapshot":snapshot_status,"route_id":route["route_id"],"version":version,"path":str(snapshot_path),"preimage_sha256":hashlib.sha256(preimage).hexdigest()},args.events)
+        elif preimage is not None and prepared_status=="created" and prepared_path is not None:
+            discard_unused_snapshot(spec_root,version,prepared_path)
+        if preimage is not None and postimage is None and result.returncode==0:
+            emit({"status":"blocked","reason":"prd-missing-after-transaction","route_id":route["route_id"],"version":version},args.events)
+            result=subprocess.CompletedProcess(command,65)
+        emit({"status":"released","route_id":route["route_id"],"version":version,"result":result.returncode,"snapshot":snapshot_status},args.events)
         lock.seek(0); lock.truncate(); lock.flush(); os.fsync(lock.fileno())
         return result.returncode
 

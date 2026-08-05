@@ -149,11 +149,10 @@ With **`--review-only`**, print Stage C and stop without Stage D.
 
 ### Stage D — Apply
 
-1. **Determine the next version.** Read `pipeline_summary.md` and find the highest `**v{N}**` row under `## 버전 히스토리` or the `**Latest version**` line. If none exists, treat the current state as implicit v1 and create v2; otherwise increment the maximum.
-2. **Snapshot only files that will change.** When `_internal/` exists or the artifact is new, use `{artifact_dir}/_internal/versions/v{prev}/{relative-path}`. For legacy artifacts with `_v{N}.md` siblings and no `_internal/`, preserve `{file_dir}/{stem}_v{prev}.{ext}`. Create parent directories as needed, never overwrite an existing snapshot for the same version, and choose the modern layout for a new artifact.
-3. **Apply exact-string edits** with the Edit tool. Never use `replace_all` unless the proposal explicitly says so.
-4. **Clean inline memos in memo mode.** When every memo from `--memo <file>` or `<!-- memo: ... -->` is applied, remove the inline memo and adjacent blank lines while preserving `---` separators. Preserve a memo only when the user requests it or it contains unresolved out-of-scope metadata worth surfacing.
-5. **Update `pipeline_summary.md` as the only history file:**
+1. **Prepare snapshots mechanically.** For every existing file that Stage C will change, run the route-bound write preflight before the first Edit. `artifact-guard.sh` invokes `utilities/artifact-snapshot.py prepare`, captures the exact current bytes, and reuses one `_internal/versions/v{N}/` receipt for the whole route. When hook coverage is unavailable, invoke that helper explicitly with the canonical artifact root, target, route file/id, and active node, and require its success receipt. Do not calculate `N`, run `mkdir`/`cp`, or accept an empty version directory. Existing legacy sibling layouts are preserved by the same helper; new layouts are modern.
+2. **Apply exact-string edits** with the Edit tool. Never use `replace_all` unless the proposal explicitly says so.
+3. **Clean inline memos in memo mode.** When every memo from `--memo <file>` or `<!-- memo: ... -->` is applied, remove the inline memo and adjacent blank lines while preserving `---` separators. Preserve a memo only when the user requests it or it contains unresolved out-of-scope metadata worth surfacing.
+4. **Update `pipeline_summary.md` as the only history file:**
 
    **Metadata:** update or add:
 
@@ -204,7 +203,7 @@ With **`--review-only`**, print Stage C and stop without Stage D.
 
    Use `STYLE`, `STRUCT`, `FACT`, or `MEMO` for `{TYPE}`; a section anchor or mutation ID for `{scope}`; and cards, a baseline file, or a direct user instruction for `{verified source}`. Skip files without the field. For a newly created array, also add one v{N-1} creation-note entry.
 
-6. **Report in at most six lines**, localized to the user's communication language unless another contract applies. State the version transition, changed-file count, snapshot, updated summary, and any audit or downstream-sync recommendation. Recommend `/audit {artifact_short_name}` after `AUDIT_HINT_THRESHOLD`, and `/autopilot-refine "{dependent_artifact_name} pipeline_summary v{N} 반영"` for each dependency.
+5. **Report in at most six lines**, localized to the user's communication language unless another contract applies. State the version transition, changed-file count, the helper-reported snapshot path, updated summary, and any audit or downstream-sync recommendation. Recommend `/audit {artifact_short_name}` after `AUDIT_HINT_THRESHOLD`, and `/autopilot-refine "{dependent_artifact_name} pipeline_summary v{N} 반영"` for each dependency.
 
 ### Stage E — Memo mode (`--memo <file>`)
 

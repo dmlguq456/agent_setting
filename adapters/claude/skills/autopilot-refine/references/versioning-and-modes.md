@@ -50,8 +50,8 @@ Skip files without a frontmatter `changelog:` field. This duplicates the pipelin
 
 When automatic invocation selects a major refine flow:
 
-1. Run Stages A–D at the selected intensity and derived rigor: investigate, preview, apply, and snapshot.
-2. Create `_internal/versions/v{N+1}/`.
+1. Run Stages A–D at the selected intensity and derived rigor: investigate, preview, mechanically snapshot, and apply.
+2. Require the route-bound snapshot receipt created by `artifact-guard.sh` / `utilities/artifact-snapshot.py`; never allocate or copy `_internal/versions/v{N+1}/` manually.
 3. Move the entire active `## 마이너 변경 로그 (v{N} → next major)` body verbatim into `### 누적 마이너 변경 사항 (v{N}_1 → v{N}_M)` under the new `## v{N+1} 변경 사항`, then clear the active minor-log section.
 4. Add a major row to `## 버전 히스토리`: `| **v{N+1}** | ... | (major) ... |`.
 

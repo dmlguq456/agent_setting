@@ -7,7 +7,7 @@ Refine mode (versioned + ref-grounded). Update an existing document {doc_type} b
 
 Canonical {doc_type} file (current/latest): {canonical_path}
 Existing required companion files: {companion_paths or none}
-Previous version archive (immutable, already created by Pre-Refine setup):
+Previous version archive (immutable, already created and verified by the route-bound snapshot helper):
 - Modern: `{artifact_root}/_internal/versions/v{prev_version}/{relative-subdir}/{filename}` (where `{relative-subdir}` is `strategy/` or `draft/`)
 - Legacy: `{path.parent}/{path.stem}_v{prev_version}.md` for each existing file, only if the artifact already used `_v{N}.md` siblings and lacks `_internal/`
 Convention mode: {modern | legacy}
@@ -42,7 +42,7 @@ For draft refinement: also cross-check against the strategy document at `{artifa
 ## Output Versioning
 
 1. **Write the new content to the canonical file and every existing required companion** (`{canonical_path}`, `{companion_paths}`) — these always represent the latest version.
-2. The pre-edit snapshot is already written by the Pre-Refine setup step (see "Pre-Refine: Versioning Setup" above) — to either `_internal/versions/v{prev_version}/...` (modern) or `{file}_v{prev_version}.md` (legacy). No additional snapshot needed at output time.
+2. The pre-edit snapshot is already written by `utilities/artifact-snapshot.py` during Pre-Refine setup — to either `_internal/versions/v{prev_version}/...` (modern) or `{file}_v{prev_version}.md` (legacy). Do not allocate, copy, or modify a snapshot at output time.
 3. **Remove all memo comments** (HTML comments, `// ...`, `[memo] ...`, etc.) from the new version. EXCEPT preserve/update the frontmatter `changelog:` array (see below).
 
 ## Changelog (frontmatter `changelog:` array — NEVER an HTML comment)

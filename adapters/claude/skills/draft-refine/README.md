@@ -59,9 +59,10 @@ Do not silently propagate an incorrect memo; the source controls factual truth.
 
 - Modern convention: `{artifact_root}/_internal/versions/v{N}/{strategy,draft}/`
 - Legacy convention: sibling `{path.parent}/{path.stem}_v{N}.md`, only when the artifact already uses that pattern
+- Version allocation and copying are performed by `utilities/artifact-snapshot.py` through the route write guard; raw `mkdir`/`cp` is not the versioning mechanism.
 - Preserve both the `latest` file at current vN and the `v{N-1}` archive.
 - Prior versions are **immutable**; never modify them.
-- On first refinement, snapshot the current state as v1 and write the change as v2.
+- On first refinement, the helper snapshots the current state as v1 and the refinement writes the change as v2.
 
 ## 4. Changelog — Managed Frontmatter Array
 

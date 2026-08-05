@@ -15,11 +15,11 @@ or allocate the same version twice. `plans/<cycle>/` is path-separated by
 cycle and does not require this lock.
 
 - **Lock file:** `<artifact-root>/.pipeline-lock`, visible to all worktrees. The holder keeps an OS advisory lock for the full transaction, so process exit releases ownership without a stale-age override.
-- **Protected scope:** the complete spec transaction is one atomic sequence while the lock is held: re-read latest state → allocate and create the next `_internal/versions/v{N}/` snapshot → update `prd.md` → update `pipeline_state.yaml` → update `pipeline_summary.md`. Reads outside a transaction and path-separated plan writes do not lock.
+- **Protected scope:** the complete spec transaction is one atomic sequence while the lock is held: re-read latest state → allocate the next version and persist the exact current `prd.md` pre-image → run the owning `prd.md` + `pipeline_state.yaml` + `pipeline_summary.md` update → retain and verify the snapshot only when `prd.md` changed. The helper prepares the pre-image before the child command, so an interrupted overwrite cannot lose the prior PRD. Initial creation and no-op updates create no version. Reads outside a transaction and path-separated plan writes do not lock.
 - **Route declaration:** a route that can touch any `spec/**` path declares `spec_touch=true`. Before lock acquisition the conductor runs §5.9 git-state checks. Missing declaration or a route/node scope mismatch is a structured failure tied to the route id.
 - **Contention:** a nonblocking acquisition first reports `BLOCKED`, then waits. After acquiring it re-reads the latest spec and version chain and enters the next version. It never retries a previously computed `v{N}` and never overwrites an existing snapshot.
 
-Acquire immediately before `autopilot-spec` Step 3 or update mode, `autopilot-code` state/summary writes, or a spec-drift update. The helper holds the lock around the supplied transaction command and exports `AGENT_SPEC_NEXT_VERSION` only after the latest version is re-read under lock:
+Acquire immediately before `autopilot-spec` Step 3 or update mode, `autopilot-code` state/summary writes, or a spec-drift update. The helper holds the lock around the supplied transaction command, prepares and verifies the prior PRD bytes itself, and exports `AGENT_SPEC_NEXT_VERSION` only after the latest version is re-read under lock. Callers must not create or validate the snapshot themselves:
 
 ```bash
 REPORTS_DIR=$("${AGENT_HOME:-$HOME/agent_setting}/utilities/artifact-root.sh" "$PWD") || exit
@@ -30,6 +30,11 @@ python3 "${AGENT_HOME:-$HOME/agent_setting}/utilities/spec-transaction.py" run \
 ```
 
 Exit 3 means the bounded wait expired; report the current owner and leave every spec surface unchanged. Do not delete the lock or reuse the version number.
+
+`--require-snapshot` is a deprecated compatibility flag and has no authority;
+snapshot enforcement is unconditional whenever an existing `prd.md` changes.
+An existing `v{N}/prd.md` must be byte-identical to the captured pre-image, and
+an empty `v{N}/` never satisfies the transaction.
 
 The helper releases automatically after normal completion, interruption, or error. The transaction command must fail before its first canonical write if all four output paths cannot be completed.
 

@@ -343,6 +343,11 @@ The underscore keeps internal data visible but de-emphasized; a dot directory wo
     └── versions/v{N}/<changed files>
 ```
 
+For spec updates and route-backed document/research refinement, snapshots are
+machine-prepared from the exact current bytes before the first canonical write.
+A model must not allocate a version or copy a snapshot by hand. One route
+reuses one `v{N}` directory for every changed file in the same artifact.
+
 ### §5.4. Capability Mappings
 
 #### §5.4.1. Research
@@ -351,7 +356,7 @@ The underscore keeps internal data visible but de-emphasized; a dot directory wo
 
 #### §5.4.2. Documents
 
-`<artifact-root>/documents/<date>_<name>/` contains T1 pipeline state and the latest `draft/`; T2 latest `strategy/`, `analysis/`, and `assets/`; and T3 metadata, strategy/draft reviews, audits, discarded variants, and snapshots under `_internal/versions/v{N}/`. Retire sibling `_v{N}.md` files for new output but preserve them in legacy artifacts.
+`<artifact-root>/documents/<date>_<name>/` contains T1 pipeline state and the latest `draft/`; T2 latest `strategy/`, `analysis/`, and `assets/`; and T3 metadata, strategy/draft reviews, audits, discarded variants, and major-refine snapshots under `_internal/versions/v{N}/`. Direct minor edits remain snapshot-free and are recorded in `pipeline_summary.md`. Retire sibling `_v{N}.md` files for new output but preserve them in legacy artifacts.
 
 #### §5.4.3. Code Track — Flat `spec/` Plus Repeated `plans/`
 
@@ -374,7 +379,11 @@ plans/<date>_<slug>/
 └── _internal/            # plan, dev, and test reviews
 ```
 
-`prd.md` is always current. A major `autopilot-spec refine` snapshots it before overwrite; minor edits append to pipeline history, and five accumulated minors trigger an audit alert. Code history uses git rather than `autopilot-refine` by default.
+`prd.md` is always current. Every transaction that changes an existing
+`prd.md` snapshots its exact pre-image before the transaction command can
+overwrite it; initial creation and no-op updates create no version. Minor edits
+still append to pipeline history, and five accumulated minors trigger an audit
+alert. Code history uses git rather than `autopilot-refine` by default.
 
 #### §5.4.4. Project Analysis
 
@@ -383,6 +392,11 @@ plans/<date>_<slug>/
 ### §5.5. Legacy Compatibility
 
 For a new or empty directory, create the modern layout. On re-entry, the presence of `_internal/` selects modern behavior; otherwise main-level review directories or sibling `_v{N}.md` files select legacy behavior. Preserve the detected shape. Migrate only on an explicit user request through a one-off helper.
+
+New route-owned output may be created only in the capability buckets listed in
+§6.5. `autopilot-refine`'s `target-artifact` scope resolves only to
+`documents/<artifact>/**` or `research/<artifact>/**`; an ad-hoc top-level
+folder such as `rebuttal/` is input or legacy state, never a new output target.
 
 ### §5.6. Authoring `SKILL.md`
 
@@ -522,7 +536,7 @@ When `spec/pipeline_state.yaml` exists, read it and activate every applicable ap
 | code | `plans/<date>_<slug>/` |
 | lab | `experiments/<date>_<slug>/` plus `_RUNLOG.md` |
 | draft | `documents/<date>_<name>/` |
-| refine | Target artifact plus `_internal/versions/v{N}/` |
+| refine | Target artifact plus `_internal/versions/v{N}/` for a major refine; direct minor edits update history only |
 | note | Run logs in artifact root plus routed cards and digests under the configured notes target |
 | apply | Real source outside artifact root; git branch and commit provide versions, with apply logs under the cheatsheet artifact |
 

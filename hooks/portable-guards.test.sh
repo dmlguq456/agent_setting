@@ -120,6 +120,46 @@ else
     || bad "worktree-only scope violation wrong exit"
 fi
 
+printf '{"route_id":"rt-refine","route_hash":"sha256:refine","capability":"autopilot-refine","effective_intensity":"standard","spec_touch":false,"nodes":[{"id":"transaction","write_scope":["target-artifact","_internal/versions/**"]}]}\n' > "$TMP/route-refine.json"
+mkdir -p "$TMP/proj/.agent_reports/documents/cycle" "$TMP/proj/.agent_reports/rebuttal"
+printf 'before\n' > "$TMP/proj/.agent_reports/documents/cycle/doc.md"
+printf 'legacy\n' > "$TMP/proj/.agent_reports/rebuttal/rebuttal.md"
+if AGENT_ROUTE_FILE="$TMP/route-refine.json" AGENT_ROUTE_ID=rt-refine AGENT_ROUTE_NODE=transaction \
+  "$ART" --file "$TMP/proj/.agent_reports/documents/cycle/doc.md" >/tmp/art_refine_owned.out 2>/tmp/art_refine_owned.err; then
+  [ "$(cat "$TMP/proj/.agent_reports/documents/cycle/_internal/versions/v1/doc.md")" = "before" ] \
+    && ok "major refine guard snapshots an owned document preimage" \
+    || bad "major refine guard did not preserve the owned document preimage"
+else
+  bad "target-artifact should authorize an owned document"
+fi
+if AGENT_ROUTE_FILE="$TMP/route-refine.json" AGENT_ROUTE_ID=rt-refine AGENT_ROUTE_NODE=transaction \
+  "$ART" --file "$TMP/proj/.agent_reports/rebuttal/rebuttal.md" >/tmp/art_refine_unowned.out 2>/tmp/art_refine_unowned.err; then
+  bad "target-artifact should not authorize an unowned rebuttal container"
+else
+  [ "$?" -eq 2 ] && grep -q 'artifact-write-outside-node-scope' /tmp/art_refine_unowned.err \
+    && ok "target-artifact rejects unowned top-level artifact containers" \
+    || bad "unowned target-artifact failure was not route-addressed"
+fi
+printf '{"route_id":"rt-refine-direct","route_hash":"sha256:refine-direct","capability":"autopilot-refine","effective_intensity":"direct","spec_touch":false,"nodes":[{"id":"inline","write_scope":["target-artifact","_internal/versions/**"]}]}\n' > "$TMP/route-refine-direct.json"
+mkdir -p "$TMP/proj/.agent_reports/documents/minor"
+printf 'minor\n' > "$TMP/proj/.agent_reports/documents/minor/doc.md"
+if AGENT_ROUTE_FILE="$TMP/route-refine-direct.json" AGENT_ROUTE_ID=rt-refine-direct AGENT_ROUTE_NODE=inline \
+  "$ART" --file "$TMP/proj/.agent_reports/documents/minor/doc.md" >/tmp/art_refine_direct.out 2>/tmp/art_refine_direct.err; then
+  [ ! -e "$TMP/proj/.agent_reports/documents/minor/_internal/versions" ] \
+    && ok "direct minor refine remains snapshot-free" \
+    || bad "direct minor refine unexpectedly created a snapshot"
+else
+  bad "direct minor refine should pass for an owned document"
+fi
+mkdir -p "$TMP/proj/.agent_reports/plans/cycle/documents/fake"
+if AGENT_ROUTE_FILE="$TMP/route-refine-direct.json" AGENT_ROUTE_ID=rt-refine-direct AGENT_ROUTE_NODE=inline \
+  "$ART" --file "$TMP/proj/.agent_reports/plans/cycle/documents/fake/doc.md" >/tmp/art_refine_nested.out 2>/tmp/art_refine_nested.err; then
+  bad "target-artifact must be anchored to a canonical top-level container"
+else
+  [ "$?" -eq 2 ] && ok "target-artifact cannot match an owned-looking nested suffix" \
+    || bad "nested target-artifact violation wrong exit"
+fi
+
 echo "== source-only worktree artifact guard =="
 mkdir -p "$TMP/artrepo/.agent_reports/_internal" "$TMP/artrepo-wt"
 (

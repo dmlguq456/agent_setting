@@ -21,8 +21,10 @@ General entrypoint for creating and updating requirements and blueprints: new
 intent, cleanup/public-release preparation for existing code, and iteration of
 an existing spec through `prd.md`. It supports app, library, API, CLI, and
 research modes; multiple modes; auto detection; and update mode. Update mode
-edits the existing `prd.md`, the canonical path for every spec change, and
-automatically snapshots the previous version. PRDs contain common sections plus
+edits the existing `prd.md`, the canonical path for every spec change. The
+shared transaction helper automatically snapshots the exact previous bytes
+whenever an existing PRD actually changes, at every intensity. PRDs contain
+common sections plus
 independent per-mode sections. Automatically cite autopilot-research and
 analyze-project outputs. This is the blueprint counterpart to analyze-project's
 new-intent analysis. Actual code work belongs to autopilot-code, which detects
@@ -47,7 +49,7 @@ Required public artifacts:
 
 Internal artifacts belong under `spec/_internal/`, including old PRD snapshots, drafts, raw notes, review records, and temporary scaffolding decisions.
 
-For update mode, snapshot the previous `prd.md` to `spec/_internal/versions/v{N}/prd.md` before overwriting it, then update `pipeline_summary.md` in the same transaction.
+For update mode, run the complete write through `utilities/spec-transaction.py`. It prepares the previous `prd.md` at `spec/_internal/versions/v{N}/prd.md` before the child command, retains it only when the PRD changes, and verifies byte identity. The owning command updates `pipeline_summary.md` under the same lock. Initial creation and no-op updates create no snapshot.
 
 ## Role Requirements
 
@@ -91,7 +93,7 @@ Additional spec-entry gates:
 5. Draft or update `prd.md` with a common section plus mode-specific sections.
 6. Produce or update companion contracts for the active modes.
 7. Run the configured QA/refine passes.
-8. For update mode, snapshot the old `prd.md`, write the new `prd.md`, update `pipeline_state.yaml`, and append the narrative to `pipeline_summary.md`.
+8. For update mode, run the new `prd.md`, `pipeline_state.yaml`, and `pipeline_summary.md` writes inside the spec transaction helper; do not copy the snapshot manually.
 
 ## Mode-Specific Semantics
 

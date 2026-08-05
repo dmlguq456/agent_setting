@@ -70,7 +70,7 @@ Follow [OPERATIONS §5.10](../../../core/OPERATIONS.md#510-work-isolation-and-pa
 
 When `spec/` exists, compare the request with `spec/prd.md` and relevant contract files before planning:
 
-- **spec-significant:** route, schema, entity field, UI flow, external service, stack, migration, or existing spec drift. Run autopilot-spec update first, snapshot the old spec, then implement against the new spec. Ask only when classification is ambiguous.
+- **spec-significant:** route, schema, entity field, UI flow, external service, stack, migration, or existing spec drift. Run autopilot-spec update through `spec-transaction.py` first; the helper snapshots the exact old PRD automatically when it changes. Then implement against the new spec. Ask only when classification is ambiguous.
 - **within-spec:** bug fix, refactor, or implementation detail. Continue.
 
 Write one verdict to chat and plan or logs before code-plan:

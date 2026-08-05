@@ -34,31 +34,20 @@ Do not generate a language-companion pair by default. Preserve the target artifa
 
 ## Prepare Versioning
 
-Before dispatching the `research/research-survey` unit, establish the next version and snapshot the current state.
+Before dispatching the `research/research-survey` unit, prepare every existing
+canonical or companion file that the refinement will change through the active
+route's write preflight. `artifact-guard.sh` calls
+`utilities/artifact-snapshot.py prepare`, preserves exact pre-change bytes, and
+reuses one version receipt across the artifact. If hook coverage is unavailable,
+invoke the helper explicitly with `--artifact-root`, `--target`, `--route`,
+`--route-id`, and `--node` before editing and require exit 0. Never scan version
+numbers or use raw `mkdir`/`cp` as the snapshot mechanism.
 
-1. **Determine the convention and version.**
-   - Modern: when `{artifact_root}/_internal/` exists, scan `_internal/versions/v{N}/`; use max `N + 1`, or `2` when none exists.
-   - Legacy: only when `_v{N}.md` siblings exist and `_internal/` does not, scan sibling versions and use max `N + 1`, or `2` when none exists.
-   - New: create `_internal/versions/` and start at `next_version = 2`.
-2. **Snapshot the current previous version**, skipping an already existing snapshot.
-   - Modern: preserve each canonical and existing companion file at the same relative strategy/draft path under `_internal/versions/v{prev_version}/`.
-   - Legacy: copy each existing file to its sibling `{stem}_v{prev_version}.md`.
-3. Pass `next_version`, `prev_version`, convention, snapshot paths, canonical path, and existing companion paths to the `research/research-survey` unit.
-
-Use these commands with the files that actually exist:
-
-```bash
-# Modern compatibility form
-mkdir -p {artifact_root}/_internal/versions/v{prev_version}/{ko_relative_subdir}
-cp {ko_path} {artifact_root}/_internal/versions/v{prev_version}/{ko_relative_subdir}/{ko_filename}
-cp {en_path} {artifact_root}/_internal/versions/v{prev_version}/{en_relative_subdir}/{en_filename}
-
-# Legacy compatibility form
-cp {ko_path} {ko_path.parent}/{ko_path.stem}_v{prev_version}.md
-cp {en_path} {en_path.parent}/{en_path.stem}_v{prev_version}.md
-```
-
-The `ko_path` and `en_path` variables are legacy compatibility names, not a requirement to create either language.
+Pass the helper-reported version, convention, snapshot paths, canonical path,
+and existing companion paths to the `research/research-survey` unit. The helper
+preserves a detected legacy sibling layout and uses
+`_internal/versions/v{N}/<relative-path>` for modern/new layouts. A new target
+has no prior state to snapshot.
 
 ## Delegate Refinement
 

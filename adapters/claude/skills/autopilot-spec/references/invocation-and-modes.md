@@ -102,11 +102,11 @@ New versus re-entry detection works without an explicit `--from` option by inspe
 
 This skill treats initial creation and existing-spec updates as equally first-class capabilities. **Every spec change that updates `prd.md` must pass through update mode**, whether requested directly, detected as drift by autopilot-code, or initiated by a WORKFLOW §7/adapter post-run correction. Do not edit `prd.md` ad hoc; update mode preserves versioning and prevents drift or loss.
 
-Update mode performs three operations as one transaction:
+Update mode performs three operations as one helper-owned transaction:
 
-1. Update `spec/prd.md`, the always-current T1 file.
-2. **Before overwriting it**, snapshot the prior `prd.md` to `spec/_internal/versions/v{N}/prd.md`, mirroring autopilot-refine document versioning per [CONVENTIONS §5.4.3](../../../core/CONVENTIONS.md#5-skill-output-convention--t1t2t3). autopilot-spec owns the operation because the target is a spec.
-3. Record the change narrative in `pipeline_summary.md`. Synchronize affected adjacent files (`data_model.md`, `api_contract.md`, `ui_flow.md`, `stack.md`) and Architecture Diagrams in the same transaction using the Step 3.5 coupled-update logic.
+1. Enter `utilities/spec-transaction.py run`; it re-reads the latest version under `.pipeline-lock` and prepares the exact current `prd.md` bytes before the child command.
+2. Update `spec/prd.md`, the always-current T1 file. If it changed, the helper retains and byte-verifies `spec/_internal/versions/v{N}/prd.md`; initial creation and no-op updates create no snapshot. Do not create or check the snapshot manually.
+3. Record the change narrative in `pipeline_summary.md`. Synchronize affected adjacent files (`data_model.md`, `api_contract.md`, `ui_flow.md`, `stack.md`) and Architecture Diagrams inside the same transaction using the Step 3.5 coupled-update logic.
 
 > Update mode is not a separate mode label. It activates automatically on re-entry when `pipeline_state.yaml` exists. The five modes (`app`, `library`, `api`, `cli`, `research`) describe the spec type; update describes an operation. They are orthogonal, so update the existing spec's original mode sections. In `research` mode the typical update is a roadmap advance: close a step with its verdict and evidence links, then re-plan the remaining ladder in the same transaction.
 
@@ -122,6 +122,7 @@ For a small spec tweak, `--intensity quick` uses one registered-headless dispatc
 
 This is the update-mode mechanism above. Spec versioning reuses the document-track mechanism in [CONVENTIONS §5.4.3](../../../core/CONVENTIONS.md#5-skill-output-convention--t1t2t3): `prd.md` is always the current T1 file.
 
-- **Major change/refinement v{N+1}** — before overwriting `prd.md`, snapshot it to `spec/_internal/versions/v{N}/prd.md`, then write the new content. Record the narrative in `pipeline_summary.md`.
-- **Minor edit** — edit directly and add a minor-log entry to `pipeline_summary.md`; do not snapshot. After five accumulated minor edits, emit an `/audit` chat alert.
+- **Any change to an existing `prd.md`** — the transaction helper preserves its exact pre-image at `spec/_internal/versions/v{N}/prd.md`, then verifies the snapshot after the child command.
+- **Minor edit** — use the same transaction/snapshot path, add a minor-log entry to `pipeline_summary.md`, and after five accumulated minor edits emit an `/audit` chat alert. Minor means lighter review/history, not snapshot exemption.
+- **Initial creation or no-op update** — create no snapshot and consume no version.
 - Do not ask the user to manage versions manually.

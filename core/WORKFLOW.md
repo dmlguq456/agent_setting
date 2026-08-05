@@ -101,7 +101,7 @@ its existing legacy artifact root and memory-linked artifacts were read.
 
 - **No code without a spec:** if a code request has no `spec/`, run `autopilot-spec` first. A one-off throwaway is the only exception; repeated work graduates to a spec.
 - **No spec without prior evidence:** if neither `research/` nor `analysis_project/` grounds the spec, run `autopilot-research` or `analyze-project` first. Enforce this more strongly in unfamiliar domains and for new intent.
-- **Mechanical enforcement:** `artifact-guard.sh` fail-closes writes outside the canonical artifact root and, for a route-backed write under `spec/`, requires the active route to have declared `spec_touch` with a `spec/` write scope. The artifact-creation order above is convention plus routing reminders, not a mechanical block; it does not block edits to existing artifacts or source either way.
+- **Mechanical enforcement:** `artifact-guard.sh` fail-closes writes outside the canonical artifact root and, for a route-backed write under `spec/`, requires the active route to have declared `spec_touch` with a `spec/` write scope. For route-backed refine work, `target-artifact` resolves only to `documents/<artifact>/**` and `research/<artifact>/**`; before a major existing-file rewrite the guard invokes the deterministic snapshot helper. The artifact-creation order above is convention plus routing reminders, not a mechanical block; it does not block edits to existing artifacts or source either way.
 
 **The owning capability also owns revisions.** The routing reminder and convention govern edits; `artifact-guard.sh` does not track per-artifact edit history.
 
@@ -109,7 +109,7 @@ its existing legacy artifact root and memory-linked artifacts were read.
 |---|---|---|
 | `spec/` blueprint | `autopilot-spec` update | `_internal/versions/v{N}/` |
 | code work under `plans/` | `autopilot-code` | `plans/<date>_<slug>/` |
-| documents | `autopilot-draft` or `autopilot-refine` | `_internal/versions/v{N}/` |
+| documents | `autopilot-draft` or `autopilot-refine` | `_internal/versions/v{N}/` for major refinement; minor history in `pipeline_summary.md` |
 | experiments | `autopilot-lab` | `_RUNLOG.md` |
 | DB records with `type=profile` | `analyze-user` or `post-it --scope user` | changelog inside the record body |
 
@@ -491,7 +491,7 @@ Code uses sibling `spec/` and `plans/` buckets.
 | Document | `documents/<date>_<name>/` |
 | Prior research and analysis | `research/<topic>/` and `analysis_project/<mode>/` |
 
-Numeric prefixes such as `00_`, `01_`, `02_`, and `05_` are retired. Use plain names inside `spec/`, separating user-facing files from machine-oriented `_internal/`. `autopilot-spec refine` snapshots prior `prd.md` versions automatically, following the document-track versioning principle. See `CONVENTIONS §§5 and 6.5`.
+Numeric prefixes such as `00_`, `01_`, `02_`, and `05_` are retired. Use plain names inside `spec/`, separating user-facing files from machine-oriented `_internal/`. The spec transaction helper snapshots the exact prior `prd.md` automatically whenever an existing PRD changes, regardless of intensity; initial creation and no-op updates do not allocate a version. See `CONVENTIONS §§5 and 6.5`.
 
 ## 6.1. Cross-Project Continuity Layer
 
@@ -512,7 +512,7 @@ In a spec-backed project, a later fix or feature—especially in a new session�
 0. **Understand existing artifacts first:** follow the read-only orientation order in §0.1 before editing or choosing a capability, then read `spec/prd.md`, `pipeline_state.yaml`, and recent `plans/*`. Reading the spec that governs the declared work scope — root `prd.md` or the relevant `spec/<slug>/prd.md` — is a hard gate in a spec-backed cwd; which candidate governs remains agent judgment, recorded via route-record `spec_read.source`. Adapter-native markers and gates deny entry to spec-changing capabilities when a current spec of this project has not been read in the current session or has changed since the read.
 1. **Refresh analysis when needed:** if `analysis_project/code/` is stale or the domain is unfamiliar, run incremental `analyze-project --mode code` first.
 2. **Require a spec:** when absent, route to `autopilot-spec` before development. A single throwaway is the only exception, and repetition should graduate to a spec.
-3. **Check spec drift before code:** compare the request with `spec/prd.md`. A route, schema/entity, UI-flow, external integration, migration, or existing code drift is spec-significant and routes through `autopilot-spec` update with a snapshot under `_internal/versions/v{N}/`. Proceed autonomously and report when drift is clear; ask when it is genuinely ambiguous. Record “no spec impact” for within-spec implementation details. `autopilot-code` repeats this verdict in preflight Step 0 as a backstop.
+3. **Check spec drift before code:** compare the request with `spec/prd.md`. A route, schema/entity, UI-flow, external integration, migration, or existing code drift is spec-significant and routes through `autopilot-spec` update; when the transaction changes an existing PRD, the helper preserves its exact pre-image under `_internal/versions/v{N}/`. Proceed autonomously and report when drift is clear; ask when it is genuinely ambiguous. Record “no spec impact” for within-spec implementation details. `autopilot-code` repeats this verdict in preflight Step 0 as a backstop.
 4. **Run `autopilot-code`:** intensity selects the graph. Direct performs inline production plus sanity/report. Quick uses one registered-headless dispatch-depth-1 one-shot conductor for micro-plan, plan-check-lite, focused verification, and report with no dispatch depth 2. Only `standard+` creates a durable `plans/<date>_<slug>/` cycle. Derived rigor never creates a separate plan cycle by itself.
 
 These rules close three gaps: a broken trail caused by over-creating plans for quick work, spec drift that bypasses versioned spec update, and blind editing in a new session. Both `autopilot-spec` and `autopilot-code` are iterable; post-build change is another invocation of the same capability, not a new workflow family.
