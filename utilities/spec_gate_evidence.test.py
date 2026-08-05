@@ -167,6 +167,26 @@ class SpecGateEvidenceTest(unittest.TestCase):
         self._bump(self.route, ahead_of=self.prd)
         self.assertNotEqual(0, self._check(route_id=""))
 
+    def test_satisfied_record_with_omitted_route_id_denies(self):
+        # dev review finding (blocking, round 2): an otherwise fully-satisfied
+        # record (fresh mtime, matching cwd/artifact-root, spec_read
+        # satisfied) must still DENY when the caller supplies no --route-id.
+        # Before the fix, `if route_id:` skipped the comparison entirely and
+        # ANY record in the same cwd/artifact-root passed with no marker.
+        _write(self.route, self._record())
+        self._bump(self.route, ahead_of=self.prd)
+        self.assertNotEqual(0, self._check(route_id=""))
+
+    def test_satisfied_record_with_mismatched_route_id_denies(self):
+        _write(self.route, self._record())
+        self._bump(self.route, ahead_of=self.prd)
+        self.assertNotEqual(0, self._check(route_id="rt-mismatched"))
+
+    def test_satisfied_record_with_matching_route_id_passes(self):
+        _write(self.route, self._record(route_id="rt-fixture"))
+        self._bump(self.route, ahead_of=self.prd)
+        self.assertEqual(0, self._check(route_id="rt-fixture"))
+
     def test_tampered_route_content_with_forged_mtime_still_requires_bindings(self):
         # A route file assembled entirely outside the real registry (forged
         # AGENT_ROUTE_FILE) still has to satisfy every binding — forging the

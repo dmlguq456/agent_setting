@@ -261,6 +261,37 @@ class HarvestTest(unittest.TestCase):
                 self.assertIn("route-completion-required", result.stdout)
                 self.assertEqual(jobs.read_text(encoding="utf-8"), before)
 
+    def test_explicit_completion_missing_file_is_hard_error(self):
+        # Advisory (round 2, reviewer A #3): an explicit --completion that is
+        # not a readable file must hard-error, not silently fall through to
+        # the derived path — a typo'd or since-deleted marker path should not
+        # be masked by an unrelated derived PASS succeeding instead.
+        for adapter in ("codex", "opencode"):
+            with self.subTest(adapter=adapter):
+                attempt = f"att-explicit-missing-{adapter}"
+                artifact = self.artifact / f"explicit-missing-{adapter}.md"
+                artifact.write_text("evidence\n", encoding="utf-8")
+                jobs = self.base / f"{adapter}.explicit-missing.jobs.log"
+                row = self.terminal_row(
+                    attempt, "PASS", "none", artifact=str(artifact),
+                    name=f"explicit-missing-{adapter}.codex.jsonl",
+                )
+                before = row
+                jobs.write_text(row, encoding="utf-8")
+                missing_completion = self.base / f"does-not-exist-{adapter}.json"
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(ROOT / f"adapters/{adapter}/bin/dispatch-harvest.py"),
+                        "--jobs", str(jobs), "--slug", "worker", "--status", "open",
+                        "--mark-done", "--completion", str(missing_completion),
+                    ],
+                    text=True, capture_output=True, env=self.env(),
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("route-completion-required", result.stdout)
+                self.assertEqual(jobs.read_text(encoding="utf-8"), before)
+
     def test_stale_explicit_completion_still_refused(self):
         attempt = "att-harvest-stale"
         old = os.environ.get("AGENT_HOME")

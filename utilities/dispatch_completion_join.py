@@ -1417,9 +1417,11 @@ def _row_worktree(row: ChildRow) -> str:
     return fields[3] if len(fields) == 6 else ""
 
 
-def route_completion_evidence(metadata: dict[str, str], *, worktree: str) -> str | None:
+def route_completion_evidence(
+    metadata: dict[str, str], *, worktree: str
+) -> tuple[str | None, str]:
     """Derive a readable in-root artifact path from a route-bound child's own
-    terminal envelope, or ``None`` when it cannot legally complete.
+    terminal envelope, or ``(None, reason)`` when it cannot legally complete.
 
     Shared by `close_finished_child` (supervisor path) and
     `dispatch-harvest.py --mark-done` (SD-70/78, round_1 finding 5) so both
@@ -1427,6 +1429,11 @@ def route_completion_evidence(metadata: dict[str, str], *, worktree: str) -> str
     a valid envelope, a PASS verdict, and a readable in-root artifact. Never
     a raw untrusted path — the inspector hands back only a bounded url-safe
     base64 form.
+
+    The reason distinguishes a bad base64 payload (`evidence-undecodable`)
+    from an empty or non-absolute decoded path (`evidence-absent`) — both
+    used to collapse into one bare `None`, which lost the distinction a
+    reader debugging a stuck row needs (round_1 review advisory 4).
     """
 
     terminal = inspect_terminal_attempt(
@@ -1435,21 +1442,21 @@ def route_completion_evidence(metadata: dict[str, str], *, worktree: str) -> str
         artifact_root_metadata=metadata.get("artifact_root"),
     )
     if terminal.get("state") != "valid":
-        return None
+        return None, "evidence-not-valid"
     if str(terminal.get("verdict")) != "PASS":
-        return None
+        return None, "evidence-not-pass"
     if terminal.get("artifact_state") != "readable":
-        return None
+        return None, "evidence-not-readable"
     encoded = str(terminal.get("artifact_path_b64") or "")
     try:
         artifact = base64.urlsafe_b64decode(
             encoded + "=" * (-len(encoded) % 4)
         ).decode("utf-8")
     except (ValueError, UnicodeDecodeError):
-        return None
+        return None, "evidence-undecodable"
     if not artifact or not Path(artifact).is_absolute():
-        return None
-    return artifact
+        return None, "evidence-absent"
+    return artifact, ""
 
 
 def close_finished_child(row: ChildRow, *, jobs: str | Path) -> str:
@@ -1522,9 +1529,11 @@ def close_finished_child(row: ChildRow, *, jobs: str | Path) -> str:
         ):
             return ""
         return reason
-    artifact = route_completion_evidence(metadata, worktree=_row_worktree(row))
+    artifact, evidence_reason = route_completion_evidence(
+        metadata, worktree=_row_worktree(row)
+    )
     if artifact is None:
-        return "evidence-undecodable"
+        return evidence_reason
     command = [
         sys.executable,
         str(ROOT / "utilities" / "capability-route.py"),

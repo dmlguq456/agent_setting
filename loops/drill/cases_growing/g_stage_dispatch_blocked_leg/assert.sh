@@ -1,32 +1,54 @@
 #!/bin/bash
 # g_stage_dispatch_blocked_leg — a BLOCKED codex leg leaves an open row and the
 # owner must recover, exactly once, without breadth-close (fixes 3+4, plan.md
-# §7). AXIS=static: no model turn ran; this drives the real reconcile path.
+# §7). AXIS=static: no model turn ran; this drives the real supervisor
+# owner-restoration entry point (`runtime_reconcile` in
+# `claude-session-supervisor.py` — the exact function main()'s resume loop
+# calls before ever raising `owned-children-remain-open-after-resume`), not a
+# reimplementation and not a lower-level proxy.
 set -u
 WORK=$1; T=$2
 CASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 HARNESS_ROOT=$(CDPATH= cd -- "$CASE_DIR/../../../.." && pwd)
 fail=0
 
-# 1. Run the real runtime path — reconcile_finished_children, not a
-#    reimplementation.
+# 1. Run the real owner-restoration entry point — runtime_reconcile, the
+#    function the supervisor's `main()` resume loop calls before it would
+#    otherwise raise owned-children-remain-open-after-resume. Not
+#    reconcile_finished_children directly (that was the pre-fix proxy this
+#    case used to call) and not a reimplementation.
 out=$(AGENT_HOME="$HARNESS_ROOT" python3 - "$WORK" "$HARNESS_ROOT" <<'PY'
+import argparse
+import importlib.util
 import sys
-sys.path.insert(0, sys.argv[2] + "/utilities")
 from pathlib import Path
-import dispatch_completion_join as JOIN
 
 work = Path(sys.argv[1])
+harness_root = Path(sys.argv[2])
+sys.path.insert(0, str(harness_root / "utilities"))
+
+spec = importlib.util.spec_from_file_location(
+    "claude_session_supervisor_drill", harness_root / "utilities" / "claude-session-supervisor.py"
+)
+SUP = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(SUP)
+JOIN = sys.modules["dispatch_completion_join"]
+
 jobs = work / "jobs.log"
 parent = (work / ".pre/parent_attempt_id.txt").read_text().strip()
+args = argparse.Namespace(jobs=jobs, parent_attempt_id=parent)
 rows = {row.attempt_id: row for row in JOIN.current_children(jobs, parent)}
 unresolved = {a for a, r in rows.items() if r.status in ("open", "running")}
-outcomes = JOIN.reconcile_finished_children(rows, unresolved, jobs=jobs)
-for attempt, reason in sorted(outcomes.items()):
-    print(f"{attempt}\t{reason}")
+closed = SUP.runtime_reconcile(args, rows, unresolved)
+for attempt in sorted(closed):
+    print(f"closed\t{attempt}")
+for attempt in sorted(unresolved - closed):
+    print(f"still-open\t{attempt}")
 PY
-) || { echo "FAIL: reconcile_finished_children raised"; fail=1; }
-echo "$out"
+) || { echo "FAIL: runtime_reconcile raised"; fail=1; }
+events="$out"
+data_lines=$(printf '%s\n' "$out" | grep -v '^{')
+echo "$data_lines"
 
 blocked=$(cat "$WORK/.pre/blocked_attempt_id.txt")
 
@@ -55,27 +77,41 @@ else
   echo "FAIL: a sibling row was mutated (SD-77 breadth-close)"; fail=1
 fi
 
-# 4. HARD — a second reconcile pass leaves jobs.log byte-identical
-#    (idempotent).
+# 4. HARD — a second runtime_reconcile pass leaves jobs.log byte-identical
+#    (idempotent) and closes nothing further.
 before_second=$(sha256sum "$WORK/jobs.log" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$WORK/jobs.log" | awk '{print $1}')
-AGENT_HOME="$HARNESS_ROOT" python3 - "$WORK" "$HARNESS_ROOT" <<'PY' >/dev/null
+second_out=$(AGENT_HOME="$HARNESS_ROOT" python3 - "$WORK" "$HARNESS_ROOT" <<'PY'
+import argparse
+import importlib.util
 import sys
-sys.path.insert(0, sys.argv[2] + "/utilities")
 from pathlib import Path
-import dispatch_completion_join as JOIN
 
 work = Path(sys.argv[1])
+harness_root = Path(sys.argv[2])
+sys.path.insert(0, str(harness_root / "utilities"))
+
+spec = importlib.util.spec_from_file_location(
+    "claude_session_supervisor_drill2", harness_root / "utilities" / "claude-session-supervisor.py"
+)
+SUP = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(SUP)
+JOIN = sys.modules["dispatch_completion_join"]
+
 jobs = work / "jobs.log"
 parent = (work / ".pre/parent_attempt_id.txt").read_text().strip()
+args = argparse.Namespace(jobs=jobs, parent_attempt_id=parent)
 rows = {row.attempt_id: row for row in JOIN.current_children(jobs, parent)}
 unresolved = {a for a, r in rows.items() if r.status in ("open", "running")}
-JOIN.reconcile_finished_children(rows, unresolved, jobs=jobs)
+closed = SUP.runtime_reconcile(args, rows, unresolved)
+for attempt in sorted(closed):
+    print(f"closed\t{attempt}")
 PY
+)
 after_second=$(sha256sum "$WORK/jobs.log" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$WORK/jobs.log" | awk '{print $1}')
-if [ "$before_second" = "$after_second" ]; then
-  echo "OK: second reconcile pass is a no-op (idempotent)"
+if [ "$before_second" = "$after_second" ] && [ -z "$(printf '%s\n' "$second_out" | grep -v '^{')" ]; then
+  echo "OK: second reconcile pass is a no-op (idempotent, closes nothing further)"
 else
-  echo "FAIL: second reconcile pass mutated jobs.log"; fail=1
+  echo "FAIL: second reconcile pass mutated jobs.log or closed another row"; fail=1
 fi
 
 # 5. HARD — no completion marker was created for the BLOCKED node under
@@ -88,25 +124,29 @@ else
   echo "OK: no completion marker created for the BLOCKED node"
 fi
 
-# 6. HARD — the supervisor loop over this fixture returns without
-#    owned-children-remain-open-after-resume (fix 4 end-to-end). By this
-#    point in the script the row is already closed by step 1's direct
-#    reconcile call, so the equivalent supervisor-facing assertion is that
-#    runtime_reconcile's own emitted outcome is `closed`, not `skipped`, for
-#    the exact blocked attempt — verified by the outcomes line captured in
-#    $out above.
-outcome_reason=$(printf '%s\n' "$out" | awk -F'\t' -v a="$blocked" '$1==a{print $2; found=1} END{if(!found) print "MISSING"}')
-if [ "$outcome_reason" = "" ]; then
-  echo "OK: reconcile outcome for the blocked attempt is closed (empty reason)"
+# 6. HARD — the owner-restoration entry point closes the blocked attempt
+#    (fix 4 end-to-end): runtime_reconcile's own return value names it
+#    closed, which is exactly the condition that lets main()'s resume loop
+#    continue instead of raising owned-children-remain-open-after-resume.
+if printf '%s\n' "$data_lines" | grep -q "^closed${tab}${blocked}\$"; then
+  echo "OK: runtime_reconcile (the real owner-restoration entry point) closed the blocked attempt"
 else
-  echo "FAIL: reconcile outcome for the blocked attempt was not closed (reason='$outcome_reason')"; fail=1
+  echo "FAIL: runtime_reconcile did not report the blocked attempt as closed"; fail=1
+fi
+if printf '%s\n' "$data_lines" | grep -q "^still-open${tab}"; then
+  echo "FAIL: an attempt remained open after runtime_reconcile — main() would raise owned-children-remain-open-after-resume"; fail=1
 fi
 
-# 7. SOFT(WARN) — dispatch.supervisor.reconciled with outcome=closed appears
-#    in the emitted event stream. This drill drives the join layer directly
-#    (not the full supervisor CLI), so the equivalent evidence is the closed
-#    outcome captured above; a full supervisor-CLI drive is out of scope for
-#    a static case.
-echo "WARN(soft): full supervisor CLI event stream not driven by this static case; outcomes line is the closed-evidence proxy"
+# 7. HARD — the real emitted event stream (not a proxy) carries
+#    dispatch.supervisor.reconciled with outcome=closed for the exact
+#    blocked attempt. This step used to be a soft WARN because the case only
+#    drove reconcile_finished_children, which emits nothing; runtime_reconcile
+#    is the emitting layer, so this is now a real assertion.
+if printf '%s\n' "$events" | grep -F "\"type\":\"dispatch.supervisor.reconciled\"" \
+    | grep -F "\"attempt_id\":\"$blocked\"" | grep -qF "\"outcome\":\"closed\""; then
+  echo "OK: dispatch.supervisor.reconciled outcome=closed emitted for the blocked attempt"
+else
+  echo "FAIL: dispatch.supervisor.reconciled outcome=closed was not emitted for the blocked attempt"; fail=1
+fi
 
 exit $fail

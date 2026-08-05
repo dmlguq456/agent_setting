@@ -156,7 +156,7 @@ def _complete_routed_attempt_from_terminal_evidence(
     not here.
     """
 
-    artifact = route_completion_evidence(metadata, worktree=worktree)
+    artifact, _evidence_reason = route_completion_evidence(metadata, worktree=worktree)
     if artifact is None:
         raise ValueError("route-completion-required")
     route_file = Path(metadata.get("route_file", ""))
@@ -265,7 +265,9 @@ def main(argv: list[str]) -> int:
                 return 65
             try:
                 if metadata.get("route_id"):
-                    if args.completion and Path(args.completion).is_file():
+                    if args.completion:
+                        if not Path(args.completion).is_file():
+                            raise ValueError("route-completion-required")
                         _complete_exact_routed_attempt(jobs, metadata, Path(args.completion))
                     else:
                         _complete_routed_attempt_from_terminal_evidence(

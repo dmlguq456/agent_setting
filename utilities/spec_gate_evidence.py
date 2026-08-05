@@ -60,9 +60,10 @@ def check(
         if not isinstance(spec_read, dict) or spec_read.get("satisfied") is not True:
             return _fail()
 
-        if route_id:
-            if record.get("route_id") != route_id:
-                return _fail()
+        if not route_id:
+            return _fail()
+        if record.get("route_id") != route_id:
+            return _fail()
 
         record_cwd = record.get("cwd")
         record_artifact_root = record.get("artifact_root")
