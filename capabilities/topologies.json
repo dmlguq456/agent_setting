@@ -41,7 +41,8 @@
   "artifact-order-prechecked"
  ],
  "artifact_owners": {
-  "spec": "autopilot-spec"
+  "spec": "autopilot-spec",
+  "spec/design": "autopilot-design"
  },
  "rollout": {
   "route_compiler": "enforced"
@@ -245,7 +246,15 @@
    "resume_retry_boundaries": [
     "apply",
     "verify"
-   ]
+   ],
+   "artifact_scope": {
+    "external_scopes": [
+     "target-artifact",
+     "apply-log/**"
+    ],
+    "target_relative": true,
+    "review_anchor": "reviews"
+   }
   },
   {
    "capability": "autopilot-code",
@@ -671,7 +680,21 @@
     "impl-review",
     "test",
     "report"
-   ]
+   ],
+   "artifact_scope": {
+    "cycle_anchors": [
+     "plans/<cycle>"
+    ],
+    "root_anchors": [
+     "analysis_project/code"
+    ],
+    "external_scopes": [
+     "source/**",
+     "source-scoped"
+    ],
+    "map_anchor": "shards",
+    "review_anchor": "_internal"
+   }
   },
   {
    "capability": "autopilot-design",
@@ -698,7 +721,8 @@
     "topology": "one-shot-owner",
     "worker_kind": "capability-owner",
     "write_scope": [
-     "design-scoped/**"
+     "designs/<cycle>/**",
+     "spec/design/**"
     ],
     "owner_dispatch_depth": 1,
     "max_dispatch_depth": 1,
@@ -717,10 +741,11 @@
        "references"
       ],
       "outputs": [
-       "shards/reference-brief.json"
+       "designs/<cycle>/01_refs/reference-brief.json"
       ],
       "write_scope": [
-       "shards/refs/**"
+       "designs/<cycle>/01_refs/**",
+       "spec/design/01_refs/**"
       ],
       "resource_class": "normal",
       "completion_gate": "design-refs",
@@ -755,9 +780,10 @@
        "render"
       ],
       "write_scope": [
-       "design/**",
-       "tokens/**",
-       "components/**"
+       "designs/<cycle>/02_tokens/**",
+       "designs/<cycle>/03_components/**",
+       "spec/design/02_tokens/**",
+       "spec/design/03_components/**"
       ],
       "resource_class": "bulk-generation",
       "completion_gate": "design-build",
@@ -787,10 +813,11 @@
        "components"
       ],
       "outputs": [
-       "reviews/visual/verify/verdict.yaml"
+       "designs/<cycle>/04_review/verify/verdict.yaml"
       ],
       "write_scope": [
-       "reviews/visual/verify/**"
+       "designs/<cycle>/04_review/verify/**",
+       "spec/design/04_review/verify/**"
       ],
       "resource_class": "normal",
       "completion_gate": "design-verify",
@@ -820,10 +847,11 @@
        "components"
       ],
       "outputs": [
-       "reviews/visual/critic/verdict.json"
+       "designs/<cycle>/04_review/critic/verdict.json"
       ],
       "write_scope": [
-       "reviews/visual/critic/**"
+       "designs/<cycle>/04_review/critic/**",
+       "spec/design/04_review/critic/**"
       ],
       "resource_class": "normal",
       "completion_gate": "design-critic",
@@ -848,16 +876,17 @@
       ],
       "role": "fast writer",
       "inputs": [
-       "reviews/visual/verify/verdict.yaml",
-       "reviews/visual/critic/verdict.json",
+       "designs/<cycle>/04_review/verify/verdict.yaml",
+       "designs/<cycle>/04_review/critic/verdict.json",
        "tokens",
        "components"
       ],
       "outputs": [
-       "handoff/**"
+       "designs/<cycle>/05_handoff/**"
       ],
       "write_scope": [
-       "handoff/**"
+       "designs/<cycle>/05_handoff/**",
+       "spec/design/05_handoff/**"
       ],
       "resource_class": "normal",
       "completion_gate": "design-handoff",
@@ -960,7 +989,16 @@
     "visual-verify",
     "critic-review",
     "handoff"
-   ]
+   ],
+   "artifact_scope": {
+    "cycle_anchors": [
+     "designs/<cycle>",
+     "spec/design"
+    ],
+    "map_anchor": "01_refs",
+    "review_anchor": "04_review",
+    "anchor_mode": "literal"
+   }
   },
   {
    "capability": "autopilot-draft",
@@ -1298,7 +1336,13 @@
     "quality-review",
     "fact-verify",
     "finalize"
-   ]
+   ],
+   "artifact_scope": {
+    "cycle_anchors": [
+     "documents/<cycle>"
+    ],
+    "review_anchor": "reviews"
+   }
   },
   {
    "capability": "autopilot-lab",
@@ -1571,7 +1615,13 @@
     "full-run",
     "run-verify",
     "handoff"
-   ]
+   ],
+   "artifact_scope": {
+    "cycle_anchors": [
+     "experiments/<cycle>"
+    ],
+    "review_anchor": "reviews"
+   }
   },
   {
    "capability": "autopilot-lab",
@@ -1869,7 +1919,13 @@
     "report",
     "independent-verify",
     "sync"
-   ]
+   ],
+   "artifact_scope": {
+    "cycle_anchors": [
+     "experiments/<cycle>"
+    ],
+    "review_anchor": "reviews"
+   }
   },
   {
    "capability": "autopilot-refine",
@@ -2045,7 +2101,14 @@
    "resume_retry_boundaries": [
     "review",
     "transaction"
-   ]
+   ],
+   "artifact_scope": {
+    "external_scopes": [
+     "target-artifact"
+    ],
+    "target_relative": true,
+    "review_anchor": "reviews"
+   }
   },
   {
    "capability": "autopilot-research",
@@ -2303,7 +2366,14 @@
     "synthesis",
     "report",
     "claim-verify"
-   ]
+   ],
+   "artifact_scope": {
+    "cycle_anchors": [
+     "research/<topic>"
+    ],
+    "map_anchor": "shards",
+    "review_anchor": "reviews"
+   }
   },
   {
    "capability": "autopilot-ship",
@@ -2559,7 +2629,16 @@
     "release-review",
     "deploy",
     "post-deploy-verify"
-   ]
+   ],
+   "artifact_scope": {
+    "external_scopes": [
+     "release-config/**",
+     "ship-checklist",
+     "deploy-record.json"
+    ],
+    "target_relative": true,
+    "review_anchor": "reviews"
+   }
   },
   {
    "capability": "autopilot-spec",
@@ -2614,10 +2693,10 @@
        "prior-evidence"
       ],
       "outputs": [
-       "shards/spec-research/**"
+       "spec/_internal/research/**"
       ],
       "write_scope": [
-       "shards/spec-research/**"
+       "spec/_internal/research/**"
       ],
       "resource_class": "normal",
       "completion_gate": "spec-research",
@@ -2643,13 +2722,13 @@
       "role": "deep reviewer",
       "inputs": [
        "intent",
-       "shards/spec-research/**"
+       "spec/_internal/research/**"
       ],
       "outputs": [
-       "reviews/spec-verdict.json"
+       "spec/_internal/reviews/verdict.json"
       ],
       "write_scope": [
-       "reviews/spec/**"
+       "spec/_internal/reviews/**"
       ],
       "resource_class": "normal",
       "completion_gate": "spec-review",
@@ -2675,8 +2754,8 @@
       "role": "deep orchestrator",
       "inputs": [
        "intent",
-       "shards/spec-research/**",
-       "reviews/spec-verdict.json"
+       "spec/_internal/research/**",
+       "spec/_internal/reviews/verdict.json"
       ],
       "outputs": [
        "spec/prd.md",
@@ -2787,7 +2866,16 @@
     "research",
     "review",
     "prd-transaction"
-   ]
+   ],
+   "artifact_scope": {
+    "cycle_anchors": [
+     "spec",
+     "spec/<component>"
+    ],
+    "map_anchor": "_internal/research",
+    "review_anchor": "_internal/reviews",
+    "anchor_mode": "literal"
+   }
   }
  ],
  "execution_surfaces": [
@@ -3180,5 +3268,16 @@
  "human_gate_positions": [
   "entry",
   "terminal"
- ]
+ ],
+ "artifact_buckets": {
+  "analysis": "analysis_project",
+  "research": "research/<topic>",
+  "spec": "spec",
+  "spec-design": "spec/design",
+  "plans": "plans/<cycle>",
+  "documents": "documents/<cycle>",
+  "experiments": "experiments/<cycle>",
+  "designs": "designs/<cycle>",
+  "spec-component": "spec/<component>"
+ }
 }

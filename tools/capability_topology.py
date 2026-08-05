@@ -65,13 +65,231 @@ def _touches_artifact(scope, artifact):
     return root == artifact or root.startswith(artifact + "/")
 
 
+def _parallel_path(path, suffix):
+    """Return a deterministic, disjoint artifact/scope path for one extra leg.
+
+    Single shared home for this rule (U-4): `capability-route.py` imports it
+    from here instead of keeping a second copy, so route expansion and D-1's
+    bucket-anchor containment re-check can never drift apart.
+    """
+    if path.endswith("/**") and "*" not in path[:-3]:
+        return path[:-3] + f"-{suffix}/**"
+    head, sep, tail = path.rpartition("/")
+    name, dot, ext = tail.rpartition(".")
+    if not dot:
+        return path + f"-{suffix}"
+    return f"{head}{sep}{name}.{suffix}{dot}{ext}"
+
+
+_ANCHOR_WILDCARD_RE = re.compile(r"^<[a-z]+>$")
+# `<component>` is reserved-segment aware: a leading-underscore segment (e.g.
+# `_internal`) is a bucket-internal name, never a component identifier, so it
+# must not be absorbed by the wildcard (F10) -- otherwise the flat
+# `spec/_internal/**` form and the component form `spec/<component>/_internal/`
+# become indistinguishable and the more specific anchor can never win.
+_RESERVED_SEGMENT_PREFIX = "_"
+
+# D-1 (F2): scope roots whose first segment is one of these known top-level
+# pollution names are rejected outright in `implicit` mode, unless that name is
+# the recipe's own declared `map_anchor`/`review_anchor` (e.g. draft/lab/
+# research legitimately write under a top-level `reviews/` bucket-relative
+# segment). `implicit` mode has no literal cycle-anchor prefix to check against,
+# so without this list any bare scope --including one that spells a design or
+# spec top-level bucket name-- passes unexamined (the exact P1-1/P1-1b shape).
+_IMPLICIT_FORBIDDEN_TOP_SEGMENTS = frozenset(
+    {"design", "tokens", "components", "reviews", "handoff", "shards"}
+)
+
+
+def _anchor_prefix_match(root, anchor):
+    """True when `root`'s leading segments equal `anchor`'s, `<token>` segments
+    of `anchor` matching exactly one arbitrary segment of `root` (except that
+    `<component>` never absorbs a reserved `_`-prefixed segment)."""
+    root_segments, anchor_segments = root.split("/"), anchor.split("/")
+    if len(root_segments) < len(anchor_segments):
+        return False, None
+    for root_seg, anchor_seg in zip(root_segments, anchor_segments):
+        wildcard = _ANCHOR_WILDCARD_RE.match(anchor_seg)
+        if wildcard:
+            if anchor_seg == "<component>" and root_seg.startswith(_RESERVED_SEGMENT_PREFIX):
+                return False, None
+            continue
+        if root_seg != anchor_seg:
+            return False, None
+    return True, "/".join(root_segments[len(anchor_segments):])
+
+
+def _validate_bucket_anchor(recipe, registry, scopes, node_kind, node_id, *, require_anchor_tail=False):
+    """D-1: every write scope must classify into exactly one artifact domain.
+
+    A scope is external (an exact-string allowlisted token outside the
+    artifact root), root-anchor-relative (a fixed artifact-root-relative path
+    that itself sits inside a declared `artifact_buckets` value), or
+    cycle/target relative (the recipe's own bucket, or a runtime-resolved
+    target). `_validate_recipe`'s 2026-08-05 predecessor rejected everything
+    at the artifact-root top level implicitly by requiring a literal
+    `shards/`/`reviews/`+`_internal/` prefix on map/review scopes; this
+    generalizes that into a declared, per-recipe subtree instead of a
+    hardcoded literal, and additionally rejects *any* scope (not just
+    map/review ones) that fails to classify into a single unambiguous domain.
+
+    `require_anchor_tail` (F4) is set only by the post-parallel-leg-expansion
+    re-check: a realized leg must always land on a *sibling* of its base scope
+    inside the same anchor, never overwrite the anchor's own wildcard segment
+    (`_parallel_path` suffixing `designs/<cycle>/**` directly would otherwise
+    produce `designs/<cycle>-alternative/**`, which escapes the owning cycle
+    entirely). The base (non-leg) call sites never pass this, because a scope
+    that terminates exactly at its anchor (tail == "") is a legitimate write
+    to the cycle root itself.
+    """
+    capability = recipe["capability"]
+    artifact_scope = recipe.get("artifact_scope")
+    if not isinstance(artifact_scope, dict):
+        raise TopologyError(f"{capability}: artifact_scope required")
+    buckets = registry.get("artifact_buckets", {})
+    if not isinstance(buckets, dict) or not buckets:
+        raise TopologyError("artifact_buckets registry table required")
+    external = set(artifact_scope.get("external_scopes", []))
+    root_anchors = artifact_scope.get("root_anchors", [])
+    cycle_anchors = artifact_scope.get("cycle_anchors", [])
+    target_relative = artifact_scope.get("target_relative", False)
+    map_anchor = artifact_scope.get("map_anchor")
+    review_anchor = artifact_scope.get("review_anchor")
+    # `literal`: the write_scope string itself carries the bucket prefix
+    # (design's `designs/<cycle>/01_refs/**`, spec's `spec/_internal/research/**`)
+    # -- required whenever a scope is genuinely ambiguous without it (a design
+    # scope has to say which of two owning buckets it belongs to). `implicit`:
+    # the bucket is applied externally by the caller and the scope string
+    # stays bare (code's `plan/**`, research's `shards/retrieval/**`) -- the
+    # pre-existing, still-correct convention for every other track.
+    anchor_mode = artifact_scope.get("anchor_mode", "implicit")
+    if anchor_mode not in ("implicit", "literal"):
+        raise TopologyError(f"{capability}: artifact_scope.anchor_mode must be implicit or literal")
+    if not cycle_anchors and not target_relative and not root_anchors and not external:
+        raise TopologyError(f"{capability}: artifact_scope declares no domain")
+    for anchor in root_anchors:
+        if not any(anchor == bucket or anchor.startswith(bucket + "/") for bucket in buckets.values()):
+            raise TopologyError(
+                f"{capability}: root_anchor {anchor!r} is not inside a declared artifact bucket"
+            )
+    # F10: every declared cycle_anchor must itself be (or sit inside) a
+    # declared `artifact_buckets` value, exactly like root_anchors above --
+    # otherwise a recipe can declare an undeclared bucket name (`rogue/<cycle>`)
+    # and anchor_mode=literal would happily validate scopes against it.
+    for anchor in cycle_anchors:
+        if not any(anchor == bucket or anchor.startswith(bucket + "/") for bucket in buckets.values()):
+            raise TopologyError(
+                f"{capability}: cycle_anchor {anchor!r} is not a declared artifact bucket"
+            )
+    for scope in scopes:
+        root = _scope_root(scope)
+        # Domains are mutually exclusive by priority (external > root_anchor >
+        # cycle/target relative): a scope that is both an exact external token
+        # and would also textually fall under a root_anchor or cycle_anchor is
+        # still exactly one domain by construction. The one real ambiguity is
+        # `literal` mode with more than one cycle_anchor matching the same
+        # scope -- resolved by preferring the most specific (longest) anchor,
+        # so a component anchor (`spec/<component>`) wins over its own flat
+        # parent (`spec`) whenever both match the same scope.
+        if scope in external:
+            domain_kind, tail = "external", root
+        elif any(root == anchor or root.startswith(anchor + "/") for anchor in root_anchors):
+            domain_kind, tail = "root_anchor", root
+        elif anchor_mode == "literal" and cycle_anchors:
+            matches = []
+            for anchor in cycle_anchors:
+                matched, matched_tail = _anchor_prefix_match(root, anchor)
+                if matched:
+                    matches.append((len(anchor.split("/")), matched_tail))
+            if not matches:
+                raise TopologyError(
+                    f"{capability}:{node_id}: write scope {scope!r} matches no declared cycle_anchor"
+                )
+            most_specific = max(length for length, _tail in matches)
+            candidates = {tail for length, tail in matches if length == most_specific}
+            if len(candidates) != 1:
+                raise TopologyError(
+                    f"{capability}:{node_id}: write scope {scope!r} matches {len(candidates)} "
+                    "cycle_anchors ambiguously"
+                )
+            domain_kind, tail = "cycle_anchor", next(iter(candidates))
+        elif cycle_anchors:
+            # implicit mode: the write_scope string carries no bucket prefix at
+            # all (it is resolved cycle-relative by the caller at dispatch
+            # time), so there is no anchor text to check the scope against.
+            # F2: without at least a negative check, a bare scope can still
+            # spell a top-level pollution name that a *different* track's
+            # literal anchor owns (`reviews/visual/**`, `handoff/**`) and pass
+            # unexamined -- the exact P1-1/P1-1b shape this cycle closes. A
+            # segment is allowed only when it is this recipe's own declared
+            # map_anchor/review_anchor (draft/lab/research legitimately use a
+            # top-level `reviews/` segment because `reviews` *is* their
+            # review_anchor).
+            top = root.split("/", 1)[0]
+            own_anchors = {a.split("/", 1)[0] for a in (map_anchor, review_anchor) if a}
+            if top in _IMPLICIT_FORBIDDEN_TOP_SEGMENTS and top not in own_anchors:
+                raise TopologyError(
+                    f"{capability}:{node_id}: write scope {scope!r} spells reserved top-level "
+                    f"segment {top!r}, which this recipe does not own"
+                )
+            domain_kind, tail = "cycle_anchor", root
+        elif target_relative:
+            domain_kind, tail = "target_relative", root
+        else:
+            raise TopologyError(
+                f"{capability}:{node_id}: write scope {scope!r} does not classify into any "
+                "declared artifact domain"
+            )
+        if require_anchor_tail and domain_kind in ("cycle_anchor", "root_anchor") and tail == "":
+            raise TopologyError(
+                f"{capability}:{node_id}: write scope {scope!r} exhausts its anchor with no "
+                "leaf tail; a realized parallel leg must stay a sibling inside the anchor, "
+                "never suffix the anchor's own wildcard segment"
+            )
+        if node_kind == "map-worker":
+            if not map_anchor:
+                raise TopologyError(f"{capability}:{node_id}: map-worker requires a declared map_anchor")
+            if domain_kind not in ("cycle_anchor", "target_relative") or not (
+                tail == map_anchor or tail.startswith(map_anchor + "/")
+            ):
+                raise TopologyError(f"{capability}:{node_id}: map worker may write only inside {map_anchor}")
+        if node_kind == "review-worker":
+            if not review_anchor:
+                raise TopologyError(f"{capability}:{node_id}: review-worker requires a declared review_anchor")
+            if domain_kind not in ("cycle_anchor", "target_relative") or not (
+                tail == review_anchor or tail.startswith(review_anchor + "/")
+            ):
+                raise TopologyError(f"{capability}:{node_id}: reviewer may write isolated verdicts only")
+
+
+def _artifact_owner(registry, root):
+    """Longest-prefix `artifact_owners` lookup (P4-8): `spec/design` can be owned
+    by a different capability than plain `spec`, without a second bespoke check
+    site — `artifact_owners` has exactly one consumer (this function), confirmed
+    by grep before this rule changed from an exact-key lookup (§1.1-4 of the
+    plan): `_scope_touches_spec`, `spec-transaction.py`, and
+    `hooks/artifact-guard.sh` each run their own literal `spec`/`spec/` check
+    and never read `artifact_owners`, so loosening the match here cannot loosen
+    spec ownership anywhere else.
+    """
+    owners = registry.get("artifact_owners", {})
+    segments = root.split("/")
+    for depth in range(len(segments), 0, -1):
+        candidate = "/".join(segments[:depth])
+        if candidate in owners:
+            return owners[candidate]
+    return None
+
+
 def _validate_guard_scope(recipe, scopes, preconditions, registry, node_id):
     declared = set(preconditions or [])
     unknown = declared - set(registry["guard_preconditions"])
     if unknown:
         raise TopologyError(f"{recipe['capability']}:{node_id}: unknown guard preconditions {sorted(unknown)}")
-    if any(_touches_artifact(scope, "spec") for scope in scopes):
-        owner = registry["artifact_owners"].get("spec")
+    for scope in scopes:
+        if not _touches_artifact(scope, "spec"):
+            continue
+        owner = _artifact_owner(registry, _scope_root(scope))
         if recipe["capability"] != owner and "artifact-order-prechecked" not in declared:
             raise TopologyError(
                 f"{recipe['capability']}:{node_id}: spec write scope requires sole owner "
@@ -464,6 +682,7 @@ def _validate_recipe(recipe, registry, standard_plus_owner_profile):
         )
     for scope in quick.get("write_scope", []): _scope_root(scope)
     _validate_guard_scope(recipe, quick.get("write_scope", []), quick.get("guard_preconditions", []), registry, "quick")
+    _validate_bucket_anchor(recipe, registry, quick.get("write_scope", []), None, "quick")
     graph = recipe["standard_plus"]
     if any(key in graph for key in bare_depth_keys):
         raise TopologyError(f"{recipe['capability']}: bare standard+ dispatch-depth fields are forbidden")
@@ -545,10 +764,16 @@ def _validate_recipe(recipe, registry, standard_plus_owner_profile):
         scopes = node["write_scope"]
         for scope in scopes: _scope_root(scope)
         _validate_guard_scope(recipe, scopes, node.get("guard_preconditions", []), registry, node["id"])
-        if node["kind"] == "review-worker" and any(not (s.startswith("reviews/") or s.startswith("_internal/")) for s in scopes):
-            raise TopologyError(f"{recipe['capability']}:{node['id']}: reviewer may write isolated verdicts only")
-        if node["kind"] == "map-worker" and any(not s.startswith("shards/") for s in scopes):
-            raise TopologyError(f"{recipe['capability']}:{node['id']}: map worker may write shards only")
+        _validate_bucket_anchor(recipe, registry, scopes, node["kind"], node["id"])
+        # F3: `outputs` is the same live contract surface as `write_scope` (it
+        # feeds downstream `inputs` at compile time -- see
+        # `capability-route.py`'s parallel-leg expansion), so a path-shaped
+        # output (containing "/") must classify into the same bucket domain.
+        # Bare symbol tokens (`tokens`, `render`, `version-snapshot`) carry no
+        # path and are compiler-substituted elsewhere, so they are skipped.
+        path_outputs = [out for out in node.get("outputs", []) if "/" in out]
+        if path_outputs:
+            _validate_bucket_anchor(recipe, registry, path_outputs, node["kind"], node["id"])
     if "replication" in graph or "replications" in graph:
         raise TopologyError(
             f"{recipe['capability']}: v5 uses parallel_groups; legacy replication keys are read-only"
@@ -666,6 +891,25 @@ def _validate_recipe(recipe, registry, standard_plus_owner_profile):
                     f"{recipe['capability']}:{group_id}: target outputs must be concrete files "
                     "or a map-worker '<dir>/**' shard tree"
                 )
+            # 4.3.5: a leg suffix (`-alternative`, ...) must stay inside the same bucket
+            # anchor as its base scope. `_parallel_path` is the exact function that
+            # expands a route's write_scope for a realized leg, so re-running D-1's
+            # containment check against every non-anchor leg's expanded scopes is the
+            # only way to catch an escape like `designs/<cycle>/**` -> a leg that
+            # would, once expanded, resolve one level *above* the owning cycle.
+            for leg in legs[1:]:
+                expanded = [_parallel_path(scope, leg["suffix"]) for scope in target["write_scope"]]
+                # Node-kind is intentionally omitted here: a realized leg is a
+                # deterministic *sibling* of the base scope (`01_refs` ->
+                # `01_refs-alternative`), not a child of it, so re-running the
+                # map/review-anchor subtree check would reject the isolation
+                # mechanism itself. Only bucket-anchor containment (does the
+                # leg still resolve inside the same cycle/root/external
+                # domain?) is re-checked.
+                _validate_bucket_anchor(
+                    recipe, registry, expanded, None, f"{target_id}-{leg['suffix']}",
+                    require_anchor_tail=True,
+                )
     visiting, done = set(), set()
     def visit(node_id):
         if node_id in visiting: raise TopologyError(f"{recipe['capability']}: cycle")
@@ -745,6 +989,18 @@ def validate_registry(registry, manifest=None):
         raise TopologyError("route compiler rollout must be enforced")
     if "legacy_low_level_dispatch" in registry.get("rollout", {}):
         raise TopologyError("legacy_low_level_dispatch is retired")
+    # D-1 (P4-10): every declared bucket must be a safe artifact-root-relative path, and
+    # every recipe must fail closed with a declared artifact_scope -- a new recipe added
+    # without one is exactly the P1-1/P1-1b regression this cycle is closing.
+    buckets = registry.get("artifact_buckets")
+    if not isinstance(buckets, dict) or not buckets:
+        raise TopologyError("artifact_buckets registry table required")
+    for name, value in buckets.items():
+        if not isinstance(value, str) or not value or value.startswith("/") or ".." in value.split("/"):
+            raise TopologyError(f"artifact_buckets[{name!r}] must be a safe relative path")
+    for recipe in registry["recipes"]:
+        if not isinstance(recipe.get("artifact_scope"), dict):
+            raise TopologyError(f"{recipe['capability']}: artifact_scope required (fail-closed for new recipes)")
     actual, expected = recipe_keys(registry), expected_recipe_keys(manifest)
     if actual != expected:
         raise TopologyError(f"coverage mismatch missing={sorted(expected-actual)} extra={sorted(actual-expected)}")

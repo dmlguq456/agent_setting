@@ -51,7 +51,7 @@ class MaterialRouteGuardTest(unittest.TestCase):
         subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "initial"], check=True)
         self.artifacts = self.base / "artifacts"
         self.artifacts.mkdir()
-        self.route = self.artifacts / "route.json"
+        self.route = self.artifacts / ".runtime" / "routes" / "route.json"
         self.home = self.base / "agent-home"
         (self.home / "core").mkdir(parents=True)
         (self.home / "core" / "CORE.md").write_text("core\n", encoding="utf-8")
@@ -467,6 +467,75 @@ class MaterialRouteGuardTest(unittest.TestCase):
         )
         self.assertEqual(denied.returncode, 2)
 
+    def _compile_command(self) -> list[str]:
+        command = [
+            sys.executable, str(ROUTER), "compile",
+            "--capability", "autopilot-code",
+            "--capability-mode", "dev",
+            "--intensity", "direct",
+            "--cwd", str(self.repo),
+            "--artifact-root", str(self.artifacts),
+        ]
+        for predicate in PREDICATES:
+            command += ["--predicate", predicate]
+        command += [
+            "--transport", "interactive",
+            "--inline-reason", "atomic-direct",
+            "--tracking", "untracked",
+            "--spec-read", "not-applicable",
+            "--drift-verdict", "no-project-spec",
+            "--workflow-mode", "untracked",
+            "--artifact-guard", "preflight-passed",
+        ]
+        return command
+
+    def test_posttool_compile_without_output_binds_via_stdout_route_id(self) -> None:
+        command = self._compile_command()
+        result = subprocess.run(command, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        route_id = json.loads(result.stdout)["route_id"]
+        canonical = self.artifacts / ".runtime" / "routes" / f"{route_id}.json"
+        self.assertTrue(canonical.is_file())
+
+        shell_command = " ".join(shlex.quote(part) for part in command)
+        payload = {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": shell_command},
+            "tool_response": {"stdout": result.stdout, "stderr": result.stderr},
+            "cwd": str(self.repo),
+            "session_id": "stdout-session",
+        }
+        hook_result = subprocess.run(
+            [sys.executable, str(GUARD)], input=json.dumps(payload), text=True,
+            capture_output=True, env={**os.environ, "AGENT_HOME": str(self.home)},
+        )
+        self.assertEqual(hook_result.returncode, 0, hook_result.stderr)
+        allowed = self.guard(
+            "--tool", "Edit", "--file", str(self.repo / "app.py"), session="stdout-session"
+        )
+        self.assertEqual(allowed.returncode, 0, allowed.stderr)
+
+    def test_posttool_compile_without_output_and_without_stdout_does_not_bind(self) -> None:
+        command = self._compile_command()
+        shell_command = " ".join(shlex.quote(part) for part in command)
+        payload = {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": shell_command},
+            "cwd": str(self.repo),
+            "session_id": "no-stdout-session",
+        }
+        hook_result = subprocess.run(
+            [sys.executable, str(GUARD)], input=json.dumps(payload), text=True,
+            capture_output=True, env={**os.environ, "AGENT_HOME": str(self.home)},
+        )
+        self.assertEqual(hook_result.returncode, 0, hook_result.stderr)
+        denied = self.guard(
+            "--tool", "Edit", "--file", str(self.repo / "app.py"), session="no-stdout-session"
+        )
+        self.assertEqual(denied.returncode, 2)
+
     def test_codex_preflight_compile_binds_but_echo_and_foreign_paths_do_not(self) -> None:
         trusted = str(ROOT / "adapters" / "codex" / "bin" / "preflight.sh")
         for session, command in (
@@ -631,7 +700,7 @@ class MaterialRouteGuardTest(unittest.TestCase):
         )
         for name, target, executable in cases:
             with self.subTest(case=name):
-                output = f"route-{name}.json"
+                output = f".runtime/routes/route-{name}.json"
                 command = compile_command(target, output).replace(wrapper_rel, executable, 1)
                 result = subprocess.run(command, shell=True, cwd=target, text=True, capture_output=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
@@ -653,7 +722,7 @@ class MaterialRouteGuardTest(unittest.TestCase):
                     )
                     self.assertEqual(allowed.returncode, 0, allowed.stderr)
 
-        cd_command = f"cd {linked} && {compile_command(linked, 'route-cd.json')}"
+        cd_command = f"cd {linked} && {compile_command(linked, '.runtime/routes/route-cd.json')}"
         result = subprocess.run(cd_command, shell=True, cwd=canonical, text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         result = run_portable(cd_command, canonical, "preceding-cd-portable")

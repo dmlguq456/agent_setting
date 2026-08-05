@@ -287,10 +287,10 @@ class TestRoute(unittest.TestCase):
    predicates=[],signals=["shared-contract"],transport="headless",inline_reason=None,
    dispatch_evidence=self.dispatch(self.nested())))
   replica=next(n for n in route["nodes"] if n["id"]=="research-alternative")
-  self.assertEqual(replica["outputs"],["shards/spec-research-alternative/**"])
+  self.assertEqual(replica["outputs"],["spec/_internal/research-alternative/**"])
   review=next(n for n in route["nodes"] if n["id"]=="review")
   self.assertIn("research-alternative",review["depends_on"])
-  self.assertIn("shards/spec-research-alternative/**",review["inputs"])
+  self.assertIn("spec/_internal/research-alternative/**",review["inputs"])
   R.verify_route(route,R.ROOT)
  def test_replica_carries_fallback_chain_and_seal(self):
   strong=self.compile_v3(self.dispatch(self.nested()))
@@ -541,7 +541,8 @@ class TestRoute(unittest.TestCase):
  def test_close_writes_an_idempotent_outcome_sidecar(self):
   route=R.compile_route(**self.args())
   with tempfile.TemporaryDirectory() as tmp:
-   path=Path(tmp)/"demo-route.json"; path.write_text(json.dumps(route),encoding="utf-8")
+   artifact_root=Path(tmp); route=dict(route); route["artifact_root"]=str(artifact_root)
+   path=artifact_root/"demo-route.json"; path.write_text(json.dumps(route),encoding="utf-8")
    outcome,created=R.close_route(route,path,commit="0"*40,summary="demo")
    self.assertTrue(created); self.assertTrue(R.outcome_path(path).is_file())
    self.assertEqual(outcome["route_hash"],route["route_hash"]); self.assertEqual(outcome["route_id"],route["route_id"])
@@ -552,6 +553,7 @@ class TestRoute(unittest.TestCase):
   route=R.compile_route(**self.args())
   with tempfile.TemporaryDirectory() as tmp:
    root=Path(tmp)
+   route=dict(route); route["artifact_root"]=str(root)
    (root/"open-route.json").write_text(json.dumps(route),encoding="utf-8")
    closed=root/"closed-route.json"; closed.write_text(json.dumps(route),encoding="utf-8")
    (root/"unrelated.json").write_text(json.dumps({"note":"not a route"}),encoding="utf-8")
@@ -566,10 +568,110 @@ class TestRoute(unittest.TestCase):
   second=R.compile_route(**self.args(artifact_root=R.ROOT/"other"))
   self.assertNotEqual(first["route_hash"],second["route_hash"])
   with tempfile.TemporaryDirectory() as tmp:
-   path=Path(tmp)/"demo-route.json"; path.write_text(json.dumps(first),encoding="utf-8")
+   root=Path(tmp)
+   first=dict(first); first["artifact_root"]=str(root)
+   path=root/"demo-route.json"; path.write_text(json.dumps(first),encoding="utf-8")
    R.close_route(first,path,commit="3"*40)
+   second=dict(second); second["artifact_root"]=str(root)
    path.write_text(json.dumps(second),encoding="utf-8")
-   row=R.route_status(Path(tmp))[0]
+   row=R.route_status(root)[0]
    self.assertTrue(row["closed"]); self.assertTrue(row["stale_closure"])
+ # regression ②: D-2 route-record canonical location enforcement.
+ def test_classify_route_location_covers_all_six_buckets(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   root=Path(tmp)
+   cases={
+    root/".runtime"/"routes"/"a.json":"canonical",
+    root/"a-route.json":"legacy-root",
+    root/"routes"/"a.json":"legacy-routes",
+    root/"_routes"/"a.json":"legacy-_routes",
+    root/".routes"/"a.json":"legacy-.routes",
+    root/"nested"/"a.json":"outside",
+    (root.parent/"elsewhere"/"a.json"):"outside",
+   }
+   for path,expected in cases.items():
+    self.assertEqual(R.classify_route_location(path,root),expected,path)
+ def test_classify_route_location_follows_symlink_escape(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   root=Path(tmp)/"root"; root.mkdir()
+   outside=Path(tmp)/"outside"; outside.mkdir()
+   escape=root/".runtime"/"routes-escape"
+   escape.parent.mkdir(parents=True)
+   escape.symlink_to(outside)
+   self.assertEqual(R.classify_route_location(escape/"a.json",root),"outside")
+ def _compile_cli_args(self,artifact_root,*,output=None):
+  args=["--capability","autopilot-code","--capability-mode","dev","--intensity","direct",
+        "--cwd",str(R.ROOT),"--artifact-root",str(artifact_root)]
+  for predicate in ALL: args+=["--predicate",predicate]
+  args+=["--tracking","tracked","--spec-read","true","--drift-verdict","within-spec",
+         "--workflow-mode","tracked","--artifact-guard","true"]
+  if output is not None: args+=["--output",str(output)]
+  return args
+ def _run_compile_cli(self,argv):
+  import subprocess,sys
+  return subprocess.run(
+   [sys.executable,str(P),"compile",*argv],capture_output=True,text=True,cwd=str(R.ROOT))
+ def test_compile_output_omitted_writes_canonical_default(self):
+  # F1: the previous version of this test never invoked the CLI at all -- it
+  # called `write_once` on a path it built itself, so it exercised nothing
+  # about `main()`'s actual default-output behavior. This subprocess call
+  # exercises the real enforcement: deleting `main()`'s canonical-default
+  # block makes this fail because no file is created at the expected path.
+  with tempfile.TemporaryDirectory() as tmp:
+   artifact_root=Path(tmp)
+   result=self._run_compile_cli(self._compile_cli_args(artifact_root))
+   self.assertEqual(result.returncode,0,result.stderr)
+   route=json.loads(result.stdout)
+   expected=R.canonical_routes_dir(artifact_root)/f"{route['route_id']}.json"
+   self.assertTrue(expected.is_file())
+   self.assertIn(f"route_file={expected.resolve()}",result.stderr)
+   self.assertEqual(json.loads(expected.read_text(encoding="utf-8"))["route_id"],route["route_id"])
+ def test_compile_output_outside_canonical_is_rejected(self):
+  # F1: the previous version of this test asserted only that
+  # `classify_route_location` returns "legacy-routes" for this path -- it
+  # never called the CLI, so it could not detect the enforcement block being
+  # deleted from `main()`. This subprocess call exercises the actual rejection.
+  with tempfile.TemporaryDirectory() as tmp:
+   artifact_root=Path(tmp)
+   outside=artifact_root/"routes"/"demo-route.json"
+   result=self._run_compile_cli(self._compile_cli_args(artifact_root,output=outside))
+   self.assertEqual(result.returncode,64,result.stderr)
+   self.assertIn("route-output-outside-canonical",result.stderr)
+   self.assertFalse(outside.exists())
+ def test_status_reports_location_drift_and_duplicate_locations(self):
+  route=R.compile_route(**self.args())
+  with tempfile.TemporaryDirectory() as tmp:
+   root=Path(tmp)
+   canonical=R.canonical_routes_dir(root)/f"{route['route_id']}.json"; R.write_once(canonical,route)
+   legacy=root/"routes"/f"{route['route_id']}.json"; R.write_once(legacy,route)
+   rows={row["route_file"]:row for row in R.route_status(root)}
+   c_row=rows[str(canonical)]; l_row=rows[str(legacy)]
+   self.assertEqual(c_row["location"],"canonical"); self.assertFalse(c_row["drift"]); self.assertFalse(c_row["read_only"])
+   self.assertEqual(l_row["location"],"legacy-routes"); self.assertTrue(l_row["drift"]); self.assertTrue(l_row["read_only"])
+   self.assertIn("duplicate_locations",c_row); self.assertIn("duplicate_locations",l_row)
+   self.assertEqual(set(c_row["duplicate_locations"]),{str(canonical),str(legacy)})
+ def test_close_of_legacy_location_route_records_route_location_and_keeps_sidecar_beside_it(self):
+  route=R.compile_route(**self.args())
+  with tempfile.TemporaryDirectory() as tmp:
+   artifact_root=Path(tmp); artifact_root.mkdir(exist_ok=True)
+   route=dict(route); route["artifact_root"]=str(artifact_root)
+   legacy=artifact_root/"_routes"/"demo-route.json"; legacy.parent.mkdir(parents=True)
+   legacy.write_text(json.dumps(route),encoding="utf-8")
+   outcome,created=R.close_route(route,legacy,commit="4"*40,summary="legacy close")
+   self.assertTrue(created)
+   self.assertEqual(outcome["route_location"],"legacy-_routes")
+   self.assertTrue(R.outcome_path(legacy).is_file())
+   self.assertEqual(R.outcome_path(legacy).parent,legacy.parent)
+ def test_close_rejects_a_route_file_outside_canonical_and_legacy_locations(self):
+  # F7: compile's canonical-output enforcement is worthless if close can still
+  # write an outcome sidecar next to a route file living anywhere at all.
+  route=R.compile_route(**self.args())
+  with tempfile.TemporaryDirectory() as tmp:
+   artifact_root=Path(tmp); route=dict(route); route["artifact_root"]=str(artifact_root)
+   outside=artifact_root/"nested"/"rogue-route.json"; outside.parent.mkdir(parents=True)
+   outside.write_text(json.dumps(route),encoding="utf-8")
+   with self.assertRaisesRegex(ValueError,"route-close-outside-canonical-or-legacy"):
+    R.close_route(route,outside,commit="5"*40)
+   self.assertFalse(R.outcome_path(outside).exists())
 
 if __name__=="__main__": unittest.main()

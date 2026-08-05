@@ -885,6 +885,27 @@ def write_once(path, payload):
 def completion_dir(route_id):
     return resolve_agent_home()/".dispatch"/"completion"/route_id
 
+# D-2: route lifecycle records have exactly one canonical write location. `.resolve()`
+# follows symlinks for every existing path segment, so a `--output` whose parent is a
+# symlink pointing outside the canonical directory is classified by its real target, not
+# its apparent one.
+def canonical_routes_dir(artifact_root):
+    return Path(artifact_root).resolve()/".runtime"/"routes"
+
+def classify_route_location(path, artifact_root):
+    """canonical | legacy-root | legacy-routes | legacy-_routes | legacy-.routes | outside"""
+    resolved=Path(path).resolve()
+    root=Path(artifact_root).resolve()
+    if resolved.parent == canonical_routes_dir(artifact_root): return "canonical"
+    if resolved.parent == root: return "legacy-root"
+    if resolved.parent == root/"routes": return "legacy-routes"
+    if resolved.parent == root/"_routes": return "legacy-_routes"
+    if resolved.parent == root/".routes": return "legacy-.routes"
+    return "outside"
+
+_LEGACY_LOCATIONS=("legacy-root","legacy-routes","legacy-_routes","legacy-.routes")
+_LOCATION_SORT_PRIORITY={"canonical":0,"legacy-root":1,"legacy-routes":2,"legacy-_routes":3,"legacy-.routes":4,"outside":5}
+
 def atomic_write(path, payload):
     path=Path(path); path.parent.mkdir(parents=True,exist_ok=True)
     data=json.dumps(payload,indent=2,ensure_ascii=False)+"\n"
@@ -913,6 +934,14 @@ def _head_commit(cwd):
 # recompiled route leaves a detectably stale one rather than a silently wrong one.
 def close_route(route, route_file, commit=None, summary=None):
     from datetime import datetime, timezone
+    # F7: D-2's single-storage-location contract has a compile-time entrance gate
+    # (`route-output-outside-canonical`) but had no exit gate -- `close` would
+    # happily write a sidecar next to a route file living anywhere at all. The
+    # four legacy locations stay closeable read-only (that's how open records
+    # left over from before D-2 get resolved); everywhere else is rejected.
+    location=classify_route_location(route_file,route["artifact_root"])
+    if location != "canonical" and location not in _LEGACY_LOCATIONS:
+        raise ValueError("route-close-outside-canonical-or-legacy")
     target=outcome_path(route_file)
     if target.exists():
         return json.loads(target.read_text(encoding="utf-8")), False
@@ -922,29 +951,49 @@ def close_route(route, route_file, commit=None, summary=None):
              "capability":route["capability"],"effective_intensity":route["effective_intensity"],
              "closed_at":datetime.now(timezone.utc).isoformat().replace("+00:00","Z"),
              "head_commit":commit or _head_commit(route["cwd"]),"summary":summary,
-             "registry_current":route.get("_registry_current",True)}
+             "registry_current":route.get("_registry_current",True),
+             "route_location":classify_route_location(route_file,route["artifact_root"])}
     atomic_write(target,outcome)
     return outcome, True
 
 def route_status(artifact_root):
-    """Report every compiled route under one artifact root and whether it is closed."""
+    """Report every compiled route under one artifact root and whether it is closed.
+
+    Scans the canonical `.runtime/routes/` directory plus four legacy locations
+    (root-level `*-route.json`, `routes/`, `_routes/`, `.routes/`) read-only —
+    D-2 blocks new writes to the legacy locations but `status` still surfaces
+    them so open routes there remain discoverable and closeable.
+    """
+    root=Path(artifact_root)
+    search_dirs=[canonical_routes_dir(artifact_root),root,root/"routes",root/"_routes",root/".routes"]
+    by_route_id={}
     rows=[]
-    for path in sorted(Path(artifact_root).glob("*.json")):
-        if path.name.endswith(".outcome.json"): continue
-        try: raw=json.loads(path.read_text(encoding="utf-8"))
-        except (OSError,json.JSONDecodeError,UnicodeDecodeError): continue
-        if not isinstance(raw,dict) or "route_id" not in raw or "nodes" not in raw: continue
-        target=outcome_path(path)
-        row={"route_file":str(path),"route_id":raw.get("route_id"),
-             "capability":raw.get("capability"),"effective_intensity":raw.get("effective_intensity"),
-             "source_commit":raw.get("source_commit"),"closed":target.is_file()}
-        if row["closed"]:
-            try: closure=json.loads(target.read_text(encoding="utf-8"))
-            except (OSError,json.JSONDecodeError,UnicodeDecodeError): closure={}
-            row["closed_at"]=closure.get("closed_at"); row["head_commit"]=closure.get("head_commit")
-            row["stale_closure"]=closure.get("route_hash")!=raw.get("route_hash")
-            row["registry_current"]=closure.get("registry_current",True)
-        rows.append(row)
+    for search_dir in search_dirs:
+        if not search_dir.is_dir(): continue
+        for path in sorted(search_dir.glob("*.json")):
+            if path.name.endswith(".outcome.json"): continue
+            try: raw=json.loads(path.read_text(encoding="utf-8"))
+            except (OSError,json.JSONDecodeError,UnicodeDecodeError): continue
+            if not isinstance(raw,dict) or "route_id" not in raw or "nodes" not in raw: continue
+            location=classify_route_location(path,artifact_root)
+            target=outcome_path(path)
+            row={"route_file":str(path),"route_id":raw.get("route_id"),
+                 "capability":raw.get("capability"),"effective_intensity":raw.get("effective_intensity"),
+                 "source_commit":raw.get("source_commit"),"closed":target.is_file(),
+                 "location":location,"drift":location != "canonical",
+                 "read_only":location in _LEGACY_LOCATIONS}
+            if row["closed"]:
+                try: closure=json.loads(target.read_text(encoding="utf-8"))
+                except (OSError,json.JSONDecodeError,UnicodeDecodeError): closure={}
+                row["closed_at"]=closure.get("closed_at"); row["head_commit"]=closure.get("head_commit")
+                row["stale_closure"]=closure.get("route_hash")!=raw.get("route_hash")
+                row["registry_current"]=closure.get("registry_current",True)
+            rows.append(row)
+            by_route_id.setdefault(row["route_id"],[]).append(row["route_file"])
+    for row in rows:
+        locations=by_route_id.get(row["route_id"],[])
+        if len(locations) > 1: row["duplicate_locations"]=sorted(locations)
+    rows.sort(key=lambda row:(_LOCATION_SORT_PRIORITY.get(row["location"],9),row["route_file"]))
     return rows
 
 def _marker_attempt_axes(node, attempt_id, attempt_metadata):
@@ -1376,7 +1425,14 @@ def main():
                 a.predicate,a.signal,a.transport,a.transport_evidence,a.inline_reason,
                 a.tracking,gate,dispatch_evidence,registered_headless_evidence,
             )
-        if a.output: write_once(a.output,route)
+        if a.output:
+            output_path=Path(a.output)
+            if classify_route_location(output_path,a.artifact_root) != "canonical":
+                raise ValueError("route-output-outside-canonical")
+        else:
+            output_path=canonical_routes_dir(a.artifact_root)/f"{route['route_id']}.json"
+        write_once(output_path,route)
+        print(f"route_file={output_path.resolve()}",file=sys.stderr)
         print(json.dumps(route,sort_keys=True))
     elif a.command=="status":
         rows=route_status(a.artifact_root)

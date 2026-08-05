@@ -104,7 +104,7 @@ python3 "$AGENT_HOME/utilities/compose-route.py" \
   --cwd "$PWD" --artifact-root "$ARTIFACT_ROOT" \
   --tracking tracked --spec-read "$PRD_SHA" --drift-verdict within-spec \
   --workflow-mode tracked --artifact-guard conductor-prechecked \
-  --output "$ARTIFACT_ROOT/plans/<slug>/route.json"
+  --output "$ARTIFACT_ROOT/.runtime/routes/<route_id>.json"
 ```
 
 - `role` and `kind` are derived from each unit's frontmatter — do not restate them.

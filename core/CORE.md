@@ -48,6 +48,12 @@ downloaded, and session reload or restart boundaries remain runtime-specific.
 
 Runtime homes should be adapter projections, not the source repository. Keep credentials, sessions, logs, SQLite state, caches, and other runtime-owned files in the runtime home. Expose the harness into each runtime home with symlinks or adapter-owned bootstrap files.
 
+Project-independent global runtime state (the dispatch attempt registry and
+similar cross-project bookkeeping) lives under `<agent-home>/.dispatch/` or an
+XDG state directory, never inside a project artifact root — this is the
+existing convention (see `core/OPERATIONS.md` §5.10/§5.12), restated here as
+policy rather than changed.
+
 Projection example:
 
 ```text
@@ -84,7 +90,9 @@ per-worktree directory. Resolve it with `utilities/artifact-root.sh <cwd>`:
 1. an explicit absolute `AGENT_ARTIFACT_ROOT`;
 2. for Git, the primary worktree's `.agent_reports/`, falling back to its
    existing legacy `.claude_reports/` only when the new root is absent;
-3. for non-Git, the nearest existing root above `cwd`, otherwise
+3. for non-Git, `cwd`'s own root first (self is not inheritance, no marker
+   needed); otherwise a strict ancestor's root is inherited only when that
+   ancestor also holds an `.agent-workspace` marker file; otherwise
    `<cwd>/.agent_reports/`.
 
 Linked task worktrees are source-only execution surfaces. A tracked artifact
@@ -102,6 +110,8 @@ The artifact root contains durable, project-scoped work products:
 | `plans/` | implementation cycles |
 | `documents/` | document drafts and refinement artifacts |
 | `experiments/` | experiment setup, evaluation, and run logs |
+| `designs/` | standalone design decision records (spec-owned design instead anchors at `spec/design/`) |
+| `.runtime/` | artifact-root-scoped runtime state (route lifecycle records and similar); the only bucket name for this, legacy `_runtime/` is read-only |
 
 ## 3.1. Agent Notes And Worklog Board
 

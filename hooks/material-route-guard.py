@@ -603,6 +603,7 @@ def _route_compile_argv(segment: list[str]) -> list[str] | None:
 class CompileInvocation(NamedTuple):
     outputs: tuple[Path, ...]
     effective_cwd: Path
+    artifact_root: Path | None = None
 
 
 def _git_common_dir(checkout: Path) -> Path | None:
@@ -672,6 +673,7 @@ def route_compile_invocations(command: str, cwd: Path) -> list[CompileInvocation
         if tail is None:
             continue
         outputs: list[Path] = []
+        artifact_root: Path | None = None
         for offset, value in enumerate(tail):
             raw = ""
             if value == "--output" and offset + 1 < len(tail):
@@ -683,13 +685,47 @@ def route_compile_invocations(command: str, cwd: Path) -> list[CompileInvocation
                 outputs.append(
                     (command_cwd / path).resolve() if not path.is_absolute() else path.resolve()
                 )
+            root_raw = ""
+            if value == "--artifact-root" and offset + 1 < len(tail):
+                root_raw = tail[offset + 1]
+            elif value.startswith("--artifact-root="):
+                root_raw = value.split("=", 1)[1]
+            if root_raw:
+                root_path = Path(os.path.expanduser(root_raw))
+                artifact_root = (
+                    (command_cwd / root_path).resolve()
+                    if not root_path.is_absolute()
+                    else root_path.resolve()
+                )
         unique = []
         for path in outputs:
             if path not in unique:
                 unique.append(path)
         if unique:
-            invocations.append(CompileInvocation(tuple(unique), command_cwd))
+            invocations.append(CompileInvocation(tuple(unique), command_cwd, artifact_root))
+        elif artifact_root is not None:
+            # SD-2.5: `--output` omitted means compile writes to the canonical
+            # default (`<artifact-root>/.runtime/routes/<route_id>.json`), whose
+            # route_id is only known after the command runs. PostToolUse resolves
+            # it from `tool_response` stdout; this zero-output invocation is the
+            # marker that a resolution attempt should happen.
+            invocations.append(CompileInvocation((), command_cwd, artifact_root))
     return invocations
+
+
+def _compiled_route_id(tool_response: object) -> str | None:
+    """Read `route_id` from a compile invocation's stdout (the route JSON)."""
+    if not isinstance(tool_response, dict):
+        return None
+    stdout = tool_response.get("stdout")
+    if not isinstance(stdout, str) or not stdout.strip():
+        return None
+    try:
+        route = json.loads(stdout.strip().splitlines()[-1])
+    except (json.JSONDecodeError, IndexError):
+        return None
+    route_id = route.get("route_id") if isinstance(route, dict) else None
+    return route_id if isinstance(route_id, str) and route_id else None
 
 
 def route_compile_outputs(command: str, cwd: Path) -> list[Path]:
@@ -979,6 +1015,25 @@ def hook_main(payload: dict[str, Any], agent_home: Path) -> int:
                 bind_route(outputs[0], invocations[0].effective_cwd, session_id, agent_home)
             except (RouteError, OSError, subprocess.SubprocessError):
                 pass
+        elif (
+            session_id
+            and len(invocations) == 1
+            and not invocations[0].outputs
+            and invocations[0].artifact_root is not None
+        ):
+            # `--output` was omitted, so compile wrote its canonical default. The
+            # route_id is only known from the compiled route JSON on stdout; if
+            # that is not readable, bind nothing rather than guess (no silent
+            # over-binding).
+            route_id = _compiled_route_id(payload.get("tool_response"))
+            if route_id:
+                canonical = (
+                    invocations[0].artifact_root / ".runtime" / "routes" / f"{route_id}.json"
+                )
+                try:
+                    bind_route(canonical, invocations[0].effective_cwd, session_id, agent_home)
+                except (RouteError, OSError, subprocess.SubprocessError):
+                    pass
         return 0
     if event != "PreToolUse":
         return 0
