@@ -876,8 +876,8 @@
       ],
       "role": "fast writer",
       "inputs": [
-       "reviews/visual/verify/verdict.yaml",
-       "reviews/visual/critic/verdict.json",
+       "designs/<cycle>/04_review/verify/verdict.yaml",
+       "designs/<cycle>/04_review/critic/verdict.json",
        "tokens",
        "components"
       ],
@@ -2722,7 +2722,7 @@
       "role": "deep reviewer",
       "inputs": [
        "intent",
-       "shards/spec-research/**"
+       "spec/_internal/research/**"
       ],
       "outputs": [
        "spec/_internal/reviews/verdict.json"
@@ -2754,8 +2754,8 @@
       "role": "deep orchestrator",
       "inputs": [
        "intent",
-       "shards/spec-research/**",
-       "reviews/spec-verdict.json"
+       "spec/_internal/research/**",
+       "spec/_internal/reviews/verdict.json"
       ],
       "outputs": [
        "spec/prd.md",
@@ -2869,7 +2869,8 @@
    ],
    "artifact_scope": {
     "cycle_anchors": [
-     "spec"
+     "spec",
+     "spec/<component>"
     ],
     "map_anchor": "_internal/research",
     "review_anchor": "_internal/reviews",
@@ -3276,6 +3277,7 @@
   "plans": "plans/<cycle>",
   "documents": "documents/<cycle>",
   "experiments": "experiments/<cycle>",
-  "designs": "designs/<cycle>"
+  "designs": "designs/<cycle>",
+  "spec-component": "spec/<component>"
  }
 }

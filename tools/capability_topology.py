@@ -82,23 +82,44 @@ def _parallel_path(path, suffix):
 
 
 _ANCHOR_WILDCARD_RE = re.compile(r"^<[a-z]+>$")
+# `<component>` is reserved-segment aware: a leading-underscore segment (e.g.
+# `_internal`) is a bucket-internal name, never a component identifier, so it
+# must not be absorbed by the wildcard (F10) -- otherwise the flat
+# `spec/_internal/**` form and the component form `spec/<component>/_internal/`
+# become indistinguishable and the more specific anchor can never win.
+_RESERVED_SEGMENT_PREFIX = "_"
+
+# D-1 (F2): scope roots whose first segment is one of these known top-level
+# pollution names are rejected outright in `implicit` mode, unless that name is
+# the recipe's own declared `map_anchor`/`review_anchor` (e.g. draft/lab/
+# research legitimately write under a top-level `reviews/` bucket-relative
+# segment). `implicit` mode has no literal cycle-anchor prefix to check against,
+# so without this list any bare scope --including one that spells a design or
+# spec top-level bucket name-- passes unexamined (the exact P1-1/P1-1b shape).
+_IMPLICIT_FORBIDDEN_TOP_SEGMENTS = frozenset(
+    {"design", "tokens", "components", "reviews", "handoff", "shards"}
+)
 
 
 def _anchor_prefix_match(root, anchor):
     """True when `root`'s leading segments equal `anchor`'s, `<token>` segments
-    of `anchor` matching exactly one arbitrary segment of `root`."""
+    of `anchor` matching exactly one arbitrary segment of `root` (except that
+    `<component>` never absorbs a reserved `_`-prefixed segment)."""
     root_segments, anchor_segments = root.split("/"), anchor.split("/")
     if len(root_segments) < len(anchor_segments):
         return False, None
     for root_seg, anchor_seg in zip(root_segments, anchor_segments):
-        if _ANCHOR_WILDCARD_RE.match(anchor_seg):
+        wildcard = _ANCHOR_WILDCARD_RE.match(anchor_seg)
+        if wildcard:
+            if anchor_seg == "<component>" and root_seg.startswith(_RESERVED_SEGMENT_PREFIX):
+                return False, None
             continue
         if root_seg != anchor_seg:
             return False, None
     return True, "/".join(root_segments[len(anchor_segments):])
 
 
-def _validate_bucket_anchor(recipe, registry, scopes, node_kind, node_id):
+def _validate_bucket_anchor(recipe, registry, scopes, node_kind, node_id, *, require_anchor_tail=False):
     """D-1: every write scope must classify into exactly one artifact domain.
 
     A scope is external (an exact-string allowlisted token outside the
@@ -111,6 +132,15 @@ def _validate_bucket_anchor(recipe, registry, scopes, node_kind, node_id):
     generalizes that into a declared, per-recipe subtree instead of a
     hardcoded literal, and additionally rejects *any* scope (not just
     map/review ones) that fails to classify into a single unambiguous domain.
+
+    `require_anchor_tail` (F4) is set only by the post-parallel-leg-expansion
+    re-check: a realized leg must always land on a *sibling* of its base scope
+    inside the same anchor, never overwrite the anchor's own wildcard segment
+    (`_parallel_path` suffixing `designs/<cycle>/**` directly would otherwise
+    produce `designs/<cycle>-alternative/**`, which escapes the owning cycle
+    entirely). The base (non-leg) call sites never pass this, because a scope
+    that terminates exactly at its anchor (tail == "") is a legitimate write
+    to the cycle root itself.
     """
     capability = recipe["capability"]
     artifact_scope = recipe.get("artifact_scope")
@@ -142,6 +172,15 @@ def _validate_bucket_anchor(recipe, registry, scopes, node_kind, node_id):
             raise TopologyError(
                 f"{capability}: root_anchor {anchor!r} is not inside a declared artifact bucket"
             )
+    # F10: every declared cycle_anchor must itself be (or sit inside) a
+    # declared `artifact_buckets` value, exactly like root_anchors above --
+    # otherwise a recipe can declare an undeclared bucket name (`rogue/<cycle>`)
+    # and anchor_mode=literal would happily validate scopes against it.
+    for anchor in cycle_anchors:
+        if not any(anchor == bucket or anchor.startswith(bucket + "/") for bucket in buckets.values()):
+            raise TopologyError(
+                f"{capability}: cycle_anchor {anchor!r} is not a declared artifact bucket"
+            )
     for scope in scopes:
         root = _scope_root(scope)
         # Domains are mutually exclusive by priority (external > root_anchor >
@@ -149,7 +188,9 @@ def _validate_bucket_anchor(recipe, registry, scopes, node_kind, node_id):
         # and would also textually fall under a root_anchor or cycle_anchor is
         # still exactly one domain by construction. The one real ambiguity is
         # `literal` mode with more than one cycle_anchor matching the same
-        # scope -- which anchor is authoritative for map/review containment?
+        # scope -- resolved by preferring the most specific (longest) anchor,
+        # so a component anchor (`spec/<component>`) wins over its own flat
+        # parent (`spec`) whenever both match the same scope.
         if scope in external:
             domain_kind, tail = "external", root
         elif any(root == anchor or root.startswith(anchor + "/") for anchor in root_anchors):
@@ -159,18 +200,38 @@ def _validate_bucket_anchor(recipe, registry, scopes, node_kind, node_id):
             for anchor in cycle_anchors:
                 matched, matched_tail = _anchor_prefix_match(root, anchor)
                 if matched:
-                    matches.append(matched_tail)
+                    matches.append((len(anchor.split("/")), matched_tail))
             if not matches:
                 raise TopologyError(
                     f"{capability}:{node_id}: write scope {scope!r} matches no declared cycle_anchor"
                 )
-            if len(set(matches)) != 1:
+            most_specific = max(length for length, _tail in matches)
+            candidates = {tail for length, tail in matches if length == most_specific}
+            if len(candidates) != 1:
                 raise TopologyError(
-                    f"{capability}:{node_id}: write scope {scope!r} matches {len(set(matches))} "
+                    f"{capability}:{node_id}: write scope {scope!r} matches {len(candidates)} "
                     "cycle_anchors ambiguously"
                 )
-            domain_kind, tail = "cycle_anchor", matches[0]
+            domain_kind, tail = "cycle_anchor", next(iter(candidates))
         elif cycle_anchors:
+            # implicit mode: the write_scope string carries no bucket prefix at
+            # all (it is resolved cycle-relative by the caller at dispatch
+            # time), so there is no anchor text to check the scope against.
+            # F2: without at least a negative check, a bare scope can still
+            # spell a top-level pollution name that a *different* track's
+            # literal anchor owns (`reviews/visual/**`, `handoff/**`) and pass
+            # unexamined -- the exact P1-1/P1-1b shape this cycle closes. A
+            # segment is allowed only when it is this recipe's own declared
+            # map_anchor/review_anchor (draft/lab/research legitimately use a
+            # top-level `reviews/` segment because `reviews` *is* their
+            # review_anchor).
+            top = root.split("/", 1)[0]
+            own_anchors = {a.split("/", 1)[0] for a in (map_anchor, review_anchor) if a}
+            if top in _IMPLICIT_FORBIDDEN_TOP_SEGMENTS and top not in own_anchors:
+                raise TopologyError(
+                    f"{capability}:{node_id}: write scope {scope!r} spells reserved top-level "
+                    f"segment {top!r}, which this recipe does not own"
+                )
             domain_kind, tail = "cycle_anchor", root
         elif target_relative:
             domain_kind, tail = "target_relative", root
@@ -178,6 +239,12 @@ def _validate_bucket_anchor(recipe, registry, scopes, node_kind, node_id):
             raise TopologyError(
                 f"{capability}:{node_id}: write scope {scope!r} does not classify into any "
                 "declared artifact domain"
+            )
+        if require_anchor_tail and domain_kind in ("cycle_anchor", "root_anchor") and tail == "":
+            raise TopologyError(
+                f"{capability}:{node_id}: write scope {scope!r} exhausts its anchor with no "
+                "leaf tail; a realized parallel leg must stay a sibling inside the anchor, "
+                "never suffix the anchor's own wildcard segment"
             )
         if node_kind == "map-worker":
             if not map_anchor:
@@ -698,6 +765,15 @@ def _validate_recipe(recipe, registry, standard_plus_owner_profile):
         for scope in scopes: _scope_root(scope)
         _validate_guard_scope(recipe, scopes, node.get("guard_preconditions", []), registry, node["id"])
         _validate_bucket_anchor(recipe, registry, scopes, node["kind"], node["id"])
+        # F3: `outputs` is the same live contract surface as `write_scope` (it
+        # feeds downstream `inputs` at compile time -- see
+        # `capability-route.py`'s parallel-leg expansion), so a path-shaped
+        # output (containing "/") must classify into the same bucket domain.
+        # Bare symbol tokens (`tokens`, `render`, `version-snapshot`) carry no
+        # path and are compiler-substituted elsewhere, so they are skipped.
+        path_outputs = [out for out in node.get("outputs", []) if "/" in out]
+        if path_outputs:
+            _validate_bucket_anchor(recipe, registry, path_outputs, node["kind"], node["id"])
     if "replication" in graph or "replications" in graph:
         raise TopologyError(
             f"{recipe['capability']}: v5 uses parallel_groups; legacy replication keys are read-only"
@@ -830,7 +906,10 @@ def _validate_recipe(recipe, registry, standard_plus_owner_profile):
                 # mechanism itself. Only bucket-anchor containment (does the
                 # leg still resolve inside the same cycle/root/external
                 # domain?) is re-checked.
-                _validate_bucket_anchor(recipe, registry, expanded, None, f"{target_id}-{leg['suffix']}")
+                _validate_bucket_anchor(
+                    recipe, registry, expanded, None, f"{target_id}-{leg['suffix']}",
+                    require_anchor_tail=True,
+                )
     visiting, done = set(), set()
     def visit(node_id):
         if node_id in visiting: raise TopologyError(f"{recipe['capability']}: cycle")

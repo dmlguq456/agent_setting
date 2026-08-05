@@ -934,6 +934,14 @@ def _head_commit(cwd):
 # recompiled route leaves a detectably stale one rather than a silently wrong one.
 def close_route(route, route_file, commit=None, summary=None):
     from datetime import datetime, timezone
+    # F7: D-2's single-storage-location contract has a compile-time entrance gate
+    # (`route-output-outside-canonical`) but had no exit gate -- `close` would
+    # happily write a sidecar next to a route file living anywhere at all. The
+    # four legacy locations stay closeable read-only (that's how open records
+    # left over from before D-2 get resolved); everywhere else is rejected.
+    location=classify_route_location(route_file,route["artifact_root"])
+    if location != "canonical" and location not in _LEGACY_LOCATIONS:
+        raise ValueError("route-close-outside-canonical-or-legacy")
     target=outcome_path(route_file)
     if target.exists():
         return json.loads(target.read_text(encoding="utf-8")), False

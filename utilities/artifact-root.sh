@@ -65,10 +65,14 @@ fi
 
 # D-3: cwd's own root is used on discovery (self is not inheritance, no marker
 # needed). A strict ancestor's root is inherited only when that ancestor also
-# carries an `.agent-workspace` marker file (contents unread, existence only)
-# or, as an implicit marker in a git-less environment, its own `.git`
-# directory. An ancestor with a root but no marker is skipped, not adopted --
-# the walk keeps climbing instead of stopping at the first root it finds.
+# carries a regular `.agent-workspace` marker file (contents unread, existence
+# only). F7: an earlier revision also accepted the ancestor's own `.git`
+# directory as an implicit marker, git-installed or not -- PRD D-3 and
+# core/CONVENTIONS.md/CORE.md name only `.agent-workspace`, and a malformed or
+# inaccessible `.git` would have silently re-opened the exact $HOME/NAS root
+# absorption D-3 exists to close. An ancestor with a root but no marker is
+# skipped, not adopted -- the walk keeps climbing instead of stopping at the
+# first root it finds.
 d=$start
 self=1
 while :; do
@@ -79,7 +83,7 @@ while :; do
     root="$d/.claude_reports"
   fi
   if [ -n "$root" ] \
-    && { [ "$self" = 1 ] || [ -f "$d/.agent-workspace" ] || [ -d "$d/.git" ]; }; then
+    && { [ "$self" = 1 ] || [ -f "$d/.agent-workspace" ]; }; then
     physical_dir "$root"
     exit 0
   fi

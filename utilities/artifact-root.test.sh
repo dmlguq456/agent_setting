@@ -101,4 +101,25 @@ actual=$(env -u AGENT_ARTIFACT_ROOT "$RESOLVER" "$legacy_marked_child")
 [ "$actual" = "$legacy_marked/.claude_reports" ] || fail "legacy root plus marker is inherited"
 ok "legacy root plus marker is inherited"
 
+# F7: a strict-ancestor `.git` directory must never act as an implicit marker,
+# even in a git-less environment where the resolver cannot validate it as a
+# real repository -- PRD D-3 names only `.agent-workspace`. Fake out
+# `command -v git` failing (no git binary reachable) with a PATH stripped down
+# to just the coreutils this script itself needs, so the resolver's non-Git
+# fallback loop actually runs.
+gitless_bin="$TMP/gitless-bin"
+mkdir -p "$gitless_bin"
+for tool in sh dirname basename cd pwd mktemp env cat printf test true false expr; do
+  path=$(command -v "$tool" 2>/dev/null) || continue
+  ln -sf "$path" "$gitless_bin/$tool" 2>/dev/null || true
+done
+
+fake_git_marker="$TMP/fake-git-marker"
+fake_git_marker_child="$fake_git_marker/a/b"
+mkdir -p "$fake_git_marker/.agent_reports" "$fake_git_marker/.git" "$fake_git_marker_child"
+actual=$(env -i -u AGENT_ARTIFACT_ROOT PATH="$gitless_bin" HOME="$HOME" "$RESOLVER" "$fake_git_marker_child")
+[ "$actual" = "$fake_git_marker_child/.agent_reports" ] \
+  || fail "a bare .git directory is never an implicit marker, git-less or not"
+ok "a bare .git directory is never an implicit marker, git-less or not"
+
 echo "artifact-root.test.sh: all assertions passed"

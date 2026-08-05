@@ -188,6 +188,83 @@ class TestComposeRoute(unittest.TestCase):
                 cycle_anchors=["analysis_project"],
             )
 
+    # --- F11: compose had no way to produce `anchor_mode: literal` ---------
+    def test_anchor_mode_literal_without_cycle_anchor_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "requires at least one --cycle-anchor"):
+            C.build_recipe(
+                "analyze-project", "code", UNITS,
+                topology_class="staged", quick_write_scope=[],
+                quick_model_profile="balanced-deep", gate_index=self._gate_index(),
+                root_anchors=["analysis_project"], anchor_mode="literal",
+            )
+
+    def test_anchor_mode_rejects_unknown_value(self):
+        with self.assertRaisesRegex(ValueError, "anchor-mode must be implicit or literal"):
+            C.build_recipe(
+                "analyze-project", "code", UNITS,
+                topology_class="staged", quick_write_scope=[],
+                quick_model_profile="balanced-deep", gate_index=self._gate_index(),
+                cycle_anchors=["analysis_project"], anchor_mode="bogus",
+            )
+
+    def test_build_recipe_records_anchor_mode_in_artifact_scope(self):
+        recipe = C.build_recipe(
+            "analyze-project", "code", UNITS,
+            topology_class="staged", quick_write_scope=[],
+            quick_model_profile="balanced-deep", gate_index=self._gate_index(),
+            cycle_anchors=["analysis_project"], review_anchor="reviews",
+            anchor_mode="literal",
+        )
+        self.assertEqual(recipe["artifact_scope"]["anchor_mode"], "literal")
+
+    def test_composed_recipe_anchor_mode_literal_round_trips_through_compile(self):
+        # The full compile path runs TOPO._validate_recipe against the SAME
+        # registry-declared artifact_buckets/anchor checks an enumerated
+        # recipe gets -- a scope that does not carry the declared literal
+        # prefix must fail closed here, not silently pass as "implicit" bare.
+        literal_units = [
+            {"id": "survey", "unit": "research/research-survey",
+             "write_scope": ["analysis_project/code/**"], "gate": "research-retrieval"},
+            {"id": "claim", "unit": "research/claim-verify", "depends_on": ["survey"],
+             "write_scope": ["analysis_project/reviews/**"], "gate": "research-claims"},
+        ]
+        with tempfile.TemporaryDirectory() as out_dir:
+            output = str(Path(out_dir) / ".runtime" / "routes" / "route.json")
+            command_extra = ["--anchor-mode", "literal"]
+            result = self._run_with_anchor_mode(literal_units, output, out_dir, command_extra)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+        mismatched_units = [
+            {"id": "survey", "unit": "research/research-survey",
+             "write_scope": ["analysis_project/code/**"], "gate": "research-retrieval"},
+            {"id": "claim", "unit": "research/claim-verify", "depends_on": ["survey"],
+             "write_scope": ["reviews/claims/**"], "gate": "research-claims"},
+        ]
+        with tempfile.TemporaryDirectory() as out_dir:
+            output = str(Path(out_dir) / ".runtime" / "routes" / "route.json")
+            command_extra = ["--anchor-mode", "literal"]
+            result = self._run_with_anchor_mode(mismatched_units, output, out_dir, command_extra)
+            self.assertEqual(result.returncode, 64, result.stdout)
+            self.assertIn("matches no declared cycle_anchor", result.stderr)
+
+    def _run_with_anchor_mode(self, units, output, artifact_root, extra_args):
+        with tempfile.TemporaryDirectory() as tmp:
+            evidence_path = Path(tmp) / "evidence.json"
+            evidence_path.write_text(json.dumps(FIXTURE_EVIDENCE), encoding="utf-8")
+            command = [
+                sys.executable, str(COMPOSE),
+                "--capability", "analyze-project", "--capability-mode", "code",
+                "--units-json", json.dumps(units),
+                "--cwd", str(ROOT), "--artifact-root", artifact_root,
+                "--tracking", "tracked", "--spec-read", "canonical-sha",
+                "--drift-verdict", "within-spec", "--workflow-mode", "tracked",
+                "--artifact-guard", "conductor-prechecked",
+                "--dispatch-evidence", str(evidence_path),
+                "--cycle-anchor", "analysis_project", "--review-anchor", "reviews",
+                "--output", output,
+            ] + extra_args
+            return subprocess.run(command, text=True, capture_output=True, check=False)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -151,6 +151,7 @@ def build_recipe(
     external_scopes=None,
     map_anchor=None,
     review_anchor=None,
+    anchor_mode=None,
 ):
     """Turn the unit list into a full-shape composed recipe (compile validates it).
 
@@ -266,12 +267,23 @@ def build_recipe(
             "composed recipe requires at least one of --cycle-anchor/--root-anchor/"
             "--external-scope (artifact_scope must declare a domain -- see D-1)"
         )
+    # F11/F2: a composed recipe that declares literal `cycle_anchors` (a
+    # design/spec-shaped bucket, not code/draft/lab's bare-scope convention)
+    # must be able to say so -- without an explicit `anchor_mode`, compose
+    # had no way to produce anything but the "implicit" default, which
+    # `_validate_bucket_anchor` treats as bare/unchecked scopes and reopens
+    # exactly the top-level-escape hole D-1 closes for enumerated recipes.
+    if anchor_mode is not None and anchor_mode not in ("implicit", "literal"):
+        raise ValueError("--anchor-mode must be implicit or literal")
+    if anchor_mode == "literal" and not cycle_anchors:
+        raise ValueError("--anchor-mode literal requires at least one --cycle-anchor")
     artifact_scope = {}
     if cycle_anchors: artifact_scope["cycle_anchors"] = cycle_anchors
     if root_anchors: artifact_scope["root_anchors"] = root_anchors
     if external_scopes: artifact_scope["external_scopes"] = external_scopes
     if map_anchor: artifact_scope["map_anchor"] = map_anchor
     if review_anchor: artifact_scope["review_anchor"] = review_anchor
+    if anchor_mode: artifact_scope["anchor_mode"] = anchor_mode
     if any(node["kind"] == "map-worker" for node in nodes) and not map_anchor:
         raise ValueError("a map-worker node requires --map-anchor")
     if any(node["kind"] == "review-worker" for node in nodes) and not review_anchor:
@@ -418,6 +430,9 @@ def main() -> int:
                         help="exact-string symbol token outside the artifact root (e.g. target-artifact)")
     parser.add_argument("--map-anchor", help="subtree name map-worker nodes must write inside")
     parser.add_argument("--review-anchor", help="subtree name review-worker nodes must write inside")
+    parser.add_argument("--anchor-mode", choices=("implicit", "literal"),
+                        help="literal: cycle_anchors is a literal write_scope prefix (design/spec-shaped); "
+                             "implicit (default): bare cycle-relative scopes (code/draft/lab-shaped)")
     parser.add_argument("--signal", action="append", default=[])
     parser.add_argument("--predicate", action="append", default=[])
     parser.add_argument("--transport-evidence", default="caller-selected")
@@ -455,6 +470,7 @@ def main() -> int:
         human_gate_bindings=_parse_human_gates(args.human_gate),
         cycle_anchors=args.cycle_anchor,
         root_anchors=args.root_anchor,
+        anchor_mode=args.anchor_mode,
         external_scopes=args.external_scope,
         map_anchor=args.map_anchor,
         review_anchor=args.review_anchor,

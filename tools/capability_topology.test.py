@@ -15,7 +15,7 @@ PRESERVED_FULL_FIELD_DIGESTS = {
         "1eb37bfd5ab71fc7e9edc437503624f991cc585d7806dc46af7e2910911fb9f4",
     ),
     ("autopilot-design", ('default',)): (
-        "8b613b4f2c694826ce796dbdcca8f10ed6cdc7c5f6764261cfaf310a23815949",
+        "c75c56b11affed41560aebf57faba71a07b9903e2f24224ce3207cbf290c9168",
         "55e3c44a67bba7579e3805464b8ba464951c9edc2cb05356aa696bfcb864281b",
     ),
     ("autopilot-draft", ('doc', 'paper', 'presentation')): (
@@ -43,7 +43,7 @@ PRESERVED_FULL_FIELD_DIGESTS = {
         "57f7c9ab1e362f246f0056927122c19163479334380cf84ab9a8785e620dcbf4",
     ),
     ("autopilot-spec", ('api', 'app', 'cli', 'library', 'research', 'update')): (
-        "b91cb8a1b254101f38f7b934b3e51f3888385030e96f75da7bb6ad762ec231d4",
+        "096a33a46adf1886561c032019301c7dbc64ec94729acee715c74ed3f4af302a",
         "8b421239d9a414c5d0ce1b91e9314ceee13b9fa9ac075d374fb92eb59e8437af",
     ),
 }
@@ -238,7 +238,7 @@ class TestTopology(unittest.TestCase):
         r=broken(lambda g: next(n for n in g["nodes"] if n["id"]=="plan").update(outputs=["plan/**"]))
         self.assertRaisesRegex(T.TopologyError,"concrete",T.validate_registry,r)
         r=broken(lambda g: next(n for n in g["nodes"] if n["id"]=="research").update(
-            outputs=["shards/spec-*/**"]),capability="autopilot-spec")
+            outputs=["spec/_internal/research/spec-*/**"]),capability="autopilot-spec")
         self.assertRaisesRegex(T.TopologyError,"concrete",T.validate_registry,r)
     def test_registered_nodes_reject_mini_profile(self):
         r=copy.deepcopy(self.r)
@@ -359,6 +359,110 @@ class TestTopology(unittest.TestCase):
                 recipe = next(x for x in self.r["recipes"] if x["capability"] == capability)
                 self.assertTrue(recipe["artifact_scope"].get("target_relative"))
                 T.validate_registry(copy.deepcopy(self.r))
+    def test_bucket_anchor_implicit_mode_rejects_reserved_top_segments(self):
+        # F2: `anchor_mode: implicit` recipes had no negative check at all --
+        # any bare scope that spelled a top-level pollution name used by a
+        # different track's literal anchor (`reviews/`, `handoff/`, ...) was
+        # accepted unexamined. These are the exact injections the review
+        # measured as [ACCEPTED] before this fix.
+        r=copy.deepcopy(self.r)
+        code=next(x for x in r["recipes"] if x["capability"]=="autopilot-code")
+        execute=next(n for n in code["standard_plus"]["nodes"] if n["id"]=="execute")
+        execute["write_scope"]=["reviews/visual/**","dev_logs/**"]
+        self.assertRaisesRegex(T.TopologyError,"reserved top-level segment",T.validate_registry,r)
+        r=copy.deepcopy(self.r)
+        draft=next(x for x in r["recipes"] if x["capability"]=="autopilot-draft")
+        draft["quick"]["write_scope"]=["handoff/**"]
+        self.assertRaisesRegex(T.TopologyError,"reserved top-level segment",T.validate_registry,r)
+        # a recipe's own map_anchor/review_anchor top segment stays legal (draft
+        # legitimately owns a top-level `reviews/` segment).
+        r=copy.deepcopy(self.r)
+        draft=next(x for x in r["recipes"] if x["capability"]=="autopilot-draft")
+        self.assertEqual(draft["artifact_scope"]["review_anchor"],"reviews")
+        T.validate_registry(r)
+    def test_bucket_anchor_checks_path_shaped_outputs(self):
+        # F3: `outputs` carried no anchor check at all -- write_scope and
+        # outputs could silently diverge, and outputs feeds compiled `inputs`
+        # for downstream nodes (F9), so a top-level escape there is just as
+        # real as one in write_scope.
+        r=copy.deepcopy(self.r)
+        d=next(x for x in r["recipes"] if x["capability"]=="autopilot-design")
+        refs=next(n for n in d["standard_plus"]["nodes"] if n["id"]=="refs")
+        refs["outputs"]=["reviews/visual/x.json"]
+        self.assertRaisesRegex(T.TopologyError,"matches no declared cycle_anchor",T.validate_registry,r)
+        # bare symbol tokens (no "/") are compiler-substituted elsewhere and
+        # must not be routed through the path-anchor check.
+        r=copy.deepcopy(self.r)
+        d=next(x for x in r["recipes"] if x["capability"]=="autopilot-design")
+        build=next(n for n in d["standard_plus"]["nodes"] if n["id"]=="build")
+        self.assertIn("tokens",build["outputs"])
+        T.validate_registry(r)
+    def test_bucket_anchor_rejects_parallel_leg_exhausting_the_cycle_wildcard(self):
+        # F4: `_parallel_path` suffixing a scope that is exactly `<cycle>/**`
+        # (no subdirectory) appends the leg suffix directly onto the cycle
+        # placeholder (`designs/<cycle>-alternative/**`), which resolves to a
+        # sibling *cycle*, not a sibling subdirectory inside the owning cycle.
+        # This must be rejected even though the un-expanded base scope
+        # (`designs/<cycle>/**`, tail == "") is a legitimate write to the
+        # cycle root itself.
+        recipe = {"capability": "fixture-cap", "artifact_scope": {
+            "cycle_anchors": ["designs/<cycle>"], "anchor_mode": "literal",
+        }}
+        registry = {"artifact_buckets": {"designs": "designs/<cycle>"}}
+        base_scope = "designs/<cycle>/**"
+        expanded = [T._parallel_path(base_scope, "alternative")]
+        self.assertEqual(expanded, ["designs/<cycle>-alternative/**"])
+        T._validate_bucket_anchor(recipe, registry, [base_scope], None, "node")  # base tail=="" is fine
+        self.assertRaisesRegex(
+            T.TopologyError, "exhausts its anchor",
+            T._validate_bucket_anchor, recipe, registry, expanded, None, "node-alternative",
+            require_anchor_tail=True,
+        )
+    def test_bucket_anchor_real_design_leg_expansion_still_validates(self):
+        # Positive companion to the fixture above: the actual registry's
+        # design parallel legs (suffixing a leaf directory, not the cycle
+        # placeholder) must keep validating after the F4 fix.
+        T.validate_registry(copy.deepcopy(self.r))
+    def test_bucket_anchor_parallel_leg_recheck_call_site_requires_anchor_tail(self):
+        # No live registry recipe can reach `tail == ""` through the real
+        # call site (every map/review-worker parallel target already forces a
+        # non-empty tail via its own map_anchor/review_anchor containment
+        # check, before the leg re-check ever runs) -- so the only way to
+        # prove `_validate_recipe`'s actual parallel-leg call site (not just
+        # the fixture above) is wired with `require_anchor_tail=True` is to
+        # observe the live call, not construct a registry that trips it.
+        calls = []
+        original = T._validate_bucket_anchor
+        def spy(*args, **kwargs):
+            calls.append(kwargs.get("require_anchor_tail", False))
+            return original(*args, **kwargs)
+        T._validate_bucket_anchor = spy
+        try:
+            T.validate_registry(copy.deepcopy(self.r))
+        finally:
+            T._validate_bucket_anchor = original
+        self.assertIn(True, calls)
+    def test_bucket_anchor_rejects_undeclared_cycle_anchor(self):
+        # F10: a cycle_anchor must itself be a declared artifact_buckets value,
+        # exactly like root_anchors already required -- otherwise a recipe can
+        # declare an anchor for a bucket nobody registered.
+        r=copy.deepcopy(self.r)
+        spec=next(x for x in r["recipes"] if x["capability"]=="autopilot-spec")
+        spec["artifact_scope"]["cycle_anchors"]=["rogue/<cycle>"]
+        self.assertRaisesRegex(T.TopologyError,"not a declared artifact bucket",T.validate_registry,r)
+    def test_bucket_anchor_component_spec_resolves_without_swallowing_internal(self):
+        # F10: restoring `spec/<component>` must not let the `<component>`
+        # wildcard absorb the reserved `_internal` segment (which would make
+        # the flat `spec/_internal/**` form indistinguishable from a component
+        # path and break map/review containment for the common flat case).
+        spec=next(x for x in self.r["recipes"] if x["capability"]=="autopilot-spec")
+        self.assertEqual(spec["artifact_scope"]["cycle_anchors"], ["spec", "spec/<component>"])
+        T._validate_bucket_anchor(
+            spec, self.r, ["spec/mycomp/_internal/research/**"], "map-worker", "research"
+        )
+        T._validate_bucket_anchor(
+            spec, self.r, ["spec/_internal/research/**"], "map-worker", "research"
+        )
     def test_unit_choices_membership(self):
         r=copy.deepcopy(self.r); code=next(x for x in r["recipes"] if x["capability"]=="autopilot-code")
         execute=next(n for n in code["standard_plus"]["nodes"] if n["id"]=="execute")

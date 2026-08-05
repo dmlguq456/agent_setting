@@ -24,6 +24,7 @@ import json
 import os
 import re
 import stat
+import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 
@@ -167,13 +168,88 @@ def _filesystem_kind(path: Path, mountinfo=None) -> str:
 
 
 def _is_git(path: Path) -> bool:
-    return (path / ".git").exists()
+    """F5: True when `path` sits inside a Git working tree, not only when it
+    is itself a repository root. A physical migration root is very often a
+    subdirectory (`.agent_reports`) of the checkout that owns it; the earlier
+    single-level check (`path/.git` only) reported `git: false` for exactly
+    that common shape."""
+    current = path
+    while True:
+        try:
+            if (current / ".git").exists():
+                return True
+        except OSError:
+            pass
+        parent = current.parent
+        if parent == current:
+            return False
+        current = parent
 
 
 def _mirror_map_lookup(mirror_map, root_key: str):
     if not mirror_map:
         return None
     return mirror_map.get(root_key)
+
+
+def _bisync_impact(mirror_map, mirror) -> str:
+    """F5: real classification instead of a fixed instructional string.
+    `mirror_map` absent/empty means no data was supplied at all -- distinct
+    from a root that was checked and found not to be mirrored."""
+    if not mirror_map:
+        return "unknown"
+    return "mirrored" if mirror is not None else "not-mirrored"
+
+
+_JOBS_LOG_MIN_FIELDS = 4  # timestamp, status, install root, worktree path
+
+
+def _resolve_agent_home(explicit: str | None) -> Path | None:
+    if explicit:
+        return Path(explicit)
+    env = os.environ.get("AGENT_HOME") or os.environ.get("CLAUDE_HOME")
+    if env:
+        return Path(env)
+    script = Path(__file__).resolve().parents[1] / "utilities" / "agent-home.sh"
+    if not script.is_file():
+        return None
+    try:
+        result = subprocess.run(
+            ["sh", str(script)], capture_output=True, text=True, timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    return Path(result.stdout.strip())
+
+
+def _live_job_signal(root: Path, agent_home: Path | None) -> str:
+    """F5/I7: `live | none | unknown`, from bounded path-metadata parsing of
+    `<agent-home>/.dispatch/jobs.log` only -- never job stdout, session
+    transcripts, or credentials. Each line is
+    `timestamp\tstatus\tinstall-root\tworktree-path\tslug\tmeta`; only
+    `status` and `worktree-path` are read. `unknown` means the registry could
+    not be located or read, never a data point about the root itself."""
+    if agent_home is None:
+        return "unknown"
+    jobs_log = agent_home / ".dispatch" / "jobs.log"
+    try:
+        text = jobs_log.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return "unknown"
+    root_str = str(root)
+    live = False
+    for line in text.splitlines():
+        fields = line.split("\t")
+        if len(fields) < _JOBS_LOG_MIN_FIELDS:
+            continue
+        status, worktree = fields[1], fields[3]
+        if worktree == root_str or worktree.startswith(root_str + os.sep):
+            if status == "open":
+                live = True
+                break
+    return "live" if live else "none"
 
 
 # --- scan ---------------------------------------------------------------
@@ -239,8 +315,32 @@ def _walk_sorted(root: Path):
             stack.append(sub)
 
 
+def _safe_iterdir(path: Path):
+    try:
+        return list(path.iterdir())
+    except OSError:
+        return []
+
+
+# F5: `open_route_present` must recognize D-2's canonical location plus all
+# four legacy ones, using one shared classifier -- the previous version only
+# checked `.routes`/`_routes` directory names and root-level `*-route.json`
+# files, silently missing `routes/` and the canonical `.runtime/routes/`.
+_ROUTE_CONTAINER_RELPATHS = {("routes",), ("_routes",), (".routes",), (".runtime", "routes")}
+
+
+def _dir_has_open_route(path: Path) -> bool:
+    for child in _safe_iterdir(path):
+        if not (child.is_file() and child.name.endswith(".json")
+                and not child.name.endswith(".outcome.json")):
+            continue
+        if not (child.with_name(child.stem + ".outcome.json")).exists():
+            return True
+    return False
+
+
 def scan_root(root: Path, *, dest: Path | None, do_hash: bool, ref_scan_max_bytes: int,
-              mirror_map: dict, root_key: str) -> tuple[list[dict], dict]:
+              mirror_map: dict, root_key: str, agent_home: Path | None = None) -> tuple[list[dict], dict]:
     root = root.resolve()
     records: list[dict] = []
     file_count = dir_count = symlink_count = 0
@@ -255,7 +355,7 @@ def scan_root(root: Path, *, dest: Path | None, do_hash: bool, ref_scan_max_byte
         summary = _root_summary(
             root, dest, mirror_map, root_key, file_count=0, dir_count=0, symlink_count=0,
             total_bytes=0, complete=False, lock_present=False, open_route_present=False,
-            nested_artifact_root=False, ref_scan_skipped=0,
+            nested_artifact_root=False, ref_scan_skipped=0, agent_home=agent_home,
         )
         return records, summary
 
@@ -269,20 +369,19 @@ def scan_root(root: Path, *, dest: Path | None, do_hash: bool, ref_scan_max_byte
         if kind == "dir":
             dir_count += 1
             records.append({"record_type": "dir", "path": rel})
+            if path.name in LOCK_NAMES:
+                lock_present = True
             try:
-                if rel and rel != "." and (path / ".agent_reports").is_dir():
+                # F5: nested-root detection must recognize legacy
+                # `.claude_reports` alongside `.agent_reports`.
+                if rel and rel != "." and ((path / ".agent_reports").is_dir()
+                                            or (path / ".claude_reports").is_dir()):
                     nested_artifact_root = True
             except OSError:
                 pass
-            if path.name in (".routes", "_routes"):
-                try:
-                    open_route_present = open_route_present or any(
-                        child.is_file() and child.name.endswith(".json") and not child.name.endswith(".outcome.json")
-                        and not (child.with_name(child.stem + ".outcome.json")).exists()
-                        for child in _safe_iterdir(path)
-                    )
-                except OSError:
-                    pass
+            rel_parts = tuple(PurePosixPath(rel).parts) if rel != "." else ()
+            if rel_parts in _ROUTE_CONTAINER_RELPATHS:
+                open_route_present = open_route_present or _dir_has_open_route(path)
             continue
         if kind == "symlink":
             symlink_count += 1
@@ -316,7 +415,12 @@ def scan_root(root: Path, *, dest: Path | None, do_hash: bool, ref_scan_max_byte
                 digest = hashlib.sha256(path.read_bytes()).hexdigest()
                 record["sha256"] = digest
             except OSError:
-                pass
+                # F5: a hash read failure is a real incompleteness, not a
+                # silent gap -- the caller asked for `--hash` and did not get
+                # one, so the manifest must say so and refuse to claim it is
+                # a complete inventory.
+                record["hash_error"] = True
+                complete = False
         records.append(record)
 
     records.sort(key=lambda r: (RECORD_RANK[r["record_type"]], os.fsencode(r["path"])))
@@ -325,23 +429,39 @@ def scan_root(root: Path, *, dest: Path | None, do_hash: bool, ref_scan_max_byte
         symlink_count=symlink_count, total_bytes=total_bytes, complete=complete,
         lock_present=lock_present, open_route_present=open_route_present,
         nested_artifact_root=nested_artifact_root, ref_scan_skipped=ref_scan_skipped,
+        agent_home=agent_home,
     )
     return records, summary
 
 
-def _safe_iterdir(path: Path):
+# F6: a `dest` that already exists as a plain file (or an unreadable
+# directory) used to crash `any(dest.iterdir())` with `NotADirectoryError`/
+# `PermissionError`. This resolves to a typed collision state instead of
+# either exception or a bare boolean.
+def _destination_conflict_state(dest: Path | None) -> str:
+    if dest is None:
+        return "none"
     try:
-        return list(path.iterdir())
+        if not dest.exists():
+            return "none"
+        if dest.is_symlink():
+            return "symlink"
+        if dest.is_file():
+            return "file"
+        if not dest.is_dir():
+            return "other"
+        return "populated" if any(dest.iterdir()) else "none"
     except OSError:
-        return []
+        return "unreadable"
 
 
 def _root_summary(root: Path, dest: Path | None, mirror_map, root_key, *, file_count, dir_count,
                    symlink_count, total_bytes, complete, lock_present, open_route_present,
-                   nested_artifact_root, ref_scan_skipped) -> dict:
+                   nested_artifact_root, ref_scan_skipped, agent_home: Path | None = None) -> dict:
     dest_resolved = str(dest.resolve()) if dest else None
     dest_exists = dest.exists() if dest else False
     mirror = _mirror_map_lookup(mirror_map, root_key)
+    conflict_state = _destination_conflict_state(dest)
     return {
         "record_type": "root_summary",
         "path": ".",
@@ -350,7 +470,8 @@ def _root_summary(root: Path, dest: Path | None, mirror_map, root_key, *, file_c
         "source_exists": root.is_dir(),
         "destination": dest_resolved,
         "destination_exists": dest_exists,
-        "destination_conflict": bool(dest_exists and any(dest.iterdir()) if dest_exists else False),
+        "destination_conflict": conflict_state != "none",
+        "destination_conflict_state": conflict_state,
         "file_count": file_count,
         "dir_count": dir_count,
         "symlink_count": symlink_count,
@@ -361,11 +482,11 @@ def _root_summary(root: Path, dest: Path | None, mirror_map, root_key, *, file_c
         "onedrive_mirror_target": mirror,
         "lock_present": lock_present,
         "open_route_present": open_route_present,
-        "live_job": "unknown",
+        "live_job": _live_job_signal(root, agent_home),
         "nested_artifact_root": nested_artifact_root,
         "ref_scan_skipped_count": ref_scan_skipped,
         "rollback_command": f"# no move performed; a future apply step would revert with: mv {dest_resolved or '<dest>'} {root}",
-        "bisync_impact": "unknown — cross-check against the active bisync filter before any apply step",
+        "bisync_impact": _bisync_impact(mirror_map, mirror),
         "complete": complete,
     }
 
@@ -396,22 +517,30 @@ def _reject_out_inside_investigated(out_dir: Path, *investigated: Path | None):
 
 # --- two-pass determinism (I6) ---------------------------------------
 
-def _scan_twice(root: Path, *, dest, do_hash, ref_scan_max_bytes, mirror_map, root_key):
+def _sorted_all(records: list[dict], summary: dict) -> list[dict]:
+    all_records = records + [summary]
+    all_records.sort(key=lambda r: (RECORD_RANK[r["record_type"]], os.fsencode(r["path"])))
+    return all_records
+
+
+def _scan_twice(root: Path, *, dest, do_hash, ref_scan_max_bytes, mirror_map, root_key, agent_home=None):
     records_a, summary_a = scan_root(root, dest=dest, do_hash=do_hash, ref_scan_max_bytes=ref_scan_max_bytes,
-                                      mirror_map=mirror_map, root_key=root_key)
+                                      mirror_map=mirror_map, root_key=root_key, agent_home=agent_home)
     records_b, summary_b = scan_root(root, dest=dest, do_hash=do_hash, ref_scan_max_bytes=ref_scan_max_bytes,
-                                      mirror_map=mirror_map, root_key=root_key)
-    bytes_a = _dump_jsonl(records_a)
-    bytes_b = _dump_jsonl(records_b)
-    determinism_ok = bytes_a == bytes_b and summary_a["complete"]
+                                      mirror_map=mirror_map, root_key=root_key, agent_home=agent_home)
+    # F6: comparing only `records_a`/`records_b` let a second-pass mutation of
+    # `root_summary` alone (the thing that actually lands in the JSONL output)
+    # slip through undetected -- both passes' *complete* output, records plus
+    # summary, must match byte-for-byte.
+    bytes_a = _dump_jsonl(_sorted_all(records_a, summary_a))
+    bytes_b = _dump_jsonl(_sorted_all(records_b, summary_b))
+    determinism_ok = bytes_a == bytes_b and summary_a["complete"] and summary_b["complete"]
     return records_a, summary_a, determinism_ok
 
 
 def _write_root_output(out_dir: Path, key: str, records: list[dict], summary: dict, determinism_ok: bool) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
-    all_records = records + [summary]
-    all_records.sort(key=lambda r: (RECORD_RANK[r["record_type"]], os.fsencode(r["path"])))
-    body = _dump_jsonl(all_records)
+    body = _dump_jsonl(_sorted_all(records, summary))
     path = out_dir / f"{key}.jsonl"
     path.write_text(body, encoding="utf-8")
     return path
@@ -459,16 +588,23 @@ def _load_mirror_map(path: str | None) -> dict:
     return data or {}
 
 
+# F6: sweep keys become filenames (`<key>.jsonl`) under `--out` -- an
+# unvalidated key let `key: ../escaped` write a sibling file outside `--out`
+# entirely. Path-component-only, no traversal.
+_SWEEP_KEY_RE = re.compile(r'^[A-Za-z0-9._-]+$')
+
+
 def cmd_scan(args) -> int:
     root = Path(args.root)
     dest = Path(args.dest) if args.dest else None
     out_dir = Path(args.out)
     _reject_out_inside_investigated(out_dir, root, dest)
     mirror_map = _load_mirror_map(args.mirror_map)
+    agent_home = _resolve_agent_home(args.agent_home)
     key = root.resolve().name or "root"
     records, summary, determinism_ok = _scan_twice(
         root, dest=dest, do_hash=args.hash, ref_scan_max_bytes=args.ref_scan_max_bytes,
-        mirror_map=mirror_map, root_key=key,
+        mirror_map=mirror_map, root_key=key, agent_home=agent_home,
     )
     _write_root_output(out_dir, key, records, summary, determinism_ok)
     entries = [{"key": key, "summary": summary, "determinism_ok": determinism_ok}]
@@ -488,11 +624,21 @@ def cmd_sweep(args) -> int:
         raise ManifestError("roots.yaml must declare a non-empty 'roots' list")
     out_dir = Path(args.out)
     mirror_map = _load_mirror_map(args.mirror_map) if getattr(args, "mirror_map", None) else {}
+    agent_home = _resolve_agent_home(args.agent_home)
     investigated = []
+    seen_keys = set()
     for row in entries_spec:
         if not isinstance(row, dict) or "key" not in row or "path" not in row:
             raise ManifestError(f"invalid roots.yaml entry: {row!r}")
+        key = row["key"]
+        if not isinstance(key, str) or not _SWEEP_KEY_RE.match(key):
+            raise ManifestError(f"roots.yaml key must be a bare path component: {key!r} -- I1")
+        if key in seen_keys:
+            raise ManifestError(f"duplicate roots.yaml key: {key!r}")
+        seen_keys.add(key)
         investigated.append(Path(row["path"]))
+        if row.get("dest"):
+            investigated.append(Path(row["dest"]))
     _reject_out_inside_investigated(out_dir, *investigated)
 
     entries = []
@@ -503,7 +649,7 @@ def cmd_sweep(args) -> int:
         dest = Path(row["dest"]) if row.get("dest") else None
         records, summary, determinism_ok = _scan_twice(
             root, dest=dest, do_hash=args.hash, ref_scan_max_bytes=args.ref_scan_max_bytes,
-            mirror_map=mirror_map, root_key=key,
+            mirror_map=mirror_map, root_key=key, agent_home=agent_home,
         )
         _write_root_output(out_dir, key, records, summary, determinism_ok)
         entries.append({"key": key, "summary": summary, "determinism_ok": determinism_ok, "expected_action": row.get("expected_action")})
@@ -525,6 +671,7 @@ def main() -> int:
     scan_p.add_argument("--hash", action="store_true")
     scan_p.add_argument("--ref-scan-max-bytes", type=int, default=DEFAULT_REF_SCAN_MAX_BYTES)
     scan_p.add_argument("--mirror-map")
+    scan_p.add_argument("--agent-home", help="defaults to $AGENT_HOME, then utilities/agent-home.sh")
 
     sweep_p = sub.add_parser("sweep")
     sweep_p.add_argument("--roots", required=True)
@@ -532,6 +679,7 @@ def main() -> int:
     sweep_p.add_argument("--hash", action="store_true")
     sweep_p.add_argument("--ref-scan-max-bytes", type=int, default=DEFAULT_REF_SCAN_MAX_BYTES)
     sweep_p.add_argument("--mirror-map")
+    sweep_p.add_argument("--agent-home", help="defaults to $AGENT_HOME, then utilities/agent-home.sh")
 
     args = parser.parse_args()
     try:
