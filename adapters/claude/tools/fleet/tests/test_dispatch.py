@@ -48,18 +48,18 @@ class RenderDispatchPresentationTest(unittest.TestCase):
 
         self.assertEqual(text.count("gpt-5.6-sol"), 1)
 
-    def test_depth_two_prefix_nests_the_spawn_arrow_deeper(self):
-        # user 2026-07-16: every depth fans out with the same ↳ arrow, and the ladder
-        # starts one level in ("분사 세션의 화살표를 좀 더 들여쓰자") — the depth-1
-        # arrow sits under the parent's text, not on its glyph column. F-64 (v49,
-        # user 2026-08-05 "depth=1,2의 들여쓰기를 좀 더 구분해줘") widened the step
-        # from two to three cells per level: widths are depth*3 + 2.
+    def test_depth_prefixes_arrowless_depth1_and_deeper_depth2_arrow(self):
+        # F-64c (v49, user 2026-08-05 "depth=1을 조금 앞당겨서 들여쓰기 폭을 줄이고
+        # 세로선은 그 아래 depth=2에 대해서만"): depth-1 sits arrowless at a shallow
+        # 2-cell inset (its unit mark is the hanging rail, painted by the assembler);
+        # depth≥2 keeps the ↳ spawn arrow three cells deeper per level.
         top = DispatchJob(key="code", slug="top", depth=1)
         nested = DispatchJob(key="code", slug="nested", depth=2)
 
-        self.assertEqual(render._dispatch_prefix(top), "   ↳ ")
-        self.assertEqual(render._dispatch_prefix(nested), "      ↳ ")
-        self.assertEqual(len(render._dispatch_prefix(nested)), 8)
+        self.assertEqual(render._dispatch_prefix(top), "  ")
+        self.assertEqual(render._dispatch_prefix(nested), "     ↳ ")
+        self.assertEqual(len(render._dispatch_prefix(nested)), 7)
+        self.assertEqual(render._dispatch_prefix(top, orphan=True), "··")
 
     def _rail_fixture(self, owner_liveness="working"):
         parent = Session(harness="claude", pid=1, cwd="/work/repo", session_id="sid-1",
@@ -92,29 +92,41 @@ class RenderDispatchPresentationTest(unittest.TestCase):
                 return line
         return None
 
-    def test_f64c_depth1_arrow_becomes_a_rail_and_depth2_keeps_its_arrow(self):
+    def test_f64c_rail_hangs_under_the_arrowless_depth1_row(self):
         lines = self._rail_lines()
         owner = self._line_with(lines, "rail-owner (")   # the row, not the alert line
         leg = self._line_with(lines, "rail-leg (")
         subtitle = self._line_with(lines, "harvesting")
         owner_txt = "".join(p for p, _k in owner)
         leg_txt = "".join(p for p, _k in leg)
-        self.assertIn(render._RAIL_CHAR, owner_txt)
         self.assertNotIn("↳", owner_txt)          # the depth-1 arrow is gone
-        self.assertIn(render._RAIL_CHAR, leg_txt)  # rail continues through the block
+        self.assertNotIn(render._RAIL_CHAR, owner_txt)   # rail hangs BELOW, not on it
+        self.assertIn(render._RAIL_CHAR, leg_txt)  # subordinate rows carry the rail
         self.assertIn("↳", leg_txt)               # depth-2 keeps its spawn arrow
         self.assertIn(render._RAIL_CHAR, "".join(p for p, _k in subtitle))
 
     def test_f64c_rail_blinks_in_stage_hue_only_while_working(self):
         for blink, expected in ((True, "stg0_on"), (False, "stg0_off")):
-            owner = self._line_with(self._rail_lines(blink=blink), "rail-owner (")
-            keys = [k for p, k in owner if p == render._RAIL_CHAR]
+            leg = self._line_with(self._rail_lines(blink=blink), "rail-leg (")
+            keys = [k for p, k in leg if p == render._RAIL_CHAR]
             self.assertEqual(keys, [expected])
         for blink in (True, False):
-            owner = self._line_with(
-                self._rail_lines(blink=blink, owner_liveness="stale"), "rail-owner (")
-            keys = [k for p, k in owner if p == render._RAIL_CHAR]
+            leg = self._line_with(
+                self._rail_lines(blink=blink, owner_liveness="stale"), "rail-leg (")
+            keys = [k for p, k in leg if p == render._RAIL_CHAR]
             self.assertEqual(keys, ["dim"])       # finished units never blink
+
+    def test_f64c_rail_hue_mirrors_the_breadcrumb_current_token(self):
+        # user 2026-08-05 "컬러 안맞는데": the rail must share the exact index the lit
+        # breadcrumb token uses — route rows via _route_current_index, legacy rows via
+        # the _PIPE_STAGES position, everything else the breadcrumb's stg0.
+        route = [("plan", "done"), ("exec", "active"), ("test", "pending")]
+        self.assertEqual(render._depth1_rail_color_index("code", "exec", route), 1)
+        self.assertEqual(render._depth1_rail_color_index("code", "exec", None), 1)
+        self.assertEqual(render._depth1_rail_color_index("code", "test", None), 2)
+        # unknown stage → the F-11 single-lit-token path colors with stg0; so does the rail
+        self.assertEqual(render._depth1_rail_color_index("code", "execute", None), 0)
+        self.assertEqual(render._depth1_rail_color_index("nope", None, None), 0)
 
     def test_f64c_rail_is_wide_layout_only(self):
         lines = self._rail_lines(layout="narrow")

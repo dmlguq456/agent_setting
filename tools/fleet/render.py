@@ -909,6 +909,17 @@ def _drop_past_stages(items, cur_i, max_width):
     return items
 
 
+def _route_current_index(route_seq):
+    """The breadcrumb's CURRENT node index — the single judge every current-hue consumer
+    shares (the lit token and the F-64c rail must never disagree on color)."""
+    for want in ("active", "degraded", "reconciling"):
+        found = next((i for i, (_nid, st) in enumerate(route_seq) if st == want), None)
+        if found is not None:
+            return found
+    done_idx = [i for i, (_nid, st) in enumerate(route_seq) if st == "done"]
+    return min((done_idx[-1] + 1) if done_idx else 0, max(0, len(route_seq) - 1))
+
+
 def _route_stage_segs(route_seq, working, max_width):
     """F-28b route-aware breadcrumb (prd.md:303). `route_seq` = [(node_id, state), ...] in the
     route's own DAG order (flattened level order — route.py's `view["nodes"]` is already in
@@ -919,15 +930,7 @@ def _route_stage_segs(route_seq, working, max_width):
         if working and not _BLINK_ON:
             return "stg%d_off" % (i % 5)
         return "stg%d_on" % (i % 5)
-    cur_i = next((i for i, (_nid, st) in enumerate(route_seq) if st == "active"), None)
-    if cur_i is None:
-        cur_i = next((i for i, (_nid, st) in enumerate(route_seq) if st == "degraded"), None)
-    if cur_i is None:
-        cur_i = next((i for i, (_nid, st) in enumerate(route_seq)
-                      if st == "reconciling"), None)
-    if cur_i is None:
-        done_idx = [i for i, (_nid, st) in enumerate(route_seq) if st == "done"]
-        cur_i = min((done_idx[-1] + 1) if done_idx else 0, max(0, len(route_seq) - 1))
+    cur_i = _route_current_index(route_seq)
     items = []
     for i, (nid, st) in enumerate(route_seq):
         if st == "failed":
@@ -1507,35 +1510,55 @@ def _compact_dispatch_name(name, max_width=_DISPATCH_NAME_MAX):
 
 
 def _dispatch_prefix(j, orphan=False):
-    # Every dispatch depth fans out with the same ↳ spawn arrow, nested three cells deeper per
-    # level (2→3, F-64 v49 — user 2026-08-05 "depth=1,2의 들여쓰기를 좀 더 구분해줘"; the arrow
-    # itself came from user 2026-07-16: dispatch-depth-2 rows lost their arrow when they were
-    # indent-only), and the whole ladder starts one level in — the dispatch-depth-1 arrow sits
-    # UNDER its parent session's text, not on the session's own glyph column (user 2026-07-16
-    # "분사 세션의 화살표를 좀 더 들여쓰자"). Width = depth*3 + 2; the harness field absorbs it
-    # (_HMW - len; at depth 2 that leaves 35-8=27 ≥ the 26-cell worst-case live label).
+    # F-64c (v49, user 2026-08-05 "depth=1을 조금 앞당겨서 들여쓰기 폭을 줄이고 세로선은 그
+    # 아래 depth=2에 대해서만"): depth-1 sheds both its ↳ arrow and most of its inset — a
+    # 2-cell nudge off the session column is its whole indent, and the blinking rail its
+    # subordinate rows carry (assembler post-pass, `_RAIL_CHAR`) is what marks the unit.
+    # depth≥2 keeps the ↳ spawn arrow (user 2026-07-16: indent-only depth-2 rows lost their
+    # arrow), three cells deeper per level past the depth-1 seat (F-64 "들여쓰기를 좀 더
+    # 구분해줘"). The harness field absorbs the prefix (_HMW - len: depth-1 38-2=36,
+    # depth-2 38-7=31 ≥ the 26-cell worst-case live label).
     #
     # Project-level orphans (parent dead/off-screen, surfaced as a project fallback) intentionally
     # drop the ↳ tree arrow — a parent-child arrow with no on-screen parent misleads readers into
     # attaching the orphan to whatever live session row happens to sit above it. Replace with a
     # same-width flat `··` "no-hierarchy" mark so the column stays aligned without implying nesting.
     depth = max(1, min(3, int(getattr(j, "depth", 1) or 1)))
-    if orphan:
-        return "   " * depth + "··"
-    return "   " * depth + "↳ "
+    if depth == 1:
+        return "··" if orphan else "  "
+    marker = "··" if orphan else "↳ "
+    return "  " + "   " * (depth - 1) + marker
 
 
-# F-64c (v49, user 2026-08-05 "depth=1에서는 화살표를 안쓰고 쭉 세로줄로 표시하고 그걸
-# 점멸하도록"): a depth-1 dispatch unit drops its ↳ arrow for a continuous vertical rail
-# spanning the whole block (owner row, NOW subtitle, ⚡strips, depth-2 rows). The rail
-# BLINKS in the owner's stage hue while the owner is working (same _BLINK_ON phase as the
-# running token — blink changes brightness, never hue) and sits steady dim otherwise.
-# depth-2 rows keep their ↳ arrows — the rail is what tells a dispatch unit apart from a
-# native sub-agent strip, which never carries one. Wide layout only; narrow/stack cards
-# keep the arrow prefix, and orphan rows keep their flat `··` (a rail with no on-screen
-# parent would imply lineage F-26 forbids guessing).
-_RAIL_CHAR = "┃"
-_RAIL_COL = 5      # the depth-1 arrow's display column: 2-cell margin + 3-cell ladder inset
+# F-64c (v49, user 2026-08-05 "depth=1에서는 화살표를 안쓰고 쭉 세로줄로 … 점멸하도록",
+# 정정 "depth=1을 조금 앞당겨서 들여쓰기 폭을 줄이고 세로선은 그 아래 depth=2에 대해서만"):
+# a depth-1 dispatch unit renders arrowless at a shallow 2-cell inset, and a vertical rail
+# hangs UNDER it — through the NOW subtitle, ⚡strips, depth-2 rows and their details, but
+# never on the owner row itself. The rail BLINKS in the owner's stage hue while the owner
+# is working (same _BLINK_ON phase as the running token — blink changes brightness, never
+# hue) and sits steady dim otherwise. depth-2 rows keep their ↳ arrows — rail + arrow is
+# what tells a dispatch unit apart from a native sub-agent strip, which carries neither.
+# Wide layout only; narrow/stack cards keep prefixes as-is, and orphan rows keep their
+# flat `··` (a rail with no on-screen parent would imply lineage F-26 forbids guessing).
+# Rail glyph: `❙` (medium vertical bar), deliberately SHORTER than the cell — box-drawing
+# `┃` fused adjacent rows into one solid wall (user 2026-08-05 "다 붙어버리는데 …
+# 위아래가 좀 짧은걸"); the dingbat leaves intrinsic top/bottom air so each row's mark
+# reads as a beaded line, not a pipe. One-char swaps if a font lacks it: `╏` `┊` `|`.
+_RAIL_CHAR = "❙"
+_RAIL_COL = 4      # the depth-1 owner's GLYPH column (2-cell margin + 2-cell inset) — the
+                   # rail drops straight down from the owner's dot
+
+
+def _depth1_rail_color_index(key, stage, route_seq):
+    """F-64c: the rail wears the SAME hue as the conductor breadcrumb's current token —
+    route rows share `_route_current_index`, legacy rows the `_PIPE_STAGES` position, and
+    everything else (`preparing…`/queued/raw stage) lands on the breadcrumb's stg0."""
+    if route_seq is not None and route_seq:
+        return _route_current_index(route_seq) % 5
+    seq = _PIPE_STAGES.get(key)
+    if seq and stage in seq:
+        return seq.index(stage) % 5
+    return 0
 
 
 def _overwrite_rail_cell(segs, col, char, key):
@@ -4228,20 +4251,20 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 _emit_dispatch_tree(sub, parent_model=job.model or parent_model,
                                     parent_harness=job.harness or parent_harness,
                                     parent_effort=parent_effort, orphan=False)
-            # F-64c: paint the depth-1 rail over the whole block just emitted — the ↳
-            # cell on the owner row itself, and the spare inset cell on every subordinate
-            # row (NOW subtitle, ⚡strip, depth-2 rows and their details). Working owners
-            # blink in their stage hue (brightness only); finished/stale sit steady dim.
+            # F-64c: hang the rail under the depth-1 owner row — the spare inset cell on
+            # every SUBORDINATE row (NOW subtitle, ⚡strip, depth-2 rows and their
+            # details); the owner row itself stays rail-free at its shallow seat. Working
+            # owners blink in their stage hue (brightness only); finished/stale sit dim.
             if (_jrow is None and not orphan
                     and max(1, int(getattr(job, "depth", 1) or 1)) == 1):
                 if job.liveness == "working":
-                    color_i = _dispatch_stage_color_index(
-                        job, getattr(job, "key", None),
-                        stage_override or getattr(job, "stage", None))
+                    color_i = _depth1_rail_color_index(
+                        getattr(job, "key", None),
+                        stage_override or getattr(job, "stage", None), route_seq)
                     rail_key = ("stg%d_on" if _BLINK_ON else "stg%d_off") % color_i
                 else:
                     rail_key = "dim"
-                for idx in range(block_start, len(lines)):
+                for idx in range(block_start + 1, len(lines)):
                     lines[idx] = _overwrite_rail_cell(
                         lines[idx], _RAIL_COL, _RAIL_CHAR, rail_key)
 
