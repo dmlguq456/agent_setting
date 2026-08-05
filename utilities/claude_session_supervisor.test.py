@@ -341,6 +341,125 @@ class ClaudeSessionSupervisorTest(unittest.TestCase):
         self.assertIn("failure_class=auth", registry)
         self.assertIn("api_status=401", registry)
 
+    # -- Phase 4 (plan.md, round_1 finding 1 dependency): owner restoration --
+
+    def _non_closing_join(self) -> Path:
+        """A join fake that reports readiness but never rewrites jobs.log —
+        reproduces the incident: a real terminal envelope exists but the
+        registry row was never closed."""
+        script = self.base / "fake_join_stale.py"
+        script.write_text(
+            textwrap.dedent(
+                """\
+                import json, sys
+                parent = sys.argv[sys.argv.index('--parent-attempt-id') + 1]
+                attempts = [sys.argv[i + 1] for i, value in enumerate(sys.argv) if value == '--attempt-id']
+                print(json.dumps({'schema_version':1,'state':'ready','parent_attempt_id':parent,
+                    'children':[{'attempt_id':attempt,'status':'open','readiness':'ready',
+                                 'reason':'terminal-observed'} for attempt in attempts]}))
+                """
+            ),
+            encoding="utf-8",
+        )
+        return script
+
+    def _blocked_child_row(self) -> str:
+        log = self.base / "att-child.claude.jsonl"
+        artifact = self.artifact_root / "brief.md"
+        artifact.write_text("evidence\n", encoding="utf-8")
+        log.write_text(
+            json.dumps({"type": "system", "subtype": "init"}) + "\n"
+            + json.dumps({
+                "type": "result", "subtype": "success", "is_error": False,
+                "result": f"artifact: {artifact}\nverdict: BLOCKED\nblocker: stuck",
+            }) + "\n",
+            encoding="utf-8",
+        )
+        route = self.base / "route.json"
+        return (
+            f"2026-07-23T00:00:00Z\topen\t{self.base}\t{self.base}\tchild\t"
+            "attempt_schema_version=2,dispatch_depth=2,transport=headless,"
+            "execution_surface=registered-headless,registered_worker=1,"
+            "fallback_hop=same-harness-headless,harness=claude,"
+            f"attempt_id=att-child,parent_attempt_id={PARENT},"
+            f"log_file={log},artifact_root={self.artifact_root},"
+            f"route_file={route},route_node=frame,"
+            "launch_outcome=reaped-before-publish\n"
+        )
+
+    def command_with_join(self, join_script: Path) -> list[str]:
+        cmd = self.command()
+        idx = cmd.index("--join-command")
+        cmd[idx + 1] = f"{sys.executable} {join_script}"
+        return cmd
+
+    def test_blocked_child_reconciles_without_owned_children_error(self):
+        self.jobs.write_text(owner_row() + self._blocked_child_row(), encoding="utf-8")
+        join_script = self._non_closing_join()
+        result = subprocess.run(
+            self.command_with_join(join_script),
+            input="initial assignment",
+            text=True,
+            capture_output=True,
+            env={**os.environ, "FAKE_TRACE": str(self.trace)},
+            timeout=10,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        rows = [json.loads(line) for line in result.stdout.splitlines()]
+        self.assertNotIn(
+            "owned-children-remain-open-after-resume",
+            result.stdout + result.stderr,
+        )
+        reconciled = [
+            row for row in rows
+            if row.get("type") == "dispatch.supervisor.reconciled"
+            and row.get("attempt_id") == "att-child"
+        ]
+        self.assertEqual(len(reconciled), 1, rows)
+        self.assertEqual(reconciled[0]["outcome"], "closed")
+        registry = self.jobs.read_text(encoding="utf-8")
+        self.assertIn("dead-worker-blocked", registry)
+        # The batch resolves through the ordinary join-then-reconcile cycle,
+        # never through the model-facing `remediation_prompt` continuation —
+        # every prompt after the first is the plain harvest/completion
+        # receipt, not a "contract violation" remediation demand.
+        trace = [json.loads(line) for line in self.trace.read_text().splitlines()]
+        turns = [row for row in trace if row["event"] == "turn-start"]
+        self.assertGreaterEqual(len(turns), 2, turns)
+        for turn in turns[1:]:
+            self.assertTrue(turn["resume"])
+            self.assertNotIn("Runtime completion contract violation", turn["prompt"])
+
+    def test_live_unresolved_child_still_raises(self):
+        # Fix 4 must not become "never fail": a genuinely unresolved, live
+        # (non-quiescent) child with no terminal evidence still raises.
+        log = self.base / "att-live.claude.jsonl"
+        route = self.base / "route.json"
+        row = (
+            f"2026-07-23T00:00:00Z\topen\t{self.base}\t{self.base}\tchild\t"
+            "attempt_schema_version=2,dispatch_depth=2,transport=headless,"
+            "execution_surface=registered-headless,registered_worker=1,"
+            "fallback_hop=same-harness-headless,harness=claude,"
+            f"attempt_id=att-live,parent_attempt_id={PARENT},"
+            f"log_file={log},artifact_root={self.artifact_root},"
+            f"route_file={route},route_node=frame\n"
+        )
+        self.jobs.write_text(owner_row() + row, encoding="utf-8")
+        join_script = self._non_closing_join()
+        result = subprocess.run(
+            self.command_with_join(join_script)
+            + ["--max-continuations", "1"],
+            input="initial assignment",
+            text=True,
+            capture_output=True,
+            env={**os.environ, "FAKE_TRACE": str(self.trace)},
+            timeout=10,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("owned-children-remain-open-after-resume", result.stdout + result.stderr)
+        registry = self.jobs.read_text(encoding="utf-8")
+        self.assertIn("\topen\t", registry)
+
 
 if __name__ == "__main__":
     unittest.main()

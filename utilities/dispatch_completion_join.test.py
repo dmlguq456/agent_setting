@@ -657,8 +657,9 @@ class FinishedChildClosure(unittest.TestCase):
         self.jobs.touch()
 
     def child(self, *, route: bool = True, verdict: str = "PASS",
-              artifact: str | None = "brief.md") -> JOIN.ChildRow:
-        log = self.base / "child.claude.jsonl"
+              artifact: str | None = "brief.md", quiescent: bool = False,
+              attempt_id: str = "att-child") -> JOIN.ChildRow:
+        log = self.base / f"{attempt_id}.claude.jsonl"
         target = "-" if artifact is None else str(self.artifact / artifact)
         if artifact is not None:
             (self.artifact / artifact).write_text("evidence\n", encoding="utf-8")
@@ -671,21 +672,26 @@ class FinishedChildClosure(unittest.TestCase):
             encoding="utf-8",
         )
         meta = {
-            "attempt_id": "att-child", "dispatch_depth": "2",
+            "attempt_id": attempt_id, "attempt_schema_version": "2", "dispatch_depth": "2",
             "transport": "headless", "execution_surface": "registered-headless",
             "registered_worker": "1", "fallback_hop": "same-harness-headless",
             "harness": "claude", "log_file": str(log),
             "artifact_root": str(self.artifact),
         }
+        if quiescent:
+            # No PID recorded and an atomic-launch outcome that proves no
+            # governed process remains -> attempt_process_quiescence()
+            # classifies this as quiescent without needing a real PID probe.
+            meta["launch_outcome"] = "reaped-before-publish"
         if route:
             meta["route_file"] = str(self.base / "route.json")
             meta["route_node"] = "frame"
         raw = "\t".join([
             "2026-07-28T06:00:00.000000Z", "open", str(self.base), str(self.base),
-            "child-slug", ",".join(f"{k}={v}" for k, v in meta.items()),
+            f"{attempt_id}-slug", ",".join(f"{k}={v}" for k, v in meta.items()),
         ])
         return JOIN.ChildRow(
-            order=0, status="open", slug="child-slug", attempt_id="att-child",
+            order=0, status="open", slug=f"{attempt_id}-slug", attempt_id=attempt_id,
             raw=raw, metadata=meta,
         )
 
@@ -744,6 +750,165 @@ class FinishedChildClosure(unittest.TestCase):
         finally:
             JOIN.run_route_completion = real
         self.assertEqual(outcomes, {"att-child": "completion-rejected"})
+
+    # -- Phase 3 (plan.md, round_1 finding 1): typed BLOCKED/FAIL closure ----
+
+    def test_quiescent_blocked_row_with_readable_artifact_closes_typed_never_completes(self):
+        # round_1 finding 1: a readable artifact must NOT reach route
+        # completion when the verdict is BLOCKED — this is the exact ordering
+        # bug the arbiter flagged (readable branch was unguarded).
+        row = self.child(verdict="BLOCKED", quiescent=True)
+        self.jobs.write_text(row.raw + "\n", encoding="utf-8")
+        calls = []
+        real = JOIN.run_route_completion
+        JOIN.run_route_completion = lambda command: calls.append(command) or ""
+        try:
+            reason = JOIN.close_finished_child(row, jobs=self.jobs)
+        finally:
+            JOIN.run_route_completion = real
+        self.assertEqual(reason, "")
+        self.assertEqual(calls, [], "route completion must never run for a BLOCKED verdict")
+        lines = self.jobs.read_text(encoding="utf-8").strip().splitlines()
+        self.assertEqual(len(lines), 1)
+        self.assertIn("done", lines[0])
+        self.assertIn("dead-worker-blocked", lines[0])
+        self.assertIn("completion-join-terminal-verdict-v1", lines[0])
+        self.assertFalse(
+            (self.base / ".dispatch" / "completion").exists(),
+            "a typed BLOCKED closure must never create a completion marker",
+        )
+
+    def test_quiescent_fail_row_with_readable_artifact_closes_typed_never_completes(self):
+        row = self.child(verdict="FAIL", quiescent=True)
+        self.jobs.write_text(row.raw + "\n", encoding="utf-8")
+        calls = []
+        real = JOIN.run_route_completion
+        JOIN.run_route_completion = lambda command: calls.append(command) or ""
+        try:
+            reason = JOIN.close_finished_child(row, jobs=self.jobs)
+        finally:
+            JOIN.run_route_completion = real
+        self.assertEqual(reason, "")
+        self.assertEqual(calls, [], "route completion must never run for a FAIL verdict")
+        lines = self.jobs.read_text(encoding="utf-8").strip().splitlines()
+        self.assertIn("dead-worker-fail", lines[0])
+        self.assertIn("completion-join-terminal-verdict-v1", lines[0])
+
+    def test_blocked_row_without_readable_artifact_also_closes_typed(self):
+        # The pre-existing branch (no readable artifact) must keep closing
+        # BLOCKED/FAIL typed too, not just the new readable-artifact branch.
+        row = self.child(verdict="BLOCKED", artifact=None, quiescent=True)
+        self.jobs.write_text(row.raw + "\n", encoding="utf-8")
+        reason = JOIN.close_finished_child(row, jobs=self.jobs)
+        self.assertEqual(reason, "")
+        lines = self.jobs.read_text(encoding="utf-8").strip().splitlines()
+        self.assertIn("dead-worker-blocked", lines[0])
+
+    def test_live_process_blocked_row_stays_open(self):
+        # Quiescence precondition must not be relaxed: a still-draining
+        # worker (no terminal-envelope-implied quiescence and no exited
+        # process evidence) is never closed early, BLOCKED or not.
+        row = self.child(verdict="BLOCKED", quiescent=False)
+        self.jobs.write_text(row.raw + "\n", encoding="utf-8")
+        before = self.jobs.read_text(encoding="utf-8")
+        reason = JOIN.close_finished_child(row, jobs=self.jobs)
+        self.assertNotEqual(reason, "")
+        self.assertEqual(self.jobs.read_text(encoding="utf-8"), before)
+
+    def test_second_reconcile_pass_over_closed_row_is_a_no_op(self):
+        row = self.child(verdict="BLOCKED", quiescent=True)
+        self.jobs.write_text(row.raw + "\n", encoding="utf-8")
+        first = JOIN.close_finished_child(row, jobs=self.jobs)
+        self.assertEqual(first, "")
+        before = self.jobs.read_text(encoding="utf-8")
+        outcomes = JOIN.reconcile_finished_children(
+            {"att-child": row}, {"att-child"}, jobs=self.jobs
+        )
+        after = self.jobs.read_text(encoding="utf-8")
+        self.assertEqual(before, after, "a second pass must not mutate an already-closed row")
+        self.assertIn("att-child", outcomes)
+
+    def test_sibling_rows_stay_byte_identical_no_breadth_close(self):
+        sibling = self.child(verdict="PASS", attempt_id="att-sibling", quiescent=False)
+        target = self.child(verdict="BLOCKED", quiescent=True)
+        self.jobs.write_text(sibling.raw + "\n" + target.raw + "\n", encoding="utf-8")
+        sibling_line_before = sibling.raw
+        reason = JOIN.close_finished_child(target, jobs=self.jobs)
+        self.assertEqual(reason, "")
+        after_lines = self.jobs.read_text(encoding="utf-8").splitlines()
+        self.assertIn(sibling_line_before, after_lines, "the sibling row must be untouched (SD-77)")
+
+    def test_marker_wins_existing_completion_not_overwritten_by_envelope_note(self):
+        # SD-72: if a route/node already carries an exact completion marker,
+        # a typed envelope note must never overwrite that success. This is
+        # exercised at the PASS+readable path, which is unchanged by Phase 3
+        # and still reaches route completion (a real marker write is the
+        # completion command's own responsibility, verified untouched here).
+        calls = []
+        real = JOIN.run_route_completion
+        JOIN.run_route_completion = lambda command: calls.append(command) or ""
+        try:
+            reason = JOIN.close_finished_child(self.child(verdict="PASS"), jobs=self.jobs)
+        finally:
+            JOIN.run_route_completion = real
+        self.assertEqual(reason, "")
+        self.assertEqual(len(calls), 1)
+        self.assertIn("complete", calls[0])
+
+    def test_pass_verdict_behaviour_unchanged(self):
+        reason = JOIN.close_finished_child(self.child(artifact=None), jobs=self.jobs)
+        self.assertTrue(reason.startswith("evidence-"), reason)
+
+    def test_codex_turn_completed_blocked_envelope_closes_typed_same_as_claude(self):
+        # SD-72/SD-77 require both adapter terminal forms (round_1 graft):
+        # Codex's `item.completed` + `turn.completed` pair must classify and
+        # close identically to the Claude `result` fixture above.
+        log = self.base / "att-codex-child.codex.jsonl"
+        artifact_path = self.artifact / "brief.md"
+        artifact_path.write_text("evidence\n", encoding="utf-8")
+        log.write_text(
+            "\n".join(json.dumps(row) for row in [
+                {"type": "system", "subtype": "init"},
+                {
+                    "type": "item.completed",
+                    "item": {
+                        "type": "agent_message",
+                        "text": f"artifact: {artifact_path}\nverdict: BLOCKED\nblocker: stuck",
+                    },
+                },
+                {"type": "turn.completed"},
+            ]) + "\n",
+            encoding="utf-8",
+        )
+        meta = {
+            "attempt_id": "att-codex-child", "attempt_schema_version": "2",
+            "dispatch_depth": "2", "transport": "headless",
+            "execution_surface": "registered-headless", "registered_worker": "1",
+            "fallback_hop": "same-harness-headless", "harness": "codex",
+            "log_file": str(log), "artifact_root": str(self.artifact),
+            "route_file": str(self.base / "route.json"), "route_node": "frame",
+            "launch_outcome": "reaped-before-publish",
+        }
+        raw = "\t".join([
+            "2026-07-28T06:00:00.000000Z", "open", str(self.base), str(self.base),
+            "att-codex-child-slug", ",".join(f"{k}={v}" for k, v in meta.items()),
+        ])
+        row = JOIN.ChildRow(
+            order=0, status="open", slug="att-codex-child-slug",
+            attempt_id="att-codex-child", raw=raw, metadata=meta,
+        )
+        self.jobs.write_text(raw + "\n", encoding="utf-8")
+        calls = []
+        real = JOIN.run_route_completion
+        JOIN.run_route_completion = lambda command: calls.append(command) or ""
+        try:
+            reason = JOIN.close_finished_child(row, jobs=self.jobs)
+        finally:
+            JOIN.run_route_completion = real
+        self.assertEqual(reason, "")
+        self.assertEqual(calls, [])
+        lines = self.jobs.read_text(encoding="utf-8").strip().splitlines()
+        self.assertIn("dead-worker-blocked", lines[0])
 
 
 if __name__ == "__main__":

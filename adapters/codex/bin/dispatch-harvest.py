@@ -26,6 +26,7 @@ from dispatch_completion_join import (  # noqa: E402
     consume_parent_session_attempt,
     JoinContractError,
     parent_session_state_path,
+    route_completion_evidence,
 )
 _route_spec = importlib.util.spec_from_file_location(
     "capability_route", ROOT / "utilities" / "capability-route.py"
@@ -134,6 +135,50 @@ def _complete_exact_routed_attempt(jobs: Path, metadata: dict[str, str], complet
     )
 
 
+def _complete_routed_attempt_from_terminal_evidence(
+    jobs: Path, metadata: dict[str, str], worktree: str
+) -> None:
+    """Derive completion evidence from the row's own terminal envelope when
+    no explicit ``--completion`` marker was named (SD-70/78, round_1 finding
+    5: `preflight.sh harvest --attempt-id ... --mark-done` is the only
+    admitted delivered-phase command, and it was unsatisfiable for a
+    route-bound row because no production caller ever supplied
+    ``--completion``).
+
+    Uses the identical shared predicate `route_completion_evidence` the
+    supervisor path already uses (valid envelope, PASS verdict, readable
+    in-root artifact) and then the same `ROUTE.complete_node` entry point
+    `_complete_exact_routed_attempt` calls. The exact route/hash/node/attempt
+    binding is enforced by `complete_node` itself, which re-reads the live
+    registry row and the real route file rather than trusting this call's
+    arguments — a wrong route file, wrong route hash, wrong node id, or
+    wrong attempt id in the metadata this function was given is caught there,
+    not here.
+    """
+
+    artifact = route_completion_evidence(metadata, worktree=worktree)
+    if artifact is None:
+        raise ValueError("route-completion-required")
+    route_file = Path(metadata.get("route_file", ""))
+    if not route_file.is_file():
+        raise ValueError("route-record-unreadable")
+    route = ROUTE.verify_route(json.loads(route_file.read_text(encoding="utf-8")))
+    node = next(
+        (row for row in route["nodes"] if row.get("id") == metadata["route_node"]),
+        None,
+    )
+    if node is None:
+        raise ValueError("route-node-unknown")
+    ROUTE.complete_node(
+        route,
+        node,
+        metadata["route_node"],
+        Path(artifact),
+        jobs=jobs,
+        attempt_id=metadata["attempt_id"],
+    )
+
+
 def mark_native_stop_harvest(jobs: Path, attempt_id: str) -> bool:
     try:
         return annotate_attempt_row(
@@ -220,9 +265,12 @@ def main(argv: list[str]) -> int:
                 return 65
             try:
                 if metadata.get("route_id"):
-                    if not args.completion or not Path(args.completion).is_file():
-                        raise ValueError("route-completion-required")
-                    _complete_exact_routed_attempt(jobs, metadata, Path(args.completion))
+                    if args.completion and Path(args.completion).is_file():
+                        _complete_exact_routed_attempt(jobs, metadata, Path(args.completion))
+                    else:
+                        _complete_routed_attempt_from_terminal_evidence(
+                            jobs, metadata, target[3]
+                        )
                 elif not close_attempt_row(jobs, attempt_id, "harvest-complete"):
                     raise ValueError("attempt-row-not-open")
             except (KeyError, OSError, TypeError, ValueError) as exc:

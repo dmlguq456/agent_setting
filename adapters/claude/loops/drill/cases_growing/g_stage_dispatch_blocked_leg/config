@@ -1,0 +1,3 @@
+MAX_TURNS=1
+TIMEOUT=300
+AXIS=static

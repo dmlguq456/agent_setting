@@ -563,6 +563,17 @@ else
   bad "legacy .claude_reports sub-spec read should satisfy gate"
 fi
 
+# g. adapters/claude/hooks/spec-skill-gate.sh must stay a symlink to the root
+# hook (mode 120000), not a hand-maintained duplicate (round_1 finding 3,
+# dispatch-guard-identity cycle) — a future accidental de-symlink would let
+# the two adapters silently diverge on the SD-45 route-record gate.
+CLAUDE_SPEC="$ROOT/adapters/claude/hooks/spec-skill-gate.sh"
+if [ -L "$CLAUDE_SPEC" ] && cmp -s "$SPEC" "$CLAUDE_SPEC"; then
+  ok "adapters/claude/hooks/spec-skill-gate.sh stays a byte-identical symlink to the root hook"
+else
+  bad "adapters/claude/hooks/spec-skill-gate.sh must remain a symlink to hooks/spec-skill-gate.sh"
+fi
+
 echo "== core-first adapter edit gate CLI =="
 mkdir -p "$TMP/coreproj/core" "$TMP/coreproj/adapters/codex"
 (

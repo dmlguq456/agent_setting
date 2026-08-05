@@ -549,6 +549,7 @@ def dispatch_prompt(
         f"- intensity: {args.intensity}\n"
         f"- dispatch_depth: {args.dispatch_depth}\n"
         f"- worker_type: {args.worker_type}\n"
+        f"- guard_session_id: {args.attempt_id}\n"
         f"- assigned_contract: {args.assigned_contract}\n"
         f"- route_node: {args.route_node or '-'}\n"
         f"- model_role: {getattr(args, 'resolved_model_settings', {}).get('role') or args.model_role or '-'}\n"

@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import (DispatchContractError, close_attempt_row,
                                parse_registry_metadata, reconcile_local_registry,
                                validate_attempt_metadata)  # noqa: E402
+from dispatch_completion_join import route_completion_evidence  # noqa: E402
 _route_spec = importlib.util.spec_from_file_location(
     "capability_route", ROOT / "utilities" / "capability-route.py"
 )
@@ -112,6 +113,39 @@ def _complete_exact_routed_attempt(jobs: Path, metadata: dict[str, str], complet
     )
 
 
+def _complete_routed_attempt_from_terminal_evidence(
+    jobs: Path, metadata: dict[str, str], worktree: str
+) -> None:
+    """Isomorphic to adapters/codex/bin/dispatch-harvest.py (round_1 finding
+    5, SD-70/78): derive completion evidence from the row's own terminal
+    envelope when no explicit ``--completion`` marker was named. The exact
+    route/hash/node/attempt binding is enforced by `ROUTE.complete_node`
+    itself against the live registry row and the real route file.
+    """
+
+    artifact = route_completion_evidence(metadata, worktree=worktree)
+    if artifact is None:
+        raise ValueError("route-completion-required")
+    route_file = Path(metadata.get("route_file", ""))
+    if not route_file.is_file():
+        raise ValueError("route-record-unreadable")
+    route = ROUTE.verify_route(json.loads(route_file.read_text(encoding="utf-8")))
+    node = next(
+        (row for row in route["nodes"] if row.get("id") == metadata["route_node"]),
+        None,
+    )
+    if node is None:
+        raise ValueError("route-node-unknown")
+    ROUTE.complete_node(
+        route,
+        node,
+        metadata["route_node"],
+        Path(artifact),
+        jobs=jobs,
+        attempt_id=metadata["attempt_id"],
+    )
+
+
 def main(argv: list[str]) -> int:
     args = parser().parse_args(argv[1:])
     if args.mark_done and not (args.slug or args.worktree):
@@ -166,9 +200,12 @@ def main(argv: list[str]) -> int:
                 return 65
             try:
                 if metadata.get("route_id"):
-                    if not args.completion or not Path(args.completion).is_file():
-                        raise ValueError("route-completion-required")
-                    _complete_exact_routed_attempt(jobs, metadata, Path(args.completion))
+                    if args.completion and Path(args.completion).is_file():
+                        _complete_exact_routed_attempt(jobs, metadata, Path(args.completion))
+                    else:
+                        _complete_routed_attempt_from_terminal_evidence(
+                            jobs, metadata, target[3]
+                        )
                 elif not close_attempt_row(jobs, attempt_id, "harvest-complete"):
                     raise ValueError("attempt-row-not-open")
             except (KeyError, OSError, TypeError, ValueError) as exc:

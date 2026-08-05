@@ -143,6 +143,12 @@ def run_join(args: argparse.Namespace, attempts: set[str]) -> dict[str, Any]:
 
 
 def completion_prompt(receipt: dict[str, Any]) -> str:
+    # This command's route-bound success depends on the derived-evidence
+    # fallback in adapters/codex/bin/dispatch-harvest.py /
+    # adapters/opencode/bin/dispatch-harvest.py (`route_completion_evidence`,
+    # round_1 finding 5). Do not silently revert that fallback — without it
+    # this exact command is unsatisfiable for a route-bound row and the
+    # delivered/harvest-only phase deadlocks (SD-70/78).
     compact = json.dumps(receipt, separators=(",", ":"), sort_keys=True)
     commands = "\n".join(
         "adapters/codex/bin/preflight.sh harvest --attempt-id "
@@ -185,6 +191,7 @@ def runtime_reconcile(args: argparse.Namespace, rows: dict[str, Any],
 
 
 def remediation_prompt(attempts: set[str]) -> str:
+    # Same route-bound-success dependency as completion_prompt() above.
     commands = "\n".join(
         "adapters/codex/bin/preflight.sh harvest --attempt-id "
         f"{shlex.quote(attempt)} --mark-done"

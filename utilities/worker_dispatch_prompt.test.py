@@ -154,6 +154,16 @@ class WorkerDispatchPromptTest(unittest.TestCase):
                 self.assertIn("blocker: none | <one line>", prompt)
                 self.assertNotIn("Read $AGENT_HOME/adapters/codex/AGENTS.md first", prompt)
                 self.assertNotIn("Return a concise report with changed files", prompt)
+                if harness in {"codex", "claude"}:
+                    # SD-45 guard-identity parity (round_1 finding 4): the
+                    # dispatch metadata's guard_session_id must equal the
+                    # exact attempt id the wrapper minted for this row — the
+                    # same identity embedded in the prompt filename itself —
+                    # and the field name/position must match across adapters.
+                    prompt_attempt_id = prompts[0].name.split(".")[1]
+                    self.assertIn(f"- guard_session_id: {prompt_attempt_id}\n", prompt)
+                    self.assertNotIn("- guard_session_id: codex-headless", prompt)
+                    self.assertNotIn("codex-headless", prompt)
 
     def test_route_bound_stage_prompts_name_deterministic_heartbeat_consumer(self):
         for harness, (wrapper, model, _suffix) in ADAPTERS.items():

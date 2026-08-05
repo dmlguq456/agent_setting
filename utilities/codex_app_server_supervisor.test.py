@@ -265,6 +265,115 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
         self.assertIn("\tdone\t/repo\t/wt\towner\t", registry)
         self.assertIn("note=dead-protocol", registry)
 
+    # -- Phase 4 (plan.md, round_1 finding 1 dependency): owner restoration,
+    # byte-isomorphic Codex case (SD-43 sibling principle: a Claude PASS is
+    # not proxy evidence for Codex). --
+
+    def _non_closing_join(self) -> Path:
+        script = self.base / "fake_join_stale.py"
+        script.write_text(
+            textwrap.dedent(
+                """\
+                import json, sys
+                parent = sys.argv[sys.argv.index('--parent-attempt-id') + 1]
+                attempts = [sys.argv[i + 1] for i, value in enumerate(sys.argv) if value == '--attempt-id']
+                print(json.dumps({'schema_version':1,'state':'ready','parent_attempt_id':parent,
+                    'children':[{'attempt_id':attempt,'status':'open','readiness':'ready',
+                                 'reason':'terminal-observed'} for attempt in attempts]}))
+                """
+            ),
+            encoding="utf-8",
+        )
+        return script
+
+    def _blocked_child_row(self) -> str:
+        log = self.base / "att-child.codex.jsonl"
+        artifact = self.artifact_root / "brief.md"
+        artifact.write_text("evidence\n", encoding="utf-8")
+        log.write_text(
+            "\n".join(json.dumps(row) for row in [
+                {"type": "system", "subtype": "init"},
+                {
+                    "type": "item.completed",
+                    "item": {
+                        "type": "agent_message",
+                        "text": f"artifact: {artifact}\nverdict: BLOCKED\nblocker: stuck",
+                    },
+                },
+                {"type": "turn.completed"},
+            ]) + "\n",
+            encoding="utf-8",
+        )
+        route = self.base / "route.json"
+        return (
+            f"2026-07-23T00:00:00Z\topen\t{self.base}\t{self.base}\tchild\t"
+            "attempt_schema_version=2,dispatch_depth=2,transport=headless,"
+            "execution_surface=registered-headless,registered_worker=1,"
+            "fallback_hop=same-harness-headless,harness=codex,"
+            f"attempt_id=att-child,parent_attempt_id={PARENT},"
+            f"log_file={log},artifact_root={self.artifact_root},"
+            f"route_file={route},route_node=frame,"
+            "launch_outcome=reaped-before-publish\n"
+        )
+
+    def command_with_join(self, join_script: Path) -> list[str]:
+        cmd = self.command()
+        idx = cmd.index("--join-command")
+        cmd[idx + 1] = f"{sys.executable} {join_script}"
+        return cmd
+
+    def test_blocked_child_reconciles_without_owned_children_error(self):
+        self.jobs.write_text(owner_row(self.lease) + self._blocked_child_row(), encoding="utf-8")
+        result = subprocess.run(
+            self.command_with_join(self._non_closing_join()),
+            input="initial assignment",
+            text=True,
+            capture_output=True,
+            env={**os.environ, "FAKE_TRACE": str(self.trace)},
+            timeout=10,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertNotIn(
+            "owned-children-remain-open-after-resume",
+            result.stdout + result.stderr,
+        )
+        rows = [json.loads(line) for line in result.stdout.splitlines()]
+        reconciled = [
+            row for row in rows
+            if row.get("type") == "dispatch.supervisor.reconciled"
+            and row.get("attempt_id") == "att-child"
+        ]
+        self.assertEqual(len(reconciled), 1, rows)
+        self.assertEqual(reconciled[0]["outcome"], "closed")
+        registry = self.jobs.read_text(encoding="utf-8")
+        self.assertIn("dead-worker-blocked", registry)
+
+    def test_live_unresolved_child_still_raises(self):
+        log = self.base / "att-live.codex.jsonl"
+        route = self.base / "route.json"
+        row = (
+            f"2026-07-23T00:00:00Z\topen\t{self.base}\t{self.base}\tchild\t"
+            "attempt_schema_version=2,dispatch_depth=2,transport=headless,"
+            "execution_surface=registered-headless,registered_worker=1,"
+            "fallback_hop=same-harness-headless,harness=codex,"
+            f"attempt_id=att-live,parent_attempt_id={PARENT},"
+            f"log_file={log},artifact_root={self.artifact_root},"
+            f"route_file={route},route_node=frame\n"
+        )
+        self.jobs.write_text(owner_row(self.lease) + row, encoding="utf-8")
+        result = subprocess.run(
+            self.command_with_join(self._non_closing_join()) + ["--max-continuations", "1"],
+            input="initial assignment",
+            text=True,
+            capture_output=True,
+            env={**os.environ, "FAKE_TRACE": str(self.trace)},
+            timeout=10,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("owned-children-remain-open-after-resume", result.stdout + result.stderr)
+        registry = self.jobs.read_text(encoding="utf-8")
+        self.assertIn("\topen\t", registry)
+
 
 if __name__ == "__main__":
     unittest.main()

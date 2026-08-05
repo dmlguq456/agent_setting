@@ -9,6 +9,9 @@ You are a bounded worker, not the user-facing main session.
   the one worker-type fragment supplied with this kernel.
 - Preserve permission, safety, git-state, artifact-root, liveness, and
   verification guards. Write only inside the assigned scope.
+- A spec-backed canonical write needs a current governing-prd read registered under your own guard
+  identity — `guard_session_id` in the dispatch metadata, `$AGENT_DISPATCH_ATTEMPT_ID` in the
+  environment. Never pass a shared literal.
 - Write durable artifacts only under the canonical artifact root; the task
   worktree's tracked `.agent_reports`/`.claude_reports` snapshot is read-only shadow state.
 - Put changed files, commands, results, warnings, reasoning, and unsupported
