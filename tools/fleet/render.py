@@ -613,15 +613,15 @@ _wt_count = gitinfo.worktree_count
 # stay aligned for comparison. Job flow never sits under branch/gate.
 _HW = 16                      # Bare harness-badge width — narrow/stack L1 badges and the
                               # dispatch-prefix budget math still use this unmerged value.
-_HMW = 35                     # F-33 (v19 spacing hotfix): WIDE-layout harness field with one
-                              # extra trailing cell before the session column. 33→38→42→32→35
-                              # (F-64, v49, 2026-08-05 사용자 "harness의 열의 폭을 조금 더"):
+_HMW = 38                     # F-33 (v19 spacing hotfix): WIDE-layout harness field with one
+                              # extra trailing cell before the session column. 33→38→42→32→35→38
+                              # (F-64, v49, 2026-08-05 사용자 "harness의 열의 폭을 조금 더" 재차):
                               # the labels that actually render are `claude code (Opus 5·xhigh)`
-                              # at 26 cells and `codex (gpt-5.6-sol·xhigh)` at 25; 35 restores
-                              # the 33-cell `opencode (claude-sonnet-4-5·high)` worst case F-58's
-                              # 32 clipped, keeps the deeper F-64 dispatch ladder (3 cells/level)
-                              # from starving the depth-2 field below the 26/25-cell labels, and
-                              # still stays 7 under the blank-heavy 42 that F-58 rolled back. The
+                              # at 26 cells and `codex (gpt-5.6-sol·xhigh)` at 25; at 38 the
+                              # 33-cell `opencode (claude-sonnet-4-5·high)` worst case fits even
+                              # behind the depth-1 arrow (38-5=33) and the depth-2 field keeps
+                              # 30 ≥ the 26-cell live labels under the F-64 3-cell ladder, while
+                              # staying 4 under the blank-heavy 42 that F-58 rolled back. The
                               # cells
                               # shift the whole wide row right and are charged to the _wide_slack
                               # budget; the _NW_S/_NAME_WIDE_MAX allocation rules are unchanged
@@ -1840,8 +1840,11 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     # SD-F3: the job's own effort is first-class; when it's absent (proc-scan rows — env
     # doesn't export it yet), fall back to the parent's effort, shown plain (user
     # 2026-07-16: the `~` derived-value marker is retired — qa left the display with the
-    # retired qa axis at the same time). A dead/stale row has no live telemetry (F-13).
-    eff = None if dead_stale_j else (j.effort or parent_effort or None)
+    # retired qa axis at the same time). F-64b (v49 정정, user 2026-08-05 "done이 되면 앞에
+    # 뜨던 정보들이 없어지고 - 만 남아서"): model/effort are the attempt's static IDENTITY,
+    # not live telemetry — a finished (afterglow/stale) row keeps them dim; only a DEAD row
+    # still wipes them (F-13's honest-collapse survives where the row actually crashed).
+    eff = None if j.liveness == "dead" else (j.effort or parent_effort or None)
 
     # DIFFERENTIAL indent (harness 2 cols deeper than a session) with a ↳ spawn arrow off the
     # parent's dot column (user pick over ├─/└─ tree bars); the harness field is narrowed by 2 so
@@ -1850,7 +1853,8 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     # parenthetical (SD-F3).
     prefix = _dispatch_prefix(j, orphan=orphan)
     segs = [("  ", None), (prefix, "dim"), (gch, gkey), (" ", None)]
-    segs += _harness_model_cell(j.harness, None if dead_stale_j else (j.model or parent_model),
+    segs += _harness_model_cell(j.harness,
+                                None if j.liveness == "dead" else (j.model or parent_model),
                                 eff, max(1, _HMW - len(prefix)),
                                 _BADGE_KEY.get(j.harness, "dim"), dim=True, unknown="—")
     avail = max(3, name_width or _NW_S)
@@ -1897,34 +1901,26 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
             # (the time column already shows elapsed) — "dead @exec" tells you WHERE it died.
             last_stage = stage if stage not in (None, "", "open", "running") else key
             segs.append(("dead @%s" % last_stage, "g_dead"))
-    elif afterglow_j:
-        # F-46: the job-row mirror of group cooling — dim `✓ done <since completion>` in the
-        # status zone, no blink, no telemetry. The elapsed value is measured from the `done`
-        # registry row's own timestamp, so it counts UP to the 15-min window and the row then
-        # disappears on the next tick.
-        # F-64a (v49 정정, user 2026-08-05 "depth=2에서 running 점멸만 done으로 바꾸고
-        # 체크표시 하나"): a depth-2 stage worker finishes by swapping the blinking `running`
-        # micro-token for a steady `✓ done` in the same slot — no elapsed here, the
-        # right-flushed time column already carries it.
+    elif afterglow_j or j.liveness == "stale":
+        # F-46 afterglow / F-13 stale, both corrected by F-64b (v49, user 2026-08-05 "done이
+        # 되면 앞에 뜨던 정보들이 없어지고 - 만 남아서"): the options dial is static identity
+        # like model/effort above, so the finished row keeps it dim instead of collapsing to
+        # a bare `-`. Only the STAGE SLOT changes to a steady done token — never a blinking
+        # frame. F-64a: depth-2 workers show a bare `✓ done` (elapsed already rides the
+        # right-flushed time column); depth-1 afterglow keeps its counting-up elapsed (F-46)
+        # and depth-1 stale its age (`done <age>`, the v49 "last seen" successor).
         segs.append((" " * _WIDE_STAGE_GAP, None))
+        opt_segs, optw = _opts_segs(j)
+        segs += opt_segs
+        if optw < _OPTW:
+            segs.append((" " * (_OPTW - optw), None))
         if int(getattr(j, "depth", 1) or 1) >= 2:
-            segs += [("-", "dim"), ("  ", None),
-                     ("%s done" % _LIVE_GLYPH["done"], "dim")]
+            token = "%s done" % _LIVE_GLYPH["done"]
+        elif afterglow_j:
+            token = "%s done %s" % (_LIVE_GLYPH["done"], fmt_min(j.elapsed_min))
         else:
-            segs += [("-", "dim"), ("  ", None),
-                     ("%s done %s" % (_LIVE_GLYPH["done"], fmt_min(j.elapsed_min)), "dim")]
-    elif j.liveness == "stale":
-        # F-13: a stale job has no live model/effort/stage worth showing — collapse the whole
-        # telemetry zone (model cell + stage breadcrumb) into one `done <age>` cell
-        # (F-64 v49: "last seen" → "done", symmetric with the live "running" vocabulary).
-        # Depth-2 workers take the same minimal `✓ done` micro-token as afterglow (F-64a).
-        segs.append((" " * _WIDE_STAGE_GAP, None))
-        if int(getattr(j, "depth", 1) or 1) >= 2:
-            segs += [("-", "dim"), ("  ", None),
-                     ("%s done" % _LIVE_GLYPH["done"], "dim")]
-        else:
-            segs += [("-", "dim"), ("  ", None),
-                     ("done %s" % fmt_min(j.elapsed_min), "dim")]
+            token = "done %s" % fmt_min(j.elapsed_min)
+        segs.append((token, "dim"))
     else:
         # F-15a options column (fixed-ish gap, dim mode/qa/profile) — a declutter move OUT of
         # the name zone, not a new axis. model/effort now live in the harness field (F-4/SD-F3).
@@ -2089,14 +2085,14 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
 
     stage = stage_override if stage_override is not None else (j.stage or "")
     if afterglow_j:
-        # F-46: the L2 telemetry line collapses to the same dim `✓ done <since completion>`
-        # cell the wide row shows — no model/effort/options/breadcrumb for finished work.
-        # F-64a: depth-2 workers keep the minimal `✓ done` (elapsed already rides L2's ⏱).
-        if int(getattr(j, "depth", 1) or 1) >= 2:
-            l2 = [("    ", None), ("%s done" % _LIVE_GLYPH["done"], "dim")]
-        else:
-            l2 = [("    ", None),
-                  ("%s done %s" % (_LIVE_GLYPH["done"], fmt_min(j.elapsed_min)), "dim")]
+        # F-46 as corrected by F-64b: the L2 line keeps the model cell (static identity,
+        # not telemetry) and swaps only the stage slot for a steady `✓ done` token. L2
+        # already leads with the elapsed cell, so no depth needs it repeated (F-64a).
+        eff = j.effort or parent_effort or None
+        l2 = [("    ", None), (_pad(fmt_min(j.elapsed_min), _HW), "dim")]
+        l2 += _model_cell(j.model or parent_model, eff, _MW, dim=True)
+        l2.append(("    ", None))
+        l2.append(("%s done" % _LIVE_GLYPH["done"], "dim"))
     else:
         eff = j.effort or parent_effort or None
         l2 = [("    ", None), (_pad(fmt_min(j.elapsed_min), _HW), "dim")]

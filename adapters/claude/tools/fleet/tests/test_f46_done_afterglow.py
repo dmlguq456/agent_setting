@@ -92,10 +92,13 @@ class DoneAfterglowRenderTest(unittest.TestCase):
         # the glyph cell is the dim ✓, never a spinner frame or the live green key
         self.assertEqual([key for part, key in segs if part == "✓"], ["dim"])
 
-    def test_narrow_row_collapses_telemetry_to_the_same_cell(self):
+    def test_narrow_row_keeps_identity_and_swaps_the_stage_slot(self):
+        # F-64b: L2 keeps its leading elapsed + model cell; only the stage slot
+        # becomes the steady `✓ done` token.
         _l1, l2 = render._dispatch_row_2line(self._job())
         text = "".join(part for part, _key in l2)
-        self.assertIn("✓ done 4m", text)
+        self.assertIn("✓ done", text)
+        self.assertIn("4m", text)
 
     def _depth2_job(self, **kw):
         return model.DispatchJob(key="code-execute", slug="stage-leg", depth=2,

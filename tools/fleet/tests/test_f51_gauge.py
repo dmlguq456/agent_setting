@@ -141,19 +141,21 @@ class F51GaugeTest(unittest.TestCase):
         failing.
 
         Re-frozen for F-64 (v49; renamed from `..._v44.json` ← `..._v41.json` ←
-        `..._v40.json` ← `..._v38.json` ← `..._v35.json`). Like F-58, F-64 moves ONE
-        constant (`_HMW` 32→35), so this is a single exact TRANSLATION of the previous
-        ledger, proved before the values were written:
+        `..._v40.json` ← `..._v38.json` ← `..._v35.json`; frozen twice within v49 as the
+        user widened `_HMW` 32→35→38). Like F-58, each F-64 step moves ONE constant, so
+        each freeze is a single exact TRANSLATION of the previous ledger, proved before
+        the values were written (net vs v44 below):
 
           * `wide_slack` — `_HMW` only enters through `_NAME_COL` in `fixed_row`, which
-            grows by exactly 3, so every entry loses 3 cells: `v49[w] == v44[w] - 3`
-            for all w in 60..400 (verified 341/341 at re-freeze). A VERTICAL shift.
-          * `wide_name_width` — the same 3 cells reach the title 3 columns later:
-            `v49[w] == v44[w-3]` for all w in 63..400 (verified 338/338), and 60..62 sit
-            on the `_NW_S` floor either way. A HORIZONTAL shift, so the ladder's SHAPE is
-            unchanged — same `_NW_S` floor (28), same `_NAME_WIDE_MAX` cap (40), still
-            monotonic. Only the width at which each rung is reached moved: the 40-col name
-            cap is now first reached at 133 cols (was 130 at v44, 140 at v41)."""
+            grows by exactly 6 net, so every entry loses 6 cells: `v49[w] == v44[w] - 6`
+            for all w in 60..400 (each 3-cell step verified 341/341 at its re-freeze).
+            A VERTICAL shift.
+          * `wide_name_width` — the same 6 cells reach the title 6 columns later:
+            `v49[w] == v44[w-6]` for all w in 66..400 (each step verified 338/338), and
+            the low end sits on the `_NW_S` floor either way. A HORIZONTAL shift, so the
+            ladder's SHAPE is unchanged — same `_NW_S` floor (28), same `_NAME_WIDE_MAX`
+            cap (40), still monotonic. Only the width at which each rung is reached moved:
+            the 40-col name cap is now first reached at 136 cols (was 130 at v44)."""
         path = os.path.join(os.path.dirname(__file__), "fixtures", "f51_wide_ledger_v49.json")
         with open(path, encoding="utf-8") as fh:
             ledger = json.load(fh)

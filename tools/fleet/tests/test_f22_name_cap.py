@@ -37,12 +37,12 @@ class WideNameCapTest(unittest.TestCase):
             self.assertLess(render._wide_name_width(w), render._NAME_WIDE_MAX)
 
     def test_wide_widths_are_clamped_to_the_cap(self):
-        # 168→172→176→140→130→133 for the first sample: F-54 shifted the ladder right by 5
+        # 168→172→176→140→130→136 for the first sample: F-54 shifted the ladder right by 5
         # then 4 (v40), F-57 (v41) shifted it 36 back left, F-58 (v44) another 10, and F-64
-        # (v49, _HMW 32→35) 3 back right, so the cap is first reached at 133. The clamp rule
-        # is unchanged — every width at or past the first capped width still returns exactly
-        # _NAME_WIDE_MAX, however wide it gets.
-        for w in (133, 176, 200, 400, 10000):
+        # (v49, _HMW 32→35→38) 6 back right, so the cap is first reached at 136. The clamp
+        # rule is unchanged — every width at or past the first capped width still returns
+        # exactly _NAME_WIDE_MAX, however wide it gets.
+        for w in (136, 176, 200, 400, 10000):
             self.assertEqual(render._wide_name_width(w), render._NAME_WIDE_MAX)
 
     def test_lower_bound_still_wins_on_tiny_terminals(self):
