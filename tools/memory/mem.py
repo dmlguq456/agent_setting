@@ -1905,7 +1905,11 @@ def recall_gate(decision=None, reason="", query=None, *, outcome=None, gate_id=N
     """Record a work-start recall opportunity without storing raw prompts."""
     runtime = os.environ.get("MEM_RECALL_RUNTIME", "unknown")
     sid = session_id if session_id is not None else (
-        os.environ.get("MEM_SID") or os.environ.get("CODEX_THREAD_ID") or ""
+        os.environ.get("MEM_SID")
+        or os.environ.get("CLAUDE_CODE_SESSION_ID")
+        or os.environ.get("CODEX_THREAD_ID")
+        or os.environ.get("OPENCODE_SESSION_ID")
+        or ""
     )
     turn_id = turn_id if turn_id is not None else os.environ.get("MEM_TURN_ID", "")
     project = project_key(Path.cwd())

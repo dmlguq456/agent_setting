@@ -156,6 +156,19 @@ def recall_turn_digest(turn_id: str) -> str:
     ).hexdigest()
 
 
+def _is_tool_result_user_row(row: dict[str, Any]) -> bool:
+    """Return whether a Claude ``type:user`` row is a tool result, not a prompt."""
+    message = row.get("message")
+    if not isinstance(message, dict):
+        return False
+    content = message.get("content")
+    blocks = content if isinstance(content, list) else [content]
+    return any(
+        isinstance(block, dict) and block.get("type") == "tool_result"
+        for block in blocks
+    )
+
+
 def transcript_turn_id(path_value: object) -> str:
     """Derive the current Claude turn from the bounded tail of its transcript."""
     if not isinstance(path_value, str) or not path_value:
@@ -179,7 +192,8 @@ def transcript_turn_id(path_value: object) -> str:
         except (UnicodeDecodeError, ValueError, TypeError, json.JSONDecodeError):
             continue
         if (not isinstance(row, dict) or row.get("type") != "user"
-                or row.get("isSidechain") is True):
+                or row.get("isSidechain") is True
+                or _is_tool_result_user_row(row)):
             continue
         uid = row.get("uuid")
         if isinstance(uid, str) and uid:

@@ -8,6 +8,7 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 export MEM_STORE="$TMP/store"
 export MEM_RECALL_EVENTS="$TMP/recall-events.jsonl"
+export MEM_RECALL_RECEIPTS="$TMP/recall-opportunities"
 export MEM_WRITE_EVENTS="$TMP/write-events.jsonl"
 mkdir -p "$MEM_STORE"
 
@@ -138,6 +139,33 @@ assert any(row.get("event") == "recall-outcome" and row.get("outcome") == "appli
            and row.get("record_ids") for row in rows)
 assert any(row.get("event") == "recall-outcome" and row.get("outcome") == "miss"
            for row in rows)
+PY
+
+# Claude's shell exposes CLAUDE_CODE_SESSION_ID. The documented no-argument
+# recovery path must replace the current candidate receipt with explicit proof.
+claude_sid='mem-v24-claude-session'
+python3 "$MEM" candidates capsule-first --session-id "$claude_sid" \
+  --turn-id 'claude-user-prompt' >/dev/null
+python3 - "$MEM_RECALL_RECEIPTS" "$claude_sid" <<'PY'
+import hashlib, json, pathlib, sys
+key = hashlib.sha256(
+    b"memory-recall-opportunity-v1\0" + sys.argv[2].encode()
+).hexdigest()
+value = json.loads((pathlib.Path(sys.argv[1]) / f"{key}.json").read_text())
+assert value["source"] == "candidate-probe"
+assert value["turn_digest"]
+PY
+env -u MEM_SID CLAUDE_CODE_SESSION_ID="$claude_sid" \
+  python3 "$MEM" recall-gate --decision skip \
+    --reason 'prompt hook recovery uses the native Claude session' --turn-id '' >/dev/null
+python3 - "$MEM_RECALL_RECEIPTS" "$claude_sid" <<'PY'
+import hashlib, json, pathlib, sys
+key = hashlib.sha256(
+    b"memory-recall-opportunity-v1\0" + sys.argv[2].encode()
+).hexdigest()
+value = json.loads((pathlib.Path(sys.argv[1]) / f"{key}.json").read_text())
+assert value["source"] == "explicit-skip"
+assert value["turn_digest"] == ""
 PY
 
 # v7 export/import round-trips source fields while derived indexes rebuild.

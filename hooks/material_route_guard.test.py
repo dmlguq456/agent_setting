@@ -186,7 +186,7 @@ class MaterialRouteGuardTest(unittest.TestCase):
         )
         self.assertEqual(recovered.returncode, 0, recovered.stderr)
 
-    def test_claude_transcript_turn_anchor_tracks_latest_user_uuid(self) -> None:
+    def test_claude_transcript_turn_anchor_tracks_latest_real_user_uuid(self) -> None:
         transcript = self.base / "transcript.jsonl"
         transcript.write_text(
             "\n".join([
@@ -207,6 +207,74 @@ class MaterialRouteGuardTest(unittest.TestCase):
             MATERIAL_GUARD.transcript_turn_id(str(transcript)),
             "transcript-user:user-two",
         )
+        with transcript.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps({
+                "type": "assistant", "uuid": "assistant-tool",
+                "message": {"role": "assistant", "content": [{
+                    "type": "tool_use", "id": "tool-one", "name": "Read",
+                }]},
+            }) + "\n")
+            handle.write(json.dumps({
+                "type": "user", "uuid": "tool-result-one",
+                "message": {"role": "user", "content": [{
+                    "type": "tool_result", "tool_use_id": "tool-one", "content": "result",
+                }]},
+            }) + "\n")
+        self.assertEqual(
+            MATERIAL_GUARD.transcript_turn_id(str(transcript)),
+            "transcript-user:user-two",
+        )
+
+    def test_claude_lookup_then_two_edits_keep_same_turn_receipt(self) -> None:
+        session = "same-turn-edits"
+        transcript = self.base / "same-turn.jsonl"
+        transcript.write_text(json.dumps({
+            "type": "user", "uuid": "actual-user-prompt",
+            "message": {"role": "user", "content": "inspect and fix"},
+        }) + "\n", encoding="utf-8")
+        self.assertEqual(self.bind(session).returncode, 0)
+        self.opportunity(session, turn="transcript-user:actual-user-prompt")
+
+        clean = {
+            key: value for key, value in os.environ.items()
+            if key not in {"AGENT_ROUTE_FILE", "AGENT_ROUTE_ID", "AGENT_ROUTE_NODE"}
+        }
+
+        def edit_after(tool_id: str, tool_name: str) -> subprocess.CompletedProcess[str]:
+            with transcript.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps({
+                    "type": "assistant", "uuid": f"assistant-{tool_id}",
+                    "message": {"role": "assistant", "content": [{
+                        "type": "tool_use", "id": tool_id, "name": tool_name,
+                    }]},
+                }) + "\n")
+                handle.write(json.dumps({
+                    "type": "user", "uuid": f"result-{tool_id}",
+                    "message": {"role": "user", "content": [{
+                        "type": "tool_result", "tool_use_id": tool_id, "content": "ok",
+                    }]},
+                }) + "\n")
+            payload = {
+                "hook_event_name": "PreToolUse", "tool_name": "Edit",
+                "tool_input": {"file_path": str(self.repo / "app.py")},
+                "cwd": str(self.repo), "session_id": session,
+                "transcript_path": str(transcript),
+            }
+            return subprocess.run(
+                [sys.executable, str(GUARD)], input=json.dumps(payload), text=True,
+                capture_output=True,
+                env={
+                    **clean, "AGENT_HOME": str(self.home),
+                    "MEM_RECALL_RECEIPTS": str(self.receipts),
+                },
+            )
+
+        first_edit = edit_after("lookup-one", "Read")
+        self.assertEqual(first_edit.returncode, 0, first_edit.stderr)
+        self.assertEqual(first_edit.stdout, "", first_edit.stdout)
+        second_edit = edit_after("edit-one", "Edit")
+        self.assertEqual(second_edit.returncode, 0, second_edit.stderr)
+        self.assertEqual(second_edit.stdout, "", second_edit.stdout)
 
     def test_docs_config_scratch_and_foreign_session_behavior(self) -> None:
         config_script = self.repo / "config" / "bootstrap.sh"
