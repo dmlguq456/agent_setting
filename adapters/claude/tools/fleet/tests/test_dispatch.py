@@ -61,6 +61,66 @@ class RenderDispatchPresentationTest(unittest.TestCase):
         self.assertEqual(render._dispatch_prefix(nested), "      ↳ ")
         self.assertEqual(len(render._dispatch_prefix(nested)), 8)
 
+    def _rail_fixture(self, owner_liveness="working"):
+        parent = Session(harness="claude", pid=1, cwd="/work/repo", session_id="sid-1",
+                         slug="repo", model="Fable 5", effort="xhigh", liveness="working")
+        d1 = DispatchJob(key="code", slug="rail-owner", cwd="/work/repo",
+                         parent_sid="sid-1", is_child=True, harness="claude", depth=1,
+                         model="Opus 5", effort="xhigh", liveness=owner_liveness,
+                         stage="execute", elapsed_min=35,
+                         summary="harvesting", summary_ts=None)
+        d2 = DispatchJob(key="code", slug="rail-leg", cwd="/work/repo",
+                         parent_slug="rail-owner", harness="claude", depth=2,
+                         model="Opus 5", effort="xhigh", liveness="working",
+                         stage="running", elapsed_min=5)
+        return parent, d1, d2
+
+    def _rail_lines(self, blink=True, owner_liveness="working", layout="wide"):
+        parent, d1, d2 = self._rail_fixture(owner_liveness)
+        old = render._BLINK_ON
+        render._BLINK_ON = blink
+        try:
+            return render._build_lines([parent], [d1, d2], section="both", narrow=False,
+                                       malformed=0, layout=layout, term_width=175)
+        finally:
+            render._BLINK_ON = old
+
+    @staticmethod
+    def _line_with(lines, needle):
+        for line in lines:
+            if line and needle in "".join(p for p, _k in line):
+                return line
+        return None
+
+    def test_f64c_depth1_arrow_becomes_a_rail_and_depth2_keeps_its_arrow(self):
+        lines = self._rail_lines()
+        owner = self._line_with(lines, "rail-owner (")   # the row, not the alert line
+        leg = self._line_with(lines, "rail-leg (")
+        subtitle = self._line_with(lines, "harvesting")
+        owner_txt = "".join(p for p, _k in owner)
+        leg_txt = "".join(p for p, _k in leg)
+        self.assertIn(render._RAIL_CHAR, owner_txt)
+        self.assertNotIn("↳", owner_txt)          # the depth-1 arrow is gone
+        self.assertIn(render._RAIL_CHAR, leg_txt)  # rail continues through the block
+        self.assertIn("↳", leg_txt)               # depth-2 keeps its spawn arrow
+        self.assertIn(render._RAIL_CHAR, "".join(p for p, _k in subtitle))
+
+    def test_f64c_rail_blinks_in_stage_hue_only_while_working(self):
+        for blink, expected in ((True, "stg0_on"), (False, "stg0_off")):
+            owner = self._line_with(self._rail_lines(blink=blink), "rail-owner (")
+            keys = [k for p, k in owner if p == render._RAIL_CHAR]
+            self.assertEqual(keys, [expected])
+        for blink in (True, False):
+            owner = self._line_with(
+                self._rail_lines(blink=blink, owner_liveness="stale"), "rail-owner (")
+            keys = [k for p, k in owner if p == render._RAIL_CHAR]
+            self.assertEqual(keys, ["dim"])       # finished units never blink
+
+    def test_f64c_rail_is_wide_layout_only(self):
+        lines = self._rail_lines(layout="narrow")
+        joined = "".join(p for line in lines if line for p, _k in line)
+        self.assertNotIn(render._RAIL_CHAR, joined)
+
     def test_dispatch_role_suffix_has_no_qa_token(self):
         # qa axis retired (CONVENTIONS §1.1); intensity moved to the dial's paren knob
         # group (2026-07-20 hierarchical dial) — this suffix is the ROLE tail only now.

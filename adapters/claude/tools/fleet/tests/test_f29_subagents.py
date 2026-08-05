@@ -997,7 +997,9 @@ class NoRegressionTest(unittest.TestCase):
         self.assertEqual(len(strip), 1)
         text = "".join(t for t, _k in strip[0] if not render._is_fill(t))
         lead = text[:text.index(render._ICON_SUBAGENT)].lstrip("▍")
-        self.assertEqual(lead.strip(), "")
+        # F-64c: the strip belongs to a depth-1 dispatch unit, so its lead may carry the
+        # unit's vertical rail — pure inset otherwise.
+        self.assertIn(lead.strip(), ("", render._RAIL_CHAR))
         # depth-1 strip = _SUBAGENT_IND + 2, minus the one indent cell the group tint
         # rail (▍) consumes when it is prepended to every card row.
         self.assertGreaterEqual(len(lead), len(render._SUBAGENT_IND) + 1)

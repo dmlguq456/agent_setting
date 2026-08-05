@@ -1525,6 +1525,43 @@ def _dispatch_prefix(j, orphan=False):
     return "   " * depth + "↳ "
 
 
+# F-64c (v49, user 2026-08-05 "depth=1에서는 화살표를 안쓰고 쭉 세로줄로 표시하고 그걸
+# 점멸하도록"): a depth-1 dispatch unit drops its ↳ arrow for a continuous vertical rail
+# spanning the whole block (owner row, NOW subtitle, ⚡strips, depth-2 rows). The rail
+# BLINKS in the owner's stage hue while the owner is working (same _BLINK_ON phase as the
+# running token — blink changes brightness, never hue) and sits steady dim otherwise.
+# depth-2 rows keep their ↳ arrows — the rail is what tells a dispatch unit apart from a
+# native sub-agent strip, which never carries one. Wide layout only; narrow/stack cards
+# keep the arrow prefix, and orphan rows keep their flat `··` (a rail with no on-screen
+# parent would imply lineage F-26 forbids guessing).
+_RAIL_CHAR = "┃"
+_RAIL_COL = 5      # the depth-1 arrow's display column: 2-cell margin + 3-cell ladder inset
+
+
+def _overwrite_rail_cell(segs, col, char, key):
+    """Overwrite ONE display cell of a row with the rail mark, splitting whatever seg
+    covers it. Fail closed: if the target cell holds real content (not a space or the
+    depth-1 ↳ the rail replaces), return the row untouched."""
+    out, pos, replaced = [], 0, False
+    for text, k in segs:
+        width = _dw(text) if text else 0
+        if replaced or pos + width <= col:
+            out.append((text, k)); pos += width; continue
+        acc, i = 0, 0
+        while i < len(text) and pos + acc + _cw(text[i]) <= col:
+            acc += _cw(text[i]); i += 1
+        if i >= len(text) or text[i] not in (" ", "↳"):
+            return segs
+        if text[:i]:
+            out.append((text[:i], k))
+        out.append((char, key))
+        if text[i + 1:]:
+            out.append((text[i + 1:], k))
+        pos += width
+        replaced = True
+    return out if replaced else segs
+
+
 _ORPHAN_DIVIDER_LABEL = "  ⌄ orphaned dispatch rows"
 
 
@@ -4136,6 +4173,7 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                                 orphan=False, is_last=True):
             # Row authority is the attached WorkProjection.  No first-child or
             # first-route selection is allowed in this render-local tree walk.
+            block_start = len(lines)   # F-64c: the depth-1 rail spans everything emitted below
             stage_override = _projection_stage_for_dispatch(job)
             route_seq = _projection_route_seq(job)
             if job.liveness == "stale":
@@ -4190,6 +4228,22 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 _emit_dispatch_tree(sub, parent_model=job.model or parent_model,
                                     parent_harness=job.harness or parent_harness,
                                     parent_effort=parent_effort, orphan=False)
+            # F-64c: paint the depth-1 rail over the whole block just emitted — the ↳
+            # cell on the owner row itself, and the spare inset cell on every subordinate
+            # row (NOW subtitle, ⚡strip, depth-2 rows and their details). Working owners
+            # blink in their stage hue (brightness only); finished/stale sit steady dim.
+            if (_jrow is None and not orphan
+                    and max(1, int(getattr(job, "depth", 1) or 1)) == 1):
+                if job.liveness == "working":
+                    color_i = _dispatch_stage_color_index(
+                        job, getattr(job, "key", None),
+                        stage_override or getattr(job, "stage", None))
+                    rail_key = ("stg%d_on" if _BLINK_ON else "stg%d_off") % color_i
+                else:
+                    rail_key = "dim"
+                for idx in range(block_start, len(lines)):
+                    lines[idx] = _overwrite_rail_cell(
+                        lines[idx], _RAIL_COL, _RAIL_CHAR, rail_key)
 
         shown = _sort_group_sessions(shown)
         if live_order is not None:
