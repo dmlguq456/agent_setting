@@ -92,21 +92,30 @@ class RenderDispatchPresentationTest(unittest.TestCase):
                 return line
         return None
 
-    def test_f64c_rail_hangs_under_the_arrowless_depth1_row(self):
+    def test_f64c_capsule_rail_brackets_the_whole_unit_from_the_owner_row(self):
         lines = self._rail_lines()
         owner = self._line_with(lines, "rail-owner (")   # the row, not the alert line
         leg = self._line_with(lines, "rail-leg (")
         subtitle = self._line_with(lines, "harvesting")
         owner_txt = "".join(p for p, _k in owner)
         leg_txt = "".join(p for p, _k in leg)
-        self.assertNotIn("↳", owner_txt)          # the depth-1 arrow is gone
-        for ch in render._RAIL_CHARS:             # rail hangs BELOW, not on the owner
-            self.assertNotIn(ch, owner_txt)
-        # capsule ends (user 2026-08-05 "가장 위와 가장 아래만 각각 위와 아래가 짧은 바"):
-        # the first rail cell is the top-short cap, the last the bottom-short cap.
-        self.assertIn(render._RAIL_TOP, "".join(p for p, _k in subtitle))
+        self.assertNotIn("↳", owner_txt)          # the depth-1 arrow stays gone
+        # capsule shape (user 2026-08-05 "다시 앞으로 당겨서 depth=1까지 묶어주고" + "가장
+        # 위와 가장 아래만 각각 위와 아래가 짧은 바"): owner row = top cap, middle rows =
+        # full bar, last row = bottom cap.
+        self.assertIn(render._RAIL_TOP, owner_txt)
+        self.assertIn(render._RAIL_MID, "".join(p for p, _k in subtitle))
         self.assertIn(render._RAIL_BOT, leg_txt)
         self.assertIn("↳", leg_txt)               # depth-2 keeps its spawn arrow
+
+    def test_f64c_childless_single_row_unit_stays_unpainted(self):
+        parent, d1, _d2 = self._rail_fixture()
+        d1.summary = None
+        lines = render._build_lines([parent], [d1], section="both", narrow=False,
+                                    malformed=0, layout="wide", term_width=175)
+        owner_txt = "".join(p for p, _k in self._line_with(lines, "rail-owner ("))
+        for ch in render._RAIL_CHARS:
+            self.assertNotIn(ch, owner_txt)
 
     def test_f64c_rail_blinks_in_stage_hue_only_while_working(self):
         for blink, expected in ((True, "stg0_on"), (False, "stg0_off")):

@@ -1550,8 +1550,10 @@ _RAIL_MID = "┃"
 _RAIL_BOT = "╹"
 _RAIL_SOLO = "❙"
 _RAIL_CHARS = (_RAIL_TOP, _RAIL_MID, _RAIL_BOT, _RAIL_SOLO)
-_RAIL_COL = 4      # the depth-1 owner's GLYPH column (2-cell margin + 2-cell inset) — the
-                   # rail drops straight down from the owner's dot
+_RAIL_COL = 2      # the left-margin column just inside the card edge (user 2026-08-05
+                   # "세로줄은 다시 앞으로 당겨서 depth=1까지 묶어주고") — one cell of air
+                   # before the owner's glyph, so the capsule brackets the WHOLE unit,
+                   # owner row included
 
 
 def _depth1_rail_color_index(key, stage, route_seq):
@@ -4260,12 +4262,14 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                 _emit_dispatch_tree(sub, parent_model=job.model or parent_model,
                                     parent_harness=job.harness or parent_harness,
                                     parent_effort=parent_effort, orphan=False)
-            # F-64c: hang the rail under the depth-1 owner row — the spare inset cell on
-            # every SUBORDINATE row (NOW subtitle, ⚡strip, depth-2 rows and their
-            # details); the owner row itself stays rail-free at its shallow seat. Working
+            # F-64c: bracket the WHOLE depth-1 unit — owner row included (user 2026-08-05
+            # "다시 앞으로 당겨서 depth=1까지 묶어주고") — with the capsule rail in the
+            # left margin: ╻ on the owner row, ┃ through the middle, ╹ on the last row.
+            # A childless one-row unit has nothing to bind and stays unpainted. Working
             # owners blink in their stage hue (brightness only); finished/stale sit dim.
             if (_jrow is None and not orphan
-                    and max(1, int(getattr(job, "depth", 1) or 1)) == 1):
+                    and max(1, int(getattr(job, "depth", 1) or 1)) == 1
+                    and len(lines) - block_start >= 2):
                 if job.liveness == "working":
                     color_i = _depth1_rail_color_index(
                         getattr(job, "key", None),
@@ -4273,11 +4277,9 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                     rail_key = ("stg%d_on" if _BLINK_ON else "stg%d_off") % color_i
                 else:
                     rail_key = "dim"
-                first, last = block_start + 1, len(lines) - 1
+                first, last = block_start, len(lines) - 1
                 for idx in range(first, len(lines)):
-                    if first == last:
-                        char = _RAIL_SOLO
-                    elif idx == first:
+                    if idx == first:
                         char = _RAIL_TOP
                     elif idx == last:
                         char = _RAIL_BOT
