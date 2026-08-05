@@ -56,10 +56,10 @@ class RenderDispatchPresentationTest(unittest.TestCase):
         top = DispatchJob(key="code", slug="top", depth=1)
         nested = DispatchJob(key="code", slug="nested", depth=2)
 
-        self.assertEqual(render._dispatch_prefix(top), "  ")
-        self.assertEqual(render._dispatch_prefix(nested), "     ↳ ")
-        self.assertEqual(len(render._dispatch_prefix(nested)), 7)
-        self.assertEqual(render._dispatch_prefix(top, orphan=True), "··")
+        self.assertEqual(render._dispatch_prefix(top), "   ")
+        self.assertEqual(render._dispatch_prefix(nested), "      ↳ ")
+        self.assertEqual(len(render._dispatch_prefix(nested)), 8)
+        self.assertEqual(render._dispatch_prefix(top, orphan=True), "·· ")
 
     def _rail_fixture(self, owner_liveness="working"):
         parent = Session(harness="claude", pid=1, cwd="/work/repo", session_id="sid-1",

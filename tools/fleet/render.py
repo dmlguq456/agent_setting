@@ -1510,14 +1510,13 @@ def _compact_dispatch_name(name, max_width=_DISPATCH_NAME_MAX):
 
 
 def _dispatch_prefix(j, orphan=False):
-    # F-64c (v49, user 2026-08-05 "depth=1을 조금 앞당겨서 들여쓰기 폭을 줄이고 세로선은 그
-    # 아래 depth=2에 대해서만"): depth-1 sheds both its ↳ arrow and most of its inset — a
-    # 2-cell nudge off the session column is its whole indent, and the blinking rail its
-    # subordinate rows carry (assembler post-pass, `_RAIL_CHAR`) is what marks the unit.
-    # depth≥2 keeps the ↳ spawn arrow (user 2026-07-16: indent-only depth-2 rows lost their
-    # arrow), three cells deeper per level past the depth-1 seat (F-64 "들여쓰기를 좀 더
-    # 구분해줘"). The harness field absorbs the prefix (_HMW - len: depth-1 38-2=36,
-    # depth-2 38-7=31 ≥ the 26-cell worst-case live label).
+    # F-64c (v49, user 2026-08-05 "depth=1을 조금 앞당겨서 들여쓰기 폭을 줄이고" + "세로선은
+    # 좀 더 들여쓰게"): depth-1 sheds its ↳ arrow and sits at a shallow 3-cell inset — the
+    # capsule rail (assembler post-pass at `_RAIL_COL`) is what marks the unit. depth≥2
+    # keeps the ↳ spawn arrow (user 2026-07-16: indent-only depth-2 rows lost their arrow),
+    # three cells deeper per level past the depth-1 seat (F-64 "들여쓰기를 좀 더 구분해줘").
+    # The harness field absorbs the prefix (_HMW - len: depth-1 38-3=35, depth-2 38-8=30 ≥
+    # the 26-cell worst-case live label).
     #
     # Project-level orphans (parent dead/off-screen, surfaced as a project fallback) intentionally
     # drop the ↳ tree arrow — a parent-child arrow with no on-screen parent misleads readers into
@@ -1525,9 +1524,9 @@ def _dispatch_prefix(j, orphan=False):
     # same-width flat `··` "no-hierarchy" mark so the column stays aligned without implying nesting.
     depth = max(1, min(3, int(getattr(j, "depth", 1) or 1)))
     if depth == 1:
-        return "··" if orphan else "  "
+        return "·· " if orphan else "   "
     marker = "··" if orphan else "↳ "
-    return "  " + "   " * (depth - 1) + marker
+    return "   " + "   " * (depth - 1) + marker
 
 
 # F-64c (v49, user 2026-08-05 "depth=1에서는 화살표를 안쓰고 쭉 세로줄로 … 점멸하도록",
@@ -1550,10 +1549,10 @@ _RAIL_MID = "┃"
 _RAIL_BOT = "╹"
 _RAIL_SOLO = "❙"
 _RAIL_CHARS = (_RAIL_TOP, _RAIL_MID, _RAIL_BOT, _RAIL_SOLO)
-_RAIL_COL = 2      # the left-margin column just inside the card edge (user 2026-08-05
-                   # "세로줄은 다시 앞으로 당겨서 depth=1까지 묶어주고") — one cell of air
-                   # before the owner's glyph, so the capsule brackets the WHOLE unit,
-                   # owner row included
+_RAIL_COL = 3      # one step in from the card edge (user 2026-08-05 "세로선은 좀 더
+                   # 들여쓰게") — the depth-1 seat moved to a 3-cell inset with it, so one
+                   # cell of air stays between the rail and the owner's glyph and the
+                   # capsule still brackets the WHOLE unit, owner row included
 
 
 def _depth1_rail_color_index(key, stage, route_seq):
