@@ -308,6 +308,15 @@ reads the current source checkout, `autopilot-code` mutates code there, and
 draft/research/refine read and write persistent inputs only below the canonical
 artifact root. Cross-project work changes cwd and uses another session.
 
+Non-Git cwd resolution never inherits a strict ancestor's root by mere
+discovery. The cwd's own root (`.agent_reports/` or legacy `.claude_reports/`)
+is used first when present — self is not inheritance and needs no marker.
+Beyond that, a strict ancestor's root is inherited only when that ancestor
+directory also holds an `.agent-workspace` marker file; an empty file is
+sufficient, and an optional `scope:` comment is for human readers only. Absent
+both, the root is `<cwd>/.agent_reports/`. This Git-worktree resolution path —
+primary worktree wins — is unchanged by the marker rule.
+
 Artifact directories are gitignored in every tracked repository, including
 `<agent-home>` (2026-07-31 policy change for the public v2.0 release: the
 former agent-home exception that committed artifact history is retired;
@@ -539,6 +548,36 @@ When `spec/pipeline_state.yaml` exists, read it and activate every applicable ap
 | refine | Target artifact plus `_internal/versions/v{N}/` for a major refine; direct minor edits update history only |
 | note | Run logs in artifact root plus routed cards and digests under the configured notes target |
 | apply | Real source outside artifact root; git branch and commit provide versions, with apply logs under the cheatsheet artifact |
+
+### §6.5-anchors. Anchor Resolution
+
+Every track's scopes above resolve against exactly one bucket domain:
+cycle-relative (code, lab, draft, research: relative to that capability's
+`<date>_<slug>` or `<topic>` cycle directory), artifact-root-relative
+(project analysis, spec, and design: relative to a fixed sub-path under the
+artifact root), or outside the artifact root (apply's real source target,
+symbol tokens the compiler never substitutes). Standalone design anchors at
+`designs/<name>/`; spec-owned design anchors at `spec/design/`; spec-owned
+byproducts (research shards, review shards) anchor at `spec/_internal/`
+(or `spec/<component>/_internal/` for a component spec). A parallel leg's
+suffix (e.g. `-alternative`) may only appear as a subdirectory inside the
+owning anchor, never by escaping it.
+
+route lifecycle records live in a single hidden runtime location:
+`<artifact-root>/.runtime/routes/<name>.json`, with a terminal sidecar
+`<name>.outcome.json` beside it. `compile --output` outside that directory is
+a typed rejection; omitting `--output` defaults to the canonical path. `status`
+and `close` still recognize four legacy locations (root-level `*-route.json`,
+`routes/`, `_routes/`, `.routes/`) read-only and flag them as drift; only new
+writes to legacy locations are blocked.
+
+`.runtime/` is the only bucket name for artifact-root-scoped runtime state.
+Legacy `_runtime/` is recognized read-only and must never be freshly created.
+File-based memory is a retired mechanism: the memory database is the sole
+source of truth, and harness code must not create new `NOTES.md`, `memo.md`,
+or `.claude/agent-memory/` inside an artifact root (existing files are left in
+place, not deleted). cwd-scoped grounding state (`.route-grounding/` and
+siblings) is not an artifact and is unaffected by this section.
 
 ### §6.6. Autopilot Intake Gate
 

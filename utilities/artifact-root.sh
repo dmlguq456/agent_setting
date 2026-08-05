@@ -63,16 +63,27 @@ if command -v git >/dev/null 2>&1 \
   exit 0
 fi
 
+# D-3: cwd's own root is used on discovery (self is not inheritance, no marker
+# needed). A strict ancestor's root is inherited only when that ancestor also
+# carries an `.agent-workspace` marker file (contents unread, existence only)
+# or, as an implicit marker in a git-less environment, its own `.git`
+# directory. An ancestor with a root but no marker is skipped, not adopted --
+# the walk keeps climbing instead of stopping at the first root it finds.
 d=$start
+self=1
 while :; do
+  root=""
   if [ -d "$d/.agent_reports" ]; then
-    physical_dir "$d/.agent_reports"
+    root="$d/.agent_reports"
+  elif [ -d "$d/.claude_reports" ]; then
+    root="$d/.claude_reports"
+  fi
+  if [ -n "$root" ] \
+    && { [ "$self" = 1 ] || [ -f "$d/.agent-workspace" ] || [ -d "$d/.git" ]; }; then
+    physical_dir "$root"
     exit 0
   fi
-  if [ -d "$d/.claude_reports" ]; then
-    physical_dir "$d/.claude_reports"
-    exit 0
-  fi
+  self=0
   [ "$d" = "/" ] && break
   parent=$(dirname "$d")
   [ "$parent" = "$d" ] && break

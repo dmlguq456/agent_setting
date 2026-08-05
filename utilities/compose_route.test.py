@@ -54,20 +54,25 @@ class TestComposeRoute(unittest.TestCase):
         return C.unit_io_gate_index(C._load_topology().load_registry())
 
     def _run(self, units, *, tracking="tracked", spec_read="canonical-sha",
-             workflow_mode="tracked", output=None, capability_mode="code"):
+             workflow_mode="tracked", output=None, capability_mode="code", artifact_root=None):
         """Invoke the compose-route.py CLI as a real caller would."""
         with tempfile.TemporaryDirectory() as tmp:
             evidence_path = Path(tmp) / "evidence.json"
             evidence_path.write_text(json.dumps(FIXTURE_EVIDENCE), encoding="utf-8")
+            # D-2: --output must resolve inside <artifact-root>/.runtime/routes. A
+            # caller who wants the sealed file to outlive this temp dir passes its
+            # own artifact_root (see test_round_trip_seals_and_verifies).
+            root = artifact_root if artifact_root is not None else tmp
             command = [
                 sys.executable, str(COMPOSE),
                 "--capability", "analyze-project", "--capability-mode", capability_mode,
                 "--units-json", json.dumps(units),
-                "--cwd", str(ROOT), "--artifact-root", tmp,
+                "--cwd", str(ROOT), "--artifact-root", root,
                 "--tracking", tracking, "--spec-read", spec_read,
                 "--drift-verdict", "within-spec", "--workflow-mode", workflow_mode,
                 "--artifact-guard", "conductor-prechecked",
                 "--dispatch-evidence", str(evidence_path),
+                "--cycle-anchor", "analysis_project", "--review-anchor", "reviews",
             ]
             if output is not None:
                 command += ["--output", output]
@@ -80,6 +85,7 @@ class TestComposeRoute(unittest.TestCase):
             "analyze-project", "code", UNITS,
             topology_class="staged", quick_write_scope=[],
             quick_model_profile="balanced-deep", gate_index=self._gate_index(),
+            cycle_anchors=["analysis_project"], review_anchor="reviews",
         )
         nodes = {n["id"]: n for n in recipe["standard_plus"]["nodes"]}
         # role is derived from unit frontmatter (never caller-supplied).
@@ -104,6 +110,7 @@ class TestComposeRoute(unittest.TestCase):
             [{"id": "review", "unit": "qa/plan-review", "write_scope": ["reviews/plan/**"]}],
             topology_class="staged", quick_write_scope=[],
             quick_model_profile="balanced-deep", gate_index=self._gate_index(),
+            cycle_anchors=["analysis_project"], review_anchor="reviews",
         )
         # qa/plan-review names exactly one unit-io gate, so no explicit gate is needed.
         self.assertEqual(recipe["standard_plus"]["nodes"][0]["completion_gate"], "code-plan-check")
@@ -111,8 +118,8 @@ class TestComposeRoute(unittest.TestCase):
     # --- compose -> compile -> verify round trip -------------------------
     def test_round_trip_seals_and_verifies(self):
         with tempfile.TemporaryDirectory() as out_dir:
-            output = str(Path(out_dir) / "route.json")
-            result = self._run(UNITS, output=output)
+            output = str(Path(out_dir) / ".runtime" / "routes" / "route.json")
+            result = self._run(UNITS, output=output, artifact_root=out_dir)
             self.assertEqual(result.returncode, 0, result.stderr)
             route = json.loads(result.stdout)
             self.assertIs(route["composed"], True)
@@ -161,6 +168,25 @@ class TestComposeRoute(unittest.TestCase):
     def test_workflow_mode_mismatch_fails_closed(self):
         result = self._run(UNITS, tracking="tracked", workflow_mode="untracked")
         self.assertEqual(result.returncode, 64)
+
+    # --- D-1 (P4-15): a composed recipe with no declared artifact_scope ----
+    def test_missing_artifact_scope_anchors_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "artifact_scope"):
+            C.build_recipe(
+                "analyze-project", "code", UNITS,
+                topology_class="staged", quick_write_scope=[],
+                quick_model_profile="balanced-deep", gate_index=self._gate_index(),
+            )
+    def test_missing_map_anchor_for_a_map_worker_node_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "map-worker node requires --map-anchor"):
+            C.build_recipe(
+                "analyze-project", "code",
+                [{"id": "x", "unit": "material/web-image-search", "kind": "map-worker",
+                  "write_scope": ["analysis_project/refs/**"], "gate": "design-refs"}],
+                topology_class="staged", quick_write_scope=[],
+                quick_model_profile="balanced-deep", gate_index=self._gate_index(),
+                cycle_anchors=["analysis_project"],
+            )
 
 
 if __name__ == "__main__":

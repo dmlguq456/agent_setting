@@ -146,8 +146,20 @@ def build_recipe(
     quick_model_profile,
     gate_index,
     human_gate_bindings=None,
+    cycle_anchors=None,
+    root_anchors=None,
+    external_scopes=None,
+    map_anchor=None,
+    review_anchor=None,
 ):
-    """Turn the unit list into a full-shape composed recipe (compile validates it)."""
+    """Turn the unit list into a full-shape composed recipe (compile validates it).
+
+    D-1 (P4-14): a composed recipe is fail-closed on artifact_scope exactly
+    like an enumerated one -- `tools/capability_topology.py:_validate_recipe`
+    is the single policy owner (§1.1-5 of the plan), so skipping this here
+    would silently produce a recipe that TOPO.validate_registry rejects
+    later with no clue which caller's compose call was at fault.
+    """
     if not isinstance(unit_specs, list) or not unit_specs:
         raise ValueError("compose requires a non-empty unit list")
     ids = [u.get("id") for u in unit_specs]
@@ -246,12 +258,32 @@ def build_recipe(
         if not quick_write_scope:
             raise ValueError("every node scope touches spec/; pass --quick-write-scope explicitly")
 
+    cycle_anchors = list(cycle_anchors or [])
+    root_anchors = list(root_anchors or [])
+    external_scopes = list(external_scopes or [])
+    if not cycle_anchors and not root_anchors and not external_scopes:
+        raise ValueError(
+            "composed recipe requires at least one of --cycle-anchor/--root-anchor/"
+            "--external-scope (artifact_scope must declare a domain -- see D-1)"
+        )
+    artifact_scope = {}
+    if cycle_anchors: artifact_scope["cycle_anchors"] = cycle_anchors
+    if root_anchors: artifact_scope["root_anchors"] = root_anchors
+    if external_scopes: artifact_scope["external_scopes"] = external_scopes
+    if map_anchor: artifact_scope["map_anchor"] = map_anchor
+    if review_anchor: artifact_scope["review_anchor"] = review_anchor
+    if any(node["kind"] == "map-worker" for node in nodes) and not map_anchor:
+        raise ValueError("a map-worker node requires --map-anchor")
+    if any(node["kind"] == "review-worker" for node in nodes) and not review_anchor:
+        raise ValueError("a review-worker node requires --review-anchor")
+
     return {
         "capability": capability,
         "modes": [capability_mode],
         "topology_class": topology_class,
         "direct_predicates": list(STANDARD_DIRECT_PREDICATES),
         "promotion_signals": list(STANDARD_PROMOTION_SIGNALS),
+        "artifact_scope": artifact_scope,
         "quick": {
             "topology": "one-shot-owner",
             "worker_kind": "capability-owner",
@@ -378,10 +410,18 @@ def main() -> int:
                         metavar="GATE:NODE:entry|terminal",
                         help="declare an explicit human gate on a composed node")
     parser.add_argument("--quick-write-scope", action="append", default=[])
+    parser.add_argument("--cycle-anchor", action="append", default=[],
+                        help="bucket this recipe's non-external, non-root scopes are relative to (D-1); repeatable")
+    parser.add_argument("--root-anchor", action="append", default=[],
+                        help="fixed artifact-root-relative scope, must sit inside a declared artifact_buckets value")
+    parser.add_argument("--external-scope", action="append", default=[],
+                        help="exact-string symbol token outside the artifact root (e.g. target-artifact)")
+    parser.add_argument("--map-anchor", help="subtree name map-worker nodes must write inside")
+    parser.add_argument("--review-anchor", help="subtree name review-worker nodes must write inside")
     parser.add_argument("--signal", action="append", default=[])
     parser.add_argument("--predicate", action="append", default=[])
     parser.add_argument("--transport-evidence", default="caller-selected")
-    parser.add_argument("--output", help="sealed route path (compiler write-once)")
+    parser.add_argument("--output", help="sealed route path (compiler write-once); must resolve inside <artifact-root>/.runtime/routes, defaults there when omitted")
     # Tracked gate evidence -- the caller states these; this tool never fabricates them.
     parser.add_argument("--tracking", required=True, choices=("tracked", "untracked"))
     parser.add_argument("--spec-read", required=True)
@@ -413,6 +453,11 @@ def main() -> int:
         quick_model_profile=registry["owner_profile_by_intensity"]["quick"],
         gate_index=unit_io_gate_index(registry),
         human_gate_bindings=_parse_human_gates(args.human_gate),
+        cycle_anchors=args.cycle_anchor,
+        root_anchors=args.root_anchor,
+        external_scopes=args.external_scope,
+        map_anchor=args.map_anchor,
+        review_anchor=args.review_anchor,
     )
     evidence = assemble_dispatch_evidence(args)
     route_json = run_compile(args, recipe, evidence)
