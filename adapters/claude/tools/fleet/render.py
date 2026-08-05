@@ -613,15 +613,15 @@ _wt_count = gitinfo.worktree_count
 # stay aligned for comparison. Job flow never sits under branch/gate.
 _HW = 16                      # Bare harness-badge width — narrow/stack L1 badges and the
                               # dispatch-prefix budget math still use this unmerged value.
-_HMW = 32                     # F-33 (v19 spacing hotfix): WIDE-layout harness field with one
-                              # extra trailing cell before the session column. 33→38→42→32
-                              # (F-58, v44, 2026-08-04 measurement): the labels that actually
-                              # render are `claude code (Opus 5·xhigh)` at 26 cells and
-                              # `codex (gpt-5.6-sol·xhigh)` at 25, so 42 left 16-17 cells blank.
-                              # 32 = the measured maximum 26 + 6 cells of margin; the 33-cell
-                              # `opencode (claude-sonnet-4-5·high)` worst case loses one cell,
-                              # which F-58 accepts rather than making the field content-adaptive
-                              # (a dynamic ledger would take the width fixtures with it). The
+_HMW = 35                     # F-33 (v19 spacing hotfix): WIDE-layout harness field with one
+                              # extra trailing cell before the session column. 33→38→42→32→35
+                              # (F-64, v49, 2026-08-05 사용자 "harness의 열의 폭을 조금 더"):
+                              # the labels that actually render are `claude code (Opus 5·xhigh)`
+                              # at 26 cells and `codex (gpt-5.6-sol·xhigh)` at 25; 35 restores
+                              # the 33-cell `opencode (claude-sonnet-4-5·high)` worst case F-58's
+                              # 32 clipped, keeps the deeper F-64 dispatch ladder (3 cells/level)
+                              # from starving the depth-2 field below the 26/25-cell labels, and
+                              # still stays 7 under the blank-heavy 42 that F-58 rolled back. The
                               # cells
                               # shift the whole wide row right and are charged to the _wide_slack
                               # budget; the _NW_S/_NAME_WIDE_MAX allocation rules are unchanged
@@ -1478,10 +1478,12 @@ def _session_row(s, narrow, is_parent=False, child_count=0, name_width=None,
         segs.append(("-", "dim"))
     if dead_stale:
         # F-13: a stale/dead row has no live model/effort/ctx to show — a wall of "—" placeholders
-        # read as broken telemetry rather than "this session stopped". One `last seen <age>` cell
+        # read as broken telemetry rather than "this session stopped". One `done <age>` cell
         # replaces the whole model+gauge zone (LIVE rows keep the explicit "—" convention, F-3).
+        # F-64 (v49): "last seen" → "done" — the finished state reads symmetric with the live
+        # "running" vocabulary instead of sounding like lost telemetry (user 2026-08-05).
         age_min = int((time.time() - s.mtime) / 60) if s.mtime else (s.elapsed_min or 0)
-        segs += [("  ", None), ("last seen %s" % fmt_min(age_min), "dim")]
+        segs += [("  ", None), ("done %s" % fmt_min(age_min), "dim")]
     if s.app_server:
         segs.append(("  app-server", "dim"))
     if s.orphan:
@@ -1505,11 +1507,13 @@ def _compact_dispatch_name(name, max_width=_DISPATCH_NAME_MAX):
 
 
 def _dispatch_prefix(j, orphan=False):
-    # Every dispatch depth fans out with the same ↳ spawn arrow, nested two cells deeper per level
-    # (user 2026-07-16: dispatch-depth-2 rows lost their arrow when they were indent-only), and the
-    # whole ladder starts one level in — the dispatch-depth-1 arrow sits UNDER its parent session's
-    # text, not on the session's own glyph column (user 2026-07-16 "분사 세션의 화살표를
-    # 좀 더 들여쓰자"). Width = (depth+1)*2; the harness field absorbs it (_HMW - len).
+    # Every dispatch depth fans out with the same ↳ spawn arrow, nested three cells deeper per
+    # level (2→3, F-64 v49 — user 2026-08-05 "depth=1,2의 들여쓰기를 좀 더 구분해줘"; the arrow
+    # itself came from user 2026-07-16: dispatch-depth-2 rows lost their arrow when they were
+    # indent-only), and the whole ladder starts one level in — the dispatch-depth-1 arrow sits
+    # UNDER its parent session's text, not on the session's own glyph column (user 2026-07-16
+    # "분사 세션의 화살표를 좀 더 들여쓰자"). Width = depth*3 + 2; the harness field absorbs it
+    # (_HMW - len; at depth 2 that leaves 35-8=27 ≥ the 26-cell worst-case live label).
     #
     # Project-level orphans (parent dead/off-screen, surfaced as a project fallback) intentionally
     # drop the ↳ tree arrow — a parent-child arrow with no on-screen parent misleads readers into
@@ -1517,8 +1521,8 @@ def _dispatch_prefix(j, orphan=False):
     # same-width flat `··` "no-hierarchy" mark so the column stays aligned without implying nesting.
     depth = max(1, min(3, int(getattr(j, "depth", 1) or 1)))
     if orphan:
-        return "  " * depth + "··"
-    return "  " * depth + "↳ "
+        return "   " * depth + "··"
+    return "   " * depth + "↳ "
 
 
 _ORPHAN_DIVIDER_LABEL = "  ⌄ orphaned dispatch rows"
@@ -1852,7 +1856,13 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
     avail = max(3, name_width or _NW_S)
     otag = "  (orphan)" if orphan else ""
     label = _dispatch_stage_label(j)
-    name_room = min(_TITLE_MAX, max(3, avail - len(otag) - _NAME_GAP))
+    # F-64 (v49): the dispatch name uses the REAL responsive zone like session rows do —
+    # the old unconditional `_TITLE_MAX` clamp ellipsized names at 24 cells and left the
+    # rest of the column as dead space before ` (branch)` (user 2026-08-05 "줄임 표시가
+    # 너무 널널한데? 공간이 떠"). Hermetic/legacy callers (no name_width) keep the clamp.
+    name_room = max(3, avail - len(otag) - _NAME_GAP)
+    if name_width is None:
+        name_room = min(_TITLE_MAX, name_room)
     if label:
         # P2-6 composed cap: slug shares the same budget as its stage label.
         slug_room = max(1, name_room - len(label) - 1)
@@ -1897,10 +1907,11 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
                  ("%s done %s" % (_LIVE_GLYPH["done"], fmt_min(j.elapsed_min)), "dim")]
     elif j.liveness == "stale":
         # F-13: a stale job has no live model/effort/stage worth showing — collapse the whole
-        # telemetry zone (model cell + stage breadcrumb) into one `last seen <age>` cell.
+        # telemetry zone (model cell + stage breadcrumb) into one `done <age>` cell
+        # (F-64 v49: "last seen" → "done", symmetric with the live "running" vocabulary).
         segs.append((" " * _WIDE_STAGE_GAP, None))
         segs += [("-", "dim"), ("  ", None),
-                 ("last seen %s" % fmt_min(j.elapsed_min), "dim")]
+                 ("done %s" % fmt_min(j.elapsed_min), "dim")]
     else:
         # F-15a options column (fixed-ish gap, dim mode/qa/profile) — a declutter move OUT of
         # the name zone, not a new axis. model/effort now live in the harness field (F-4/SD-F3).
@@ -2459,13 +2470,14 @@ _FOLD_CHILD_LIVENESS = {"done", "queued", "idle", "unknown"}   # F-15b P0-2: dis
 # Reads distinctly from dispatch's `🚀`/`↳` so the two nested-row kinds never visually merge.
 # Single point of ASCII-degrade if double-width alignment ever breaks in a real terminal.
 _ICON_SUBAGENT = "⚡"
-_SUBAGENT_IND = "      "  # strip indent: pure inset, no connector glyph, 6 cells for a
-                          # session-owned strip — well past the dispatch-depth-2 arrow column so the
+_SUBAGENT_IND = "        "  # strip indent: pure inset, no connector glyph, 8 cells for a
+                          # session-owned strip — at/past the dispatch-depth-2 arrow column so the
                           # strip reads as INSIDE the row above, never as a sibling (사용자
                           # 2026-07-16 "들여쓰기 레벨을 충분히 안쪽으로"; the 2-cell then 4-cell
-                          # insets both read too shallow). Dispatch-owned strips add 2 more
-                          # cells per depth (see _subagent_strip). The per-session ⚡N
-                          # name-zone badge this used to pair with stays retired.
+                          # insets both read too shallow). 6→8 with the F-64 (v49) 3-cell dispatch
+                          # ladder so the anchor keeps clearing the deeper arrows. Dispatch-owned
+                          # strips add 2 more cells per depth (see _subagent_strip). The
+                          # per-session ⚡N name-zone badge this used to pair with stays retired.
 
 
 def _subagent_elapsed_min(sa):

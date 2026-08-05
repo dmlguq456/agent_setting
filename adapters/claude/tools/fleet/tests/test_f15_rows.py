@@ -355,11 +355,26 @@ class TitleCapTest(unittest.TestCase):
         text = "".join(part for part, _key in l1)
         self.assertIn("(feature/long)", text)
 
-    def test_dispatch_composed_label_plus_slug_stays_capped_in_wide_column(self):
+    def test_dispatch_composed_label_plus_slug_uses_the_real_wide_zone(self):
+        # F-64 (v49, user 2026-08-05 "줄임 표시가 너무 널널한데? 공간이 떠"): with a known
+        # terminal width the composed label+slug fills the responsive name zone like a
+        # session row does — the old unconditional `_TITLE_MAX` clamp ellipsized at 24
+        # cells and left the rest of the column blank before ` (branch)`.
         job = DispatchJob(key="code-execute", slug="a-very-long-dispatch-session-slug-name",
                           depth=2, parent_slug="p", worker_role="code-execute",
                           liveness="working")
-        segs = render._dispatch_row(job, name_width=render._wide_name_width(168))
+        nw = render._wide_name_width(168)
+        segs = render._dispatch_row(job, name_width=nw)
+        name_text = next(text for text, key in segs if key == "name_dim")
+        self.assertLessEqual(len(name_text), nw)
+        self.assertGreater(len(name_text), render._TITLE_MAX)
+
+    def test_dispatch_name_keeps_the_compact_cap_without_a_terminal_width(self):
+        # Hermetic/legacy callers (name_width=None) keep the F-15 24-cell compact cap.
+        job = DispatchJob(key="code-execute", slug="a-very-long-dispatch-session-slug-name",
+                          depth=2, parent_slug="p", worker_role="code-execute",
+                          liveness="working")
+        segs = render._dispatch_row(job)
         name_text = next(text for text, key in segs if key == "name_dim")
         self.assertLessEqual(len(name_text), render._TITLE_MAX)
 

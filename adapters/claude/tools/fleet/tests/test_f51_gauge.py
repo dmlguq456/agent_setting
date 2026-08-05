@@ -135,26 +135,26 @@ class F51GaugeTest(unittest.TestCase):
         self.assertNotIn(render._BAR_FULL, joined)
 
     def test_wide_ledger_matches_the_frozen_fixture_exactly(self):
-        """A8: `f51_wide_ledger_v44.json` records `_wide_slack`/`_wide_name_width` for every
+        """A8: `f51_wide_ledger_v49.json` records `_wide_slack`/`_wide_name_width` for every
         terminal width 60..400 — recompute both and diff against the frozen ledger so a
         future edit to the wide slack ladder cannot silently regress without this fixture
         failing.
 
-        Re-frozen for F-58 (v44; renamed from `..._v41.json` ← `..._v40.json` ←
-        `..._v38.json` ← `..._v35.json`). F-58 moves ONE constant (`_HMW` 42→32), so unlike
-        the F-57 re-freeze this is a single exact TRANSLATION of the previous ledger, proved
-        before the values were written:
+        Re-frozen for F-64 (v49; renamed from `..._v44.json` ← `..._v41.json` ←
+        `..._v40.json` ← `..._v38.json` ← `..._v35.json`). Like F-58, F-64 moves ONE
+        constant (`_HMW` 32→35), so this is a single exact TRANSLATION of the previous
+        ledger, proved before the values were written:
 
           * `wide_slack` — `_HMW` only enters through `_NAME_COL` in `fixed_row`, which
-            shrinks by exactly 10, so every entry gains 10 cells: `v44[w] == v41[w] + 10`
+            grows by exactly 3, so every entry loses 3 cells: `v49[w] == v44[w] - 3`
             for all w in 60..400 (verified 341/341 at re-freeze). A VERTICAL shift.
-          * `wide_name_width` — the same 10 cells reach the title 10 columns earlier:
-            `v44[w] == v41[w+10]` for all w in 60..390 (verified 331/331), and w>390 is
-            flat at the cap either way. A HORIZONTAL shift, so the ladder's SHAPE is
+          * `wide_name_width` — the same 3 cells reach the title 3 columns later:
+            `v49[w] == v44[w-3]` for all w in 63..400 (verified 338/338), and 60..62 sit
+            on the `_NW_S` floor either way. A HORIZONTAL shift, so the ladder's SHAPE is
             unchanged — same `_NW_S` floor (28), same `_NAME_WIDE_MAX` cap (40), still
             monotonic. Only the width at which each rung is reached moved: the 40-col name
-            cap is now first reached at 130 cols (was 140 at v41, 176 at v40)."""
-        path = os.path.join(os.path.dirname(__file__), "fixtures", "f51_wide_ledger_v44.json")
+            cap is now first reached at 133 cols (was 130 at v44, 140 at v41)."""
+        path = os.path.join(os.path.dirname(__file__), "fixtures", "f51_wide_ledger_v49.json")
         with open(path, encoding="utf-8") as fh:
             ledger = json.load(fh)
         self.assertEqual(len(ledger), 341)

@@ -49,16 +49,17 @@ class RenderDispatchPresentationTest(unittest.TestCase):
         self.assertEqual(text.count("gpt-5.6-sol"), 1)
 
     def test_depth_two_prefix_nests_the_spawn_arrow_deeper(self):
-        # user 2026-07-16: every depth fans out with the same ↳ arrow, two cells deeper
-        # per level, and the ladder starts one level in ("분사 세션의 화살표를 좀 더
-        # 들여쓰자") — the depth-1 arrow sits under the parent's text, not on its glyph
-        # column. Widths are (depth+1)*2.
+        # user 2026-07-16: every depth fans out with the same ↳ arrow, and the ladder
+        # starts one level in ("분사 세션의 화살표를 좀 더 들여쓰자") — the depth-1
+        # arrow sits under the parent's text, not on its glyph column. F-64 (v49,
+        # user 2026-08-05 "depth=1,2의 들여쓰기를 좀 더 구분해줘") widened the step
+        # from two to three cells per level: widths are depth*3 + 2.
         top = DispatchJob(key="code", slug="top", depth=1)
         nested = DispatchJob(key="code", slug="nested", depth=2)
 
-        self.assertEqual(render._dispatch_prefix(top), "  ↳ ")
-        self.assertEqual(render._dispatch_prefix(nested), "    ↳ ")
-        self.assertEqual(len(render._dispatch_prefix(nested)), 6)
+        self.assertEqual(render._dispatch_prefix(top), "   ↳ ")
+        self.assertEqual(render._dispatch_prefix(nested), "      ↳ ")
+        self.assertEqual(len(render._dispatch_prefix(nested)), 8)
 
     def test_dispatch_role_suffix_has_no_qa_token(self):
         # qa axis retired (CONVENTIONS §1.1); intensity moved to the dial's paren knob

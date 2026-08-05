@@ -259,12 +259,13 @@ class F52WidthLedgerTest(unittest.TestCase):
         self.assertEqual(render._CONTEXT_INDENT_W, 4)
         # F-57 (v41) removed the dead `_CTX_W` (24) term from `fixed_row` and the `_CTX_BOOST`
         # (12) skim from the allocator; F-58 (v44) then narrowed `_HMW` 42→32, which shrinks
-        # `_NAME_COL` — and therefore `fixed_row` — by another 10. Every slack entry gains 10
-        # and the name ladder shifts 10 widths further left: 118 is the last `_NW_S` floor
-        # width and the cap is first reached at 130 (was 140 at v41, 176 at v40).
+        # `_NAME_COL` — and therefore `fixed_row` — by another 10; F-64 (v49) widened `_HMW`
+        # 32→35, taking 3 back. Every slack entry loses 3 vs v44 and the name ladder shifts
+        # 3 widths right: 121 is the last `_NW_S` floor width and the cap is first reached
+        # at 133 (was 130 at v44, 140 at v41, 176 at v40).
         self.assertEqual([render._wide_slack(w) for w in (60, 120, 168, 200, 400)],
-                         [-30, 30, 78, 110, 310])
-        self.assertEqual([render._wide_name_width(w) for w in (118, 130, 168, 400)],
+                         [-33, 27, 75, 107, 307])
+        self.assertEqual([render._wide_name_width(w) for w in (121, 133, 168, 400)],
                          [28, 40, 40, 40])
 
     def test_row_starts_at_the_harness_name_column_and_fits_every_layout(self):
