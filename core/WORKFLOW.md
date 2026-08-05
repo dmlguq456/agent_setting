@@ -207,6 +207,14 @@ fields and this order. In Korean, the canonical card is:
 → 진행 / 수정: <틀린 부분> / 중단
 ```
 
+When the runtime exposes a native structured-question surface (Claude
+`AskUserQuestion`, Codex `request_user_input`), deliver this confirmation
+through it: the five fields form the question body and the options are exactly
+진행 (recommended) / 수정 / 중단. The plain-text card above is the fallback when
+no such surface exists or it fails. The structured form changes only the
+delivery surface — never the five fields, their order, the one-time approval
+semantics, or the exemptions below.
+
 Keep each value to one line. Do not include alternative menus, internal
 sub-Skills, or extended reasoning. The card applies when any of these observable
 conditions holds:

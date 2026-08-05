@@ -36,7 +36,9 @@ Route by `core/WORKFLOW.md §0.2`: when a request matches one manifest
 `entry-router` trigger and no exclusion, that entry is the primary route
 and `direct` sets intensity, not routing. Apply §0.3 and present the
 five-field card in §0.4 before material work unless scope and route are
-already approved, and close material work with the five-field completion card
+already approved — deliver it through `AskUserQuestion` (five fields as the
+question body, options 진행(권장)/수정/중단; plain-text card only as fallback) —
+and close material work with the five-field completion card
 in §0.5. Load full capability detail only in the acting owner or worker; spec
 work also requires the spec-read gate.
 
