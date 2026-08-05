@@ -1540,11 +1540,16 @@ def _dispatch_prefix(j, orphan=False):
 # what tells a dispatch unit apart from a native sub-agent strip, which carries neither.
 # Wide layout only; narrow/stack cards keep prefixes as-is, and orphan rows keep their
 # flat `··` (a rail with no on-screen parent would imply lineage F-26 forbids guessing).
-# Rail glyph: `❙` (medium vertical bar), deliberately SHORTER than the cell — box-drawing
-# `┃` fused adjacent rows into one solid wall (user 2026-08-05 "다 붙어버리는데 …
-# 위아래가 좀 짧은걸"); the dingbat leaves intrinsic top/bottom air so each row's mark
-# reads as a beaded line, not a pipe. One-char swaps if a font lacks it: `╏` `┊` `|`.
-_RAIL_CHAR = "❙"
+# Rail glyphs (user 2026-08-05 "세로바의 가장 위와 가장 아래만 각각 위와 아래가 짧은
+# 바"): the run stays a CONNECTED line — full `┃` through the middle — but its first cell
+# is the top-short `╻` and its last the bottom-short `╹`, so the capsule has open ends and
+# never fuses with the rows above/below the unit. A one-row run uses the standalone short
+# bar `❙` (both ends open; box-drawing has no middle-only heavy segment).
+_RAIL_TOP = "╻"
+_RAIL_MID = "┃"
+_RAIL_BOT = "╹"
+_RAIL_SOLO = "❙"
+_RAIL_CHARS = (_RAIL_TOP, _RAIL_MID, _RAIL_BOT, _RAIL_SOLO)
 _RAIL_COL = 4      # the depth-1 owner's GLYPH column (2-cell margin + 2-cell inset) — the
                    # rail drops straight down from the owner's dot
 
@@ -1974,13 +1979,16 @@ def _dispatch_row(j, orphan=False, parent_model=None, parent_harness=None, is_la
         segs += opt_segs
         if optw < _OPTW:
             segs.append((" " * (_OPTW - optw), None))
+        # user 2026-08-05 "done 앞에 콜론은 그대로 있어야지 체크 표시는 done 뒤로": the
+        # done token rides the same ` : ` stage-zone lead-in the running token uses, and
+        # the check TRAILS the word — `: done ✓`, mirroring `: running`.
         if int(getattr(j, "depth", 1) or 1) >= 2:
-            token = "%s done" % _LIVE_GLYPH["done"]
+            token = "done %s" % _LIVE_GLYPH["done"]
         elif afterglow_j:
-            token = "%s done %s" % (_LIVE_GLYPH["done"], fmt_min(j.elapsed_min))
+            token = "done %s %s" % (_LIVE_GLYPH["done"], fmt_min(j.elapsed_min))
         else:
             token = "done %s" % fmt_min(j.elapsed_min)
-        segs.append((token, "dim"))
+        segs += _stage_zone_segs([(token, "dim")])
     else:
         # F-15a options column (fixed-ish gap, dim mode/qa/profile) — a declutter move OUT of
         # the name zone, not a new axis. model/effort now live in the harness field (F-4/SD-F3).
@@ -2146,13 +2154,14 @@ def _dispatch_row_2line(j, orphan=False, parent_model=None, parent_effort=None, 
     stage = stage_override if stage_override is not None else (j.stage or "")
     if afterglow_j:
         # F-46 as corrected by F-64b: the L2 line keeps the model cell (static identity,
-        # not telemetry) and swaps only the stage slot for a steady `✓ done` token. L2
-        # already leads with the elapsed cell, so no depth needs it repeated (F-64a).
+        # not telemetry) and swaps only the stage slot for a steady `: done ✓` token
+        # (check trailing, same lead-in as `: running`). L2 already leads with the
+        # elapsed cell, so no depth needs it repeated (F-64a).
         eff = j.effort or parent_effort or None
         l2 = [("    ", None), (_pad(fmt_min(j.elapsed_min), _HW), "dim")]
         l2 += _model_cell(j.model or parent_model, eff, _MW, dim=True)
         l2.append(("    ", None))
-        l2.append(("%s done" % _LIVE_GLYPH["done"], "dim"))
+        l2 += _stage_zone_segs([("done %s" % _LIVE_GLYPH["done"], "dim")])
     else:
         eff = j.effort or parent_effort or None
         l2 = [("    ", None), (_pad(fmt_min(j.elapsed_min), _HW), "dim")]
@@ -4264,9 +4273,18 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
                     rail_key = ("stg%d_on" if _BLINK_ON else "stg%d_off") % color_i
                 else:
                     rail_key = "dim"
-                for idx in range(block_start + 1, len(lines)):
+                first, last = block_start + 1, len(lines) - 1
+                for idx in range(first, len(lines)):
+                    if first == last:
+                        char = _RAIL_SOLO
+                    elif idx == first:
+                        char = _RAIL_TOP
+                    elif idx == last:
+                        char = _RAIL_BOT
+                    else:
+                        char = _RAIL_MID
                     lines[idx] = _overwrite_rail_cell(
-                        lines[idx], _RAIL_COL, _RAIL_CHAR, rail_key)
+                        lines[idx], _RAIL_COL, char, rail_key)
 
         shown = _sort_group_sessions(shown)
         if live_order is not None:

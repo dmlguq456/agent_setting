@@ -100,20 +100,23 @@ class RenderDispatchPresentationTest(unittest.TestCase):
         owner_txt = "".join(p for p, _k in owner)
         leg_txt = "".join(p for p, _k in leg)
         self.assertNotIn("↳", owner_txt)          # the depth-1 arrow is gone
-        self.assertNotIn(render._RAIL_CHAR, owner_txt)   # rail hangs BELOW, not on it
-        self.assertIn(render._RAIL_CHAR, leg_txt)  # subordinate rows carry the rail
+        for ch in render._RAIL_CHARS:             # rail hangs BELOW, not on the owner
+            self.assertNotIn(ch, owner_txt)
+        # capsule ends (user 2026-08-05 "가장 위와 가장 아래만 각각 위와 아래가 짧은 바"):
+        # the first rail cell is the top-short cap, the last the bottom-short cap.
+        self.assertIn(render._RAIL_TOP, "".join(p for p, _k in subtitle))
+        self.assertIn(render._RAIL_BOT, leg_txt)
         self.assertIn("↳", leg_txt)               # depth-2 keeps its spawn arrow
-        self.assertIn(render._RAIL_CHAR, "".join(p for p, _k in subtitle))
 
     def test_f64c_rail_blinks_in_stage_hue_only_while_working(self):
         for blink, expected in ((True, "stg0_on"), (False, "stg0_off")):
             leg = self._line_with(self._rail_lines(blink=blink), "rail-leg (")
-            keys = [k for p, k in leg if p == render._RAIL_CHAR]
+            keys = [k for p, k in leg if p in render._RAIL_CHARS]
             self.assertEqual(keys, [expected])
         for blink in (True, False):
             leg = self._line_with(
                 self._rail_lines(blink=blink, owner_liveness="stale"), "rail-leg (")
-            keys = [k for p, k in leg if p == render._RAIL_CHAR]
+            keys = [k for p, k in leg if p in render._RAIL_CHARS]
             self.assertEqual(keys, ["dim"])       # finished units never blink
 
     def test_f64c_rail_hue_mirrors_the_breadcrumb_current_token(self):
@@ -131,7 +134,8 @@ class RenderDispatchPresentationTest(unittest.TestCase):
     def test_f64c_rail_is_wide_layout_only(self):
         lines = self._rail_lines(layout="narrow")
         joined = "".join(p for line in lines if line for p, _k in line)
-        self.assertNotIn(render._RAIL_CHAR, joined)
+        for ch in render._RAIL_CHARS:
+            self.assertNotIn(ch, joined)
 
     def test_dispatch_role_suffix_has_no_qa_token(self):
         # qa axis retired (CONVENTIONS §1.1); intensity moved to the dial's paren knob
