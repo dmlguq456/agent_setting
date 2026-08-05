@@ -1024,7 +1024,7 @@ def enrich(sess, tick=None):
         native_title = _thread_titles(home).get(sess.session_id)
         sidecar_title = titles.fresh_title(sess.session_id, harness="codex")
         sess.title = sidecar_title or native_title or sess.title
-        sess.summary = titles.fresh_summary(
+        sess.summary, sess.summary_ts = titles.fresh_summary_with_ts(
             sess.session_id, harness="codex",
             after_offset=_latest_user_message_offset(path),
         )

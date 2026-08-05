@@ -22,7 +22,11 @@ import tempfile
 import time
 
 _FRESH_SEC = 24 * 3600
-_FRESH_SUMMARY_SEC = 15 * 60   # the live subtitle loses freshness far faster than the title
+# F-63 (v48): the subtitle keeps the title's 24h window — honesty moved from hiding a
+# stale summary to rendering it with its age. A parked dispatch owner idles for hours
+# between child harvests, so the old 15-minute cutoff blanked exactly the rows a user
+# watches longest. Render owns the "live vs aged" distinction via the sidecar ts.
+_FRESH_SUMMARY_SEC = _FRESH_SEC
 _STALE_SWEEP_SEC = 7 * 24 * 3600
 _SAFE_KEY_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
@@ -97,29 +101,40 @@ def fresh_title(sid, now=None, max_age=_FRESH_SEC, harness="claude"):
 
 def fresh_summary(sid, harness="claude", now=None, max_age=_FRESH_SUMMARY_SEC,
                   after_offset=None):
-    """Return a non-empty live summary only while the sidecar timestamp is fresh.
+    """Return a non-empty summary only while the sidecar timestamp is fresh.
 
-    Same shape as ``fresh_title`` but with a much shorter default window: the
-    subtitle describes what the session is doing RIGHT NOW, so a 24h-old value
-    (fine for a title) would be actively misleading here.  ``after_offset``
-    additionally requires the sidecar cursor to cover a newer source boundary.
+    Same shape as ``fresh_title``. Since F-63 the default window matches the
+    title's — an aged summary renders with its elapsed time instead of being
+    hidden. ``after_offset`` additionally requires the sidecar cursor to cover
+    a newer source boundary.
     """
+    return fresh_summary_with_ts(sid, harness=harness, now=now, max_age=max_age,
+                                 after_offset=after_offset)[0]
+
+
+def fresh_summary_with_ts(sid, harness="claude", now=None,
+                          max_age=_FRESH_SUMMARY_SEC, after_offset=None):
+    """``(summary, ts)`` under the same gates as ``fresh_summary``, else
+    ``(None, None)``. The ts travels with the text so render can show its age
+    (F-63) instead of the collector deciding staleness for the display layer."""
     data = read(sid, harness=harness)
     if not data:
-        return None
+        return (None, None)
     ts = data.get("ts")
     if not isinstance(ts, (int, float)):
-        return None
+        return (None, None)
     now = time.time() if now is None else now
     if now - ts > max_age:
-        return None
+        return (None, None)
     if after_offset is not None:
         offset = data.get("offset")
         if (not isinstance(offset, int) or isinstance(offset, bool)
                 or offset <= after_offset):
-            return None
+            return (None, None)
     summary = data.get("summary")
-    return summary if isinstance(summary, str) and summary.strip() else None
+    if isinstance(summary, str) and summary.strip():
+        return (summary, ts)
+    return (None, None)
 
 
 def write(sid, title, source="refresher", offset=0, now=None, harness="claude", summary=None,

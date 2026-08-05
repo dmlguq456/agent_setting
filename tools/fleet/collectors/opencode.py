@@ -201,11 +201,13 @@ def enrich(sess):
         return
     sid, slug, agent, model_j, cost, ti, to, tr, tupd, _parent = row
     sidecar_title = titles.fresh_title(sid, harness="opencode")
-    sidecar_summary = titles.fresh_summary(sid, harness="opencode")
+    sidecar_summary, sidecar_summary_ts = titles.fresh_summary_with_ts(
+        sid, harness="opencode")
     if sidecar_title:
         sess.title = sidecar_title
     if sidecar_summary:
         sess.summary = sidecar_summary
+        sess.summary_ts = sidecar_summary_ts
     sess.subagents = subagents
     if sid:
         sess.session_id = sid

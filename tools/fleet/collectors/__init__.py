@@ -118,6 +118,7 @@ def _adopt_child_titles(sessions, jobs):
                 # attempt-owned fallback summary when dispatch already supplied one.
                 if not getattr(job, "_summary_sid", None):
                     job.summary = None
+                    job.summary_ts = None
             continue
         job._child_session_associated = True
         # Identity association alone is not enough to suppress the attempt-log
@@ -136,6 +137,7 @@ def _adopt_child_titles(sessions, jobs):
             job.title = getattr(source, 'title', None)
         if not getattr(job, 'summary', None):
             job.summary = getattr(source, 'summary', None)
+            job.summary_ts = getattr(source, 'summary_ts', None)
         if getattr(job, 'subagents', None) is None:
             job.subagents = getattr(source, 'subagents', None)
 

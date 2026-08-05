@@ -310,6 +310,9 @@ class Session:
     # F-16/F-17 merge (사용자 2026-07-19): live one-sentence status from the same haiku call
     # that produces the title — None = no fresh sidecar summary (render stays silent, F-13).
     summary: Optional[str] = None
+    # F-63: sidecar write time of `summary` — render appends an aged `⏳<elapsed>` tag
+    # past the live window. None with a summary = age unknown, no tag (additive).
+    summary_ts: Optional[float] = None
     # v16 additive evidence and projections.  Underscored values are private caches.
     route_file: Optional[str] = None
     route_id: Optional[str] = None
@@ -454,6 +457,8 @@ class DispatchJob:
                                         # keeps the slug as the row identity
     summary: Optional[str] = None       # the child session's own live sidecar summary,
                                         # adopted the same way as title (F-16/F-17 merge)
+    summary_ts: Optional[float] = None  # F-63: sidecar write time of `summary`, adopted
+                                        # with it so render can tag its age
     # F-29: runtime-native sub-agents owned by this exact dispatch attempt. None means
     # no trustworthy source; [] means the source was checked and found no calls.
     subagents: Optional[list] = None

@@ -917,7 +917,8 @@ def _enrich_attempt_summary(job):
         if not getattr(job, "title", None):
             job.title = titles.fresh_title(sid, harness=job.harness)
         if not getattr(job, "summary", None):
-            job.summary = titles.fresh_summary(sid, harness=job.harness)
+            job.summary, job.summary_ts = titles.fresh_summary_with_ts(
+                sid, harness=job.harness)
     except Exception:
         pass
 

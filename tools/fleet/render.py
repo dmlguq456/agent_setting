@@ -2546,7 +2546,24 @@ _SUMMARY_FALLBACK_W = 60   # hermetic/no-terminal-width callers (mirrors the dim
                            # convention used elsewhere, e.g. the memory-row snippet cells)
 
 
-def _summary_row(summary, depth=0, term_width=None, start_col=None):
+# F-63: a summary younger than this reads as "now" and carries no tag; past it the
+# text stays (24h sidecar window, titles.py) and this dim `⏳<elapsed>` age tag keeps
+# it honest. 15 minutes is the pre-F-63 freshness cutoff, kept as the live threshold.
+_SUMMARY_AGE_TAG_SEC = 15 * 60
+
+
+def _summary_age_tag(summary_ts, now=None):
+    """`⏳<elapsed>` for a summary older than the live window, else None."""
+    if not isinstance(summary_ts, (int, float)) or isinstance(summary_ts, bool):
+        return None
+    now = time.time() if now is None else now
+    age = now - summary_ts
+    if age < _SUMMARY_AGE_TAG_SEC:
+        return None
+    return "⏳%s" % fmt_min(int(age // 60))
+
+
+def _summary_row(summary, depth=0, term_width=None, start_col=None, summary_ts=None):
     """One dim subtitle row directly under a session/dispatch row (F-16/F-17 merge,
     사용자 확정 2026-07-19): the live one-sentence status from the SAME haiku call that
     produced the title. Pure inset — no connector/icon, `_SUBAGENT_IND` + the same
@@ -2564,7 +2581,15 @@ def _summary_row(summary, depth=0, term_width=None, start_col=None):
     segs = [(indent, None)]
     if padding:
         segs.append((" " * padding, None))
-    segs.append((_clip_w(summary, maxw), "dim"))
+    # F-63: the age tag reserves its own width so a long summary clips before the
+    # tag disappears — the reader always learns HOW old the sentence is first.
+    tag = _summary_age_tag(summary_ts)
+    tag_w = (_dw(tag) + 1) if tag else 0
+    if tag and maxw > tag_w:
+        segs.append((_clip_w(summary, maxw - tag_w), "dim"))
+        segs.append((" " + tag, "dim"))
+    else:
+        segs.append((_clip_w(summary, maxw), "dim"))
     return [segs]
 
 
@@ -2584,7 +2609,8 @@ def _dispatch_summary_detail_row(job, depth=1, term_width=None):
     if not summary:
         return []
     return _summary_row(str(summary), depth=depth, term_width=term_width,
-                        start_col=_NAME_COL)
+                        start_col=_NAME_COL,
+                        summary_ts=getattr(job, "summary_ts", None))
 
 
 # F-55a — the lead cell holds the state WORD, so its width is the longest word this row can
@@ -2740,11 +2766,23 @@ def _context_detail_row(entity, depth=0, term_width=None, dim=False):
             now_room -= exec_w
         if now_text:
             sep = "  " if tail else ""
-            clipped = _clip_w(str(now_text), now_room - _dw(sep)) if now_room > _dw(sep) else ""
+            # F-63: same reserved-width age tag as the dispatch subtitle row — the
+            # tag survives clipping; only when the zone cannot hold tag + any text
+            # does it drop and the bare NOW clip behaves exactly as before.
+            tag = _summary_age_tag(getattr(entity, "summary_ts", None))
+            text_room = now_room - _dw(sep)
+            tag_w = (_dw(tag) + 1) if tag else 0
+            if tag and text_room > tag_w:
+                clipped = _clip_w(str(now_text), text_room - tag_w)
+            else:
+                tag = None
+                clipped = _clip_w(str(now_text), text_room) if text_room > 0 else ""
             if clipped:
                 if sep:
                     tail.append((sep, None))
                 tail.append((clipped, "dim"))
+                if tag:
+                    tail.append((" " + tag, "dim"))
         if tail:
             segs.append((" " * gap, None))
             segs.extend(tail)

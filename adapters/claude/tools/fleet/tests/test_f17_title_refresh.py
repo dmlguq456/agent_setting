@@ -130,13 +130,28 @@ class TitlesHelperTest(_ConfigHomeMixin, unittest.TestCase):
         self.assertEqual(titles.fresh_title("sidOld"), "Old-shape title")
         self.assertIsNone(titles.fresh_summary("sidOld"))
 
-    def test_fresh_summary_within_fifteen_minute_window(self):
+    def test_fresh_summary_survives_the_old_fifteen_minute_cutoff(self):
+        # F-63: an aged summary stays visible (render tags it with its age) and
+        # only the 24h title-window still expires it.
         titles.write("sidF", "t", summary="working on it", now=1000.0)
         self.assertEqual(titles.fresh_summary("sidF", now=1000.0 + 14 * 60), "working on it")
-        self.assertIsNone(titles.fresh_summary("sidF", now=1000.0 + 16 * 60))
+        self.assertEqual(titles.fresh_summary("sidF", now=1000.0 + 16 * 60), "working on it")
+        self.assertEqual(titles.fresh_summary("sidF", now=1000.0 + 23 * 3600), "working on it")
+        self.assertIsNone(titles.fresh_summary("sidF", now=1000.0 + 25 * 3600))
 
-    def test_fresh_summary_window_is_much_shorter_than_title_window(self):
-        self.assertLess(titles._FRESH_SUMMARY_SEC, titles._FRESH_SEC)
+    def test_fresh_summary_window_matches_title_window(self):
+        # F-63: honesty moved from hiding to age-tagging, so the windows align.
+        self.assertEqual(titles._FRESH_SUMMARY_SEC, titles._FRESH_SEC)
+
+    def test_fresh_summary_with_ts_returns_sidecar_ts(self):
+        titles.write("sidTs", "t", summary="harvesting children", now=2000.0)
+        self.assertEqual(
+            titles.fresh_summary_with_ts("sidTs", now=2000.0 + 3600),
+            ("harvesting children", 2000.0))
+        self.assertEqual(
+            titles.fresh_summary_with_ts("sidTs", now=2000.0 + 25 * 3600),
+            (None, None))
+        self.assertEqual(titles.fresh_summary_with_ts("sidMissing"), (None, None))
 
     def test_fresh_summary_must_cover_latest_user_boundary(self):
         titles.write("sidB", "t", summary="previous turn", offset=42, now=1000.0)
