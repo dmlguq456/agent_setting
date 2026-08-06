@@ -1653,12 +1653,7 @@ def _short_role(value):
         # whole tag already renders "dim" (see _opts_segs), so no separate color key is needed.
         return _compact_dispatch_name(label + suffix, 14)
     m = _G_CASE_PREFIX.match(value)
-    # Unmapped values are legacy ``worker_role`` fallback metadata, not a confidence
-    # axis. Humanize identifier separators instead of turning hyphens into underscores;
-    # the raw value remains unchanged in ``--json``.
-    role = _ROLE_SHORT.get(value) or (
-        m.group(1) if m else re.sub(r"[-_]+", " ", value).strip()
-    )
+    role = _ROLE_SHORT.get(value) or (m.group(1) if m else value.replace("-", "_"))
     return _compact_dispatch_name(role, 14)
 
 
@@ -1855,7 +1850,10 @@ def _opts_segs(j):
         None if _is_owner_mode_row(j) else getattr(j, "worker_mode", None)
     )
     if projected_unit:
-        tail = " / ".join(value for value in (tail, "unit:" + _compact_dispatch_name(projected_unit, _PROFILE_MAX)) if value)
+        display_unit = str(projected_unit)
+        if display_unit.startswith("_"):
+            display_unit = display_unit[1:]
+        tail = " / ".join(value for value in (tail, "unit:" + _compact_dispatch_name(display_unit, _PROFILE_MAX)) if value)
     if _mode_axis_conflict(j):
         tail = " / ".join(value for value in (tail, "mode!") if value)
     contract_status = getattr(j, "attempt_contract_status", None)

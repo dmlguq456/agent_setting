@@ -448,6 +448,21 @@ class OptsDialHierarchyTest(unittest.TestCase):
         self.assertEqual(self._dial(child), "code-test(strong) / unit:verify")
         self.assertEqual(render._dispatch_stage_label(child), "test")
 
+    def test_reserved_unit_namespace_underscore_is_hidden_only_in_display(self):
+        owner = DispatchJob(
+            key="code",
+            slug="o",
+            depth=1,
+            capability_mode="dev",
+            worker_type="owner",
+            assigned_contract="autopilot-code",
+            unit="_kernel/owner",
+            capability_owner="autopilot-code",
+        )
+        self.assertEqual(self._dial(owner), "code(dev·owner) / unit:kernel/owner")
+        self.assertEqual(owner.unit, "_kernel/owner")
+        self.assertEqual(owner.to_dict()["unit"], "_kernel/owner")
+
     def test_route_node_compact_label_includes_unit(self):
         text, _key, _mark = render._route_node_text({
             "id": "test", "unit": "verify", "state": "pending",

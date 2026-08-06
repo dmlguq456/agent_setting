@@ -1838,18 +1838,6 @@ class StageWorkerRenderTest(unittest.TestCase):
         self.assertEqual(render._short_role("g6_worktree_dispatch"), "g6")
         self.assertEqual(render._short_role("g8b_design_verifier_clean_pass"), "g8b")
 
-    def test_unmapped_legacy_role_uses_human_spaces_not_underscores(self):
-        # Legacy/inferred display metadata is still preserved verbatim in JSON; the Fleet
-        # label does not use an underscore as a confidence marker or word separator.
-        self.assertEqual(render._short_role("legacy-helper"), "legacy helper")
-        self.assertEqual(render._short_role("legacy_helper"), "legacy helper")
-        job = DispatchJob(
-            key="code", capability_owner="autopilot-code", capability_mode="dev",
-            worker_role="legacy-helper", depth=1,
-        )
-        segs, _width = render._opts_segs(job)
-        self.assertEqual("".join(part for part, _key in segs), "code(dev·legacy helper)")
-
 
 class QuickDispatchRenderTest(unittest.TestCase):
     def test_quick_depth_one_renders_single_quick_exec_breadcrumb(self):
