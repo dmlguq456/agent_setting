@@ -105,17 +105,26 @@ class RenderDispatchPresentationTest(unittest.TestCase):
         # full bar, last row = bottom cap.
         self.assertIn(render._RAIL_TOP, owner_txt)
         self.assertIn(render._RAIL_MID, "".join(p for p, _k in subtitle))
-        self.assertIn(render._RAIL_BOT, leg_txt)
+        self.assertIn(render._RAIL_MID, leg_txt)
+        leg_index = lines.index(leg)
+        self.assertTrue(any(
+            render._RAIL_BOT in "".join(p for p, _k in line)
+            for line in lines[leg_index + 1:] if line))
         self.assertIn("↳", leg_txt)               # depth-2 keeps its spawn arrow
 
-    def test_f64c_childless_single_row_unit_stays_unpainted(self):
+    def test_f64c_childless_dispatch_card_brackets_its_context_detail(self):
         parent, d1, _d2 = self._rail_fixture()
         d1.summary = None
         lines = render._build_lines([parent], [d1], section="both", narrow=False,
                                     malformed=0, layout="wide", term_width=175)
-        owner_txt = "".join(p for p, _k in self._line_with(lines, "rail-owner ("))
-        for ch in render._RAIL_CHARS:
-            self.assertNotIn(ch, owner_txt)
+        owner = self._line_with(lines, "rail-owner (")
+        owner_txt = "".join(p for p, _k in owner)
+        self.assertIn(render._RAIL_TOP, owner_txt)
+        owner_index = lines.index(owner)
+        self.assertIn(
+            render._RAIL_BOT,
+            "".join(p for p, _k in next(line for line in lines[owner_index + 1:] if line)),
+        )
 
     def test_f64c_rail_blinks_in_stage_hue_only_while_working(self):
         for blink, expected in ((True, "stg0_on"), (False, "stg0_off")):

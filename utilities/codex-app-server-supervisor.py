@@ -78,6 +78,47 @@ def normalize_item(item: dict[str, Any]) -> dict[str, Any]:
     return {"type": str(item_type or "unknown"), "id": item.get("id")}
 
 
+def _usage_counter(value: Any) -> int | None:
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:
+        return int(value)
+    return None
+
+
+def _normalize_usage_breakdown(value: Any) -> dict[str, int]:
+    """Allow only documented numeric usage fields into the attempt log."""
+    if not isinstance(value, dict):
+        return {}
+    fields = {
+        "inputTokens": "input_tokens",
+        "cachedInputTokens": "cached_input_tokens",
+        "outputTokens": "output_tokens",
+        "reasoningOutputTokens": "reasoning_output_tokens",
+        "totalTokens": "total_tokens",
+    }
+    normalized: dict[str, int] = {}
+    for source, target in fields.items():
+        counter = _usage_counter(value.get(source))
+        if counter is not None:
+            normalized[target] = counter
+    return normalized
+
+
+def normalize_token_usage(value: Any) -> dict[str, Any] | None:
+    """Privacy-minimal projection of `thread/tokenUsage/updated`."""
+    if not isinstance(value, dict):
+        return None
+    normalized: dict[str, Any] = {
+        "last": _normalize_usage_breakdown(value.get("last")),
+        "total": _normalize_usage_breakdown(value.get("total")),
+    }
+    window = _usage_counter(value.get("modelContextWindow"))
+    if window is not None:
+        normalized["model_context_window"] = window
+    if not normalized["last"] and not normalized["total"] and window is None:
+        return None
+    return normalized
+
+
 def _typed_receipt(value: Any, parent_attempt_id: str, attempts: set[str]) -> dict[str, Any]:
     if not isinstance(value, dict) or value.get("schema_version") != 1:
         raise SupervisorError("join-receipt-schema-invalid")
@@ -332,6 +373,20 @@ def run_turn(
         method = event.get("method")
         raw_params = event.get("params")
         event_params = raw_params if isinstance(raw_params, dict) else {}
+        if (method == "thread/tokenUsage/updated"
+                and event_params.get("threadId") == thread_id):
+            usage = normalize_token_usage(event_params.get("tokenUsage"))
+            if usage is not None:
+                emit({
+                    "type": "dispatch.supervisor.token_usage",
+                    "thread_id": thread_id,
+                    "turn_id": event_params.get("turnId"),
+                    "token_usage": usage,
+                })
+        if method == "item/started" and event_params.get("turnId") == turn_id:
+            raw_item = event_params.get("item")
+            if isinstance(raw_item, dict) and raw_item.get("type") == "commandExecution":
+                emit({"type": "item.started", "item": normalize_item(raw_item)})
         if method == "item/completed" and event_params.get("turnId") == turn_id:
             raw_item = event_params.get("item")
             if isinstance(raw_item, dict):

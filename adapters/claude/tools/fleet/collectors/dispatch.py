@@ -19,6 +19,7 @@ import json
 import glob
 import os
 import re
+import shlex
 import sqlite3
 import sys
 import time
@@ -36,7 +37,8 @@ from dispatch_contract import observed_attempt_liveness  # noqa: E402
 from codex_dispatch_terminal import terminal_envelope_observed  # noqa: E402
 
 from .. import model
-from ..model import DispatchJob, etime_to_min
+from ..model import ContextEvidence, DispatchJob, etime_to_min
+from ..token_budget import telemetry_from_explicit
 from . import procscan
 
 _AUTOPILOT = re.compile(r"/autopilot-([a-z-]+)")
@@ -838,6 +840,7 @@ def _proj_home():
 _CLAUDE_STREAM_TAIL_BYTES = 512 * 1024
 _CLAUDE_SUBAGENT_SCAN_BYTES = 8 * 1024 * 1024
 _CLAUDE_STREAM_CACHE = {}       # path -> (mtime_ns, size, parsed)
+_CODEX_ATTEMPT_CACHE = {}       # path -> (mtime_ns, size, parsed)
 
 
 def _owned_attempt_log_path(job):
@@ -923,8 +926,46 @@ def _enrich_attempt_summary(job):
         pass
 
 
+def _counter(value):
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:
+        return int(value)
+    return None
+
+
+def _shell_command_label(command):
+    """Return one privacy-minimal executable label, never the full command."""
+    if not isinstance(command, str):
+        return None
+    for line in command.splitlines():
+        line = line.strip()
+        if (not line or line.startswith("#")
+                or re.match(r"^(?:set|export|cd)(?:\s|$)", line)
+                or re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", line)):
+            continue
+        try:
+            words = shlex.split(line, posix=True)
+        except ValueError:
+            words = line.split()
+        while words and words[0] in ("env", "command", "sudo"):
+            words.pop(0)
+        while words and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", words[0]):
+            words.pop(0)
+        if words:
+            return os.path.basename(words[0])[:48]
+    return None
+
+
+def _tool_label(name, tool_input=None, command=None):
+    if name in ("Bash", "bash", "command_execution", "exec"):
+        raw = command
+        if raw is None and isinstance(tool_input, dict):
+            raw = tool_input.get("command")
+        return _shell_command_label(raw) or name
+    return str(name)[:48] if isinstance(name, str) and name else None
+
+
 def _parse_claude_stream_tail(path):
-    """Read a bounded tail and return its one exact runtime session id."""
+    """Read one bounded exact-attempt tail for identity, context, and open tool."""
     try:
         st = os.stat(path)
     except OSError:
@@ -944,6 +985,11 @@ def _parse_claude_stream_tail(path):
     if start and lines:
         lines = lines[1:]  # the first item is a partial JSON line
     session_ids = set()
+    latest_usage = None
+    latest_model = None
+    latest_result_usage = None
+    model_windows = {}
+    open_tools = {}
     for line in lines:
         try:
             payload = json.loads(line)
@@ -954,10 +1000,61 @@ def _parse_claude_stream_tail(path):
         sid = payload.get("session_id")
         if isinstance(sid, str) and sid:
             session_ids.add(sid)
+        row_type = payload.get("type")
+        message = payload.get("message")
+        if row_type == "assistant" and isinstance(message, dict):
+            usage = message.get("usage")
+            if isinstance(usage, dict):
+                latest_usage = usage
+            if isinstance(message.get("model"), str):
+                latest_model = message["model"]
+            content = message.get("content")
+            if isinstance(content, list):
+                for item in content:
+                    if not isinstance(item, dict) or item.get("type") != "tool_use":
+                        continue
+                    tool_id = item.get("id")
+                    label = _tool_label(item.get("name"), item.get("input"))
+                    if isinstance(tool_id, str) and label:
+                        open_tools[tool_id] = {"name": label}
+        elif row_type == "user" and isinstance(message, dict):
+            content = message.get("content")
+            if isinstance(content, list):
+                for item in content:
+                    if isinstance(item, dict) and item.get("type") == "tool_result":
+                        open_tools.pop(item.get("tool_use_id"), None)
+        elif row_type == "result":
+            usage = payload.get("usage")
+            if isinstance(usage, dict):
+                latest_result_usage = usage
+            model_usage = payload.get("modelUsage")
+            if isinstance(model_usage, dict):
+                for model_id, values in model_usage.items():
+                    if not isinstance(model_id, str) or not isinstance(values, dict):
+                        continue
+                    window = _counter(values.get("contextWindow"))
+                    if window:
+                        model_windows[model_id] = window
+    window = model_windows.get(latest_model)
+    if window is None and len(model_windows) == 1:
+        window = next(iter(model_windows.values()))
+    active = None
+    if latest_usage is not None:
+        parts = [_counter(latest_usage.get(key)) for key in (
+            "input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")]
+        if any(value is not None for value in parts):
+            active = sum(value or 0 for value in parts)
+    cumulative = latest_result_usage or {}
     ambiguity = "multiple-stream-session-ids" if len(session_ids) > 1 else None
     parsed = {
         "session_id": next(iter(session_ids)) if len(session_ids) == 1 else None,
         "ambiguity": ambiguity,
+        "active_context_tokens": active,
+        "context_window_tokens": window,
+        "session_input_tokens": _counter(cumulative.get("input_tokens")),
+        "session_cached_input_tokens": _counter(cumulative.get("cache_read_input_tokens")),
+        "session_output_tokens": _counter(cumulative.get("output_tokens")),
+        "exec_tool": next(reversed(open_tools.values())) if open_tools else None,
     }
     _CLAUDE_STREAM_CACHE[path] = (cache_key[0], cache_key[1], parsed)
     if len(_CLAUDE_STREAM_CACHE) > 128:
@@ -966,7 +1063,7 @@ def _parse_claude_stream_tail(path):
 
 
 def _enrich_claude_stream_session(job):
-    """Attach exact child identity and native sub-agents from one attempt stream."""
+    """Attach exact child identity, context/exec, and native sub-agents."""
     path = _owned_claude_stream_path(job)
     if path is None:
         return
@@ -976,6 +1073,30 @@ def _enrich_claude_stream_session(job):
     if parsed.get("ambiguity"):
         job.association_ambiguity = parsed["ambiguity"]
         return
+    job._dispatch_context_owned = True
+    telemetry = telemetry_from_explicit(
+        adapter="claude", session_id=parsed.get("session_id"),
+        active_context_tokens=parsed.get("active_context_tokens"),
+        context_window_tokens=parsed.get("context_window_tokens"),
+        session_input_tokens=parsed.get("session_input_tokens"),
+        session_cached_input_tokens=parsed.get("session_cached_input_tokens"),
+        session_output_tokens=parsed.get("session_output_tokens"))
+    for field_name in (
+            "active_context_tokens", "context_window_tokens", "session_input_tokens",
+            "session_cached_input_tokens", "session_output_tokens", "session_total_tokens"):
+        setattr(job, field_name, getattr(telemetry, field_name))
+    job.ctx_pct = telemetry.context_used_pct
+    job.exec_tool = parsed.get("exec_tool")
+    if job.ctx_pct is not None:
+        try:
+            st = os.stat(path)
+            sequence = (st.st_mtime_ns, st.st_size)
+            job._context_evidence = ContextEvidence(
+                used_pct=job.ctx_pct, source="claude-attempt-stream",
+                sequence=sequence, source_head_sequence=sequence,
+                observed_at=st.st_mtime, fresh_until=st.st_mtime + 900)
+        except OSError:
+            pass
     # The attempt-owned log is an exact source even when the wrapper pid differs from
     # the runtime pid (and even when no persistent Claude transcript was created).
     # Reuse the parent-thread Agent lifecycle parser instead of inventing a second
@@ -994,6 +1115,99 @@ def _enrich_claude_stream_session(job):
     if not session_id:
         return
     job._runtime_session_id = session_id
+
+
+def _parse_codex_attempt_tail(path):
+    """Read sanitized App Server telemetry and the currently open command item."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    cache_key = (st.st_mtime_ns, st.st_size)
+    cached = _CODEX_ATTEMPT_CACHE.get(path)
+    if cached and cached[:2] == cache_key:
+        return cached[2]
+    start = max(0, st.st_size - _CLAUDE_STREAM_TAIL_BYTES)
+    try:
+        with open(path, "rb") as stream:
+            stream.seek(start)
+            raw = stream.read(_CLAUDE_STREAM_TAIL_BYTES)
+    except OSError:
+        return None
+    lines = raw.decode("utf-8", "replace").splitlines()
+    if start and lines:
+        lines = lines[1:]
+    latest_usage = None
+    open_commands = {}
+    for line in lines:
+        try:
+            payload = json.loads(line)
+        except Exception:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        row_type = payload.get("type")
+        if row_type == "dispatch.supervisor.token_usage":
+            usage = payload.get("token_usage")
+            if isinstance(usage, dict):
+                latest_usage = usage
+        elif row_type == "item.started":
+            item = payload.get("item")
+            if not isinstance(item, dict) or item.get("type") != "command_execution":
+                continue
+            item_id = item.get("id")
+            label = _tool_label("command_execution", command=item.get("command"))
+            if isinstance(item_id, str) and label:
+                open_commands[item_id] = {"name": label}
+        elif row_type == "item.completed":
+            item = payload.get("item")
+            if isinstance(item, dict):
+                open_commands.pop(item.get("id"), None)
+    parsed = {"token_usage": latest_usage,
+              "exec_tool": next(reversed(open_commands.values())) if open_commands else None}
+    _CODEX_ATTEMPT_CACHE[path] = (cache_key[0], cache_key[1], parsed)
+    if len(_CODEX_ATTEMPT_CACHE) > 128:
+        _CODEX_ATTEMPT_CACHE.pop(next(iter(_CODEX_ATTEMPT_CACHE)))
+    return parsed
+
+
+def _enrich_codex_attempt_session(job):
+    path = _owned_attempt_log_path(job)
+    if getattr(job, "harness", None) != "codex" or path is None:
+        return
+    parsed = _parse_codex_attempt_tail(path)
+    if parsed is None:
+        return
+    job._dispatch_context_owned = True
+    usage = parsed.get("token_usage") or {}
+    last = usage.get("last") if isinstance(usage.get("last"), dict) else {}
+    total = usage.get("total") if isinstance(usage.get("total"), dict) else {}
+    telemetry = telemetry_from_explicit(
+        adapter="codex",
+        active_context_tokens=last.get("total_tokens"),
+        context_window_tokens=usage.get("model_context_window"),
+        session_input_tokens=total.get("input_tokens"),
+        session_cached_input_tokens=total.get("cached_input_tokens"),
+        session_output_tokens=total.get("output_tokens"),
+        session_reasoning_output_tokens=total.get("reasoning_output_tokens"),
+        session_total_tokens=total.get("total_tokens"))
+    for field_name in (
+            "active_context_tokens", "context_window_tokens", "session_input_tokens",
+            "session_cached_input_tokens", "session_output_tokens",
+            "session_reasoning_output_tokens", "session_total_tokens"):
+        setattr(job, field_name, getattr(telemetry, field_name))
+    job.ctx_pct = telemetry.context_used_pct
+    job.exec_tool = parsed.get("exec_tool")
+    if job.ctx_pct is not None:
+        try:
+            st = os.stat(path)
+            sequence = (st.st_mtime_ns, st.st_size)
+            job._context_evidence = ContextEvidence(
+                used_pct=job.ctx_pct, source="codex-attempt-app-server",
+                sequence=sequence, source_head_sequence=sequence,
+                observed_at=st.st_mtime, fresh_until=st.st_mtime + 900)
+        except OSError:
+            pass
 
 
 def _enc(path):
@@ -2136,6 +2350,7 @@ def collect(jobs_path=None, harness_filter=None):
     jobs = _reconcile_drill_rows(jobs, now, codex_index=codex_index)
     for j in jobs:
         _enrich_claude_stream_session(j)
+        _enrich_codex_attempt_session(j)
         _enrich_attempt_summary(j)
     for j in jobs:
         j.liveness = _dispatch_liveness(j, now, codex_index=codex_index)

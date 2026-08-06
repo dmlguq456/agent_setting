@@ -156,6 +156,8 @@ def collect(harness_filter=None):
           cwd="/home/demo/demo-app-wt/feat-x", parent_sid="demo-claude-1", parent_cwd="/home/demo/demo-app", is_child=True,
           branch="feat-x", liveness="working", depth=1, intensity="adversarial",
           worker_role="capability-owner", capability_owner="autopilot-code",
+          ctx_pct=38, active_context_tokens=380000, context_window_tokens=1000000,
+          exec_tool={"name": "pytest"},
           # F-16/F-17 merge demo — a dispatch row's own adopted live subtitle.
           summary="지금 feat-x 브랜치의 테스트 실패를 재현하는 중"),
         # depth-2 workers owned by the autopilot-code capability worker above
@@ -163,6 +165,7 @@ def collect(harness_filter=None):
           model="gpt-5.5", elapsed_min=6, slug="demo-feat-x-plan-alt",
           cwd="/home/demo/demo-app-wt/feat-x-plan-alt", parent_slug="demo-feat-x", is_child=True,
           branch="feat-x-plan-alt", liveness="idle", depth=2, intensity="adversarial",
+          ctx_pct=47, active_context_tokens=100000, context_window_tokens=200000,
           worker_role="planner", capability_owner="autopilot-code"),
         J(key="test", stage="test", mode="verify", qa="adversarial", qa_source="jobslog", harness="opencode",
           model="glm-5.2", elapsed_min=4, slug="demo-feat-x-verifier",

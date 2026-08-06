@@ -476,12 +476,26 @@ class DispatchJob:
     # attached after the F-50b state verdict and is never an input to it. None = honest gap
     # (no match, ambiguous match, or unparseable tail).
     plugin_telemetry: Optional[dict] = None
+    # F-65: exact registered-dispatch telemetry uses the same public shape as a
+    # live Session.  The counters stay explicit because active context and
+    # cumulative session usage are different quantities.
+    ctx_pct: Optional[int] = None
+    active_context_tokens: Optional[int] = None
+    context_window_tokens: Optional[int] = None
+    session_input_tokens: Optional[int] = None
+    session_cached_input_tokens: Optional[int] = None
+    session_output_tokens: Optional[int] = None
+    session_reasoning_output_tokens: Optional[int] = None
+    session_total_tokens: Optional[int] = None
+    exec_child: Optional[dict] = None
+    exec_tool: Optional[dict] = None
     context: Optional[ContextProjection] = None
     work_projection: Optional[WorkProjection] = None
     cap_grounding: Optional[dict] = None   # {capability, mode?, intensity?} for an inline entry
                                             # session (capability-grounding marker); None otherwise.
     association_ambiguity: Optional[str] = None
     _context_evidence: Optional[ContextEvidence] = field(default=None, repr=False, compare=False)
+    _dispatch_context_owned: bool = field(default=False, repr=False, compare=False)
     _refresh_source: Optional[dict] = field(default=None, repr=False, compare=False)
 
     def to_dict(self):

@@ -13,7 +13,7 @@ from fleet import collectors as fleet_collectors  # noqa: E402
 from fleet import projection, render, route  # noqa: E402
 from fleet.collectors import dispatch as dispatch_collector  # noqa: E402
 from fleet.model import (  # noqa: E402
-    ContextProjection, DispatchJob, ProgressProjection, Session,
+    ContextEvidence, ContextProjection, DispatchJob, ProgressProjection, Session,
     SubAgent, WorkProjection,
 )
 
@@ -78,30 +78,37 @@ class ContextDetailTruthTableTest(unittest.TestCase):
                               summary="cached now"), term_width=168)
             self.assertEqual(row, [])
 
-    def test_dispatch_omits_context_and_keeps_only_fresh_now(self):
+    def test_dispatch_uses_main_context_row_even_when_now_is_missing(self):
         job = DispatchJob(
             key="code", slug="worker", harness="claude", depth=1,
-            liveness="working", summary="NOW",
+            liveness="working", summary="NOW", ctx_pct=85,
             context=ContextProjection(85, "critical", "legacy"),
         )
+        job._dispatch_context_owned = True
+        job._context_evidence = ContextEvidence(
+            used_pct=85, source="claude-attempt-stream", sequence=(1, 1),
+            source_head_sequence=(1, 1), observed_at=1, fresh_until=1000)
         for width, layout in ((168, "wide"), (120, "wide"),
                               (100, "narrow"), (60, "stack")):
             with self.subTest(width=width):
                 row = render._dispatch_summary_detail_row(
                     job, depth=1, term_width=width)
                 visible = text(row)
-                self.assertIsNone(CTX_GAUGE_RE.search(visible))   # no context gauge at all
+                self.assertIsNotNone(CTX_GAUGE_RE.search(visible))
+                self.assertIn("85%", visible)
                 self.assertEqual(visible.index("NOW"), render._NAME_COL)
                 self.assertLessEqual(render._dw(visible), width)
 
                 rendered = text(render._build_lines(
                     [], [job], "both", False, 0,
                     layout=layout, term_width=width))
-                self.assertIsNone(CTX_GAUGE_RE.search(rendered))
+                self.assertIsNotNone(CTX_GAUGE_RE.search(rendered))
                 self.assertIn("NOW", rendered)
 
         job.summary = None
-        self.assertEqual(render._dispatch_summary_detail_row(job), [])
+        visible = text(render._dispatch_summary_detail_row(job))
+        self.assertIsNotNone(CTX_GAUGE_RE.search(visible))
+        self.assertNotIn("NOW", visible)
 
     def test_malformed_legacy_percentage_is_unavailable_not_clamped(self):
         for malformed in (-1, 101, True, "63"):
@@ -448,7 +455,7 @@ class ClaudeStreamSessionTest(unittest.TestCase):
             }]},
         }
 
-    def test_attempt_stream_recovers_exact_session_without_context(self):
+    def test_attempt_stream_recovers_exact_session_and_active_tokens_without_window(self):
         job = self._job()
         self._write_log(job, [
             {"type": "system", "session_id": "sid-child"},
@@ -457,19 +464,30 @@ class ClaudeStreamSessionTest(unittest.TestCase):
         ])
         dispatch_collector._enrich_claude_stream_session(job)
         self.assertEqual(job._runtime_session_id, "sid-child")
+        self.assertEqual(job.active_context_tokens, 160)
+        self.assertTrue(job._dispatch_context_owned)
         self.assertIsNone(job.context)
         self.assertIsNone(job._context_evidence)
 
-    def test_stream_usage_does_not_create_context_or_model(self):
+    def test_stream_usage_and_same_attempt_model_window_create_context(self):
         job = self._job()
-        self._write_log(job, [self._assistant("sid-child", "claude-fable-5", 160)])
+        self._write_log(job, [
+            self._assistant("sid-child", "claude-fable-5", 160),
+            {"type": "result", "session_id": "sid-child",
+             "usage": {"input_tokens": 10, "cache_read_input_tokens": 300,
+                       "output_tokens": 40},
+             "modelUsage": {"claude-fable-5": {"contextWindow": 1000}}},
+        ])
         dispatch_collector._enrich_claude_stream_session(job)
+        projection.attach_projections([], [job], now=100.0)
         self.assertEqual(job._runtime_session_id, "sid-child")
         self.assertIsNone(job.model)
-        self.assertIsNone(job.context)
-        self.assertIsNone(job._context_evidence)
+        self.assertEqual(job.ctx_pct, 16)
+        self.assertEqual(job.context.used_pct, 16)
+        self.assertEqual(job.context_window_tokens, 1000)
+        self.assertEqual(job.session_output_tokens, 40)
 
-    def test_attempt_stream_attaches_native_subagents_without_context(self):
+    def test_attempt_stream_attaches_native_subagents_without_inventing_window(self):
         job = self._job()
         self._write_log(job, [
             {"type": "system", "session_id": "sid-child"},
@@ -484,6 +502,28 @@ class ClaudeStreamSessionTest(unittest.TestCase):
         self.assertIsNone(job.context)
         self.assertIsNone(job._context_evidence)
         self.assertEqual(job.to_dict()["subagents"][0]["agent_type"], "fact-check")
+
+    def test_attempt_stream_projects_only_open_tool_executable_label(self):
+        job = self._job()
+        row = self._assistant("sid-child", "claude-fable-5", 160)
+        row["message"]["content"] = [{
+            "type": "tool_use", "name": "Bash", "id": "toolu-bash-1",
+            "input": {"command": "python3 train.py --token SECRET"},
+        }]
+        self._write_log(job, [row])
+        dispatch_collector._enrich_claude_stream_session(job)
+        self.assertEqual(job.exec_tool, {"name": "python3"})
+        self.assertNotIn("SECRET", json.dumps(job.to_dict()))
+
+        dispatch_collector._CLAUDE_STREAM_CACHE.clear()
+        self._write_log(job, [row, {
+            "type": "user", "session_id": "sid-child",
+            "message": {"content": [{
+                "type": "tool_result", "tool_use_id": "toolu-bash-1",
+            }]},
+        }])
+        dispatch_collector._enrich_claude_stream_session(job)
+        self.assertIsNone(job.exec_tool)
 
     def test_multiple_stream_session_ids_and_foreign_path_fail_closed(self):
         job = self._job()
@@ -506,19 +546,26 @@ class ClaudeStreamSessionTest(unittest.TestCase):
 
 class ChildAssociationTest(unittest.TestCase):
     def _child(self, pid, start, cwd, harness="claude"):
-        return Session(harness=harness, pid=pid, proc_start=start, cwd=cwd,
-                       session_id="sid-%s" % pid, is_child=True, liveness="working",
-                       title="Child title", summary="Child now",
-                       context=ContextProjection(70, "tight", "child"))
+        child = Session(harness=harness, pid=pid, proc_start=start, cwd=cwd,
+                        session_id="sid-%s" % pid, is_child=True, liveness="working",
+                        title="Child title", summary="Child now", ctx_pct=70,
+                        active_context_tokens=700, context_window_tokens=1000,
+                        context=ContextProjection(70, "tight", "child"))
+        child._context_evidence = ContextEvidence(
+            used_pct=70, source="child", sequence=(1, 1),
+            source_head_sequence=(1, 1), observed_at=1, fresh_until=1000)
+        return child
 
-    def test_exact_identity_copies_title_and_now_only(self):
+    def test_exact_identity_copies_title_now_and_context(self):
         child = self._child(7, "new", "/child")
         child.subagents = [SubAgent(agent_type="exact-child", active=True)]
         job = DispatchJob(key="code", slug="job", pid=7, proc_start="new", cwd="/other",
                           harness="claude", liveness="working", is_child=True)
         fleet_collectors._adopt_child_titles([child], [job])
-        self.assertEqual((job.title, job.summary, job.context),
-                         ("Child title", "Child now", None))
+        projection.attach_projections([], [job], now=100.0)
+        self.assertEqual((job.title, job.summary, job.context.used_pct),
+                         ("Child title", "Child now", 70))
+        self.assertEqual(job.active_context_tokens, 700)
         self.assertEqual(job.subagents[0].agent_type, "exact-child")
 
     def test_wrapper_pid_uses_attempt_stream_session_id_for_title_and_now(self):
@@ -530,8 +577,9 @@ class ChildAssociationTest(unittest.TestCase):
         )
         job._runtime_session_id = child.session_id
         fleet_collectors._adopt_child_titles([child], [job])
-        self.assertEqual((job.title, job.summary, job.context),
-                         ("Child title", "Child now", None))
+        projection.attach_projections([], [job], now=100.0)
+        self.assertEqual((job.title, job.summary, job.context.used_pct),
+                         ("Child title", "Child now", 70))
         self.assertEqual(job.subagents[0].agent_type, "sid-child")
         self.assertEqual(child.context.used_pct, 70)
 
@@ -621,11 +669,70 @@ class ChildAssociationTest(unittest.TestCase):
         finally:
             render.set_process_view(False)
         visible = "\n".join("".join(part for part, _ in line) for line in lines if line)
-        self.assertIsNone(CTX_GAUGE_RE.search(visible))
+        self.assertIsNotNone(CTX_GAUGE_RE.search(visible))
         self.assertLess(visible.index("└▸🚀"), visible.index("NOW"))
         self.assertLess(visible.index("NOW"), visible.index("⚡tool"))
         now_line = next(line for line in visible.splitlines() if "NOW" in line)
         self.assertEqual(now_line.index("NOW"), render._NAME_COL)
+
+
+class CodexAttemptTelemetryTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.logs = os.path.join(self.tmp.name, ".dispatch", "logs")
+        os.makedirs(self.logs)
+        self.env = mock.patch.dict(os.environ, {"AGENT_HOME": self.tmp.name})
+        self.env.start()
+        dispatch_collector._CODEX_ATTEMPT_CACHE.clear()
+
+    def tearDown(self):
+        dispatch_collector._CODEX_ATTEMPT_CACHE.clear()
+        self.env.stop()
+        self.tmp.cleanup()
+
+    def _job(self):
+        job = DispatchJob(key="code", slug="owner", harness="codex",
+                          attempt_id="att-codex-exact", liveness="working")
+        job._log_file = os.path.join(
+            self.logs, "owner.att-codex-exact.codex.jsonl")
+        return job
+
+    def test_exact_token_usage_and_open_command_are_projected(self):
+        job = self._job()
+        rows = [
+            {"type": "dispatch.supervisor.token_usage", "token_usage": {
+                "last": {"total_tokens": 100000},
+                "total": {"input_tokens": 120000, "cached_input_tokens": 30000,
+                          "output_tokens": 5000, "reasoning_output_tokens": 1000,
+                          "total_tokens": 156000},
+                "model_context_window": 200000}},
+            {"type": "item.started", "item": {
+                "type": "command_execution", "id": "cmd-1",
+                "command": "python3 train.py --secret omitted"}},
+        ]
+        with open(job._log_file, "w", encoding="utf-8") as stream:
+            for row in rows:
+                stream.write(json.dumps(row) + "\n")
+        dispatch_collector._enrich_codex_attempt_session(job)
+        projection.attach_projections([], [job], now=100.0)
+        self.assertEqual(job.context.used_pct, 47)  # Codex 12k reserve formula
+        self.assertEqual(job.context_window_tokens, 200000)
+        self.assertEqual(job.exec_tool, {"name": "python3"})
+        self.assertNotIn("secret", json.dumps(job.to_dict()))
+        visible = text(render._dispatch_summary_detail_row(job, term_width=168))
+        self.assertIn("⚙ python3", visible)
+
+    def test_completed_command_is_not_reported_as_running(self):
+        job = self._job()
+        with open(job._log_file, "w", encoding="utf-8") as stream:
+            for row in (
+                    {"type": "item.started", "item": {
+                        "type": "command_execution", "id": "cmd-1", "command": "rg x"}},
+                    {"type": "item.completed", "item": {
+                        "type": "command_execution", "id": "cmd-1", "status": "completed"}}):
+                stream.write(json.dumps(row) + "\n")
+        dispatch_collector._enrich_codex_attempt_session(job)
+        self.assertIsNone(job.exec_tool)
 
 
 if __name__ == "__main__":

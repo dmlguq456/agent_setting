@@ -1,4 +1,4 @@
-"""Single fail-closed work projection plus interactive-session context for Fleet.
+"""Single fail-closed work projection plus session/dispatch context for Fleet.
 
 This module is deliberately source-agnostic: collectors supply already observed
 entities and route evidence, while every display and JSON surface consumes the
@@ -898,7 +898,7 @@ def attach_projections(sessions: Iterable[Session], jobs: Iterable[DispatchJob],
                       route_records=None, node_evidence=None, artifact_root=None, now=None,
                       spec_markers=None, spec_marker_home=None,
                       capability_groundings=None, degradations=None):
-    """Attach work to every row and context only to interactive session rows."""
+    """Attach work to every row and exact-owned context to live cards."""
     sessions, jobs = list(sessions), list(jobs)
     route_records = _load_evidence_records(node_evidence, route_records)
     home = spec_marker_home or _grounding_home()
@@ -912,17 +912,21 @@ def attach_projections(sessions: Iterable[Session], jobs: Iterable[DispatchJob],
         session.context = public
         session._context_evidence = private
     for job in jobs:
-        # A registered dispatch stream does not expose a session-owned context
-        # window.  Drop legacy/inferred values instead of projecting "unknown".
-        # F-50f is the one exception: a plugin-queue row IS one Codex thread, joined to its
-        # own rollout by an exact sid match, so it owns a real context window.  It still goes
-        # through the same resolver — never a second, render-local context path.
-        if job.source == "plugin-queue" and job._context_evidence is not None:
+        # F-50f plugin rows and F-65 registered attempts own their exact telemetry.
+        # Arbitrary legacy/inferred job values remain fail-closed.
+        owned = (job.source == "plugin-queue"
+                 or getattr(job, "_dispatch_context_owned", False))
+        if owned and job._context_evidence is not None:
             job.context, job._context_evidence = normalize_context(
                 _evidence(job), now=now, live=_is_live(job))
             continue
-        job.context = None
-        job._context_evidence = None
+        if owned:
+            # Rendering still shows the honest unknown gauge for a live dispatch;
+            # keep the JSON context object absent until an actual percentage exists.
+            job.context = None
+        else:
+            job.context = None
+            job._context_evidence = None
     # Resolve the current inline entry before artifact fallback.  A spec-read
     # marker is eligible only when this exact session is actively in autopilot-spec.
     for session in sessions:

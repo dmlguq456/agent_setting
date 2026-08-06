@@ -66,7 +66,7 @@ def _mark_dispatch_child_sessions(sessions, jobs):
 
 
 def _adopt_child_titles(sessions, jobs):
-    """Atomically associate title, NOW, and sub-agents from one exact child."""
+    """Atomically associate title, NOW, context/exec, and sub-agents from one exact child."""
     children = [s for s in sessions if getattr(s, 'is_child', False)]
     by_identity = {}
     by_session_id = {}
@@ -130,9 +130,8 @@ def _adopt_child_titles(sessions, jobs):
             or getattr(source, "_refresh_source", None)
         )
         # Values cross the boundary as one association decision. Attempt-stream
-        # sub-agents already attached to the job are stronger and stay authoritative.
-        # Dispatch context is intentionally absent: headless runtimes expose no
-        # session-owned window.
+        # telemetry/sub-agents already attached to the job are stronger and stay
+        # authoritative.  This fallback never borrows from the parent session.
         if not getattr(job, 'title', None):
             job.title = getattr(source, 'title', None)
         if not getattr(job, 'summary', None):
@@ -140,6 +139,15 @@ def _adopt_child_titles(sessions, jobs):
             job.summary_ts = getattr(source, 'summary_ts', None)
         if getattr(job, 'subagents', None) is None:
             job.subagents = getattr(source, 'subagents', None)
+        if not getattr(job, '_dispatch_context_owned', False):
+            for field_name in (
+                    'ctx_pct', 'active_context_tokens', 'context_window_tokens',
+                    'session_input_tokens', 'session_cached_input_tokens',
+                    'session_output_tokens', 'session_reasoning_output_tokens',
+                    'session_total_tokens', 'exec_child', 'exec_tool'):
+                setattr(job, field_name, getattr(source, field_name, None))
+            job._context_evidence = getattr(source, '_context_evidence', None)
+            job._dispatch_context_owned = True
 
 
 def collect_all(harness_filter=None, jobs_path=None, usage="cache-only"):

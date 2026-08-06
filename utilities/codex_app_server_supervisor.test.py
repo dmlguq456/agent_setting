@@ -93,6 +93,26 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
                                lease_held=lease_held)
                         turn_id = f'turn-{turns}'
                         send({'jsonrpc':'2.0','id':value['id'],'result':{'turn':{'id':turn_id}}})
+                        send({'jsonrpc':'2.0','method':'thread/tokenUsage/updated','params':{
+                            'threadId':'thread-1','turnId':turn_id,'tokenUsage':{
+                                'last':{'inputTokens':80000,'cachedInputTokens':10000,
+                                        'outputTokens':9000,'reasoningOutputTokens':1000,
+                                        'totalTokens':100000},
+                                'total':{'inputTokens':120000,'cachedInputTokens':30000,
+                                         'outputTokens':5000,'reasoningOutputTokens':1000,
+                                         'totalTokens':156000},
+                                'modelContextWindow':200000,
+                                'prompt':'MUST_NOT_LEAK'}}})
+                        send({'jsonrpc':'2.0','method':'item/started','params':{
+                            'threadId':'thread-1','turnId':turn_id,'item':{
+                                'type':'commandExecution','id':f'cmd-{turns}',
+                                'command':'python3 worker.py --private value','status':'inProgress'}}})
+                        send({'jsonrpc':'2.0','method':'item/completed','params':{
+                            'threadId':'thread-1','turnId':turn_id,'item':{
+                                'type':'commandExecution','id':f'cmd-{turns}',
+                                'command':'python3 worker.py --private value',
+                                'aggregatedOutput':'MUST_NOT_REACH_FLEET','exitCode':0,
+                                'status':'completed'}}})
                         final_first = os.environ.get('FAKE_NO_CHILD') == '1'
                         text = ('artifact: -\\nverdict: PASS\\nblocker: none'
                                 if turns > 1 or final_first else 'runtime_wait: registered-children')
@@ -186,6 +206,16 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
         self.assertEqual(
             sum(row.get("type") == "dispatch.supervisor.turn.started" for row in rows),
             2,
+        )
+        telemetry = [row for row in rows
+                     if row.get("type") == "dispatch.supervisor.token_usage"]
+        self.assertEqual(len(telemetry), 2)
+        self.assertEqual(telemetry[-1]["token_usage"]["last"]["total_tokens"], 100000)
+        self.assertEqual(telemetry[-1]["token_usage"]["model_context_window"], 200000)
+        self.assertNotIn("prompt", telemetry[-1]["token_usage"])
+        self.assertEqual(
+            [row["item"]["id"] for row in rows if row.get("type") == "item.started"],
+            ["cmd-1", "cmd-2"],
         )
         final_messages = [
             row["item"]["text"]

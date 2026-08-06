@@ -2691,14 +2691,13 @@ def _summary_row(summary, depth=0, term_width=None, start_col=None, summary_ts=N
 
 
 def _dispatch_summary_detail_row(job, depth=1, term_width=None):
-    """Dispatch has no session-owned context window; show only fresh NOW."""
+    """Use the main-session detail grammar for every live model dispatch."""
     if getattr(job, "liveness", None) in ("stale", "dead"):
         return []
-    if getattr(job, "source", None) == "plugin-queue" and not getattr(job, "afterglow", False):
-        # F-50f: the one dispatch row that DOES own a context window (its own Codex thread,
-        # joined exact-1 on `threadId`). It reuses the session gauge row unchanged, so a
-        # failed/ambiguous join renders the same honest `—` every other source does. A
-        # finished row keeps the F-13/F-46 "no live telemetry" lane instead.
+    is_model_dispatch = getattr(job, "harness", None) in ("claude", "codex")
+    if is_model_dispatch and not getattr(job, "afterglow", False):
+        # F-65: a missing first-turn denominator is an unknown gauge, not a missing row.
+        # Dispatch rows retain their dim visual weight and depth indentation.
         # Dispatch rows carry the dim glyph weight (see _dispatch_row) — the lead liveness mark
         # must match the row it belongs to, not the brighter main-session one.
         return _context_detail_row(job, depth=depth, term_width=term_width, dim=True)
