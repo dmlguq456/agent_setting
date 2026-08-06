@@ -1653,7 +1653,12 @@ def _short_role(value):
         # whole tag already renders "dim" (see _opts_segs), so no separate color key is needed.
         return _compact_dispatch_name(label + suffix, 14)
     m = _G_CASE_PREFIX.match(value)
-    role = _ROLE_SHORT.get(value) or (m.group(1) if m else value.replace("-", "_"))
+    # Unmapped values are legacy ``worker_role`` fallback metadata, not a confidence
+    # axis. Humanize identifier separators instead of turning hyphens into underscores;
+    # the raw value remains unchanged in ``--json``.
+    role = _ROLE_SHORT.get(value) or (
+        m.group(1) if m else re.sub(r"[-_]+", " ", value).strip()
+    )
     return _compact_dispatch_name(role, 14)
 
 
