@@ -287,15 +287,47 @@ def receipt(launch: Launch, state: str, reason: str, root: Path) -> str:
     harvest = (
         root / "adapters" / "codex" / "bin" / "preflight.sh"
     )
+    if state == "ready":
+        required_action = "advance-completed"
+        instruction = "No harvest command is required; advance or finish the route."
+    else:
+        status = ""
+        try:
+            for line in launch.jobs.read_text(
+                encoding="utf-8", errors="replace"
+            ).splitlines():
+                columns = line.split("\t")
+                if (
+                    len(columns) == 6
+                    and _registry_metadata(columns[5]).get("attempt_id")
+                    == launch.attempt_id
+                ):
+                    status = columns[1]
+        except OSError:
+            pass
+        if state == "attention" and status in {"open", "running"}:
+            required_action = "complete-open"
+            instruction = (
+                "Use only the exact checked harvest command: "
+                f"{shlex.quote(str(harvest))} harvest --attempt-id "
+                f"{shlex.quote(launch.attempt_id)} --status open --mark-done."
+            )
+        elif state == "attention" and status == "done":
+            required_action = "inspect-done-failure"
+            instruction = (
+                "Use only the exact checked harvest command: "
+                f"{shlex.quote(str(harvest))} harvest --attempt-id "
+                f"{shlex.quote(launch.attempt_id)} --status done --failure-detail."
+            )
+        else:
+            required_action = "inspect-bridge"
+            instruction = "Inspect the typed bridge state; do not harvest or re-arm it."
     return (
         "Runtime owner completion receipt "
-        f"schema=1 state={state} attempt_id={launch.attempt_id} armed={launch.armed} "
-        f"reason={reason}. "
+        f"schema=2 state={state} attempt_id={launch.attempt_id} armed={launch.armed} "
+        f"reason={reason} required_action={required_action}. "
         "Do not start or re-arm Background Bash, Monitor, liveness, or dispatch-wait. "
-        "Use only the exact checked harvest command: "
-        f"{shlex.quote(str(harvest))} harvest --attempt-id "
-        f"{shlex.quote(launch.attempt_id)} --mark-done. "
-        "Then advance or finish the route without a periodic progress recap."
+        f"{instruction} Do not emit a periodic progress recap."
     )
 
 

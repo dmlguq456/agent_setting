@@ -10,6 +10,13 @@ reported polling fallback waits synchronously in the current turn. Harvest the e
 artifact verdict and close each registry row. Synthesize one owner artifact. Do not
 merge, push, clean worktrees, or create dispatch depth 3.
 
+Consume the supervisor receipt's `required_action` literally. Complete an open
+PASS row, inspect a terminal failure row, or advance an already-completed row with
+the exact status named by the receipt; never retry a default `status=open`
+selector against a terminal row. The owner-level route binding has no node id and
+still authorizes declared inline fallback through the material route guard.
+Duplicate starts are typed existing states, not evidence that a new worker ran.
+
 The route stage is the semantic gate; sessions are execution capacity. At any
 stage, you may keep one session or declare bounded serial sub-sessions under the
 same node. Use parallel sessions only through the existing sealed parallel-group

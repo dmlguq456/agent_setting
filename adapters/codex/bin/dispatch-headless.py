@@ -32,6 +32,7 @@ from dispatch_contract import (  # noqa: E402
     anchored_capacity_failure,
     annotate_attempt_row,
     attempt_launch_is_available,
+    attempt_launch_state,
     cancel_governor_reservation,
     claim_attempt_row,
     close_attempt_row,
@@ -58,6 +59,7 @@ from dispatch_lifecycle import (  # noqa: E402
     DETACHED,
     FOREGROUND_SCOPED,
     LIFECYCLES,
+    pid_namespace_evidence,
     pid_namespace_scoped,
     wait_foreground,
 )
@@ -67,6 +69,11 @@ from dispatch_mode_contract import (  # noqa: E402
     normalize_dispatch_modes,
     validate_capability_mode,
     validate_route_mode_axes,
+)
+from owner_route_binding import (  # noqa: E402
+    OwnerRouteBindingError,
+    binding_from_environment,
+    validate_runtime_requirements,
 )
 from worker_bootstrap import (  # noqa: E402
     assigned_contract,
@@ -1221,10 +1228,20 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
             f",eligibility_probe={getattr(args, 'eligibility_probe', None) or '-'}"
         )
     pipe += f",runtime_sandbox={effective_runtime_sandbox(args)}"
+    lifecycle_evidence = pid_namespace_evidence()
+    pipe += f",launch_lifecycle={args.launch_lifecycle}"
+    for key, value in sorted(lifecycle_evidence.items()):
+        pipe += f",{key}={value}"
     for key in ("route_file", "route_id", "route_hash", "route_node", "registry_digest", "write_scope", "completion_gate", "harness_affinity"):
         value = getattr(args, key)
         if value:
             pipe += f",{key}={value}"
+    if getattr(args, "owner_route_binding", None):
+        pipe += (
+            f",owner_route_file={args.owner_route_binding.route_file}"
+            f",owner_route_id={args.owner_route_binding.route_id}"
+            f",owner_route_hash={args.owner_route_binding.route_hash}"
+        )
     settings = args.resolved_model_settings
     pipe += (
         f",model_source={settings['source']},model_role={settings['role']}"
@@ -1700,6 +1717,10 @@ def validate_route_record(args: argparse.Namespace) -> int:
     if route_record.get("schema_version") != 2 or "broker_contract_version" in route_record:
         return fail("legacy-broker-route-read-only", 65, route_file=args.route_file, child_spawned="0")
     try:
+        validate_runtime_requirements(route_record, args.route_node)
+    except OwnerRouteBindingError as exc:
+        return fail(str(exc), 69, child_spawned="0", fallback="inline-or-main")
+    try:
         validate_route_mode_axes(args, route_record)
     except DispatchModeContractError as exc:
         return fail(exc.reason, 65, **exc.fields, child_spawned="0")
@@ -1823,6 +1844,21 @@ def main(argv: list[str]) -> int:
             eligibility_failure_class=args.eligibility_failure_class or "-",
             eligibility_probe=args.eligibility_probe,
         )
+    try:
+        args.owner_route_binding = binding_from_environment(
+            dict(os.environ),
+            worktree=args.worktree,
+            capability=args.capability,
+            capability_mode=args.capability_mode,
+            intensity=args.intensity,
+            harness="codex",
+        )
+        if args.owner_route_binding and (
+            args.dispatch_depth != 1 or args.worker_type != "owner" or args.route_file
+        ):
+            raise OwnerRouteBindingError("owner-route-binding-tuple-invalid")
+    except OwnerRouteBindingError as exc:
+        return fail(str(exc), 65, child_spawned="0")
     rc = validate_route_record(args)
     if rc != 0:
         return rc
@@ -2142,8 +2178,14 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_OWNER": args.capability_owner or "",
             "AGENT_DISPATCH_OWNER_HARNESS": args.owner_harness or "",
             "AGENT_ARTIFACT_ROOT": args.artifact_root,
-            "AGENT_ROUTE_FILE": args.route_file or "",
-            "AGENT_ROUTE_ID": args.route_id or "",
+            "AGENT_ROUTE_FILE": (
+                args.route_file
+                or (args.owner_route_binding.route_file if args.owner_route_binding else "")
+            ),
+            "AGENT_ROUTE_ID": (
+                args.route_id
+                or (args.owner_route_binding.route_id if args.owner_route_binding else "")
+            ),
             "AGENT_ROUTE_NODE": args.route_node or "",
             "AGENT_MODEL_GOVERNOR_ROOT": str(governor_root),
             GOVERNOR_RESERVATION_ENV: reservation_token,
@@ -2279,10 +2321,16 @@ def main(argv: list[str]) -> int:
                 cancel_governor_reservation(
                     governor, governor_root, reservation_token
                 )
-                return fail(
-                    exc.reason, 73, detail=exc.detail,
-                    attempt_id=args.attempt_id, child_spawned="0",
-                )
+                print("check=ok")
+                print("status=start")
+                print(f"attempt_id={args.attempt_id}")
+                print("duplicate_attempt=1")
+                print("launch_state=existing-active")
+                print("registered=0")
+                print("started=0")
+                print("child_spawned=0")
+                print("reason=attempt-launch-already-claimed")
+                return 0
             reason = (
                 "parent-exited"
                 if exc.reason.startswith("parent-attempt-")
@@ -2505,6 +2553,12 @@ def main(argv: list[str]) -> int:
     print(f"registered_worker={int(bool(args.registered_worker))}")
     print(f"registry_lock={jobs}.lock")
     print(f"duplicate_attempt={0 if args.attempt_claimed or action == 'dry-run' else 1}")
+    print(
+        "launch_state="
+        + attempt_launch_state(
+            jobs, args.attempt_id, claimed=args.attempt_claimed, action=action
+        )
+    )
     print(f"registered={1 if args.attempt_claimed else 0}")
     print(f"started={1 if action == 'start' and args.attempt_claimed else 0}")
     print(

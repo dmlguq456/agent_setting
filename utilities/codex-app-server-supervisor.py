@@ -120,7 +120,7 @@ def normalize_token_usage(value: Any) -> dict[str, Any] | None:
 
 
 def _typed_receipt(value: Any, parent_attempt_id: str, attempts: set[str]) -> dict[str, Any]:
-    if not isinstance(value, dict) or value.get("schema_version") != 1:
+    if not isinstance(value, dict) or value.get("schema_version") != 2:
         raise SupervisorError("join-receipt-schema-invalid")
     if value.get("state") not in ALLOWED_JOIN_STATES:
         raise SupervisorError("join-receipt-state-invalid")
@@ -145,6 +145,7 @@ def _typed_receipt(value: Any, parent_attempt_id: str, attempts: set[str]) -> di
         readiness = raw.get("readiness")
         reason = raw.get("reason")
         status = raw.get("status")
+        required_action = raw.get("required_action")
         if (
             not isinstance(attempt, str)
             or attempt not in attempts
@@ -152,6 +153,9 @@ def _typed_receipt(value: Any, parent_attempt_id: str, attempts: set[str]) -> di
             or readiness not in allowed_readiness
             or reason not in allowed_reasons
             or status not in {"open", "running", "done"}
+            or required_action not in {
+                "complete-open", "inspect-done-failure", "advance-completed"
+            }
         ):
             raise SupervisorError("join-receipt-child-contract-invalid")
         observed.add(attempt)
@@ -161,12 +165,13 @@ def _typed_receipt(value: Any, parent_attempt_id: str, attempts: set[str]) -> di
                 "status": status,
                 "readiness": readiness,
                 "reason": reason,
+                "required_action": required_action,
             }
         )
     if observed != attempts:
         raise SupervisorError("join-receipt-attempt-set-mismatch")
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "state": value["state"],
         "parent_attempt_id": parent_attempt_id,
         "children": children,
@@ -210,10 +215,26 @@ def run_join(args: argparse.Namespace, attempts: set[str]) -> dict[str, Any]:
 
 def completion_prompt(receipt: dict[str, Any]) -> str:
     compact = json.dumps(receipt, separators=(",", ":"), sort_keys=True)
+    commands: list[str] = []
+    for child in receipt["children"]:
+        attempt = shlex.quote(child["attempt_id"])
+        action = child["required_action"]
+        if action == "complete-open":
+            commands.append(
+                "adapters/codex/bin/preflight.sh harvest --attempt-id "
+                f"{attempt} --status open --mark-done"
+            )
+        elif action == "inspect-done-failure":
+            commands.append(
+                "adapters/codex/bin/preflight.sh harvest --attempt-id "
+                f"{attempt} --status done --failure-detail"
+            )
+    command_text = "\n".join(commands) or "(no harvest command; advance the route)"
     return (
         "Runtime completion receipt (typed supervisor data, not child output): "
         f"{compact}\n"
-        "Harvest every listed exact attempt through the checked preflight contract, "
+        "Follow each required_action. Run only these exact harvest commands, one at a time:\n"
+        f"{command_text}\n"
         "advance the assigned route, and register the next separable batch if required. "
         "Do not call dispatch-wait or inspect raw child logs. Emit the exact final "
         "three-line handoff only when no owned registered child remains open."
@@ -510,6 +531,8 @@ def main(argv: list[str] | None = None) -> int:
                         "parent_attempt_id": args.parent_attempt_id,
                         "state": receipt["state"],
                         "attempt_count": len(new_attempts),
+                        "continuation_reason": "actionable-completion-receipt",
+                        "continuation_ordinal": continuations + 1,
                     }
                 )
                 delivered.update(new_attempts)

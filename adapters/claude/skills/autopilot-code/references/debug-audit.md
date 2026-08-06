@@ -47,7 +47,7 @@ Invoke `code-test`, then reproduce the original scenario:
 
 If verification fails or the original error persists:
 
-1. Read `Safety commit: {hash}` from `plan/checklist.md` and restore only changed paths with `git checkout <safety-commit> -- <changed paths>`.
+1. Read `Safety commit: {hash}` from `checklist.md` and restore only changed paths with `git checkout <safety-commit> -- <changed paths>`.
 2. Write `pipeline_summary.md` with `status: unresolved` before user output.
 3. Report the diagnosis, attempted fix, why it failed, and manual investigation steps.
 

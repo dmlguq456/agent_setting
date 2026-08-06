@@ -48,6 +48,7 @@ class Verdict:
     stale_rows: int = 0
     active_pids: list[int] = field(default_factory=list)
     process_scan: str = "unknown"
+    repository_mode: str = "remote"
 
 
 def run(
@@ -207,13 +208,23 @@ def process_cwds(target: Path) -> tuple[str, list[int]]:
     return "unavailable", []
 
 
-def evaluate(target: Path, jobs: Path, integration_ref: str | None) -> Verdict:
+def evaluate(
+    target: Path,
+    jobs: Path,
+    integration_ref: str | None,
+    repository_mode: str = "remote",
+) -> Verdict:
     entries = worktree_entries(target)
     if not entries:
         raise RuntimeError("git reported no registered worktrees")
     primary = entries[0].path
     chosen_ref = integration_ref or default_integration_ref(primary)
-    verdict = Verdict(path=target, primary=primary, integration_ref=chosen_ref)
+    verdict = Verdict(
+        path=target,
+        primary=primary,
+        integration_ref=chosen_ref,
+        repository_mode=repository_mode,
+    )
 
     by_path = {entry.path: entry for entry in entries}
     entry = by_path.get(target)
@@ -273,7 +284,9 @@ def evaluate(target: Path, jobs: Path, integration_ref: str | None) -> Verdict:
             ],
             check=False,
         )
-        if upstream_result.returncode != 0 or not upstream_result.stdout.strip():
+        if repository_mode == "local-only":
+            verdict.upstream = "local-only"
+        elif upstream_result.returncode != 0 or not upstream_result.stdout.strip():
             verdict.reasons.append("integration-upstream-missing")
         else:
             verdict.upstream = upstream_result.stdout.strip()
@@ -379,6 +392,7 @@ def emit(verdict: Verdict, status: str, reconciled: int = 0) -> None:
     print(f"primary_worktree={verdict.primary}")
     print(f"integration_ref={verdict.integration_ref}")
     print(f"integration_upstream={verdict.upstream}")
+    print(f"repository_mode={verdict.repository_mode}")
     print(f"head={verdict.head or '-'}")
     print(f"branch={verdict.branch or '-'}")
     print(f"process_scan={verdict.process_scan}")
@@ -442,6 +456,12 @@ def parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--repo", default=os.getcwd(), help="repo used with --all-eligible")
     p.add_argument("--integration-ref")
+    p.add_argument(
+        "--repository-mode",
+        choices=("remote", "local-only"),
+        default="remote",
+        help="explicitly skip only the push-sync gate for a local-only repository",
+    )
     p.add_argument("--jobs")
     p.add_argument("--audit")
     return p
@@ -472,7 +492,9 @@ def main(argv: list[str]) -> int:
         if index:
             print()
         try:
-            verdict = evaluate(target, jobs, args.integration_ref)
+            verdict = evaluate(
+                target, jobs, args.integration_ref, args.repository_mode
+            )
         except (OSError, RuntimeError) as e:
             print("status=blocked")
             print(f"worktree={target}")
@@ -509,6 +531,7 @@ def main(argv: list[str]) -> int:
             "primary_worktree": str(verdict.primary),
             "integration_ref": verdict.integration_ref,
             "integration_upstream": verdict.upstream,
+            "repository_mode": verdict.repository_mode,
             "head": verdict.head,
             "branch": verdict.branch,
             "branch_deleted": False,

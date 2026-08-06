@@ -40,7 +40,7 @@ Run the `editorial/report` unit (portable `fast writer` role) with this task:
 Generate a final change report.
 
 Plan file: {$ARG}, resolved through the plan-resolution contract
-Log directory: {task root above plan/plan.md}
+Log directory: {task root above plan.md}
 Existing audience-language companion plan: {path or none}
 Report output: {log_directory}/final_report.md
 Artifact language: {explicit audience/artifact language, otherwise conversation language}
@@ -48,7 +48,7 @@ Date: {YYYY-MM-DD}
 
 Inputs:
 1. Canonical plan and any existing required companion
-2. plan/checklist.md
+2. checklist.md
 3. dev_logs/step_*.md and test_logs/
 4. _internal/{plan_reviews,dev_reviews,test_reviews}/
 5. pipeline_summary.md when present

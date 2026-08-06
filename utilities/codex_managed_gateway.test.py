@@ -400,7 +400,7 @@ def receipt_request(batch: str = "batch-1") -> dict[str, Any]:
         "parent_attempt_id": "att-parent",
         "sealed_batch_id": batch,
         "receipt": {
-            "schema_version": 1,
+            "schema_version": 2,
             "state": "ready",
             "parent_attempt_id": "att-parent",
             "children": [
@@ -409,6 +409,7 @@ def receipt_request(batch: str = "batch-1") -> dict[str, Any]:
                     "status": "done",
                     "readiness": "ready",
                     "reason": "registry-closed",
+                    "required_action": "advance-completed",
                     "harness": "codex",
                 }
             ],
@@ -510,7 +511,30 @@ class ManagedGatewayTest(unittest.TestCase):
         self.assertEqual(starts[0]["params"]["input"], [])
         encoded = GATEWAY.canonical(starts[0])
         self.assertIn("AGENT_HARNESS_COMPLETION_V1", encoded)
+        self.assertIn("no harvest command; advance the route", encoded)
         self.assertNotIn("RAW_CHILD", encoded)
+
+    def test_actionable_receipt_emits_exact_harvest_command(self) -> None:
+        request = receipt_request("batch-open")
+        child = request["receipt"]["children"][0]
+        child.update(
+            {
+                "status": "open",
+                "reason": "terminal-observed",
+                "required_action": "complete-open",
+            }
+        )
+        result = control(self.control, request)
+        self.assertEqual(result["status"], "accepted")
+        start = next(
+            value for value in self.server.messages
+            if value.get("method") == "turn/start"
+        )
+        encoded = GATEWAY.canonical(start)
+        self.assertIn(
+            "harvest --attempt-id att-batch-open --status open --mark-done",
+            encoded,
+        )
 
     def test_active_manual_turn_receipt_steers_without_second_turn(self) -> None:
         self.client.request(

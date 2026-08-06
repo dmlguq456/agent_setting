@@ -124,12 +124,16 @@ children = [
             else 'registry-closed' if state == 'ready'
             else 'process-alive'
         ),
+        'required_action': (
+            'complete-open' if mode in {'timeout', 'terminal'}
+            else 'advance-completed'
+        ),
         'slug': 'child',
     }
     for attempt in attempts
 ]
 print(json.dumps({
-    'schema_version': 1,
+    'schema_version': 2,
     'state': state,
     identity_key: parent,
     'children': children,
@@ -224,9 +228,14 @@ raise SystemExit(3 if state == 'timeout' else 0)
         self.assertTrue(server.called.wait(2))
         assert server.request is not None
         children = server.request["receipt"]["children"]
+        self.assertEqual(server.request["receipt"]["schema_version"], 2)
         self.assertEqual(
             {child["harness"] for child in children},
             {"codex", "claude"},
+        )
+        self.assertEqual(
+            {child["required_action"] for child in children},
+            {"advance-completed"},
         )
         encoded = json.dumps(server.request)
         self.assertNotIn("RAW_CHILD_SENTINEL", encoded)
@@ -259,7 +268,7 @@ raise SystemExit(3 if state == 'timeout' else 0)
         self.assertEqual(payload["status"], "timeout")
         self.assertFalse(self.control_path.exists())
 
-    def test_terminal_observed_open_child_is_normalized_to_done(self) -> None:
+    def test_terminal_observed_open_child_keeps_actionable_status(self) -> None:
         self.jobs.write_text(
             row("att-terminal", harness="codex", status="open"),
             encoding="utf-8",
@@ -276,8 +285,9 @@ raise SystemExit(3 if state == 'timeout' else 0)
         self.assertTrue(server.called.wait(2))
         assert server.request is not None
         child = server.request["receipt"]["children"][0]
-        self.assertEqual(child["status"], "done")
+        self.assertEqual(child["status"], "open")
         self.assertEqual(child["reason"], "terminal-observed")
+        self.assertEqual(child["required_action"], "complete-open")
 
     def test_foreign_or_missing_attempt_fails_before_gateway(self) -> None:
         self.jobs.write_text(

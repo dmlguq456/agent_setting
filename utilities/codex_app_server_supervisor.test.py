@@ -146,9 +146,9 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
                                 'execution_surface=registered-headless,registered_worker=1,'
                                 f'attempt_id={attempt},parent_attempt_id={parent}\\n')
                 record('join-end')
-                print(json.dumps({'schema_version':1,'state':'ready','parent_attempt_id':parent,
+                print(json.dumps({'schema_version':2,'state':'ready','parent_attempt_id':parent,
                     'children':[{'attempt_id':attempt,'status':'done','readiness':'ready',
-                                 'reason':'registry-closed'} for attempt in attempts]}))
+                                 'reason':'registry-closed','required_action':'advance-completed'} for attempt in attempts]}))
                 """
             ),
             encoding="utf-8",
@@ -307,9 +307,9 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
                 import json, sys
                 parent = sys.argv[sys.argv.index('--parent-attempt-id') + 1]
                 attempts = [sys.argv[i + 1] for i, value in enumerate(sys.argv) if value == '--attempt-id']
-                print(json.dumps({'schema_version':1,'state':'ready','parent_attempt_id':parent,
+                print(json.dumps({'schema_version':2,'state':'ready','parent_attempt_id':parent,
                     'children':[{'attempt_id':attempt,'status':'open','readiness':'ready',
-                                 'reason':'terminal-observed'} for attempt in attempts]}))
+                                 'reason':'terminal-observed','required_action':'complete-open'} for attempt in attempts]}))
                 """
             ),
             encoding="utf-8",

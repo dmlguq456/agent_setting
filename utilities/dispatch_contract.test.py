@@ -242,6 +242,46 @@ class DispatchContractTest(unittest.TestCase):
   finally:
    proc.kill();proc.wait()
 
+ def test_supervisor_handoff_repairs_lower_authority_foreground_verdict(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log"
+   meta=("attempt_schema_version=2,dispatch_depth=2,transport=headless,"
+         "execution_surface=registered-headless,registered_worker=1,"
+         "fallback_hop=same-harness-headless,attempt_id=att-race,"
+         "note=dead-worker-fail,failure_class=fail,"
+         "detected_by=foreground-terminal-handoff,"
+         "classifier_source=foreground-tail-v1")
+   jobs.write_text("2026-08-06T00:00:00Z\tdone\t/r\t/w\tstage\t"+meta+"\n")
+   result=D.reconcile_attempt_terminal(
+    jobs,"att-race","completed-supervisor",
+    evidence={
+     "failure_class":"pass",
+     "classifier_source":"supervisor-terminal-v1",
+     "detected_by":"completion-supervisor",
+     "terminal_event":"turn.completed",
+     "reconcile_reason":"exact-final-handoff",
+    })
+   self.assertEqual(result,"repaired-terminal")
+   text=jobs.read_text()
+   self.assertIn("note=completed-supervisor",text)
+   self.assertIn("prior_failure_class=fail",text)
+   self.assertIn("terminal_conflict=1",text)
+
+ def test_equal_authority_verdict_conflict_fails_closed(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log"
+   meta=("attempt_schema_version=2,dispatch_depth=1,transport=headless,"
+         "execution_surface=registered-headless,registered_worker=1,"
+         "fallback_hop=same-harness-headless,"
+         "attempt_id=att-conflict,note=completed-supervisor,"
+         "failure_class=pass,classifier_source=supervisor-terminal-v1")
+   jobs.write_text("2026-08-06T00:00:00Z\tdone\t/r\t/w\towner\t"+meta+"\n")
+   result=D.reconcile_attempt_terminal(
+    jobs,"att-conflict","dead-worker-fail",
+    evidence={"failure_class":"fail","classifier_source":"supervisor-terminal-v1"})
+   self.assertEqual(result,"terminal-conflict")
+   self.assertIn("note=dead-terminal-conflict",jobs.read_text())
+
  def test_remounted_proc_nspid_is_bound_to_inner_namespace(self):
   inner_namespace="pid:[inner-remounted]"
   def namespace_identity(pid="self"):

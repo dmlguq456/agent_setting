@@ -192,6 +192,22 @@ class WorktreeCleanupTests(unittest.TestCase):
         self.assertEqual(result.returncode, 3)
         self.assertIn("integration-upstream-missing", result.stdout)
 
+    def test_explicit_local_only_skips_only_push_sync_gate(self):
+        path = self.fx.add_worktree("local-only")
+        run(["git", "-C", str(self.fx.repo), "branch", "--unset-upstream", "main"])
+        result = run(
+            [
+                str(SCRIPT), "--check", "--worktree", str(path),
+                "--integration-ref", "main", "--repository-mode", "local-only",
+                "--jobs", str(self.fx.jobs), "--audit", str(self.fx.audit),
+            ],
+            cwd=self.fx.root,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("repository_mode=local-only", result.stdout)
+        self.assertIn("integration_upstream=local-only", result.stdout)
+
     def test_primary_is_blocked(self):
         result = self.fx.cleanup(self.fx.repo)
         self.assertEqual(result.returncode, 3)

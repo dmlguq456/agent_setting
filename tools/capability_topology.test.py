@@ -11,7 +11,7 @@ PRESERVED_FULL_FIELD_DIGESTS = {
         "ef01f5c116d199aaee0f86d845921face1f7a7a5095ac73d30ad9a40d4b0233f",
     ),
     ("autopilot-code", ('audit', 'debug', 'dev')): (
-        "c7a07196b631be5b4063d592b23e9aa0191b9cc4eca32b863e929a16ea177c33",
+        "812f7acba3c4adf1ebbc0f279206577b31e2b6131ba102f2bb9ba556ee3f831c",
         "1eb37bfd5ab71fc7e9edc437503624f991cc585d7806dc46af7e2910911fb9f4",
     ),
     ("autopilot-design", ('default',)): (
@@ -86,6 +86,16 @@ class TestTopology(unittest.TestCase):
         self.assertRaisesRegex(T.TopologyError,"execution-surface",T.validate_registry,r)
         r=copy.deepcopy(self.r); r["recipes"][0]["standard_plus"]["nodes"][0]["fallback_hops"]=["mystery"]
         self.assertRaisesRegex(T.TopologyError,"fallback hops",T.validate_registry,r)
+        r=copy.deepcopy(self.r)
+        r["recipes"][0]["standard_plus"]["nodes"][0]["runtime_requirements"]=["mystery"]
+        self.assertRaisesRegex(T.TopologyError,"runtime requirements",T.validate_registry,r)
+
+    def test_bare_filename_output_is_checked_as_a_path(self):
+        r=copy.deepcopy(self.r)
+        code=next(x for x in r["recipes"] if x["capability"]=="autopilot-code")
+        plan=next(n for n in code["standard_plus"]["nodes"] if n["id"]=="plan")
+        plan["write_scope"]=["plan/**"]
+        self.assertRaises(T.TopologyError,T.validate_registry,r)
     def test_reviewer_and_map_scopes(self):
         r=copy.deepcopy(self.r); r["recipes"][0]["standard_plus"]["nodes"][1]["write_scope"]=["source/**"]; self.assertRaises(T.TopologyError,T.validate_registry,r)
         r=copy.deepcopy(self.r); d=next(x for x in r["recipes"] if x["capability"]=="autopilot-design"); d["standard_plus"]["nodes"][0]["write_scope"]=["design/**"]; self.assertRaises(T.TopologyError,T.validate_registry,r)

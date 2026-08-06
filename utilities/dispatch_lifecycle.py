@@ -27,6 +27,43 @@ FOREGROUND_TIMEOUT_DEFAULT = 3600.0  # 1h: what a non-positive/non-finite reques
 FOREGROUND_TIMEOUT_MAX = 86400.0  # 24h hard ceiling: no finite request may be effectively infinite
 
 
+def pid_namespace_evidence(
+    status_path: Path = Path("/proc/self/status"),
+    init_comm_path: Path = Path("/proc/1/comm"),
+) -> dict[str, str]:
+    """Return bounded, non-sensitive evidence used by lifecycle selection."""
+    width = 0
+    nspid_state = "unreadable"
+    try:
+        for line in status_path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("NSpid:"):
+                width = max(0, len(line.split()) - 1)
+                nspid_state = "nested" if width > 1 else "single"
+                break
+        else:
+            nspid_state = "absent"
+    except OSError:
+        pass
+    try:
+        comm = init_comm_path.read_text(encoding="utf-8").strip()
+        init_class = "system-init" if comm in {"systemd", "init"} else "non-system-init"
+    except OSError:
+        init_class = "unreadable"
+    if nspid_state == "nested":
+        source = "nspid-vector"
+    elif init_class == "non-system-init":
+        source = "pid1-class"
+    elif nspid_state == "unreadable" or init_class == "unreadable":
+        source = "proc-unreadable"
+    else:
+        source = "host-like"
+    return {
+        "lifecycle_selector_source": source,
+        "lifecycle_nspid_width": str(width),
+        "lifecycle_pid1_class": init_class,
+    }
+
+
 def bounded_foreground_timeout(timeout: float) -> float:
     """Clamp a foreground wait to a finite window — it may never be indefinite.
 
@@ -58,21 +95,10 @@ def pid_namespace_scoped(
     fails safe because a detached child cannot then be proven durable.
     """
 
-    try:
-        for line in status_path.read_text(encoding="utf-8").splitlines():
-            if line.startswith("NSpid:"):
-                if len(line.split()) > 2:
-                    return True
-                break
-    except OSError:
-        pass
-    try:
-        return init_comm_path.read_text(encoding="utf-8").strip() not in {
-            "systemd",
-            "init",
-        }
-    except OSError:
-        return True
+    evidence = pid_namespace_evidence(status_path, init_comm_path)
+    return evidence["lifecycle_selector_source"] in {
+        "nspid-vector", "pid1-class", "proc-unreadable"
+    }
 
 
 def select_launch_lifecycle(

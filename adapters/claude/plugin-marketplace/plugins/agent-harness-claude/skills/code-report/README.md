@@ -22,7 +22,7 @@ Use one fast writer. The report synthesizes artifacts already checked by plan, c
 
 ## Report Assembly — `editorial/report` unit
 
-Inputs: the canonical plan, `plan/checklist.md`, `dev_logs/`, `test_logs/`, `_internal/{plan_reviews,dev_reviews,test_reviews}/`, and any existing required language companion.
+Inputs: the canonical plan, `checklist.md`, `dev_logs/`, `test_logs/`, `_internal/{plan_reviews,dev_reviews,test_reviews}/`, and any existing required language companion.
 
 Procedure:
 

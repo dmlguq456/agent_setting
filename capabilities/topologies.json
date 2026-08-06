@@ -27,6 +27,9 @@
   "headless",
   "interactive"
  ],
+ "runtime_requirements": [
+  "loopback-listen"
+ ],
  "tracking_values": [
   "tracked",
   "untracked"
@@ -345,7 +348,8 @@
        "checklist.md"
       ],
       "write_scope": [
-       "plan/**"
+       "plan.md",
+       "checklist.md"
       ],
       "resource_class": "normal",
       "completion_gate": "code-plan",

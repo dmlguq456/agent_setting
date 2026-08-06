@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from owner_route_binding import OwnerRouteBindingError, validate_owner_route_binding
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -311,9 +312,21 @@ def main(argv):
         if caller_harness:
             child_env["AGENT_DISPATCH_CALLER_HARNESS"] = caller_harness
         child_env["AGENT_DISPATCH_OWNER_HARNESS"] = selected
+        if route_evidence:
+            binding = validate_owner_route_binding(
+                route_evidence,
+                worktree=values["--worktree"],
+                capability=values["--capability"],
+                capability_mode=values["--capability-mode"],
+                intensity=values["--intensity"],
+                harness=selected,
+            )
+            child_env["AGENT_OWNER_ROUTE_FILE"] = binding.route_file
+            child_env["AGENT_OWNER_ROUTE_ID"] = binding.route_id
+            child_env["AGENT_OWNER_ROUTE_HASH"] = binding.route_hash
         child = subprocess.run([str(wrapper), *forwarded], env=child_env)
         return child.returncode
-    except (OwnerError, OSError) as exc:
+    except (OwnerError, OwnerRouteBindingError, OSError) as exc:
         return _error(str(exc))
 
 

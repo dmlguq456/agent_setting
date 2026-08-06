@@ -56,7 +56,7 @@ def reconcile(args: argparse.Namespace, terminal: SupervisorTerminal) -> bool:
 
 
 def typed_receipt(value: object, parent_attempt_id: str, attempts: set[str]) -> dict[str, Any]:
-    if not isinstance(value, dict) or value.get("schema_version") != 1:
+    if not isinstance(value, dict) or value.get("schema_version") != 2:
         raise SupervisorError("join-receipt-schema-invalid")
     if value.get("state") not in {"ready", "timeout"}:
         raise SupervisorError("join-receipt-state-invalid")
@@ -74,6 +74,7 @@ def typed_receipt(value: object, parent_attempt_id: str, attempts: set[str]) -> 
         status = raw.get("status")
         readiness = raw.get("readiness")
         reason = raw.get("reason")
+        required_action = raw.get("required_action")
         if (
             not isinstance(attempt, str)
             or attempt not in attempts
@@ -86,6 +87,9 @@ def typed_receipt(value: object, parent_attempt_id: str, attempts: set[str]) -> 
                 "process-alive",
                 "process-unverifiable",
             }
+            or required_action not in {
+                "complete-open", "inspect-done-failure", "advance-completed"
+            }
         ):
             raise SupervisorError("join-receipt-child-contract-invalid")
         observed.add(attempt)
@@ -95,12 +99,13 @@ def typed_receipt(value: object, parent_attempt_id: str, attempts: set[str]) -> 
                 "status": status,
                 "readiness": readiness,
                 "reason": reason,
+                "required_action": required_action,
             }
         )
     if observed != attempts:
         raise SupervisorError("join-receipt-attempt-set-mismatch")
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "state": value["state"],
         "parent_attempt_id": parent_attempt_id,
         "children": children,
@@ -150,17 +155,26 @@ def completion_prompt(receipt: dict[str, Any]) -> str:
     # this exact command is unsatisfiable for a route-bound row and the
     # delivered/harvest-only phase deadlocks (SD-70/78).
     compact = json.dumps(receipt, separators=(",", ":"), sort_keys=True)
-    commands = "\n".join(
-        "adapters/codex/bin/preflight.sh harvest --attempt-id "
-        f"{shlex.quote(child['attempt_id'])} --mark-done"
-        for child in receipt["children"]
-    )
+    commands: list[str] = []
+    for child in receipt["children"]:
+        attempt = shlex.quote(child["attempt_id"])
+        if child["required_action"] == "complete-open":
+            commands.append(
+                "adapters/codex/bin/preflight.sh harvest --attempt-id "
+                f"{attempt} --status open --mark-done"
+            )
+        elif child["required_action"] == "inspect-done-failure":
+            commands.append(
+                "adapters/codex/bin/preflight.sh harvest --attempt-id "
+                f"{attempt} --status done --failure-detail"
+            )
+    command_text = "\n".join(commands) or "(no harvest command; advance the route)"
     return (
         "Runtime completion receipt (typed supervisor data, not child output): "
         f"{compact}\n"
         "Harvest every listed exact attempt through the checked contract. Run only "
         "these exact commands, one at a time:\n"
-        f"{commands}\n"
+        f"{command_text}\n"
         "Then advance "
         "the route, and register the next separable batch if required. Do not call "
         "dispatch-wait or inspect raw child logs. Emit the exact final three-line "
@@ -377,6 +391,8 @@ def main(argv: list[str] | None = None) -> int:
                         "parent_attempt_id": args.parent_attempt_id,
                         "state": receipt["state"],
                         "attempt_count": len(new_attempts),
+                        "continuation_reason": "actionable-completion-receipt",
+                        "continuation_ordinal": continuations + 1,
                     }
                 )
                 delivered.update(new_attempts)

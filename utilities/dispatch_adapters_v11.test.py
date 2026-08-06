@@ -200,7 +200,7 @@ class AdapterV11Test(unittest.TestCase):
     self.seed_parent(jobs,repo,harness=harness)
     command=self.command(harness,"start",repo,jobs,logs)+["--launch-lifecycle","foreground-scoped","--foreground-timeout","2"]
     wrapper=self.load_wrapper(harness); argv=["dispatch-headless.py",*command[2:]]
-    env={**os.environ,"PATH":str(fakebin)+os.pathsep+os.environ.get("PATH",""),"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),"AGENT_DISPATCH_JOBS":str(jobs),"AGENT_DISPATCH_CHILD":"1","AGENT_DISPATCH_ATTEMPT_ID":"att-parent-fixture"}
+    env={**os.environ,"PATH":str(fakebin)+os.pathsep+os.environ.get("PATH",""),"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),"AGENT_DISPATCH_JOBS":str(jobs),"AGENT_DISPATCH_CHILD":"1","AGENT_DISPATCH_ATTEMPT_ID":"att-parent-fixture","XDG_STATE_HOME":str(root/"state")}
     stream=io.StringIO()
     patches=[mock.patch.dict(os.environ,env,clear=True)]
     if hasattr(wrapper,"check_runtime_projection"): patches.append(mock.patch.object(wrapper,"check_runtime_projection",return_value=0))
@@ -255,6 +255,7 @@ class AdapterV11Test(unittest.TestCase):
         "AGENT_DISPATCH_JOBS":str(jobs),"AGENT_DISPATCH_CHILD":"1",
         "AGENT_DISPATCH_ATTEMPT_ID":"att-parent-fixture",
         "AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN":"1",
+        "XDG_STATE_HOME":str(root/"state"),
         "FAKE_CHILD_COUNT":str(count)}
    codes=[]
    def invoke(): codes.append(wrapper.main(argv))

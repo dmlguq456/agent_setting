@@ -158,6 +158,12 @@ ATTEMPT_TERMINAL_EVIDENCE_KEYS = {
     "reset",
     "terminal_event",
     "watchdog_windows",
+    "terminal_conflict",
+    "prior_terminal_note",
+    "prior_classifier_source",
+    "prior_failure_class",
+    "conflicting_classifier_source",
+    "conflicting_failure_class",
 }
 _MODULE_ROOT = Path(__file__).resolve().parents[1]
 _CAPACITY_TERMINAL_RE = re.compile(
@@ -3145,6 +3151,36 @@ def close_attempt_row(
     return False
 
 
+def attempt_launch_state(
+    jobs: Path,
+    attempt_id: str,
+    *,
+    claimed: bool,
+    action: str,
+) -> str:
+    """Return the typed launch receipt state for one exact attempt."""
+    if action == "dry-run":
+        return "preview"
+    if claimed:
+        return "claimed"
+    try:
+        lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return "existing-unknown"
+    states = []
+    for line in lines:
+        fields = line.split("\t")
+        if len(fields) != 6:
+            continue
+        if parse_registry_metadata(fields[5]).get("attempt_id") == attempt_id:
+            states.append(fields[1])
+    if any(state in {"open", "running"} for state in states):
+        return "existing-active"
+    if states:
+        return "existing-completed"
+    return "existing-unknown"
+
+
 def reconcile_attempt_terminal(
     jobs: Path,
     attempt_id: str,
@@ -3184,6 +3220,61 @@ def reconcile_attempt_terminal(
         index, fields, metadata = matches[0]
         validate_attempt_metadata(metadata)
         if fields[1] in {"done", "killed", "cancelled"}:
+            incoming = evidence or {}
+            prior_class = metadata.get("failure_class", "")
+            next_class = str(incoming.get("failure_class", ""))
+            if not prior_class or not next_class or prior_class == next_class:
+                return "already-terminal"
+
+            def authority(source: str, detected: str) -> int:
+                if source == "supervisor-terminal-v1":
+                    return 30
+                if source == "completion-join-terminal-verdict-v1":
+                    return 20
+                if detected == "foreground-terminal-handoff":
+                    return 10
+                return 0
+
+            prior_rank = authority(
+                metadata.get("classifier_source", ""),
+                metadata.get("detected_by", ""),
+            )
+            next_rank = authority(
+                str(incoming.get("classifier_source", "")),
+                str(incoming.get("detected_by", "")),
+            )
+            semantic = {"pass", "fail", "blocked"}
+            values = {
+                "terminal_conflict": "1",
+                "prior_terminal_note": metadata.get("note", ""),
+                "prior_classifier_source": metadata.get("classifier_source", ""),
+                "prior_failure_class": prior_class,
+            }
+            if next_rank > prior_rank and next_class in semantic:
+                values.update({"note": note, **incoming})
+                fields[5] = _updated_attempt_metadata(
+                    fields[5], values, terminal=True
+                )
+                lines[index] = "\t".join(fields)
+                _atomic_registry_replace(jobs, lines)
+                return "repaired-terminal"
+            if next_rank == prior_rank and {prior_class, next_class} <= semantic:
+                values.update(
+                    {
+                        "note": "dead-terminal-conflict",
+                        "failure_class": "contract",
+                        "conflicting_classifier_source": str(
+                            incoming.get("classifier_source", "")
+                        ),
+                        "conflicting_failure_class": next_class,
+                    }
+                )
+                fields[5] = _updated_attempt_metadata(
+                    fields[5], values, terminal=True
+                )
+                lines[index] = "\t".join(fields)
+                _atomic_registry_replace(jobs, lines)
+                return "terminal-conflict"
             return "already-terminal"
         if fields[1] not in {"open", "running"}:
             raise DispatchContractError(

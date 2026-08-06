@@ -30,12 +30,12 @@ Executes an implementation plan with progress tracking. It implements individual
 ## Initialization
 
 - Read the plan file.
-- **Log directory = the grandparent of `plan/plan.md`** (for example, `<artifact-root>/plans/2026-03-18_refactor/`).
+- **Log directory = the grandparent of `plan.md`** (for example, `<artifact-root>/plans/2026-03-18_refactor/`).
 - **Inspect the existing log directory**:
-  - If `{log_dir}/plan/checklist.md` contains `[x]`, `[FAIL]`, or `[SKIP-DEP]`, **resume**: update the safety commit, skip completed steps, and start at the first `[ ]`.
+  - If `{log_dir}/checklist.md` contains `[x]`, `[FAIL]`, or `[SKIP-DEP]`, **resume**: update the safety commit, skip completed steps, and start at the first `[ ]`.
   - Otherwise, start a new run.
 - Run `mkdir -p {log_dir}/dev_logs {log_dir}/_internal/dev_reviews`.
-- Write `{log_dir}/plan/checklist.md`.
+- Write `{log_dir}/checklist.md`.
 
 ## Rules
 

@@ -35,7 +35,8 @@ Search `<artifact-root>/plans/` for a similar plan and branch on its frontmatter
 Plan mode. Create a new implementation plan.
 
 Task: {$ARGUMENTS}
-Save canonical plan to: <artifact-root>/plans/{YYYY-MM-DD}_{short-task-name}/plan/plan.md
+Save canonical plan to: <artifact-root>/plans/{YYYY-MM-DD}_{short-task-name}/plan.md
+Save execution checklist to: <artifact-root>/plans/{YYYY-MM-DD}_{short-task-name}/checklist.md
 Date: {YYYY-MM-DD}
 {If done/failed/partial plan exists: "Reference previous plan: [path], status: [status]"}
 {If partial: "Failed steps from previous execution: [list]"}

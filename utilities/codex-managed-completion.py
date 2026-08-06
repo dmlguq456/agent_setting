@@ -30,6 +30,9 @@ from dispatch_completion_join import (  # noqa: E402
 MAX_RESPONSE_BYTES = 16 * 1024
 MAX_RECEIPT_BYTES = 1536
 ALLOWED_REASONS = {"registry-closed", "terminal-observed"}
+REQUIRED_ACTIONS = {
+    "complete-open", "inspect-done-failure", "advance-completed",
+}
 
 
 class CompletionError(RuntimeError):
@@ -167,7 +170,7 @@ def normalize_receipt(
     )
     identity_value = parent_session_id or parent_attempt_id
     if (
-        receipt.get("schema_version") != 1
+        receipt.get("schema_version") != 2
         or receipt.get("state") != "ready"
         or receipt.get(identity_name) != identity_value
     ):
@@ -182,14 +185,24 @@ def normalize_receipt(
         attempt_id = child.get("attempt_id")
         status = child.get("status")
         reason = child.get("reason")
+        required_action = child.get("required_action")
         if (
             not isinstance(attempt_id, str)
             or attempt_id not in attempts
             or attempt_id in by_attempt
             or child.get("readiness") != "ready"
             or reason not in ALLOWED_REASONS
+            or required_action not in REQUIRED_ACTIONS
             or (reason == "registry-closed" and status != "done")
             or (reason == "terminal-observed" and status not in OPEN_STATES)
+            or (
+                required_action == "complete-open"
+                and status not in OPEN_STATES
+            )
+            or (
+                required_action in {"inspect-done-failure", "advance-completed"}
+                and status != "done"
+            )
         ):
             raise CompletionError("join-receipt-child-contract-invalid")
         by_attempt[attempt_id] = child
@@ -214,15 +227,18 @@ def normalize_receipt(
             raise CompletionError("registry-child-harness-invalid")
         harnesses[row.attempt_id] = harness
     normalized = {
-        "schema_version": 1,
+        "schema_version": 2,
         "state": "ready",
         "parent_attempt_id": delivery_parent_id,
         "children": [
             {
                 "attempt_id": attempt_id,
-                "status": "done",
+                "status": str(by_attempt[attempt_id]["status"]),
                 "readiness": "ready",
                 "reason": str(by_attempt[attempt_id]["reason"]),
+                "required_action": str(
+                    by_attempt[attempt_id]["required_action"]
+                ),
                 "harness": harnesses[attempt_id],
             }
             for attempt_id in sorted(attempts)

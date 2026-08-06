@@ -18,7 +18,7 @@ and is the **only stage that mutates source**.
 
 ### Input / output artifact class (OPERATIONS §5.10 ④)
 
-- **Read** (from files, never prior-stage conversation): `plans/<slug>/plan/plan.md`.
+- **Read** (from files, never prior-stage conversation): `plans/<slug>/plan.md`.
 - **Write** (this stage's class): **source code** (core/·adapters/·skills/·hooks/·
   profiles/·utilities/ …) + `plans/<slug>/{checklist.md,dev_logs/,_internal/dev_reviews/}`
   + plan.md frontmatter `status`. Do **not** write test_logs or report artifacts.

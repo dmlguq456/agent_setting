@@ -28,6 +28,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--jobs")
     p.add_argument("--reconcile-local", help="legacy cycle-local registry to reconcile first")
     p.add_argument("--slug")
+    p.add_argument("--attempt-id")
     p.add_argument("--worktree")
     p.add_argument("--status", choices=("open", "done", "all"), default="open")
     p.add_argument("--mark-done", action="store_true")
@@ -41,6 +42,7 @@ def emit_header(args: argparse.Namespace, jobs: Path, matched: int, marked_done:
     print("status=harvest")
     print(f"job_registry={jobs}")
     print(f"selector_slug={args.slug or '*'}")
+    print(f"selector_attempt_id={args.attempt_id or '*'}")
     print(f"selector_worktree={args.worktree or '*'}")
     print(f"status_filter={args.status}")
     print(f"matched={matched}")
@@ -61,6 +63,10 @@ def matches(args: argparse.Namespace, fields: list[str]) -> bool:
         return False
     if args.slug and slug != args.slug:
         return False
+    if args.attempt_id:
+        metadata = parse_registry_metadata(fields[5])
+        if metadata.get("attempt_id") != args.attempt_id:
+            return False
     if args.worktree and worktree != args.worktree:
         return False
     return True
@@ -148,10 +154,10 @@ def _complete_routed_attempt_from_terminal_evidence(
 
 def main(argv: list[str]) -> int:
     args = parser().parse_args(argv[1:])
-    if args.mark_done and not (args.slug or args.worktree):
+    if args.mark_done and not (args.slug or args.attempt_id or args.worktree):
         print("check=failed")
         print("reason=selector-required")
-        print("hint=pass --slug or --worktree before --mark-done")
+        print("hint=pass --slug, --attempt-id, or --worktree before --mark-done")
         return 64
 
     agent_home = resolve_agent_home()

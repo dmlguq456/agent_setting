@@ -15,7 +15,7 @@ metadata:
 
 # code-test
 
-> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated dispatch-depth-2 stage worker dispatched by the `autopilot-code` conductor. Read the verification section in `plan/plan.md` and marks in `plan/checklist.md` from disk; never depend on prior-stage conversation. Source is read-only in this stage. The write class is `test_logs/` and `_internal/test_reviews/`. The stage runs as the `qa/test` unit (the node's unit); it dispatches no units itself.
+> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated dispatch-depth-2 stage worker dispatched by the `autopilot-code` conductor. Read the verification section in `plan.md` and marks in `checklist.md` from disk; never depend on prior-stage conversation. Source is read-only in this stage. The write class is `test_logs/` and `_internal/test_reviews/`. The stage runs as the `qa/test` unit (the node's unit); it dispatches no units itself.
 
 > **Plan resolution**: Treat [arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) as the single authority for resolving `$ARG`. If no plan matches, interpret the argument as the file or directory test target instead of returning a plan-resolution error.
 
@@ -29,7 +29,7 @@ Run the `qa/test` unit. Select one prompt form:
 
   ```text
   Run graduated tests for plan: {$ARG}
-  Read the plan verification sections and plan/checklist.md in the task root to identify targets.
+  Read the plan verification sections and checklist.md in the task root to identify targets.
   Execute Level 1 → 2 → 3 → 4 → 5 in order, stopping on the first failure.
   ```
 
@@ -97,7 +97,7 @@ Return the report path, executed commands, skipped levels and reasons, blockers,
 
 ## Log Directory
 
-- Plan path: use the task root above `plan/`; for example, `<artifact-root>/plans/2026-03-18_refactor/plan/plan.md` → `<artifact-root>/plans/2026-03-18_refactor/`.
+- Plan path: use the task root above `plan/`; for example, `<artifact-root>/plans/2026-03-18_refactor/plan.md` → `<artifact-root>/plans/2026-03-18_refactor/`.
 - No plan: use a date-stamped directory under `<artifact-root>/tests/`.
 
 ## Task

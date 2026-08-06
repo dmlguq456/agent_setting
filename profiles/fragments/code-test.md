@@ -16,7 +16,7 @@ and treats **source as read-only**.
 
 ### Input / output artifact class (OPERATIONS §5.10 ④)
 
-- **Read** (from files, never prior-stage conversation): `plans/<slug>/plan/plan.md`
+- **Read** (from files, never prior-stage conversation): `plans/<slug>/plan.md`
   verification section + `plans/<slug>/checklist.md`; source is **read-only**.
 - **Write** (this stage's class): `plans/<slug>/{test_logs/,_internal/test_reviews/}`.
   Do **not** mutate source, plan, checklist, dev_logs, or report artifacts.

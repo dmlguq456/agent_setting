@@ -148,6 +148,10 @@ class DispatchCompletionJoinTest(unittest.TestCase):
             {child["attempt_id"] for child in receipt["children"]},
             {"att-a", "att-b"},
         )
+        self.assertEqual(
+            {child["required_action"] for child in receipt["children"]},
+            {"inspect-done-failure"},
+        )
         self.assertNotIn("RAW_CHILD_SENTINEL", json.dumps(receipt))
 
     def test_terminal_liveness_resumes_for_typed_harvest(self):
@@ -173,6 +177,7 @@ class DispatchCompletionJoinTest(unittest.TestCase):
         )
         self.assertEqual(receipt["state"], "ready")
         self.assertEqual(receipt["children"][0]["reason"], "terminal-observed")
+        self.assertEqual(receipt["children"][0]["required_action"], "complete-open")
         self.assertEqual(
             JOIN.pending_attempt_ids(
                 JOIN.current_children(self.jobs, "att-parent")
@@ -439,6 +444,16 @@ class DispatchCompletionJoinTest(unittest.TestCase):
             parent_slug="owner",
         )
         self.assertEqual(harvest, JOIN.SupervisorShellAction("harvest", "att-a"))
+        harvest_all = JOIN.classify_supervised_shell_command(
+            base=JOIN.ROOT,
+            command=(
+                "adapters/codex/bin/preflight.sh harvest "
+                "--attempt-id att-a --status all"
+            ),
+            open_attempt_ids=open_attempts,
+            parent_slug="owner",
+        )
+        self.assertEqual(harvest_all, JOIN.SupervisorShellAction("harvest", "att-a"))
         dispatch = JOIN.classify_supervised_shell_command(
             base=JOIN.ROOT,
             command=(

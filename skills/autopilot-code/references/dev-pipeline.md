@@ -106,7 +106,7 @@ python3 <agent-home>/utilities/capability-route.py complete \
 ```
 
 The marker lands at `<agent-home>/.dispatch/completion/<route_id>/<node_id>.json`. Evidence is
-the stage's contractual terminal artifact (`plan/plan.md`, the final dev log, the test verdict,
+the stage's contractual terminal artifact (`plan.md`, the final dev log, the test verdict,
 `final_report.md`). The pass judgement stays semantic and belongs to the conductor; the marker
 only makes its *result* deterministic. A record-bound `--start` for a node whose `depends_on`
 markers are absent fails closed with `completion-marker-missing` and spawns nothing. Marker
@@ -218,7 +218,7 @@ others. When a non-anchor leg wins or a graft is required, materialize the final
 
 For standard+, run the route-bound dispatch transaction with `NODE_ID=execute`; its route node
 selects `assigned_contract=code-execute` and the portable implementer role. Pass the absolute
-`plan/plan.md` path, retain the emitted attempt ID, yield for the typed receipt, and publish exact completion. Fallback
+`plan.md` path, retain the emitted attempt ID, yield for the typed receipt, and publish exact completion. Fallback
 to in-session only under the closed rules above.
 
 Read plan frontmatter after harvest:

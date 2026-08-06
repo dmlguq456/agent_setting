@@ -86,8 +86,8 @@ Record actual pauses in the summary's Decision Points table. Do not log every au
 Resolve `$ARG` to a plan file:
 
 1. `.md` suffix → use directly.
-2. Directory → append `/plan/plan.md`.
+2. Directory → append `/plan.md`.
 3. Otherwise search all projects: `ls -d <artifact-root>/plans/*/*$ARG* 2>/dev/null`.
-   - One match → `{match}/plan/plan.md`.
+   - One match → `{match}/plan.md`.
    - Multiple → prefer a folder without `_audit` or `_fix_`; ask if still ambiguous.
    - None → report an error.

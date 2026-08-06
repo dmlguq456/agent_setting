@@ -15,7 +15,7 @@ metadata:
 
 # code-execute
 
-> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated dispatch-depth-2 stage worker dispatched by the `autopilot-code` conductor. Resolve the plan path from arguments, read `plan/plan.md` from disk, and never depend on prior-stage conversation. This is the only source-mutating stage. Its write class is source code, `plan/checklist.md`, `dev_logs/`, `_internal/dev_reviews/`, and plan-frontmatter `status`. The stage runs as the compiled route's `dev/*` unit (sealed at compile); it never dispatches units itself, and any unforeseen narrow scaffolding uses an ephemeral native helper without unit semantics.
+> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated dispatch-depth-2 stage worker dispatched by the `autopilot-code` conductor. Resolve the plan path from arguments, read `plan.md` from disk, and never depend on prior-stage conversation. This is the only source-mutating stage. Its write class is source code, `checklist.md`, `dev_logs/`, `_internal/dev_reviews/`, and plan-frontmatter `status`. The stage runs as the compiled route's `dev/*` unit (sealed at compile); it never dispatches units itself, and any unforeseen narrow scaffolding uses an ephemeral native helper without unit semantics.
 
 > **Plan resolution**: Treat [arguments-and-decisions.md#plan-resolution](../autopilot-code/references/arguments-and-decisions.md) as the single authority for resolving `$ARG` to a plan path.
 
@@ -45,12 +45,12 @@ Before source changes, establish a recoverable working state.
 ## Initialization
 
 1. Read the resolved plan at `$ARG`.
-2. Set `{log_dir}` to the task root two levels above `plan/plan.md`.
-   - Example: `<artifact-root>/plans/2026-03-18_refactor_engine/plan/plan.md` → `<artifact-root>/plans/2026-03-18_refactor_engine/`
+2. Set `{log_dir}` to the task root two levels above `plan.md`.
+   - Example: `<artifact-root>/plans/2026-03-18_refactor_engine/plan.md` → `<artifact-root>/plans/2026-03-18_refactor_engine/`
 3. Detect resume state.
-   - If `{log_dir}/plan/checklist.md` contains `[x]`, `[FAIL]`, or `[SKIP-DEP]`, update its `Safety commit:` line, skip completed steps, and continue at the first `[ ]` step.
+   - If `{log_dir}/checklist.md` contains `[x]`, `[FAIL]`, or `[SKIP-DEP]`, update its `Safety commit:` line, skip completed steps, and continue at the first `[ ]` step.
    - Otherwise create a fresh checklist.
-4. Run `mkdir -p {log_dir}/dev_logs {log_dir}/_internal/dev_reviews` and write `{log_dir}/plan/checklist.md` directly from the canonical plan:
+4. Run `mkdir -p {log_dir}/dev_logs {log_dir}/_internal/dev_reviews` and write `{log_dir}/checklist.md` directly from the canonical plan:
 
    ```text
    Safety commit: {$SAFETY_COMMIT}

@@ -23,6 +23,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import signal
 import socket
 import stat
@@ -49,9 +50,13 @@ ALLOWED_RECEIPT_KEYS = {
     "schema_version", "state", "parent_attempt_id", "children",
 }
 ALLOWED_CHILD_KEYS = {
-    "attempt_id", "status", "readiness", "reason", "harness",
+    "attempt_id", "status", "readiness", "reason", "required_action", "harness",
 }
 ALLOWED_REASONS = {"registry-closed", "terminal-observed"}
+REQUIRED_ACTIONS = {
+    "complete-open", "inspect-done-failure", "advance-completed",
+}
+AGENT_HOME = Path(__file__).resolve().parents[1]
 
 
 class GatewayError(RuntimeError):
@@ -1201,7 +1206,7 @@ class ManagedGateway:
         ):
             raise GatewayError("receipt-shape-invalid")
         if (
-            receipt.get("schema_version") != 1
+            receipt.get("schema_version") != 2
             or receipt.get("state") != "ready"
             or receipt.get("parent_attempt_id") != parent_attempt_id
         ):
@@ -1224,11 +1229,24 @@ class ManagedGateway:
                 raw.get("attempt_id"), "receipt-child-attempt-invalid"
             )
             harness = raw.get("harness", "unknown")
+            status = raw.get("status")
+            required_action = raw.get("required_action")
             if (
                 attempt_id in observed
-                or raw.get("status") != "done"
+                or status not in {"open", "running", "done"}
                 or raw.get("readiness") != "ready"
                 or raw.get("reason") not in ALLOWED_REASONS
+                or required_action not in REQUIRED_ACTIONS
+                or (
+                    required_action == "complete-open"
+                    and status not in {"open", "running"}
+                )
+                or (
+                    required_action in {
+                        "inspect-done-failure", "advance-completed"
+                    }
+                    and status != "done"
+                )
                 or harness not in {"codex", "claude", "unknown"}
             ):
                 raise GatewayError("receipt-child-contract-invalid")
@@ -1236,14 +1254,15 @@ class ManagedGateway:
             children.append(
                 {
                     "attempt_id": attempt_id,
-                    "status": "done",
+                    "status": str(status),
                     "readiness": "ready",
                     "reason": str(raw["reason"]),
+                    "required_action": str(required_action),
                     "harness": str(harness),
                 }
             )
         normalized = {
-            "schema_version": 1,
+            "schema_version": 2,
             "state": "ready",
             "parent_attempt_id": parent_attempt_id,
             "children": children,
@@ -1281,11 +1300,29 @@ class ManagedGateway:
         receipt: dict[str, Any],
         delivery_id: str,
     ) -> dict[str, Any]:
+        commands: list[str] = []
+        harvest = shlex.quote(
+            str(AGENT_HOME / "adapters" / "codex" / "bin" / "preflight.sh")
+        )
+        for child in receipt["children"]:
+            attempt = shlex.quote(str(child["attempt_id"]))
+            if child["required_action"] == "complete-open":
+                commands.append(
+                    f"{harvest} harvest --attempt-id {attempt} "
+                    "--status open --mark-done"
+                )
+            elif child["required_action"] == "inspect-done-failure":
+                commands.append(
+                    f"{harvest} harvest --attempt-id {attempt} "
+                    "--status done --failure-detail"
+                )
+        command_text = "\n".join(commands) or "(no harvest command; advance the route)"
         context = (
             "AGENT_HARNESS_COMPLETION_V1\n"
             + canonical(receipt)
-            + "\nExact typed receipt. Harvest listed attempts, continue route; "
-            "no raw logs or waits."
+            + "\nExact typed receipt. Run only these commands:\n"
+            + command_text
+            + "\nThen continue the route; no raw logs or waits."
         )
         if len(context.encode("utf-8")) > MAX_CONTEXT_BYTES:
             raise GatewayError("completion-context-oversized")

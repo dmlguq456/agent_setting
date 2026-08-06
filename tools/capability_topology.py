@@ -708,6 +708,16 @@ def _validate_recipe(recipe, registry, standard_plus_owner_profile):
         )
     gates = set(recipe["completion_gates"])
     for node in nodes:
+        requirements = node.get("runtime_requirements", [])
+        if (
+            not isinstance(requirements, list)
+            or any(not isinstance(item, str) for item in requirements)
+            or len(requirements) != len(set(requirements))
+            or not set(requirements) <= set(registry.get("runtime_requirements", []))
+        ):
+            raise TopologyError(
+                f"{recipe['capability']}:{node['id']}: invalid runtime requirements"
+            )
         if node.get("kind") not in registry["worker_kinds"]:
             raise TopologyError(f"{recipe['capability']}:{node['id']}: invalid worker kind")
         _validate_unit_ref(recipe, node, registry)
@@ -769,11 +779,31 @@ def _validate_recipe(recipe, registry, standard_plus_owner_profile):
         # feeds downstream `inputs` at compile time -- see
         # `capability-route.py`'s parallel-leg expansion), so a path-shaped
         # output (containing "/") must classify into the same bucket domain.
-        # Bare symbol tokens (`tokens`, `render`, `version-snapshot`) carry no
-        # path and are compiler-substituted elsewhere, so they are skipped.
-        path_outputs = [out for out in node.get("outputs", []) if "/" in out]
+        # Bare semantic tokens are an explicit closed vocabulary. A filename such
+        # as plan.md is still a path even though it contains no slash.
+        semantic_outputs = {
+            "applied-artifact", "apply-log", "components", "config",
+            "diff-preview", "evidence-map", "experiment-artifact",
+            "experiment-scaffold", "final-artifact", "render",
+            "research-artifact", "revised-artifact", "ship-checklist",
+            "snapshot", "source-diff", "strategy", "summary-stats",
+            "tokens", "version-snapshot",
+        }
+        path_outputs = [
+            out for out in node.get("outputs", []) if out not in semantic_outputs
+        ]
         if path_outputs:
             _validate_bucket_anchor(recipe, registry, path_outputs, node["kind"], node["id"])
+            uncovered = [
+                out for out in path_outputs
+                if "/" not in out
+                if not any(_overlap(out, scope) for scope in scopes)
+            ]
+            if uncovered:
+                raise TopologyError(
+                    f"{recipe['capability']}:{node['id']}: outputs outside write_scope "
+                    f"{sorted(uncovered)}"
+                )
     if "replication" in graph or "replications" in graph:
         raise TopologyError(
             f"{recipe['capability']}: v5 uses parallel_groups; legacy replication keys are read-only"

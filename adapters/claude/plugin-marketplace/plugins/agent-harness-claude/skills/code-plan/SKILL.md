@@ -17,7 +17,7 @@ metadata:
 
 Use the deepest eligible planning profile selected by the active adapter when cross-file reasoning or call-site analysis would benefit from it.
 
-> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated dispatch-depth-2 stage worker dispatched by the `autopilot-code` conductor. Inputs are the task description and `<artifact-root>/plans/`; never depend on prior-stage conversation. The write class is `plan/plan.md`, an existing or explicitly requested audience-language companion such as legacy `plan/plan_ko.md`, and `_internal/plan_reviews/`. The stage runs as the `plan/plan-author` unit (the node's unit); independent plan review is the sibling `plan-check` node dispatched by the conductor, not an in-stage delegation.
+> **Stage-session entry (`standard+` dispatch, spec/stage-dispatch SD-2)**: Run in-session or as an isolated dispatch-depth-2 stage worker dispatched by the `autopilot-code` conductor. Inputs are the task description and `<artifact-root>/plans/`; never depend on prior-stage conversation. The write class is root `plan.md`, root `checklist.md`, an existing or explicitly requested audience-language companion such as legacy `plan_ko.md`, and `_internal/plan_reviews/`. The stage runs as the `plan/plan-author` unit (the node's unit); independent plan review is the sibling `plan-check` node dispatched by the conductor, not an in-stage delegation.
 
 > **Language rule**: Follow the audience and artifact language contract in [arguments-and-decisions.md#language-rule](../autopilot-code/references/arguments-and-decisions.md). Write the canonical plan in the selected artifact language; do not generate a language mirror merely because the skill source is English or the conversation uses a particular language.
 
@@ -39,7 +39,8 @@ Run the `plan/plan-author` unit with this task, adapted only for the selected ar
 Plan mode. Create a new implementation plan.
 
 Task: {$ARGUMENTS}
-Save canonical plan to: <artifact-root>/plans/{YYYY-MM-DD}_{short-task-name}/plan/plan.md
+Save canonical plan to: <artifact-root>/plans/{YYYY-MM-DD}_{short-task-name}/plan.md
+Save execution checklist to: <artifact-root>/plans/{YYYY-MM-DD}_{short-task-name}/checklist.md
 Artifact language: {selected audience or conversation language}
 Date: {YYYY-MM-DD}
 {If a done/failed/partial plan exists: "Reference previous plan: [path], status: [status]"}
@@ -52,7 +53,7 @@ Plan procedure, plan structure, and the single-line return contract are owned by
 
 Derive verification rigor from the caller's `--intensity` and plan risk under [CONVENTIONS §1.1](../../core/CONVENTIONS.md#11-verification-rigor-tiers). Rigor does not select this stage: `code-plan` runs only after the caller chooses a durable `standard+` graph. `direct` skips it; `quick` uses a one-shot worker with an inline micro-plan and plan-check-lite.
 
-Set `{log_dir}` to the task root above `plan/`; for example, `<artifact-root>/plans/2026-03-18_task/plan/plan.md` resolves to `<artifact-root>/plans/2026-03-18_task/`. Run `mkdir -p {log_dir}/_internal/plan_reviews` before independent review.
+Set `{log_dir}` to the directory containing root `plan.md`; for example, `<artifact-root>/plans/2026-03-18_task/plan.md` resolves to `<artifact-root>/plans/2026-03-18_task/`. Run `mkdir -p {log_dir}/_internal/plan_reviews` before independent review.
 
 | Rigor | Plan-check action | Correction budget |
 |---|---|---|

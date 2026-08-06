@@ -102,9 +102,9 @@ class ClaudeSessionSupervisorTest(unittest.TestCase):
                                 f'attempt_id={attempt},parent_attempt_id={parent}\\n')
                 with open(trace, 'a', encoding='utf-8') as h:
                     h.write(json.dumps({'event':'join-end','time':time.monotonic()}) + '\\n')
-                print(json.dumps({'schema_version':1,'state':'ready','parent_attempt_id':parent,
+                print(json.dumps({'schema_version':2,'state':'ready','parent_attempt_id':parent,
                     'children':[{'attempt_id':attempt,'status':'done','readiness':'ready',
-                                 'reason':'registry-closed'} for attempt in attempts]}))
+                                 'reason':'registry-closed','required_action':'advance-completed'} for attempt in attempts]}))
                 """
             ),
             encoding="utf-8",
@@ -249,7 +249,7 @@ class ClaudeSessionSupervisorTest(unittest.TestCase):
     def test_completion_prompt_carries_only_exact_checked_harvest(self):
         prompt = supervisor.completion_prompt(
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "state": "ready",
                 "parent_attempt_id": PARENT,
                 "children": [
@@ -258,19 +258,21 @@ class ClaudeSessionSupervisorTest(unittest.TestCase):
                         "status": "open",
                         "readiness": "ready",
                         "reason": "terminal-observed",
+                        "required_action": "complete-open",
                     },
                     {
                         "attempt_id": "att-child-b",
                         "status": "open",
                         "readiness": "ready",
                         "reason": "terminal-observed",
+                        "required_action": "complete-open",
                     },
                 ],
             }
         )
         self.assertEqual(prompt.count("preflight.sh harvest --attempt-id"), 2)
-        self.assertIn("--attempt-id att-child-a --mark-done", prompt)
-        self.assertIn("--attempt-id att-child-b --mark-done", prompt)
+        self.assertIn("--attempt-id att-child-a --status open --mark-done", prompt)
+        self.assertIn("--attempt-id att-child-b --status open --mark-done", prompt)
         self.assertNotIn("RAW_CLAUDE_SENTINEL", prompt)
 
     def test_missing_result_has_no_false_terminal(self):
@@ -354,9 +356,9 @@ class ClaudeSessionSupervisorTest(unittest.TestCase):
                 import json, sys
                 parent = sys.argv[sys.argv.index('--parent-attempt-id') + 1]
                 attempts = [sys.argv[i + 1] for i, value in enumerate(sys.argv) if value == '--attempt-id']
-                print(json.dumps({'schema_version':1,'state':'ready','parent_attempt_id':parent,
+                print(json.dumps({'schema_version':2,'state':'ready','parent_attempt_id':parent,
                     'children':[{'attempt_id':attempt,'status':'open','readiness':'ready',
-                                 'reason':'terminal-observed'} for attempt in attempts]}))
+                                 'reason':'terminal-observed','required_action':'complete-open'} for attempt in attempts]}))
                 """
             ),
             encoding="utf-8",

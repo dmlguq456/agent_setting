@@ -37,7 +37,7 @@ from codex_dispatch_terminal import (  # noqa: E402
     terminal_envelope_observed,
 )
 OPEN_STATES = frozenset({"open", "running"})
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 STATE_SCHEMA_VERSION = 1
 MAX_STATE_BYTES = 16384
 MAX_BATCH_ATTEMPTS = 4
@@ -848,7 +848,7 @@ def classify_supervised_shell_command(
         attempt = options["--attempt-id"][0]
         if (
             attempt not in open_attempt_ids
-            or options.get("--status", ["open"])[0] != "open"
+            or options.get("--status", ["open"])[0] not in {"open", "all"}
         ):
             return None
         return SupervisorShellAction("harvest", attempt)
@@ -1255,6 +1255,17 @@ def _join_snapshot(
                     "status": row.status,
                     "readiness": readiness,
                     "reason": reason,
+                    "required_action": (
+                        "complete-open"
+                        if row.status in OPEN_STATES
+                        else (
+                            "advance-completed"
+                            if row.metadata.get("failure_class") == "pass"
+                            or row.metadata.get("note")
+                            in {"completed-marker", "completed-supervisor"}
+                            else "inspect-done-failure"
+                        )
+                    ),
                 }
             )
         if not pending:

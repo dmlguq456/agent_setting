@@ -21,11 +21,11 @@ implementation plan, nothing downstream.
 - **Read** (from files, never prior-stage conversation): the dispatched task,
   the `spec/` blueprint, and any prior `plans/<slug>/` cycles.
 - **Write** (this stage's class only): the canonical
-  `plans/<slug>/plan/plan.md`, any audience-language companion that already
-  exists or was explicitly requested, and `_internal/plan_reviews/`. The legacy
-  Korean compatibility path is `plan_ko.md`; its name does not make it a
-  required output. Do **not** touch source, checklist, dev_logs, test_logs, or
-  report artifacts — those belong to later stages.
+  `plans/<slug>/plan.md`, `plans/<slug>/checklist.md`, any audience-language
+  companion that already exists or was explicitly requested, and
+  `_internal/plan_reviews/`. The legacy Korean compatibility path is
+  `plan_ko.md`; its name does not make it a required output. Do **not** touch
+  source, dev_logs, test_logs, or report artifacts.
 
 ### File-only handoff
 
