@@ -39,7 +39,10 @@ dir=$(dirname "$fp")
 while [ ! -d "$dir" ] && [ "$dir" != "/" ] && [ "$dir" != "." ]; do dir=$(dirname "$dir"); done
 [ -d "$dir" ] || exit 0
 gd=$(git -C "$dir" rev-parse --git-dir 2>/dev/null) || exit 0
-case "$gd" in /*) ;; *) gd="$dir/$gd" ;; esac
+# Absolute? POSIX paths start with "/"; on Windows git returns a drive-letter path
+# like "C:/Users/...". Treat both as absolute — otherwise the drive path is wrongly
+# prefixed with "$dir", so the CLAUDE_MERGE_EDIT_OK escape-hatch marker is never found.
+case "$gd" in /* | [A-Za-z]:* ) ;; *) gd="$dir/$gd" ;; esac
 
 op=""
 [ -f "$gd/MERGE_HEAD" ] && op="merge"
