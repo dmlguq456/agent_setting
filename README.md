@@ -33,6 +33,11 @@ actually discovers.
   reports, and durable evidence stay connected.
 - **Keep one contract across three runtimes.** Shared behavior is projected
   onto the surfaces Claude Code, Codex, and OpenCode actually discover.
+- **Spend the right model on the right node.** Stage meaning and risk select
+  the execution profile, sealed at route-compile time rather than passed as a
+  trailing flag.
+- **Watch the work while it runs.** `fleet` shows interactive sessions and
+  dispatched workers from every runtime in one live tree.
 - **Know what is running.** Inspect the active release or checkout, revision,
   freshness, duplicates, and required session action.
 - **One activation, the whole harness.** Every runtime discovers the full
@@ -76,7 +81,13 @@ harness runtime status --runtime all
 harness update
 harness auto-update status
 harness runtime doctor --runtime all --strict
+
+fleet          # live cross-harness dashboard; --once for a plain snapshot
 ```
+
+The installer also drops a `fleet` launcher into `~/.local/bin`. The live
+full-screen view needs `curses`; `fleet --once` and `fleet --json` do not, so
+scripting and snapshots work anywhere Python does.
 
 `auto-update status` also reports the installed release, channel, and live
 scheduler health when Linux systemd-user or macOS LaunchAgent exposes it.
@@ -119,6 +130,32 @@ or artifact language instead of inheriting the language of this README.
 
 See [capabilities/README.md](capabilities/README.md) for every entrypoint and
 [roles/README.md](roles/README.md) for the portable role model.
+
+## What actually runs your request
+
+One sentence in, a routed pipeline out. Routing, model selection, verification
+depth, and evidence are the harness's job — and each decision is recorded
+rather than improvised.
+
+| Layer | What it does |
+|---|---|
+| **Routed capabilities** | 12 entry routers over 26 capabilities. Before material work the agent proposes a five-field route card — task, reason, route, scope, completion. You approve a filled-in proposal instead of recalling command names and flags. |
+| **Intensity ladder** | `direct → quick → standard → strong → thorough → adversarial` selects the stage graph and dispatch depth. Verification rigor is derived from intensity rather than set on a separate axis, and token pressure can never downshift it. |
+| **Sealed cross-harness dispatch** | At `standard+` each stage is a separately launched session with a sealed role, model profile, and disjoint write scope. Parallel groups of 2–4 legs start in exactly one transaction — a capacity shortage creates zero registry rows and zero model processes. Legs spread across harness families by default. Dispatch depth 3 is forbidden. |
+| **Per-node model tiers** | `deep`, `balanced-deep`, `light`, and `mini` are distinct operating points, sealed per node at compile time. Adapters map them to concrete models; shared contracts never name a vendor model. |
+| **Fleet** | A live dashboard over the same attempt registry: interactive sessions and dispatched workers from all three runtimes in one tree, each with state, harness, sealed profile, context gauge, and token accounting. Orphaned rows are surfaced, not dropped. |
+| **Guards, not good intentions** | 39 hooks, 5 of them hard blocks. Write scope, spec read, artifact root, git state, and memory path are denied before the tool call, not flagged in review. A source edit with no compiled route for this working directory is refused — hotfix included. |
+| **Fixed artifact system** | `research / analyze-project → spec → plans` for code and `research → draft → refine` for documents, under one project-wide `.agent_reports/` root. Each artifact has exactly one owning capability, and spec revisions snapshot the prior version. |
+| **One memory store** | SQLite + FTS5 across every session, project, and runtime. Changed decisions are superseded rather than deleted, and handoffs stay pending until explicitly consumed. |
+
+When a leg cannot start on its intended surface it degrades along a checked
+chain — `same-harness-headless → cross-harness-headless → native-subagent →
+inline` — preserving the route id, write scope, completion gate, and attempt
+identity. The degradation is recorded with its failure class; it is never
+silent.
+
+The [landing page and agent map](https://dmlguq456.github.io/agent_setting/)
+shows the same structure as a diagram.
 
 ## How it works
 
@@ -175,6 +212,16 @@ cd ~/agent_setting
 ./tools/install/harness.sh runtime activate --runtime all --mode linked
 ```
 
+Enable the repository's own Git hooks once per clone:
+
+```bash
+git config core.hooksPath tools/git-hooks
+```
+
+`pre-push` runs the same generated-projection check CI runs and refuses a push
+that would fail it, so drift is caught before the commit is public and before
+the release workflow tags it. `git push --no-verify` still bypasses it.
+
 After changing a shared definition, refresh every generated projection and
 check for drift:
 
@@ -189,6 +236,11 @@ python3 tools/generate.py --check
 ./tools/check-adaptation-boundary.sh
 adapters/codex/bin/preflight.sh doctor
 ```
+
+`tools/generate.py` is the single build/check entrypoint for every core
+projection — runtime adapter metadata, the operator hub, and the published
+landing surface included. Run the lifecycle suites from a clean working tree:
+packaged activation deliberately refuses to build a bundle from a dirty repo.
 
 Marketplace bundle generation is not part of this path. Humans own the root
 README's value proposition and explanation; only machine contracts and runtime

@@ -35,6 +35,11 @@ Agent Harness는 지원되는 코딩 에이전트 런타임에서 조사, 계획
   지속 가능한 근거가 한 흐름으로 이어집니다.
 - **세 런타임에서 하나의 계약을 유지합니다.** 공유 동작을 Claude Code,
   Codex, OpenCode가 실제로 발견하는 표면에 투영합니다.
+- **필요한 노드에 필요한 모델만 씁니다.** 단계의 의미와 위험이 execution
+  profile을 결정하며, route 컴파일 시점에 봉인됩니다. 뒤에 붙이는 model
+  플래그로 바꿀 수 없습니다.
+- **실행 중인 작업을 눈으로 봅니다.** `fleet`은 모든 런타임의 대화형
+  session과 dispatch된 worker를 하나의 라이브 트리로 보여줍니다.
 - **무엇이 실행 중인지 확인합니다.** 활성 release 또는 checkout,
   revision, freshness, duplicate와 필요한 session action을 검사합니다.
 - **한 번 활성화하면 harness 전체입니다.** 모든 런타임이 manifest가 정의한
@@ -79,7 +84,13 @@ harness runtime status --runtime all
 harness update
 harness auto-update status
 harness runtime doctor --runtime all --strict
+
+fleet          # 라이브 cross-harness 대시보드, 단순 스냅숏은 --once
 ```
+
+installer는 `~/.local/bin`에 `fleet` launcher도 함께 설치합니다. 전체 화면
+라이브 뷰에는 `curses`가 필요하지만 `fleet --once`와 `fleet --json`은 필요
+없어서, Python이 도는 곳이면 스크립팅과 스냅숏이 그대로 동작합니다.
 
 `harness update`는 새 release를 staging에서 검증한 뒤 active pointer를
 전환하고 실패하면 이전 release로 rollback합니다. 이미 열린 agent session이
@@ -114,6 +125,33 @@ curl -fsSL https://github.com/dmlguq456/agent_setting/releases/download/v2.0.0/i
 
 전체 진입점은 [capabilities/README.md](capabilities/README.md), portable role
 모델은 [roles/README.md](roles/README.md)를 참고하세요.
+
+## 요청을 실제로 처리하는 것들
+
+문장 하나를 넣으면 라우팅된 파이프라인이 나옵니다. 경로 선택, 모델 선택,
+검증 강도, 근거 기록은 harness의 일이며, 각 결정은 즉흥적으로 정해지지 않고
+기록으로 남습니다.
+
+| 계층 | 하는 일 |
+|---|---|
+| **라우팅된 capability** | 26개 capability 위의 12개 entry router. 실질적 작업 전에 에이전트가 task, reason, route, scope, completion 다섯 필드의 route card를 제시합니다. 명령 이름과 플래그를 외우는 대신 채워진 제안을 승인합니다. |
+| **Intensity 사다리** | `direct → quick → standard → strong → thorough → adversarial`가 stage graph와 dispatch depth를 결정합니다. 검증 강도는 별도 축이 아니라 intensity에서 파생되며, 토큰 압박으로 낮출 수 없습니다. |
+| **봉인된 cross-harness dispatch** | `standard+`에서 각 stage는 role, model profile, 서로 겹치지 않는 write scope가 봉인된 별도 session입니다. 2~4개 leg의 병렬 그룹은 정확히 한 번의 트랜잭션으로 시작하며, 용량이 모자라면 registry 행도 모델 프로세스도 0개입니다. leg는 기본적으로 서로 다른 harness 계열에 분산됩니다. dispatch depth 3은 금지입니다. |
+| **노드별 모델 티어** | `deep`, `balanced-deep`, `light`, `mini`는 서로 다른 동작점이며 컴파일 시점에 노드마다 봉인됩니다. 공유 계약은 vendor 모델명을 쓰지 않고, 어댑터가 실제 모델로 매핑합니다. |
+| **Fleet** | 같은 attempt registry 위의 라이브 대시보드. 세 런타임의 대화형 session과 dispatch된 worker를 하나의 트리에 상태, harness, 봉인된 profile, context 게이지, 토큰 집계와 함께 보여줍니다. 고아 행도 버리지 않고 드러냅니다. |
+| **선의가 아닌 guard** | hook 39개, 그중 5개는 hard block. write scope, spec 읽기, artifact root, git 상태, memory 경로는 리뷰가 아니라 도구 호출 **전에** 거부됩니다. 해당 작업 디렉터리에 컴파일된 route가 없는 소스 편집은 hotfix라도 거부됩니다. |
+| **고정된 artifact 체계** | 코드는 `research / analyze-project → spec → plans`, 문서는 `research → draft → refine`. 프로젝트마다 `.agent_reports/` 루트 하나, artifact마다 소유 capability 하나이며 spec 개정은 이전 버전을 스냅숏으로 남깁니다. |
+| **단일 memory 저장소** | 모든 session, 프로젝트, 런타임을 가로지르는 SQLite + FTS5. 바뀐 결정은 삭제가 아니라 supersede되고, handoff는 명시적으로 소비될 때까지 pending으로 남습니다. |
+
+leg가 의도한 표면에서 시작하지 못하면 검사된 사슬
+`same-harness-headless → cross-harness-headless → native-subagent → inline`을
+따라 강등되며, route id, write scope, completion gate, attempt identity는
+그대로 유지됩니다. 강등은 실패 분류와 함께 기록되고 절대 조용히 넘어가지
+않습니다.
+
+같은 구조를 그림으로 보려면
+[랜딩 페이지와 에이전트 맵](https://dmlguq456.github.io/agent_setting/)을
+참고하세요.
 
 ## 작동 방식
 
@@ -169,6 +207,16 @@ cd ~/agent_setting
 ./tools/install/harness.sh runtime activate --runtime all --mode linked
 ```
 
+Clone마다 한 번, 저장소가 제공하는 Git hook을 켭니다.
+
+```bash
+git config core.hooksPath tools/git-hooks
+```
+
+`pre-push`는 CI가 돌리는 것과 동일한 생성물 검사를 수행하고 실패할 push를
+거부합니다. 커밋이 공개되고 release workflow가 태그를 붙이기 전에 drift를
+잡습니다. `git push --no-verify`로 우회할 수 있습니다.
+
 공유 정의를 변경한 후에는 모든 생성 projection을 갱신하고 drift를
 검사합니다.
 
@@ -184,6 +232,11 @@ python3 tools/generate.py --check
 adapters/codex/bin/preflight.sh doctor
 ```
 
+`tools/generate.py`는 모든 core projection의 단일 build/check 진입점입니다 —
+런타임 어댑터 metadata, 운영자 hub, 공개 랜딩 표면까지 포함합니다. lifecycle
+테스트는 clean 작업 트리에서 실행하세요. packaged activation은 dirty
+저장소에서 bundle 생성을 의도적으로 거부합니다.
+
 Marketplace bundle 생성은 이 경로에 포함되지 않습니다. 루트 README의 가치
 제안과 설명은 사람이 관리하며, machine contract와 runtime projection만
 자동으로 생성됩니다.
@@ -194,6 +247,7 @@ Marketplace bundle 생성은 이 경로에 포함되지 않습니다. 루트 REA
 |---|---|
 | 전체 사용 안내 | [MANUAL.md](MANUAL.md) |
 | 설치와 런타임 projection | [INSTALL_LAYOUT.md](INSTALL_LAYOUT.md) |
+| 릴리스 기준과 SemVer 자동화 | [RELEASE_POLICY.md](RELEASE_POLICY.md) |
 | Capability와 role | [capabilities/README.md](capabilities/README.md), [roles/README.md](roles/README.md), [roles/MODES.md](roles/MODES.md) |
 | Routing과 artifact | [core/WORKFLOW.md](core/WORKFLOW.md), [core/CONVENTIONS.md](core/CONVENTIONS.md) |
 | Git, worktree, dispatch | [core/OPERATIONS.md](core/OPERATIONS.md) |
