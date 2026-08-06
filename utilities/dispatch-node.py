@@ -242,8 +242,11 @@ def main():
  a=p.parse_args(); route=json.loads(Path(a.route).read_text()); subprocess.run([sys.executable,str(ROOT/"utilities/capability-route.py"),"verify","--route",a.route,"--cwd",route["cwd"]],check=True,stdout=subprocess.DEVNULL)
  node=next((x for x in route["nodes"] if x["id"]==a.node),None)
  if not node: raise SystemExit("unknown route node")
- sub_values=(a.subsession_id,a.subsession_index,a.subsession_count,a.subsession_mode,a.session_chain_id,a.phase_brief,a.narrow_verify,a.expected_round_trips,a.attempt_id)
- if any(value is not None for value in sub_values) and not all(value is not None for value in sub_values):
+ # A subsession declaration stays all-or-nothing and still requires the exact
+ # attempt identity; a standalone --attempt-id is a batch-reserved leg identity
+ # and is valid without any subsession axis (2026-08-06 eiren-m4-r2 frame batch).
+ sub_values=(a.subsession_id,a.subsession_index,a.subsession_count,a.subsession_mode,a.session_chain_id,a.phase_brief,a.narrow_verify,a.expected_round_trips)
+ if any(value is not None for value in sub_values) and not (all(value is not None for value in sub_values) and a.attempt_id is not None):
   print("check=failed\nreason=subsession-arguments-incomplete\nchild_spawned=0"); raise SystemExit(64)
  if a.subsession_id and a.stage_authority != 0:
   print("check=failed\nreason=subsession-stage-authority-forbidden\nchild_spawned=0"); raise SystemExit(64)
