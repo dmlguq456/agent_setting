@@ -190,7 +190,7 @@ class WorktreeCleanupTests(unittest.TestCase):
         run(["git", "-C", str(self.fx.repo), "branch", "--unset-upstream", "main"])
         result = self.fx.cleanup(path)
         self.assertEqual(result.returncode, 3)
-        self.assertIn("integration-upstream-missing", result.stdout)
+        self.assertIn("no-upstream-configured", result.stdout)
 
     def test_explicit_local_only_skips_only_push_sync_gate(self):
         path = self.fx.add_worktree("local-only")

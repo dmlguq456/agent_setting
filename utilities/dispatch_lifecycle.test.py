@@ -52,6 +52,36 @@ class LifecycleTest(unittest.TestCase):
             L.DETACHED,
         )
 
+    def test_wrapper_reselection_promotes_detached_without_failed_attempt(self):
+        resolution = L.reconcile_launch_lifecycle(
+            L.DETACHED,
+            {},
+            evidence={
+                "lifecycle_selector_source": "pid1-class",
+                "lifecycle_nspid_width": "1",
+                "lifecycle_pid1_class": "non-system-init",
+            },
+        )
+        self.assertEqual(resolution.requested, L.DETACHED)
+        self.assertEqual(resolution.effective, L.FOREGROUND_SCOPED)
+        self.assertEqual(resolution.reselection, "promoted-wrapper-scope")
+        self.assertEqual(
+            resolution.metadata()["lifecycle_selector_source"], "pid1-class"
+        )
+
+    def test_wrapper_reselection_respects_long_lived_namespace_override(self):
+        resolution = L.reconcile_launch_lifecycle(
+            L.DETACHED,
+            {"AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN": "1"},
+            evidence={
+                "lifecycle_selector_source": "nspid-vector",
+                "lifecycle_nspid_width": "2",
+                "lifecycle_pid1_class": "non-system-init",
+            },
+        )
+        self.assertEqual(resolution.effective, L.DETACHED)
+        self.assertEqual(resolution.reselection, "retained-wrapper-scope")
+
     def test_foreground_wait_reports_success_and_child_signal(self):
         success = subprocess.Popen(["sh", "-c", "exit 0"], start_new_session=True)
         self.assertEqual(L.wait_foreground(success, 2), L.ForegroundResult(0, ""))

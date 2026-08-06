@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import importlib.util
 import os
 from pathlib import Path
@@ -16,6 +17,15 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SUPERVISOR = ROOT / "utilities" / "claude-session-supervisor.py"
 PARENT = "att-parent"
+
+
+def seal_route(value: dict) -> dict:
+    encoded = json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode()
+    value["route_hash"] = "sha256:" + hashlib.sha256(encoded).hexdigest()
+    value["route_id"] = "rt-" + value["route_hash"].split(":", 1)[1][:16]
+    return value
 sys.path.insert(0, str(ROOT / "utilities"))
 _SPEC = importlib.util.spec_from_file_location("claude_session_supervisor", SUPERVISOR)
 supervisor = importlib.util.module_from_spec(_SPEC)
@@ -230,6 +240,67 @@ class ClaudeSessionSupervisorTest(unittest.TestCase):
         self.assertEqual(len(trace), 1)
         self.assertFalse(trace[0]["resume"])
         self.assertFalse(self.state.exists())
+
+    def test_bound_long_route_survives_thirteen_continuations_and_completes(self):
+        route = self.base / "long-route.json"
+        route_value = seal_route({
+            "schema_version": 2,
+            "cwd": str(self.base),
+            "nodes": [{"id": f"node-{index}"} for index in range(8)],
+            "resume_retry_boundaries": [f"node-{index}" for index in range(7)],
+        })
+        route.write_text(json.dumps(route_value), encoding="utf-8")
+        long_claude = self.base / "long_claude.py"
+        long_claude.write_text(
+            textwrap.dedent(
+                """\
+                import json, os, sys
+                state_path = os.environ['AGENT_DISPATCH_COMPLETION_STATE_FILE']
+                with open(state_path, encoding='utf-8') as h:
+                    delivered = json.load(h)['delivered_attempt_ids']
+                turn = len(delivered) + 1
+                if turn <= 13:
+                    attempt = f'att-child-{turn}'
+                    with open(os.environ['LONG_JOBS'], 'a', encoding='utf-8') as h:
+                        h.write('2026-08-06T00:00:00Z\\topen\\t/repo\\t/wt\\t'
+                                f'child-{turn}\\tattempt_schema_version=2,'
+                                'dispatch_depth=2,transport=headless,'
+                                'execution_surface=registered-headless,registered_worker=1,'
+                                f'attempt_id={attempt},parent_attempt_id=att-parent\\n')
+                    text = 'runtime_wait: registered-children'
+                else:
+                    text = 'artifact: report.md\\nverdict: PASS\\nblocker: none'
+                print(json.dumps({'type':'result','subtype':'success','is_error':False,
+                                  'result':text}))
+                """
+            ),
+            encoding="utf-8",
+        )
+        self.jobs.write_text(owner_row(), encoding="utf-8")
+        command = self.command(long_claude) + [
+            "--route-file", str(route),
+            "--route-id", route_value["route_id"],
+            "--route-hash", route_value["route_hash"],
+        ]
+        result = subprocess.run(
+            command,
+            input="initial assignment",
+            text=True,
+            capture_output=True,
+            env={**os.environ, "FAKE_TRACE": str(self.trace), "LONG_JOBS": str(self.jobs)},
+            timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        rows = [json.loads(line) for line in result.stdout.splitlines()]
+        budget = next(row for row in rows if row.get("type") == "dispatch.supervisor.continuation-budget")
+        self.assertEqual((budget["limit"], budget["source"]), (15, "bound-route"))
+        resumed = [row for row in rows if row.get("type") == "dispatch.supervisor.resumed"]
+        self.assertEqual(len(resumed), 13)
+        self.assertEqual(resumed[-1]["continuation_ordinal"], 13)
+        self.assertEqual(sum(row.get("type") == "result" for row in rows), 1)
+        registry = self.jobs.read_text(encoding="utf-8")
+        self.assertIn("\tdone\t/repo\t/wt\towner\t", registry)
+        self.assertIn("note=completed-supervisor", registry)
 
     def test_codex_child_uses_same_claude_resume_adapter(self):
         self.jobs.write_text(

@@ -116,6 +116,59 @@ def select_launch_lifecycle(
 
 
 @dataclass(frozen=True)
+class LifecycleResolution:
+    requested: str
+    effective: str
+    reselection: str
+    evidence: dict[str, str]
+
+    def metadata(self) -> dict[str, str]:
+        return {
+            "launch_lifecycle_requested": self.requested,
+            "launch_lifecycle": self.effective,
+            "launch_lifecycle_reselection": self.reselection,
+            **self.evidence,
+        }
+
+
+def reconcile_launch_lifecycle(
+    requested: str,
+    environ: Mapping[str, str] | None = None,
+    *,
+    evidence: Mapping[str, str] | None = None,
+) -> LifecycleResolution:
+    """Re-evaluate a provisional caller selection in the wrapper's scope."""
+
+    if requested not in LIFECYCLES:
+        raise ValueError(f"unknown launch lifecycle: {requested}")
+    env = os.environ if environ is None else environ
+    observed = dict(evidence) if evidence is not None else pid_namespace_evidence()
+    scoped = observed.get("lifecycle_selector_source") in {
+        "nspid-vector", "pid1-class", "proc-unreadable"
+    }
+    actual = (
+        DETACHED
+        if env.get("AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN") == "1"
+        else FOREGROUND_SCOPED if scoped else DETACHED
+    )
+    effective = (
+        FOREGROUND_SCOPED
+        if requested == DETACHED and actual == FOREGROUND_SCOPED
+        else requested
+    )
+    return LifecycleResolution(
+        requested=requested,
+        effective=effective,
+        reselection=(
+            "promoted-wrapper-scope"
+            if effective != requested
+            else "retained-wrapper-scope"
+        ),
+        evidence=observed,
+    )
+
+
+@dataclass(frozen=True)
 class ForegroundResult:
     exit_code: int
     failure: str

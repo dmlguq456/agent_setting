@@ -20,6 +20,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / "utilities")]
 from tools.fleet.model import ATTEMPT_CLASSIFIER_SOURCE, classify_attempt_evidence  # noqa: E402
 from dispatch_contract import (DispatchContractError, annotate_attempt_row_if,
                                attempt_process_quiescence,
+                               authoritative_process_identities,
                                close_attempt_row_if,
                                exact_process_group_signal_authority,
                                parse_registry_metadata,
@@ -138,14 +139,25 @@ def attempt_terminal_observation(home, meta):
 
 
 def proc_inputs(row, home=None):
-    meta = row["meta"]; raw = meta.get("pid", "")
-    pid = int(raw) if raw.isdigit() else None; expected = meta.get("pid_start", "")
+    meta = row["meta"]
+    raw_local = meta.get("pid", "")
+    local_pid = int(raw_local) if raw_local.isdigit() else None
+    local_start = meta.get("pid_start", "")
+    identities = authoritative_process_identities(meta)
+    identity = identities[0] if len(identities) == 1 else None
+    pid = identity.pid if identity is not None else local_pid
+    expected = identity.expected_start if identity is not None else local_start
     actual = ""; alive = False
-    if pid is not None:
+    if pid is not None and (identity is not None or meta.get("pid_scope") != "namespace-local"):
         actual = process_start_ticks(pid) or ""
         alive = bool(actual) and process_state(pid) != "Z"
     return {"pid": pid, "proc_start": expected, "actual_proc_start": actual,
             "pid_alive": alive, "proc_start_match": bool(alive and expected == actual),
+            "pid_authoritative": identity is not None,
+            "pid_identity_source": identity.source if identity is not None else None,
+            "pid_local": local_pid, "pid_local_start": local_start,
+            "pid_host": int(meta["pid_host"]) if meta.get("pid_host", "").isdigit() else None,
+            "pid_host_start": meta.get("pid_host_start", ""),
             "pid_scope": meta.get("pid_scope"),
             "attempt_id": meta.get("attempt_id"), "route_id": meta.get("route_id"),
             "route_node": meta.get("route_node"),

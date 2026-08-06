@@ -139,6 +139,10 @@ main/orchestrator chooses per job and the wrapper only reflects that choice:
   the parent. This extra
   settings object applies only to the spawned command and never edits the user's
   Claude settings.
+  Its finite continuation ceiling is derived from the verified owner route's
+  node count plus one slot per unique `resume_retry_boundaries` node, never below
+  the compatibility floor. A positive `--max-continuations` owner-launch value
+  replaces that default; missing or mismatched route evidence stays at the floor.
 - Direct registered child completion is selected by the parent runtime, not by
   the child wrapper. An interactive Claude parent receives the successful exact
   owner-start receipt through `PostToolUse(Bash)` and arms one native
@@ -177,11 +181,13 @@ main/orchestrator chooses per job and the wrapper only reflects that choice:
 - `utilities/dispatch-liveness.sh` first inspects the exact wrapper JSONL for a
   final Claude `result` envelope, then uses process identity and legacy Claude
   session transcript mtimes as lower-precedence liveness evidence.
-- When shared `dispatch-chain` runs inside a transient PID namespace, it selects
-  `foreground-scoped` and the Claude wrapper remains alive with `claude -p`,
-  forwarding termination signals and recording the lifecycle on wrapper output
-  and the exact jobs row. Outside that scope it keeps the existing `detached`
-  launch. The explicit long-lived-namespace override also remains detached.
+- `dispatch-chain` supplies a provisional lifecycle, then the Claude wrapper
+  rechecks its actual scope before attempt registration. A transient wrapper
+  promotes `detached` to `foreground-scoped`, remains alive with `claude -p`,
+  and forwards termination signals. Wrapper output and the exact jobs row record
+  requested/effective lifecycle, reselection result, and bounded namespace
+  evidence. Outside that scope it keeps `detached`; the explicit
+  long-lived-namespace override also remains detached.
 - A dispatch-depth-2 claim resolves one live exact dispatch-depth-1 owner and
   seals its `parent_attempt_id`. The row stays registered-only until a blocked
   parent-death-safe fence has a complete PID/start/namespace/leader-PGID

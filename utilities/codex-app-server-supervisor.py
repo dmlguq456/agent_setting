@@ -20,6 +20,10 @@ from dispatch_completion_join import (
     write_supervisor_state,
 )
 from dispatch_contract import DispatchContractError, hold_supervisor_lease
+from dispatch_continuation_budget import (
+    positive_continuation_limit,
+    resolve_continuation_budget,
+)
 from dispatch_supervisor_terminal import (
     SupervisorTerminal,
     classify_codex_result,
@@ -440,7 +444,10 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument("--reasoning")
     value.add_argument("--join-interval", type=float, default=2.0)
     value.add_argument("--join-timeout", type=float, default=3600.0)
-    value.add_argument("--max-continuations", type=int, default=12)
+    value.add_argument("--max-continuations", type=positive_continuation_limit)
+    value.add_argument("--route-file")
+    value.add_argument("--route-id", default="")
+    value.add_argument("--route-hash", default="")
     value.add_argument("--state-file", default=os.environ.get("AGENT_DISPATCH_COMPLETION_STATE_FILE"))
     value.add_argument("--lease-file", required=True)
     value.add_argument("--app-server-command", default=os.environ.get("CODEX_APP_SERVER_COMMAND"))
@@ -450,6 +457,23 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    continuation_budget = resolve_continuation_budget(
+        explicit=args.max_continuations,
+        route_file=args.route_file,
+        route_id=args.route_id,
+        route_hash=args.route_hash,
+        expected_cwd=args.worktree,
+    )
+    args.max_continuations = continuation_budget.limit
+    emit(
+        {
+            "type": "dispatch.supervisor.continuation-budget",
+            "limit": continuation_budget.limit,
+            "source": continuation_budget.source,
+            "declared_nodes": continuation_budget.declared_nodes,
+            "retry_slots": continuation_budget.retry_slots,
+        }
+    )
     prompt = sys.stdin.read()
     if not prompt.strip():
         terminal = classify_supervisor_error("codex", "initial-prompt-empty", 64)

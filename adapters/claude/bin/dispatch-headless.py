@@ -54,10 +54,10 @@ from dispatch_lifecycle import (  # noqa: E402
     DETACHED,
     FOREGROUND_SCOPED,
     LIFECYCLES,
-    pid_namespace_evidence,
-    pid_namespace_scoped,
+    reconcile_launch_lifecycle,
     wait_foreground,
 )
+from dispatch_continuation_budget import positive_continuation_limit  # noqa: E402
 from dispatch_mode_contract import (  # noqa: E402
     capability_mode_from_route_file,
     DispatchModeContractError,
@@ -274,6 +274,11 @@ def parser() -> argparse.ArgumentParser:
         "(0 disables). On detection the jobs.log row is closed done,note=dead-<reason>.",
     )
     p.add_argument("--launch-lifecycle", choices=LIFECYCLES, default=DETACHED)
+    p.add_argument(
+        "--max-continuations",
+        type=positive_continuation_limit,
+        help="explicit positive override for a supervised owner continuation budget",
+    )
     p.add_argument(
         "--foreground-timeout",
         type=float,
@@ -839,6 +844,14 @@ def shell_command(args: argparse.Namespace, prompt_path: Path, log_path: Path) -
             "--state-file", str(completion_state_path(args)),
             "--add-dir", str(args.artifact_root),
         ]
+        if getattr(args, "owner_route_binding", None):
+            command += [
+                "--route-file", args.owner_route_binding.route_file,
+                "--route-id", args.owner_route_binding.route_id,
+                "--route-hash", args.owner_route_binding.route_hash,
+            ]
+        if getattr(args, "max_continuations", None) is not None:
+            command += ["--max-continuations", str(args.max_continuations)]
         if args.resolved_model_settings["source"] != "inherit":
             command += [
                 "--model", args.resolved_model_settings["model"],
@@ -952,9 +965,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     if args.worker_mode:
         pipe += f",worker_mode={args.worker_mode}"
     pipe += f",worker_type={args.worker_type},runtime_sandbox=adapter-default"
-    lifecycle_evidence = pid_namespace_evidence()
-    pipe += f",launch_lifecycle={args.launch_lifecycle}"
-    for key, value in sorted(lifecycle_evidence.items()):
+    for key, value in sorted(args.launch_lifecycle_resolution.metadata().items()):
         pipe += f",{key}={value}"
     pipe += f",assigned_contract={args.assigned_contract}"
     if args.unit:
@@ -1382,6 +1393,11 @@ def validate_route_record(args: argparse.Namespace) -> int:
 
 def main(argv: list[str]) -> int:
     args = parser().parse_args(argv[1:])
+    args.launch_lifecycle_resolution = reconcile_launch_lifecycle(
+        args.launch_lifecycle, dict(os.environ)
+    )
+    args.launch_lifecycle_requested = args.launch_lifecycle_resolution.requested
+    args.launch_lifecycle = args.launch_lifecycle_resolution.effective
     args.nested_eligibility_explicit = args.nested_eligibility is not None
     if args.nested_eligibility is None:
         args.nested_eligibility = "unknown"
@@ -1821,27 +1837,6 @@ def main(argv: list[str]) -> int:
             )
         else:
             env.pop("AGENT_DISPATCH_COMPLETION_STATE_FILE", None)
-        if (args.launch_lifecycle == DETACHED
-                and os.environ.get("AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN") != "1"
-                and pid_namespace_scoped()):
-            # Fail-fast instead of spawning a child that dies with this tool call.
-            # AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN=1 is the deliberate override for
-            # long-lived containers, where the namespace outlives the launcher.
-            annotate_attempt_row(
-                jobs, args.attempt_id, {"launch_outcome": "never-launched"}
-            )
-            cancel_governor_reservation(governor, governor_root, reservation_token)
-            close_job_row(jobs, args.slug, args.worktree,
-                          "nested-sandbox-lifetime", "", args.attempt_id)
-            return fail(
-                "nested-sandbox-lifetime", 77,
-                detail=("launcher runs inside a per-call PID-namespace sandbox; a "
-                        "background child cannot outlive this tool call — select "
-                        "foreground-scoped through dispatch-chain or use a checked "
-                        "fallback (OPERATIONS §5.10 inline / dispatch from an unsandboxed "
-                        "owner), or set AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN=1 in a "
-                        "long-lived container"),
-                attempt_id=args.attempt_id, child_spawned="0")
         launch_parent_completion_sidecar(args, jobs)
         if args.managed_sidecar_state == "launch-failed":
             annotate_attempt_row(
@@ -1885,7 +1880,7 @@ def main(argv: list[str]) -> int:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-        launch_metadata = {"launch_lifecycle": args.launch_lifecycle}
+        launch_metadata = args.launch_lifecycle_resolution.metadata()
         if args.dispatch_depth >= 2 and os.environ.get("AGENT_DISPATCH_CHILD") == "1":
             launch_metadata["pid_scope"] = "namespace-local"
         try:
@@ -2147,6 +2142,8 @@ def main(argv: list[str]) -> int:
     print(f"child_pid_start={getattr(args, 'child_pid_start', None) or '-'}")
     print(f"launch_heartbeat={getattr(args, 'launch_heartbeat', 'not-started')}")
     print(f"launch_lifecycle={args.launch_lifecycle}")
+    print(f"launch_lifecycle_requested={args.launch_lifecycle_requested}")
+    print(f"launch_lifecycle_reselection={args.launch_lifecycle_resolution.reselection}")
     print(f"worker_exit={getattr(args, 'worker_exit', '-')}")
     print(f"worker_failure={getattr(args, 'worker_failure', None) or '-'}")
     print(f"terminal_verdict={getattr(args, 'terminal_verdict', None) or '-'}")

@@ -42,6 +42,37 @@ class RegistryTest(unittest.TestCase):
   applied=self.invoke("reconcile","--attempt","att-dead000001","--apply");self.assertEqual(json.loads(applied.stdout)["closed"],1)
   text=self.jobs.read_text();self.assertIn("note=dead-exact-pid",text);self.assertIn("\topen\t/r\t/w\tactive\t",text);self.assertIn("\topen\t/r\t/w\tother\t",text)
   again=self.invoke("reconcile","--attempt","att-dead000001","--apply");self.assertEqual(json.loads(again.stdout)["closed"],0)
+ def test_remote_less_repo_closes_namespace_row_with_verified_outer_pid_reuse(self):
+  repo=self.base/"local-only-repo"
+  subprocess.run(["git","init","-q",str(repo)],check=True)
+  subprocess.run(["git","-C",str(repo),"config","user.email","test@example.invalid"],check=True)
+  subprocess.run(["git","-C",str(repo),"config","user.name","Dispatch Test"],check=True)
+  (repo/"tracked.txt").write_text("tracked\n")
+  subprocess.run(["git","-C",str(repo),"add","tracked.txt"],check=True)
+  subprocess.run(["git","-C",str(repo),"commit","-qm","initial"],check=True)
+  self.assertEqual(
+   subprocess.run(["git","-C",str(repo),"remote"],capture_output=True,text=True,check=True).stdout.strip(),
+   "",
+  )
+  namespace=os.readlink("/proc/self/ns/pid")
+  attempt="att-outer-pid-reused"
+  with self.jobs.open("a") as out:
+   out.write(
+    f"2026-08-06T00:00:00Z\topen\t{repo}\t{repo}\touter-reused\t"
+    "attempt_schema_version=2,dispatch_depth=2,transport=headless,"
+    "execution_surface=registered-headless,registered_worker=1,"
+    "fallback_hop=same-harness-headless,route_id=rt-local,route_node=report,"
+    f"attempt_id={attempt},pid=437,pid_start=1,pid_scope=namespace-local,"
+    f"pid_host={os.getpid()},pid_host_start=1,pid_host_ns={namespace},"
+    "pid_host_proof=nspid-procfs-root-v1\n"
+   )
+  applied=self.invoke("reconcile","--attempt",attempt,"--apply")
+  self.assertEqual(applied.returncode,0,applied.stdout+applied.stderr)
+  record=json.loads(applied.stdout)
+  self.assertEqual(record["closed"],1,record)
+  self.assertEqual(record["decisions"][0]["category"],"exact-dead")
+  self.assertNotIn("no-upstream-configured",record["decisions"][0]["reason"])
+  self.assertIn("note=dead-exact-pid",self.jobs.read_text())
  def test_apply_reconcile_repairs_missing_summary_owner_for_live_exact_attempt(self):
   spec=importlib.util.spec_from_file_location("dispatch_registry_summary_test",SCRIPT)
   module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)

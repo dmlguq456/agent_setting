@@ -311,7 +311,7 @@ def evaluate(
         if repository_mode == "local-only":
             verdict.upstream = "local-only"
         elif upstream_result.returncode != 0 or not upstream_result.stdout.strip():
-            verdict.reasons.append("integration-upstream-missing")
+            verdict.reasons.append("no-upstream-configured")
         else:
             verdict.upstream = upstream_result.stdout.strip()
             counts = run(

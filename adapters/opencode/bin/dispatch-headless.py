@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "utilities"))
 from dispatch_contract import (  # noqa: E402
     DispatchContractError,
+    GROUP_REAP_PROOF,
     GOVERNOR_RESERVATION_ENV,
     anchored_capacity_failure,
     annotate_attempt_row,
@@ -44,7 +45,13 @@ from dispatch_contract import (  # noqa: E402
     wait_governor_reservation_claim,
 )
 from dispatch_summary import launch_summary_owner  # noqa: E402
-from dispatch_lifecycle import pid_namespace_evidence  # noqa: E402
+from dispatch_lifecycle import (  # noqa: E402
+    DETACHED,
+    FOREGROUND_SCOPED,
+    LIFECYCLES,
+    reconcile_launch_lifecycle,
+    wait_foreground,
+)
 from dispatch_mode_contract import (  # noqa: E402
     capability_mode_from_route_file,
     DispatchModeContractError,
@@ -237,6 +244,13 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--eligibility-source", default="")
     p.add_argument("--eligibility-failure-class", default="")
     p.add_argument("--log-dir")
+    p.add_argument("--launch-lifecycle", choices=LIFECYCLES, default=DETACHED)
+    p.add_argument(
+        "--foreground-timeout",
+        type=float,
+        default=float(os.environ.get("OPENCODE_DISPATCH_FOREGROUND_TIMEOUT", "3600")),
+        help="maximum child lifetime for foreground-scoped launch",
+    )
     p.add_argument(
         "--early-exit-watch",
         type=float,
@@ -589,9 +603,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     if args.worker_role:
         pipe += f",worker_role={args.worker_role}"
     pipe += f",worker_type={args.worker_type},runtime_sandbox=adapter-default"
-    lifecycle_evidence = pid_namespace_evidence()
-    pipe += f",launch_lifecycle={getattr(args, 'launch_lifecycle', 'detached')}"
-    for key, value in sorted(lifecycle_evidence.items()):
+    for key, value in sorted(args.launch_lifecycle_resolution.metadata().items()):
         pipe += f",{key}={value}"
     pipe += f",assigned_contract={args.assigned_contract}"
     if args.unit:
@@ -1029,6 +1041,11 @@ def validate_route_record(args: argparse.Namespace) -> int:
 
 def main(argv: list[str]) -> int:
     args = parser().parse_args(argv[1:])
+    args.launch_lifecycle_resolution = reconcile_launch_lifecycle(
+        args.launch_lifecycle, dict(os.environ)
+    )
+    args.launch_lifecycle_requested = args.launch_lifecycle_resolution.requested
+    args.launch_lifecycle = args.launch_lifecycle_resolution.effective
     args.nested_eligibility_explicit = args.nested_eligibility is not None
     if args.nested_eligibility is None:
         args.nested_eligibility = "unknown"
@@ -1115,8 +1132,7 @@ def main(argv: list[str]) -> int:
         return fail(
             "opencode-standard-depth2-unsupported",
             69,
-            detail=("OpenCode lacks exact parent binding, foreground lifecycle, and "
-                    "supervisor snapshot parity"),
+            detail=("OpenCode lacks exact parent binding and supervisor snapshot parity"),
             child_spawned="0",
         )
     try:
@@ -1299,7 +1315,9 @@ def main(argv: list[str]) -> int:
                     "--parent-pid", str(os.getpid()),
                     "--gate-fd", str(gate_fd),
                     "--jobs", str(jobs), "--attempt-id", args.attempt_id,
-                    "--post-release-parent-death-signal", "none", "--",
+                    "--post-release-parent-death-signal",
+                    "kill" if args.launch_lifecycle == FOREGROUND_SCOPED else "none",
+                    "--",
                     sys.executable, str(governor), "--root", str(governor_root),
                     "run", "--class", "dispatch", "--", "sh", "-c", command,
                 ],
@@ -1310,7 +1328,7 @@ def main(argv: list[str]) -> int:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-        launch_metadata = {}
+        launch_metadata = args.launch_lifecycle_resolution.metadata()
         if args.dispatch_depth >= 2 and os.environ.get("AGENT_DISPATCH_CHILD") == "1":
             launch_metadata["pid_scope"] = "namespace-local"
         try:
@@ -1393,7 +1411,8 @@ def main(argv: list[str]) -> int:
                 exc.reason, 75, detail=exc.detail,
                 attempt_id=args.attempt_id, child_spawned="1",
             )
-        if args.dispatch_depth == 1 and args.worker_type == "owner":
+        if (args.dispatch_depth == 1 and args.worker_type == "owner"
+                and args.launch_lifecycle == DETACHED):
             try:
                 watcher_pid = launch_orphan_watch(
                     jobs, agent_home, args.attempt_id, proc.pid, start_ticks or "")
@@ -1414,15 +1433,36 @@ def main(argv: list[str]) -> int:
         args.child_pid = proc.pid
         args.child_pid_start = start_ticks
         args.launch_heartbeat = seed_launch_heartbeat(args, jobs, proc.pid, start_ticks)
-        # SD-15 (OPERATIONS §5.10 ⑨): watch briefly for a clean-exit limit/auth death.
-        # A hang-on-limit (#8203) escapes this watch and is caught by liveness log scan.
-        death = watch_early_death(proc, log_path, args.early_exit_watch)
-        if death:
-            reason, reset = death
-            close_job_row(jobs, args.slug, args.worktree, reason, reset, args.attempt_id)
-            if reason != "capacity":
-                write_reset_cache(agent_home, "opencode", reason, reset)
-            args.early_death = (reason, reset)
+        if args.launch_lifecycle == FOREGROUND_SCOPED:
+            outcome = wait_foreground(proc, args.foreground_timeout)
+            annotate_attempt_row(
+                jobs,
+                args.attempt_id,
+                (
+                    {
+                        "launch_outcome": "governed-process-reaped",
+                        "group_reap_proof": GROUP_REAP_PROOF,
+                        "group_reap_pgid": str(proc.pid),
+                    }
+                    if outcome.group_empty
+                    else {"launch_outcome": "governed-process-reap-unverified"}
+                ),
+            )
+            args.worker_exit = outcome.exit_code
+            args.worker_failure = outcome.failure
+            if outcome.failure:
+                close_job_row(
+                    jobs, args.slug, args.worktree, outcome.failure, "", args.attempt_id
+                )
+        else:
+            # SD-15: detached launches retain the short early-death watch.
+            death = watch_early_death(proc, log_path, args.early_exit_watch)
+            if death:
+                reason, reset = death
+                close_job_row(jobs, args.slug, args.worktree, reason, reset, args.attempt_id)
+                if reason != "capacity":
+                    write_reset_cache(agent_home, "opencode", reason, reset)
+                args.early_death = (reason, reset)
 
     print("check=ok")
     print("adapter=opencode")
@@ -1484,6 +1524,11 @@ def main(argv: list[str]) -> int:
     print(f"child_pid={getattr(args, 'child_pid', None) or '-'}")
     print(f"child_pid_start={getattr(args, 'child_pid_start', None) or '-'}")
     print(f"launch_heartbeat={getattr(args, 'launch_heartbeat', 'not-started')}")
+    print(f"launch_lifecycle={args.launch_lifecycle}")
+    print(f"launch_lifecycle_requested={args.launch_lifecycle_requested}")
+    print(f"launch_lifecycle_reselection={args.launch_lifecycle_resolution.reselection}")
+    print(f"worker_exit={getattr(args, 'worker_exit', '-')}")
+    print(f"worker_failure={getattr(args, 'worker_failure', None) or '-'}")
     early_death = getattr(args, "early_death", None)
     if early_death:
         reason, reset = early_death

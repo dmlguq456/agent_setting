@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -15,6 +16,15 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SUPERVISOR = ROOT / "utilities" / "codex-app-server-supervisor.py"
 PARENT = "att-parent"
+
+
+def seal_route(value: dict) -> dict:
+    encoded = json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode()
+    value["route_hash"] = "sha256:" + hashlib.sha256(encoded).hexdigest()
+    value["route_id"] = "rt-" + value["route_hash"].split(":", 1)[1][:16]
+    return value
 
 
 def owner_row(lease: Path, status: str = "open") -> str:
@@ -268,6 +278,82 @@ class CodexAppServerSupervisorTest(unittest.TestCase):
         )
         self.assertFalse(self.state.exists())
         self.assertFalse(self.lease.exists())
+
+    def test_bound_long_route_survives_thirteen_continuations_and_completes(self):
+        route = self.base / "long-route.json"
+        route_value = seal_route({
+            "schema_version": 2,
+            "cwd": str(self.base),
+            "nodes": [{"id": f"node-{index}"} for index in range(8)],
+            "resume_retry_boundaries": [f"node-{index}" for index in range(7)],
+        })
+        route.write_text(json.dumps(route_value), encoding="utf-8")
+        long_app = self.base / "long_app.py"
+        long_app.write_text(
+            textwrap.dedent(
+                """\
+                import json, os, sys
+                turns = 0
+                def send(value):
+                    print(json.dumps(value), flush=True)
+                for line in sys.stdin:
+                    value = json.loads(line)
+                    method = value.get('method')
+                    if method == 'initialize':
+                        send({'jsonrpc':'2.0','id':value['id'],'result':{'server':'fake'}})
+                    elif method == 'initialized':
+                        pass
+                    elif method == 'thread/start':
+                        send({'jsonrpc':'2.0','id':value['id'],'result':{'thread':{'id':'thread-long'}}})
+                    elif method == 'turn/start':
+                        turns += 1
+                        if turns <= 13:
+                            attempt = f'att-child-{turns}'
+                            with open(os.environ['LONG_JOBS'], 'a', encoding='utf-8') as h:
+                                h.write('2026-08-06T00:00:00Z\\topen\\t/repo\\t/wt\\t'
+                                        f'child-{turns}\\tattempt_schema_version=2,'
+                                        'dispatch_depth=2,transport=headless,'
+                                        'execution_surface=registered-headless,registered_worker=1,'
+                                        f'attempt_id={attempt},parent_attempt_id=att-parent\\n')
+                            text = 'runtime_wait: registered-children'
+                        else:
+                            text = 'artifact: report.md\\nverdict: PASS\\nblocker: none'
+                        turn_id = f'turn-{turns}'
+                        send({'jsonrpc':'2.0','id':value['id'],'result':{'turn':{'id':turn_id}}})
+                        send({'jsonrpc':'2.0','method':'item/completed','params':{
+                            'threadId':'thread-long','turnId':turn_id,
+                            'item':{'type':'agentMessage','id':f'msg-{turns}','text':text}}})
+                        send({'jsonrpc':'2.0','method':'turn/completed','params':{
+                            'threadId':'thread-long','turn':{'id':turn_id,'status':'completed'}}})
+                """
+            ),
+            encoding="utf-8",
+        )
+        self.jobs.write_text(owner_row(self.lease), encoding="utf-8")
+        command = self.command(broken_app=long_app) + [
+            "--route-file", str(route),
+            "--route-id", route_value["route_id"],
+            "--route-hash", route_value["route_hash"],
+        ]
+        result = subprocess.run(
+            command,
+            input="initial assignment",
+            text=True,
+            capture_output=True,
+            env={**os.environ, "FAKE_TRACE": str(self.trace), "LONG_JOBS": str(self.jobs)},
+            timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        rows = [json.loads(line) for line in result.stdout.splitlines()]
+        budget = next(row for row in rows if row.get("type") == "dispatch.supervisor.continuation-budget")
+        self.assertEqual((budget["limit"], budget["source"]), (15, "bound-route"))
+        resumed = [row for row in rows if row.get("type") == "dispatch.supervisor.resumed"]
+        self.assertEqual(len(resumed), 13)
+        self.assertEqual(resumed[-1]["continuation_ordinal"], 13)
+        self.assertEqual(sum(row.get("type") == "turn.completed" for row in rows), 1)
+        registry = self.jobs.read_text(encoding="utf-8")
+        self.assertIn("\tdone\t/repo\t/wt\towner\t", registry)
+        self.assertIn("note=completed-supervisor", registry)
 
     def test_protocol_failure_emits_no_false_terminal(self):
         broken = self.base / "broken.py"

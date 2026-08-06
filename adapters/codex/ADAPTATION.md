@@ -444,6 +444,12 @@ is observed.
 | worktree path isolation | The native shell PreToolUse bridge (`pretooluse-write-guard.py`) runs the worktree guard before material-route in its shell branch, with `preflight.sh worktree-path` as the explicit fallback. This covers shell `git worktree add`; the built-in-worktree-tool deny is Claude-native and has no Codex counterpart |
 | capabilities | Read `capabilities/README.md`, then run `adapters/codex/bin/preflight.sh capability-info <capability>`; do not assume Claude Skill invocation |
 
+The private Codex owner supervisor derives its finite continuation ceiling from
+the verified owner route: declared node count plus one slot for every unique
+`resume_retry_boundaries` node, never below the compatibility floor. A positive
+`--max-continuations` owner-launch value is an explicit replacement; missing or
+mismatched route evidence stays at the finite floor.
+
 For a manual/completion race, a managed Codex gateway accepts same-turn
 `turn/steer` when App Server permits it. An explicit not-steerable error is
 proof that the receipt was not accepted: the gateway serializes that exact
@@ -608,11 +614,13 @@ same-harness → cross-harness → native → inline ordering. Adapter launches 
 exact attempt, `pid`, and `/proc` start-tick identity; shared-worktree transcript
 activity cannot revive an exited retry.
 
-`dispatch-chain` also selects the launch lifecycle from its current PID scope.
-Transient namespaces use `foreground-scoped`, so the Codex or Claude wrapper
-supervises the child until exit and forwards termination signals; durable scopes
-retain `detached`. The wrapper output and exact jobs row both expose
-`launch_lifecycle`. `AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN=1` remains the checked
+`dispatch-chain` selects a provisional launch lifecycle from its current PID
+scope, and every Codex, Claude, or OpenCode wrapper rechecks its actual scope
+before attempt registration. A transient wrapper promotes `detached` to
+`foreground-scoped`, supervises the child until exit, and forwards termination
+signals; durable scopes retain `detached`. Wrapper output and the exact jobs row
+record the requested lifecycle, effective lifecycle, reselection result, and
+bounded namespace evidence. `AGENT_DISPATCH_ALLOW_NAMESPACED_SPAWN=1` remains the checked
 long-lived-namespace override and preserves detached behavior.
 For a foreground Codex child whose actual parent tuple is
 `codex/headless/workspace-write`, the child uses `danger-full-access` only as

@@ -451,7 +451,12 @@ their runtimes exit on limit.) Patterns are conservative per 2026-07 issue evide
 OpenCode participates in the inherited canonical global attempt registry for
 quick and registered dispatch-depth-1 work. It does not yet satisfy the
 registered standard+ dispatch-depth-2 contract: exact parent binding,
-foreground lifecycle, and supervisor snapshot parity are missing. The shared
+and supervisor snapshot parity are missing. The wrapper does realize the shared
+pre-registration lifecycle recheck for supported dispatch-depth-1 work: a
+transient scope promotes provisional `detached` to `foreground-scoped`, keeps
+the wrapper alive through child exit, and records requested/effective selection
+plus bounded namespace evidence. That does not supply the parent-bound
+foreground supervision required at dispatch-depth-2. The shared
 eligibility probe therefore returns
 `opencode-standard-depth2-unsupported` before any OpenCode runtime probe, and
 the OpenCode wrapper starts zero dispatch-depth-2 children. A standard+ owner must select

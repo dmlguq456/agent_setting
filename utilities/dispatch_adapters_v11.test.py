@@ -192,37 +192,91 @@ class AdapterV11Test(unittest.TestCase):
    self.assertTrue((home/"agent-harness").is_symlink())
    self.assertEqual((home/"agent-harness").resolve(),wrapper.resolve_agent_home().resolve())
    self.assertEqual(home.parent,worktree/".dispatch")
- def test_foreground_scoped_completion_is_recorded_for_codex_and_claude(self):
+ def test_detached_selection_is_promoted_before_launch_without_failure_exposure(self):
   for harness in ("codex","claude"):
-   with self.subTest(harness=harness), tempfile.TemporaryDirectory() as td:
+   for repetition in range(4):
+    with self.subTest(harness=harness,repetition=repetition), tempfile.TemporaryDirectory() as td:
+     root=Path(td); repo,art=self.fixture(root); jobs=root/"jobs.log"; logs=root/"logs"; fakebin=root/"bin"; fakebin.mkdir()
+     fake=fakebin/harness; fake.write_text("#!/bin/sh\nexit 0\n",encoding="utf-8"); fake.chmod(0o755)
+     self.seed_parent(jobs,repo,harness=harness)
+     command=self.command(harness,"start",repo,jobs,logs)+["--foreground-timeout","2"]
+     wrapper=self.load_wrapper(harness); argv=["dispatch-headless.py",*command[2:]]
+     resolution=wrapper.reconcile_launch_lifecycle(
+      wrapper.DETACHED,{},evidence={
+       "lifecycle_selector_source":"pid1-class",
+       "lifecycle_nspid_width":"1",
+       "lifecycle_pid1_class":"non-system-init",
+      })
+     env={**os.environ,"PATH":str(fakebin)+os.pathsep+os.environ.get("PATH",""),"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),"AGENT_DISPATCH_JOBS":str(jobs),"AGENT_DISPATCH_CHILD":"1","AGENT_DISPATCH_ATTEMPT_ID":"att-parent-fixture","XDG_STATE_HOME":str(root/"state")}
+     stream=io.StringIO()
+     patches=[mock.patch.dict(os.environ,env,clear=True),mock.patch.object(wrapper,"reconcile_launch_lifecycle",return_value=resolution)]
+     if hasattr(wrapper,"check_runtime_projection"): patches.append(mock.patch.object(wrapper,"check_runtime_projection",return_value=0))
+     if hasattr(wrapper,"ensure_runtime_home_projection"): patches.append(mock.patch.object(wrapper,"ensure_runtime_home_projection",return_value=None))
+     for patch in patches: patch.start()
+     try:
+      with redirect_stdout(stream): code=wrapper.main(argv)
+     finally:
+      for patch in reversed(patches): patch.stop()
+     output=stream.getvalue()
+     self.assertEqual(code,0,output)
+     self.assertIn("launch_lifecycle_requested=detached",output)
+     self.assertIn("launch_lifecycle=foreground-scoped",output)
+     self.assertIn("launch_lifecycle_reselection=promoted-wrapper-scope",output)
+     self.assertIn("worker_exit=0",output)
+     self.assertIn("worker_failure=-",output)
+     self.assertNotIn("nested-sandbox-lifetime",output)
+     row=jobs.read_text(encoding="utf-8")
+     self.assertIn("launch_lifecycle_requested=detached",row)
+     self.assertIn("launch_lifecycle=foreground-scoped",row)
+     self.assertIn("launch_lifecycle_reselection=promoted-wrapper-scope",row)
+     self.assertNotIn("dead-nested-sandbox-lifetime",row)
+     self.assertIn("parent_attempt_id=att-parent-fixture",row)
+     self.assertIn("pid_host=",row);self.assertIn("pid_host_start=",row)
+     self.assertIn("pgid=",row)
+     if harness=="claude":
+      self.assertIn("--output-format stream-json",output)
+      self.assertIn("--no-session-persistence",output)
+     self.assertIn("\topen\t",row)
+ def test_opencode_depth_one_uses_same_prelaunch_lifecycle_promotion(self):
+  for repetition in range(3):
+   with self.subTest(repetition=repetition), tempfile.TemporaryDirectory() as td:
     root=Path(td); repo,art=self.fixture(root); jobs=root/"jobs.log"; logs=root/"logs"; fakebin=root/"bin"; fakebin.mkdir()
-    fake=fakebin/harness; fake.write_text("#!/bin/sh\nexit 0\n",encoding="utf-8"); fake.chmod(0o755)
-    self.seed_parent(jobs,repo,harness=harness)
-    command=self.command(harness,"start",repo,jobs,logs)+["--launch-lifecycle","foreground-scoped","--foreground-timeout","2"]
-    wrapper=self.load_wrapper(harness); argv=["dispatch-headless.py",*command[2:]]
-    env={**os.environ,"PATH":str(fakebin)+os.pathsep+os.environ.get("PATH",""),"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),"AGENT_DISPATCH_JOBS":str(jobs),"AGENT_DISPATCH_CHILD":"1","AGENT_DISPATCH_ATTEMPT_ID":"att-parent-fixture","XDG_STATE_HOME":str(root/"state")}
+    fake=fakebin/"opencode"; fake.write_text("#!/bin/sh\nexit 0\n",encoding="utf-8"); fake.chmod(0o755)
+    wrapper=self.load_wrapper("opencode")
+    argv=["dispatch-headless.py","--start","--worktree",str(repo),"--slug","opencode-owner",
+          "--capability","autopilot-code","--capability-mode","dev","--intensity","standard",
+          "--dispatch-depth","1","--worker-type","owner","--unit","_kernel/owner",
+          "--assigned-contract","autopilot-code","--owner-harness","opencode",
+          "--model","provider/test","--variant","low","--jobs",str(jobs),
+          "--log-dir",str(logs),"--attempt-id",f"att-opencode-owner-{repetition}",
+          "--foreground-timeout","2","--prompt-text","ok"]
+    resolution=wrapper.reconcile_launch_lifecycle(
+     wrapper.DETACHED,{},evidence={
+      "lifecycle_selector_source":"pid1-class",
+      "lifecycle_nspid_width":"1",
+      "lifecycle_pid1_class":"non-system-init",
+     })
+    env={**os.environ,"PATH":str(fakebin)+os.pathsep+os.environ.get("PATH",""),
+         "AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),
+         "AGENT_DISPATCH_JOBS":str(jobs),"OPENCODE_CONFIG_CONTENT":"{}",
+         "XDG_STATE_HOME":str(root/"state")}
     stream=io.StringIO()
-    patches=[mock.patch.dict(os.environ,env,clear=True)]
+    patches=[mock.patch.dict(os.environ,env,clear=True),
+             mock.patch.object(wrapper,"reconcile_launch_lifecycle",return_value=resolution)]
     if hasattr(wrapper,"check_runtime_projection"): patches.append(mock.patch.object(wrapper,"check_runtime_projection",return_value=0))
-    if hasattr(wrapper,"ensure_runtime_home_projection"): patches.append(mock.patch.object(wrapper,"ensure_runtime_home_projection",return_value=None))
     for patch in patches: patch.start()
     try:
      with redirect_stdout(stream): code=wrapper.main(argv)
     finally:
      for patch in reversed(patches): patch.stop()
-    self.assertEqual(code,0,stream.getvalue())
-    self.assertIn("launch_lifecycle=foreground-scoped",stream.getvalue())
-    self.assertIn("worker_exit=0",stream.getvalue())
-    self.assertIn("worker_failure=-",stream.getvalue())
-    row=jobs.read_text(encoding="utf-8")
-    self.assertIn("launch_lifecycle=foreground-scoped",row)
-    self.assertIn("parent_attempt_id=att-parent-fixture",row)
-    self.assertIn("pid_host=",row);self.assertIn("pid_host_start=",row)
-    self.assertIn("pgid=",row)
-    if harness=="claude":
-     self.assertIn("--output-format stream-json",stream.getvalue())
-     self.assertIn("--no-session-persistence",stream.getvalue())
-    self.assertIn("\topen\t",row)
+    output=stream.getvalue(); row=jobs.read_text(encoding="utf-8")
+    self.assertEqual(code,0,output)
+    self.assertIn("launch_lifecycle_requested=detached",output)
+    self.assertIn("launch_lifecycle=foreground-scoped",output)
+    self.assertIn("launch_lifecycle_reselection=promoted-wrapper-scope",output)
+    self.assertIn("worker_exit=0",output)
+    self.assertNotIn("dead-nested-sandbox-lifetime",row)
+    self.assertIn("launch_outcome=governed-process-reaped",row)
  def test_exact_attempt_row_closure_is_isolated_for_both_wrappers(self):
   for harness in ("codex","claude"):
    with self.subTest(harness=harness), tempfile.TemporaryDirectory() as td:
