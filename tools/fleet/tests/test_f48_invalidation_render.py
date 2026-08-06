@@ -73,9 +73,16 @@ class InvalidationRenderTest(unittest.TestCase):
 
     def test_compact_kind_labels(self):
         expected = {"decision": "decision", "approval": "approval",
-                    "permission": "perm", "elicitation": "elicit"}
+                    "permission": "approval", "elicitation": "elicit"}
         for kind, label in expected.items():
             self.assertEqual(render._interaction_badge(self.session(kind)).strip(), label)
+
+    def test_permission_and_approval_share_one_fleet_label(self):
+        labels = {
+            render._interaction_badge(self.session(kind)).strip()
+            for kind in ("permission", "approval")
+        }
+        self.assertEqual(labels, {"approval"})
 
     def test_working_spinners_use_dedicated_vanilla_keys(self):
         with mock.patch.object(render.time, "time", return_value=0.0):

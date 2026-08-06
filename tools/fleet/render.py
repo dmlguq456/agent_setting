@@ -424,7 +424,10 @@ _GLYPH_KEY = {"working": "g_work", "idle": "g_work_off", "unused": "g_unused",
 _INTERACTION_LABEL = {
     "decision": "decision",
     "approval": "approval",
-    "permission": "perm",
+    # Claude calls the runtime event a permission prompt while Codex calls the equivalent
+    # user gate an approval request. Fleet keeps that producer evidence intact, but presents
+    # one user-facing term for the same action.
+    "permission": "approval",
     "elicitation": "elicit",
 }
 
@@ -2690,17 +2693,20 @@ def _summary_row(summary, depth=0, term_width=None, start_col=None, summary_ts=N
     return [segs]
 
 
-def _dispatch_summary_detail_row(job, depth=1, term_width=None):
+def _dispatch_summary_detail_row(job, depth=1, term_width=None, orphan=False):
     """Use the main-session detail grammar for every live model dispatch."""
     if getattr(job, "liveness", None) in ("stale", "dead"):
         return []
     is_model_dispatch = getattr(job, "harness", None) in ("claude", "codex")
     if is_model_dispatch and not getattr(job, "afterglow", False):
         # F-65: a missing first-turn denominator is an unknown gauge, not a missing row.
-        # Dispatch rows retain their dim visual weight and depth indentation.
-        # Dispatch rows carry the dim glyph weight (see _dispatch_row) — the lead liveness mark
-        # must match the row it belongs to, not the brighter main-session one.
-        return _context_detail_row(job, depth=depth, term_width=term_width, dim=True)
+        # Dispatch rows retain their dim visual weight and sit two cells AFTER their own
+        # spinner, matching the main row's ``spinner + 2`` relationship without flattening
+        # the hierarchy back onto the main-session detail column.
+        indicator_col = _dw("  " + _dispatch_prefix(job, orphan=orphan))
+        return _context_detail_row(
+            job, depth=depth, term_width=term_width, dim=True,
+            indent_width=indicator_col + 2, muted=True)
     summary = getattr(job, "summary", None)
     if not summary:
         return []
@@ -2807,7 +2813,8 @@ def _context_lead_cell(state, dim=False, degrade=False):
     return state.ljust(_CTX_LEAD_W) + " ", key
 
 
-def _context_detail_row(entity, depth=0, term_width=None, dim=False):
+def _context_detail_row(entity, depth=0, term_width=None, dim=False,
+                        indent_width=None, muted=False):
     """One ``<liveness> <gauge> <value>   NOW`` row for every live card.
 
     The lead cell names the session's state in words (F-55) using the SAME `_state_key()` color
@@ -2823,7 +2830,9 @@ def _context_detail_row(entity, depth=0, term_width=None, dim=False):
     context = getattr(entity, "context", None)
     pct = getattr(context, "used_pct", None) if context is not None else getattr(entity, "ctx_pct", None)
     now_text = getattr(entity, "summary", None)
-    indent = " " * _CONTEXT_INDENT_W + "  " * max(0, depth)
+    if indent_width is None:
+        indent_width = _CONTEXT_INDENT_W + 2 * max(0, depth)
+    indent = " " * max(0, int(indent_width))
     available = max(0, (term_width or _SUMMARY_FALLBACK_W) - _dw(indent))
     gauge_width = _compact_context_gauge_width(available, depth=depth)
     track = _context_gauge_track(getattr(entity, "context_window_tokens", None))
@@ -2882,6 +2891,10 @@ def _context_detail_row(entity, depth=0, term_width=None, dim=False):
         if tail:
             segs.append((" " * gap, None))
             segs.extend(tail)
+    if muted:
+        # A dispatch detail row is supporting telemetry. Keep its full information density,
+        # but collapse every colored segment to the same dim weight as the dispatch identity.
+        segs = [(text, "dim" if key is not None else None) for text, key in segs]
     return [segs]
 
 
@@ -4238,7 +4251,8 @@ def _build_lines(sessions, jobs, section, narrow, malformed, layout="wide", memo
             # pipeline rides the row's own breadcrumb; dedicated stage rows are a
             # session-card surface.
             detail = _dispatch_summary_detail_row(
-                job, depth=max(1, int(getattr(job, "depth", 1) or 1)), term_width=term_width)
+                job, depth=max(1, int(getattr(job, "depth", 1) or 1)), term_width=term_width,
+                orphan=orphan)
             if detail:
                 lines.extend(detail)
             # F-29 — the child session's own sub-agents, one strip directly under the

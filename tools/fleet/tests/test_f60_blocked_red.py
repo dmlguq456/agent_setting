@@ -77,7 +77,7 @@ class BlockedRowTest(unittest.TestCase):
     def test_narrow_and_stack_rows_carry_the_same_chip(self):
         for row in (render._session_row_2line(_blocked("permission"), term_width=100)[0],
                     render._session_row_stack(_blocked("permission"), term_width=60)[0]):
-            self.assertIn(" perm ", [v for v, k in row if k == "g_blocked_chip"])
+            self.assertIn(" approval ", [v for v, k in row if k == "g_blocked_chip"])
 
     def test_the_separator_space_stays_outside_the_reversed_run(self):
         """Otherwise the inverted block runs straight into the title with no gutter."""

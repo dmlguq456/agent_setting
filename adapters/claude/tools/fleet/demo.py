@@ -86,9 +86,9 @@ def collect(harness_filter=None):
           ctx_pct=72, rl_5h=94, rl_7d=53, elapsed_min=41,
           branch="feat/streaming", liveness="idle"),
         # F-60: blocked sessions — the whole point of the red key + reverse chip is that these
-        # rows are findable at a glance, so the demo board has to contain some. Two kinds, so
-        # the chip is exercised at two label lengths (`approval` 8, `perm` 4), and one of them
-        # sits in the same group as a stale row so the red-vs-red comparison is on screen.
+        # rows are findable at a glance, so the demo board has to contain some. Two producer
+        # kinds exercise Fleet's shared `approval` label, and one sits in the same group as a
+        # stale row so the red-vs-red comparison is on screen.
         S(harness="claude", pid=90011, cwd="/home/demo/demo-app", session_id="demo-blocked-1",
           slug="demo-app-gate", model="Opus 5", effort="xhigh",
           ctx_pct=37, rl_5h=33, rl_7d=12, cost=2.80, elapsed_min=7,

@@ -110,6 +110,35 @@ class ContextDetailTruthTableTest(unittest.TestCase):
         self.assertIsNotNone(CTX_GAUGE_RE.search(visible))
         self.assertNotIn("NOW", visible)
 
+    def test_dispatch_detail_sits_after_indicator_and_is_quieter_than_main(self):
+        for depth in (1, 2):
+            with self.subTest(depth=depth):
+                job = DispatchJob(
+                    key="code", slug="worker", harness="codex", depth=depth,
+                    liveness="working", summary="NOW", ctx_pct=85,
+                    context=ContextProjection(85, "critical", "codex"),
+                    exec_tool={"name": "python3"},
+                )
+                primary = render._dispatch_row(job)
+                indicator_col = sum(render._dw(part) for part, _key in primary[:2])
+                detail = render._dispatch_summary_detail_row(
+                    job, depth=depth, term_width=168)
+                visible = text(detail)
+
+                self.assertEqual(visible.index("working"), indicator_col + 2)
+                self.assertEqual(
+                    {key for line in detail for _part, key in line if key is not None},
+                    {"dim"},
+                )
+
+        main = render._context_detail_row(
+            self._session(context=ContextProjection(85, "critical", "claude")),
+            term_width=168)
+        self.assertNotEqual(
+            {key for line in main for _part, key in line if key is not None},
+            {"dim"},
+        )
+
     def test_malformed_legacy_percentage_is_unavailable_not_clamped(self):
         for malformed in (-1, 101, True, "63"):
             with self.subTest(malformed=malformed):
