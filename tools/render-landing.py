@@ -354,6 +354,38 @@ CSS = r"""
   .seal b { color: var(--accent); font-weight: 600; }
   .seal .k { color: var(--text-3); }
 
+  /* the five-field card the user actually approves */
+  .rcard {
+    border: 1px solid var(--border-2); border-radius: var(--r-md); background: var(--solid);
+    padding: 13px 15px; box-shadow: var(--shadow); margin-bottom: 14px;
+  }
+  .rcard .rh {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--text-3); margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+  }
+  .rcard .rh::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .rrow { display: flex; gap: 12px; font-size: 12.5px; line-height: 1.65; padding: 2px 0; }
+  .rrow .rk {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: .07em; text-transform: uppercase;
+    color: var(--text-3); width: 52px; flex: none; padding-top: 3px;
+  }
+  .rrow .rv { color: var(--text-2); min-width: 0; }
+  .rrow .rv b { color: var(--text); font-weight: 620; }
+  .rrow .rv code {
+    font-size: 11.5px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 5px; padding: 1px 6px; color: var(--accent);
+  }
+  .rops {
+    display: flex; gap: 6px; align-items: center; margin-top: 11px; padding-top: 10px;
+    border-top: 1px dashed var(--border);
+  }
+  .rop {
+    font-size: 11px; font-weight: 600; border: 1px solid var(--border); border-radius: 999px;
+    padding: 3px 11px; color: var(--text-3);
+  }
+  .rop.on { color: #fff; border-color: transparent; background: linear-gradient(120deg, var(--g1), var(--g2)); }
+  .rops .rnote { font-size: 11px; color: var(--text-3); margin-left: auto; }
+
   .tracks { display: flex; flex-direction: column; gap: 8px; }
   .track {
     display: flex; align-items: stretch; border-radius: 9px; overflow: hidden;
@@ -962,8 +994,22 @@ def build_canvas(d: dict) -> str:
           <div class="node" id="n-route">
             <div class="head"><span class="lv">L1</span><h3>Routing contract</h3>
               <span class="note">core/ decides the route before a file is touched</span></div>
+
+            <div class="rcard">
+              <div class="rh">Route card &mdash; the whole handshake</div>
+              <div class="rrow"><span class="rk">task</span><span class="rv">Implement and test the login API, then leave a change report</span></div>
+              <div class="rrow"><span class="rk">reason</span><span class="rv">The endpoint is already in the spec; no implementation cycle has run against it</span></div>
+              <div class="rrow"><span class="rk">route</span><span class="rv"><b>autopilot-code</b> &middot; dev &middot; <code>standard</code> &mdash; multi-file, needs independent verification</span></div>
+              <div class="rrow"><span class="rk">scope</span><span class="rv">src/auth/**, tests/auth/** &mdash; no schema or migration change</span></div>
+              <div class="rrow"><span class="rk">done</span><span class="rv">Tests green, <code>plans/&lt;cycle&gt;/pipeline_summary.md</code> written</span></div>
+              <div class="rops">
+                <span class="rop on">Proceed</span><span class="rop">Amend</span><span class="rop">Stop</span>
+                <span class="rnote">one approval, five fields, before anything is touched</span>
+              </div>
+            </div>
+
             <div class="contract">
-              <div class="sub"><div class="t">Route handshake</div>
+              <div class="sub"><div class="t">Sealed the moment you approve</div>
                 <div class="chips">
                   <button class="chip entry" data-info="rt:card">route card</button>
                   <button class="chip" data-info="rt:gate">spec gate</button>
@@ -1051,7 +1097,9 @@ def build_canvas(d: dict) -> str:
               <div class="body">
                 <span class="hd">session / node&nbsp;&nbsp;&middot;&nbsp;&nbsp;harness &middot; profile&nbsp;&nbsp;&middot;&nbsp;&nbsp;state</span>
                 {fleet_rows}
-                <span class="ft">orphan rows surfaced &middot; context gauge &middot; token accounting per session</span>
+                <span class="ft">orphan rows surfaced &middot; context gauge &middot; token accounting per session<br />
+                run it with <b style="color:#9C9CB0">fleet</b> &middot; <b style="color:#9C9CB0">--once</b> for a plain snapshot &middot;
+                <b style="color:#9C9CB0">--json</b> to script it</span>
               </div>
             </div>
           </div>
@@ -1273,7 +1321,7 @@ def render_index(d: dict) -> str:
   <aside class="side"><div class="side-in">
     <a class="brand" href="index.html">{LOGO}<span>Agent&nbsp;Harness</span></a>
     <div class="badges">
-      <span class="badge hot">v2.0</span>
+      <a class="badge hot" href="{REPO_URL}/releases">latest release &#8599;</a>
       <span class="badge">MIT</span>
       <span class="badge">{d['cap_total']} capabilities</span>
       <span class="badge">{d['unit_total']} role units</span>
@@ -1394,13 +1442,15 @@ def render_index(d: dict) -> str:
       <div class="skick">Quickstart</div>
       <ol class="steps">
         <li><span class="n"></span><div><b>Install the verified release.</b> One line, SHA-256
-          checksummed, no clone — and <code>verify</code> / <code>update</code> /
-          <code>uninstall</code> stay reversible.</div></li>
-        <li><span class="n"></span><div><b>Activate per runtime.</b>
-          <code>harness install claude</code>, repeat for
-          <code>codex</code> / <code>opencode</code>, then <code>harness verify</code>.</div></li>
+          checksummed, no clone. It activates all three runtimes as immutable bundles, and
+          <code>update</code> / <code>uninstall</code> stay reversible.</div></li>
+        <li><span class="n"></span><div><b>Confirm what is live.</b>
+          <code>harness runtime doctor --runtime all --strict</code> reports the active source,
+          revision, freshness, and the session action each runtime still needs.</div></li>
         <li><span class="n"></span><div><b>Describe the outcome.</b> The harness proposes the route
           card and closes the loop with durable evidence.</div></li>
+        <li><span class="n"></span><div><b>Watch it run.</b> <code>fleet</code> shows every
+          interactive session and dispatched worker across the three runtimes in one live tree.</div></li>
       </ol>
     </div>
 
