@@ -129,6 +129,21 @@ function runPreflight(command, args) {
   }
 }
 
+function runWorkerState(action, payload = {}) {
+  const helper = path.join(root, "utilities", "worker-state-hook.py")
+  const result = spawnSync("python3", [helper, action], {
+    cwd: root,
+    env: { ...process.env, AGENT_HOME: root },
+    input: JSON.stringify(payload),
+    encoding: "utf8",
+  })
+  if (result.status !== 0) {
+    const detail = [result.stdout, result.stderr].filter(Boolean).join("\n").trim()
+    throw new Error(detail || `worker state hook failed: ${action}`)
+  }
+  return (result.stdout || "").trim()
+}
+
 function spawnDetached(command, args) {
   // Fire-and-forget: must not block the user's turn. The child runs the
   // preflight session-end → no-tools distiller worker independently.
@@ -206,6 +221,9 @@ export const AgentHarnessGuards = async (ctx) => {
 
   return ({
   event: async ({ event }) => {
+    if (event && event.type === "session.compacted") {
+      runWorkerState("compact-after", event)
+    }
     // session.idle fires after each turn (the session is waiting for the user).
     // Use it as the auto-distillation trigger; preflight session-end debounces
     // per session and the --pure worker never re-enters this plugin. Mirrors the
@@ -261,6 +279,9 @@ export const AgentHarnessGuards = async (ctx) => {
     }
     appendContext(output, collectPreflight("prompt-signal", [cwd, sid]))
     appendContext(output, collectPreflight("briefing", [cwd]))
+  },
+  "experimental.session.compacting": async (input, output) => {
+    runWorkerState("compact-before", input || {})
   },
   "command.execute.before": async (input, output) => {
     // Spec read gate — deny autopilot-code/spec in a spec-backed cwd until prd.md

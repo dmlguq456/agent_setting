@@ -69,6 +69,13 @@ from worker_bootstrap import (  # noqa: E402
     render_worker_bootstrap,
     resolve_worker_type,
 )
+from stage_session_runtime import (  # noqa: E402
+    add_arguments as add_stage_session_arguments,
+    bind as bind_stage_session,
+    environment as stage_session_environment,
+    metadata as stage_session_metadata,
+    prompt_fragment as stage_session_prompt,
+)
 from model_profile import (  # noqa: E402
     ModelProfileError,
     resolve_profile,
@@ -266,6 +273,7 @@ def parser() -> argparse.ArgumentParser:
         default=float(os.environ.get("CLAUDE_DISPATCH_FOREGROUND_TIMEOUT", "3600")),
         help="maximum child lifetime for foreground-scoped launch; non-positive clamps to the safe default (never waits indefinitely)",
     )
+    add_stage_session_arguments(p)
     return p
 
 
@@ -568,6 +576,7 @@ def dispatch_prompt(
         "- An owner has no worker mode and must not load any unit persona.\n"
         "- Owner workers use the inherited registry, launch checked adapter wrappers directly, consume typed completion receipts, harvest artifacts, and close rows; stage/review/support workers do not dispatch.\n\n"
         f"{heartbeat}"
+        f"{stage_session_prompt(args)}"
         "Assignment:\n"
         f"{task.rstrip()}\n\n"
         f"{ending}",
@@ -971,6 +980,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     if args.profile:
         pipe += f",profile={args.profile}"
     pipe += f",artifact_root={args.artifact_root},log_file={args.log_path}"
+    pipe += stage_session_metadata(args)
     if args.attempt_id:
         pipe += (
             f",attempt_id={args.attempt_id},launch_authority={args.launch_authority}"
@@ -1520,6 +1530,10 @@ def main(argv: list[str]) -> int:
     except DispatchContractError as e:
         return fail(e.reason, 73, detail=e.detail, child_spawned="0")
     try:
+        bind_stage_session(args, artifact_root=args.artifact_root, action=action)
+    except DispatchContractError as e:
+        return fail(e.reason, 65, detail=e.detail, child_spawned="0")
+    try:
         completion_marker_gate(
             args.route_file, args.route_node, action, agent_home, jobs
         )
@@ -1738,6 +1752,7 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_CURRENT_HARNESS": "claude",
             "AGENT_DISPATCH_CURRENT_TRANSPORT": "headless",
             "AGENT_DISPATCH_CURRENT_SANDBOX": "adapter-default",
+            **stage_session_environment(args),
             "AGENT_DISPATCH_COMPLETION_MODE": (
                 "supervised"
                 if args.resolved_completion_delivery == "session-resume-supervised"

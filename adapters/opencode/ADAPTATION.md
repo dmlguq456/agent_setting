@@ -501,3 +501,17 @@ preflight for the target file and inspect `preflight.sh worklog` output.
 OpenCode may read/write notes-root files only when the task is explicitly about
 notes, triage, feedback, or worklog routing. It must not copy worklog-board
 DBs, caches, `.env*`, build output, dispatch logs, or worktrees into this repo.
+
+## Stage-session capacity contract (2026-08-06)
+
+- **Runtime support:** the plugin API exposes `experimental.session.compacting`
+  and the `session.compacted` event; OpenCode also exposes native agents.
+- **Adapter realization:** the wrapper records the same phase brief, fixed-file
+  digest, ledger, chain identity, and `stage_authority=0` axes as Claude/Codex.
+  Plugin compact events flush/re-read the ledger and structured writes transit
+  the enforcing preflight.
+- **Parity gap/fallback:** OpenCode native agents do not yet provide the local
+  route-owned dispatch-depth-2 evidence required by this contract, so no native
+  gate or helper parity is claimed. Use the checked registered-headless surface
+  where eligible, otherwise the recorded inline fallback; the one stage gate is
+  unchanged.

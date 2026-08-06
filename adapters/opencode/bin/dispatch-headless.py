@@ -55,6 +55,13 @@ from worker_bootstrap import (  # noqa: E402
     render_worker_bootstrap,
     resolve_worker_type,
 )
+from stage_session_runtime import (  # noqa: E402
+    add_arguments as add_stage_session_arguments,
+    bind as bind_stage_session,
+    environment as stage_session_environment,
+    metadata as stage_session_metadata,
+    prompt_fragment as stage_session_prompt,
+)
 from model_profile import (  # noqa: E402
     ModelProfileError,
     resolve_profile,
@@ -232,6 +239,7 @@ def parser() -> argparse.ArgumentParser:
         "Note: OpenCode may hang on limit (#8203) rather than exit; hangs are caught by "
         "dispatch-liveness's log scan, not this watch.",
     )
+    add_stage_session_arguments(p)
     return p
 
 
@@ -494,6 +502,7 @@ def prompt(args: argparse.Namespace) -> tuple[str, str]:
         f"- Read only the assigned {args.assigned_contract} Skill/mode and named artifact inputs. Project instruction auto-load is not treated as physically masked; do not manually load a full harness bootstrap.\n"
         "- Preserve the reported QA/tool contracts in the artifact; owner workers launch checked adapter wrappers directly.\n\n"
         f"{heartbeat}"
+        f"{stage_session_prompt(args)}"
         "Assignment:\n"
         f"{task.rstrip()}\n\n"
         "End with the kernel's exact three-line handoff as the entire final message — "
@@ -600,6 +609,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         f",model={settings['model']},variant={settings['variant']}"
     )
     pipe += f",artifact_root={args.artifact_root},log_file={args.log_path}"
+    pipe += stage_session_metadata(args)
     if args.attempt_id:
         pipe += (
             f",attempt_id={args.attempt_id},launch_authority={args.launch_authority}"
@@ -1117,6 +1127,10 @@ def main(argv: list[str]) -> int:
     except DispatchContractError as e:
         return fail(e.reason, 73, detail=e.detail, child_spawned="0")
     try:
+        bind_stage_session(args, artifact_root=args.artifact_root, action=action)
+    except DispatchContractError as e:
+        return fail(e.reason, 65, detail=e.detail, child_spawned="0")
+    try:
         completion_marker_gate(
             args.route_file, args.route_node, action, agent_home, jobs
         )
@@ -1219,6 +1233,7 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_CURRENT_HARNESS": "opencode",
             "AGENT_DISPATCH_CURRENT_TRANSPORT": "headless",
             "AGENT_DISPATCH_CURRENT_SANDBOX": "adapter-default",
+            **stage_session_environment(args),
             "OPENCODE_CONFIG_CONTENT": args.opencode_config_content,
             # Headless liveness contract: the OpenCode runtime child exposes
             # the dispatch slug to the plugin, which records a plugin-load

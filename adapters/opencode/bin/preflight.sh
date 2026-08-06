@@ -79,6 +79,7 @@ usage: preflight.sh write <file> [session-id] [turn-id]
        preflight.sh broker <status|stop> --jobs <jobs.log> [--root <broker-root>]  # legacy drain only
        preflight.sh dispatch [--dry-run|--register|--start] --worktree <path> --slug <slug> --capability <name> --capability-mode <mode> [--worker-mode <family/mode>] --qa <level> [--intensity <level>] [--dispatch-depth 1|2] [--parent <slug>] [--worker-type owner|stage|review|support] [--unit <unit>] [--assigned-contract <capability>] [--owner <capability>] [--agent <agent>] (--model-profile <deep|balanced-deep|light|mini> [--model-role <role>]|--model-role <role>|--model <model> --variant <variant>|--inherit-model-settings) [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>] [--log-dir <dir>]
        preflight.sh dispatch-chain --route <route.json> --node <id> --slug <slug> --parent <slug> [--capability-mode <mode>] [--worker-mode <family/mode>] [--model-role <role>] [--dry-run|--register|--start]
+       preflight.sh dispatch-session-chain <check|register|start|run> --manifest <chain.json> --parent <slug> [--jobs <jobs.log>] [--max-seconds N]
        preflight.sh stage-heartbeat --attempt-id <id> --route-id <id> --route-node <id> --jobs <jobs.log> --phase <phase> --kind <kind> --evidence <ref>
        preflight.sh dispatch-current --jobs <jobs.log> (--session <id>|--route <id>|--node <id>|--attempt <id>|--job <slug>) [--all]
        preflight.sh dispatch-reconcile --jobs <jobs.log> (--session <id>|--route <id>|--node <id>|--attempt <id>|--job <slug>) [--apply]
@@ -228,6 +229,14 @@ case "$cmd" in
     file=$2
     sid=${3:-opencode}
     turn=${4:-}
+    if [ "${AGENT_DISPATCH_STAGE_AUTHORITY:-1}" = "0" ]; then
+      [ -n "${AGENT_WORKER_STATE_LEDGER:-}" ] && [ -n "${AGENT_DISPATCH_ATTEMPT_ID:-}" ] || {
+        echo "worker sub-session ledger binding missing" >&2; exit 65;
+      }
+      python3 "$ROOT/utilities/worker-state-ledger.py" guard-edit \
+        --path "$AGENT_WORKER_STATE_LEDGER" \
+        --attempt-id "$AGENT_DISPATCH_ATTEMPT_ID" --file "$file"
+    fi
     "$ROOT/hooks/git-state-guard.sh" --file "$file"
     "$ROOT/hooks/core-first-guard.sh" --file "$file" --session "$sid"
     "$ROOT/hooks/artifact-guard.sh" --file "$file" --session "$sid"
@@ -456,6 +465,10 @@ EOF
   dispatch-chain)
     shift
     AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/stage-dispatch-fallback.py" "$@"
+    ;;
+  dispatch-session-chain)
+    shift
+    AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/stage-session-chain.py" "$@"
     ;;
   stage-heartbeat)
     shift

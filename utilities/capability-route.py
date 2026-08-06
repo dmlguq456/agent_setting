@@ -20,11 +20,13 @@ from dispatch_contract import (
     WRAPPER_PARENT_SANDBOXES,
     WRAPPER_TRANSPORTS,
     _atomic_registry_replace,
+    attempt_process_quiescence,
     ensure_global_registry_writable,
     parse_registry_metadata,
     resolve_agent_home,
     validate_attempt_metadata,
 )
+from stage_session_contract import load_manifest
 ORDER = {"direct":0,"quick":1,"standard":2,"strong":3,"thorough":4,"adversarial":5}
 TRACKING = {"tracked", "untracked"}
 GATE_FIELDS = {"spec_read", "drift_verdict", "workflow_mode", "artifact_guard"}
@@ -1008,6 +1010,21 @@ def _marker_attempt_axes(node, attempt_id, attempt_metadata):
             "registered_worker":False,
             "fallback_hop":None,
         }
+    if attempt_metadata is not None and attempt_metadata.get("stage_authority") == "owner-chain":
+        if not attempt_id or not attempt_metadata.get("subsession_manifest"):
+            raise ValueError("owner-chain completion identity incomplete")
+        return {
+            "attempt_id":attempt_id,
+            "dispatch_depth":node.get("dispatch_depth"),
+            "transport":"headless",
+            "execution_surface":"inline",
+            "registered_worker":False,
+            "fallback_hop":"inline",
+            "stage_authority":"owner-chain",
+            "subsession_manifest":attempt_metadata["subsession_manifest"],
+            "subsession_manifest_sha256":attempt_metadata["subsession_manifest_sha256"],
+            "session_chain_id":attempt_metadata["session_chain_id"],
+        }
     if attempt_metadata is None:
         if node.get("dispatch_depth") != 0 or node.get("execution_surface") != "inline":
             raise ValueError("current dispatched completion requires exact attempt metadata")
@@ -1303,6 +1320,8 @@ def complete_node(
                 validate_attempt_metadata(row_metadata)
             except DispatchContractError as exc:
                 raise ValueError(f"row-contract-invalid:{exc.reason}") from exc
+            if row_metadata.get("subsession_id") or str(row_metadata.get("stage_authority", "1")).lower() in {"0", "false"}:
+                raise ValueError("subsession-has-no-stage-gate-authority")
             if (
                 row_metadata.get("route_id") != route["route_id"]
                 or row_metadata.get("route_hash") != route["route_hash"]
@@ -1369,6 +1388,68 @@ def complete_node(
                 "status":"marker-appended" if marker_eligible else "closed",
             }
 
+def complete_subsession_stage(route, node, node_id, evidence, manifest_path, jobs):
+    """Aggregate exact PASS sub-sessions into the route node's one stage marker."""
+
+    # The manifest itself binds the actual route file; compare id/hash/node/gate
+    # here, then use its immutable digest as marker identity.
+    manifest=load_manifest(manifest_path,node=node)
+    if (
+        manifest.get("route_id") != route.get("route_id")
+        or manifest.get("route_hash") != route.get("route_hash")
+        or Path(manifest["route_file"]).resolve() != Path(route.get("_route_file", manifest["route_file"])).resolve()
+    ):
+        raise ValueError("subsession manifest route identity mismatch")
+    jobs_path=Path(jobs)
+    if not jobs_path.is_file():
+        raise ValueError("subsession registry missing")
+    rows={}
+    for line in jobs_path.read_text(encoding="utf-8",errors="replace").splitlines():
+        fields=line.split("\t")
+        if len(fields)!=6:
+            continue
+        metadata=parse_registry_metadata(fields[5])
+        attempt_id=metadata.get("attempt_id")
+        if attempt_id:
+            rows.setdefault(attempt_id,[]).append((fields,metadata))
+    for session in manifest["sessions"]:
+        matches=rows.get(session["attempt_id"],[])
+        if len(matches)!=1:
+            raise ValueError(f"subsession attempt row count invalid:{session['attempt_id']}:{len(matches)}")
+        fields,metadata=matches[0]
+        validate_attempt_metadata(metadata)
+        expected={
+            "route_id":route["route_id"], "route_node":node_id,
+            "subsession_id":session["subsession_id"],
+            "session_chain_id":manifest["chain_id"], "stage_authority":"0",
+        }
+        if any(str(metadata.get(key,""))!=str(value) for key,value in expected.items()):
+            raise ValueError(f"subsession attempt identity mismatch:{session['attempt_id']}")
+        if (
+            fields[1]!="done"
+            or metadata.get("note") not in {"completed-supervisor", "completed-marker"}
+            or metadata.get("failure_class")!="pass"
+        ):
+            raise ValueError(f"subsession not semantic PASS:{session['attempt_id']}")
+        process=attempt_process_quiescence(metadata)
+        if process.state!="quiescent":
+            raise ValueError(f"subsession process not quiescent:{session['attempt_id']}:{process.reason}")
+    digest=manifest["_manifest_sha256"]
+    attempt_id="att-stage-"+digest[:32]
+    metadata={
+        "stage_authority":"owner-chain",
+        "subsession_manifest":str(Path(manifest_path).resolve()),
+        "subsession_manifest_sha256":digest,
+        "session_chain_id":manifest["chain_id"],
+    }
+    directory=completion_dir(route["route_id"])
+    with _exclusive_lock(directory/f".{node_id}.completion.lock"):
+        marker=write_completion_marker(
+            route,node,node_id,evidence,
+            attempt_id=attempt_id,attempt_metadata=metadata,
+        )
+    return marker,{"status":"stage-gate-aggregated","sessions":len(manifest["sessions"])}
+
 def main():
     p=argparse.ArgumentParser(); sub=p.add_subparsers(dest="command",required=True)
     c=sub.add_parser("compile"); c.add_argument("--capability",required=True); c.add_argument("--capability-mode",default="default")
@@ -1392,6 +1473,7 @@ def main():
     d.add_argument("--execution-surface")
     d.add_argument("--registered-worker",choices=("0","1","false","true"))
     d.add_argument("--fallback-hop")
+    d.add_argument("--subsession-manifest",help="aggregate declared sub-sessions into this one stage gate")
     cl=sub.add_parser("close"); cl.add_argument("--route",required=True)
     cl.add_argument("--commit",help="result commit; defaults to HEAD in the route cwd")
     cl.add_argument("--summary",help="one line naming what the route produced")
@@ -1466,12 +1548,20 @@ def main():
                         "registered_worker":a.registered_worker,
                         "fallback_hop":a.fallback_hop,
                     }
-                marker,row=complete_node(
-                    route,node,a.node,evidence,
-                    jobs=a.jobs,
-                    attempt_id=a.attempt_id,
-                    explicit_attempt_metadata=explicit_attempt_metadata,
-                )
+                if a.subsession_manifest:
+                    if not a.jobs or a.attempt_id or explicit_attempt_metadata is not None:
+                        raise ValueError("subsession completion requires --jobs and forbids attempt axes")
+                    route["_route_file"]=str(Path(a.route).resolve())
+                    marker,row=complete_subsession_stage(
+                        route,node,a.node,evidence,a.subsession_manifest,a.jobs,
+                    )
+                else:
+                    marker,row=complete_node(
+                        route,node,a.node,evidence,
+                        jobs=a.jobs,
+                        attempt_id=a.attempt_id,
+                        explicit_attempt_metadata=explicit_attempt_metadata,
+                    )
                 if a.output: atomic_write(a.output, marker)
                 print(json.dumps(marker,sort_keys=True))
                 if row: print(json.dumps(row,sort_keys=True))

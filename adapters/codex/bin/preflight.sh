@@ -79,6 +79,7 @@ usage: preflight.sh write <file> [session-id] [turn-id]
        preflight.sh dispatch [--dry-run|--register|--start] [--require-hook-trust] --worktree <path> --slug <slug> --capability <name> --capability-mode <mode> [--worker-mode <family/mode>] --qa <level> [--intensity <level>] [--dispatch-depth 1|2] [--parent <slug>] [--worker-type owner|stage|review|support] [--unit <unit>] [--assigned-contract <capability>] [--owner <capability>] (--model-profile <deep|balanced-deep|light|mini> [--model-role <role>]|--model-role <role>|--model <model> --reasoning <effort>|--inherit-model-settings) [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
        preflight.sh dispatch-owner [--adapter <harness>] [--dry-run|--register|--start] --worktree <path> --slug <slug> --capability <name> --capability-mode <mode> --qa <level> --intensity <level> --dispatch-depth 1 --worker-type owner --assigned-contract <capability> --owner <capability> --model-profile <deep|balanced-deep|light> [--prompt-file <file>|--prompt-text <text>] [--jobs <jobs.log>]
        preflight.sh dispatch-chain --route <route.json> --node <id> --slug <slug> --parent <slug> [--capability-mode <mode>] [--worker-mode <family/mode>] [--model-role <role>] [--capacity-model <id> --capacity-reasoning|--capacity-effort|--capacity-variant <level>] [--progress-window-seconds N --watchdog-max-windows M] [--dry-run|--register|--start]
+       preflight.sh dispatch-session-chain <check|register|start|run> --manifest <chain.json> --parent <slug> [--jobs <jobs.log>] [--max-seconds N]
        preflight.sh dispatch-batch --route <route.json> --parallel-group <id> --slug-prefix <slug> --parent <slug> --action dry-run|start [--qa <level>] [--jobs <jobs.log>] [--prompt-text <text>] [--allow-degraded-independence]
        preflight.sh stage-heartbeat --attempt-id <id> --route-id <id> --route-node <id> --jobs <jobs.log> --phase <phase> --kind <kind> --evidence <ref>
        preflight.sh dispatch-wait --attempt-id <id> [--interval <seconds>] [--max <seconds>]
@@ -195,7 +196,8 @@ doctor() {
     "$ROOT/adapters/codex/hooks/posttooluse-interaction-clear.py" \
     "$ROOT/adapters/codex/hooks/pretooluse-write-guard.py" \
     "$ROOT/adapters/codex/hooks/posttooluse-design-check.py" \
-    "$ROOT/adapters/codex/hooks/posttooluse-read-marker.py" || rc=1
+    "$ROOT/adapters/codex/hooks/posttooluse-read-marker.py" \
+    "$ROOT/adapters/codex/hooks/worker-state-compact.py" || rc=1
   doctor_check token-budget python3 "$ROOT/utilities/token-budget.py" \
     --adapter portable --active-context-tokens 1 --context-window 100 --format json || rc=1
   doctor_check token-budget-experiment python3 "$ROOT/utilities/token-budget-experiment.py" --help || rc=1
@@ -259,6 +261,14 @@ case "$cmd" in
     sid=${3:-${AGENT_DISPATCH_ATTEMPT_ID:-codex}}
     guard_identity_hard_fail_if_worker "$sid"
     turn=${4:-}
+    if [ "${AGENT_DISPATCH_STAGE_AUTHORITY:-1}" = "0" ]; then
+      [ -n "${AGENT_WORKER_STATE_LEDGER:-}" ] && [ -n "${AGENT_DISPATCH_ATTEMPT_ID:-}" ] || {
+        echo "worker sub-session ledger binding missing" >&2; exit 65;
+      }
+      python3 "$ROOT/utilities/worker-state-ledger.py" guard-edit \
+        --path "$AGENT_WORKER_STATE_LEDGER" \
+        --attempt-id "$AGENT_DISPATCH_ATTEMPT_ID" --file "$file"
+    fi
     "$ROOT/hooks/git-state-guard.sh" --file "$file"
     "$ROOT/hooks/core-first-guard.sh" --file "$file" --session "$sid"
     "$ROOT/hooks/artifact-guard.sh" --file "$file" --session "$sid"
@@ -662,6 +672,10 @@ EOF
   dispatch-chain)
     shift
     AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/stage-dispatch-fallback.py" "$@"
+    ;;
+  dispatch-session-chain)
+    shift
+    AGENT_HOME="$AGENT_ROOT" python3 "$ROOT/utilities/stage-session-chain.py" "$@"
     ;;
   dispatch-batch)
     shift

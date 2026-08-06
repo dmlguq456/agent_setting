@@ -828,6 +828,13 @@
       "hard_block": false
     },
     {
+      "slug": "hook__worker-state-compact.py__PostCompact",
+      "name": "worker-state-compact.py compact-after",
+      "mono": "worker-state-compact.py",
+      "event": "PostCompact",
+      "hard_block": false
+    },
+    {
       "slug": "hook__capability-grounding-marker__PostToolUse",
       "name": "capability-grounding-marker",
       "mono": "capability-grounding-marker",
@@ -888,6 +895,13 @@
       "name": "fleet-interaction-state.py clear",
       "mono": "fleet-interaction-state.py",
       "event": "PostToolUseFailure",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__worker-state-compact.py__PreCompact",
+      "name": "worker-state-compact.py compact-before",
+      "mono": "worker-state-compact.py",
+      "event": "PreCompact",
       "hard_block": false
     },
     {
@@ -957,6 +971,13 @@
       "slug": "hook__subagent-model-default__PreToolUse",
       "name": "subagent-model-default",
       "mono": "subagent-model-default",
+      "event": "PreToolUse",
+      "hard_block": false
+    },
+    {
+      "slug": "hook__worker-state-compact.py__PreToolUse",
+      "name": "worker-state-compact.py guard-write",
+      "mono": "worker-state-compact.py",
       "event": "PreToolUse",
       "hard_block": false
     },

@@ -39,6 +39,10 @@ PROTECTED_ADAPTER_FLAGS = frozenset({
     "--harness-affinity", "--parent", "--start", "--register", "--dry-run",
     "--model-role", "--model-profile", "--model", "--reasoning", "--effort",
     "--variant", "--inherit-model-settings",
+    "--subsession-id", "--subsession-index", "--subsession-count",
+    "--subsession-mode", "--subsession-purpose", "--session-chain-id",
+    "--phase-brief", "--stage-authority", "--fixed-file", "--narrow-verify",
+    "--expected-round-trips", "--state-dir", "--attempt-id",
 })
 
 
@@ -234,10 +238,17 @@ def bind_dispatch_evidence(route, node, adapter, adapter_args, parent_identity=N
 
 
 def main():
- p=argparse.ArgumentParser(); p.add_argument("--route",required=True); p.add_argument("--node",required=True); p.add_argument("--adapter",choices=("claude","codex","opencode"),required=True); p.add_argument("--action",choices=("dry-run","register","start"),default="dry-run"); p.add_argument("--slug",required=True); p.add_argument("--qa",default="standard"); p.add_argument("--parent"); p.add_argument("--prompt-text",default="Execute the selected immutable route node and emit its completion evidence."); p.add_argument("adapter_args",nargs=argparse.REMAINDER)
+ p=argparse.ArgumentParser(); p.add_argument("--route",required=True); p.add_argument("--node",required=True); p.add_argument("--adapter",choices=("claude","codex","opencode"),required=True); p.add_argument("--action",choices=("dry-run","register","start"),default="dry-run"); p.add_argument("--slug",required=True); p.add_argument("--qa",default="standard"); p.add_argument("--parent"); p.add_argument("--prompt-text",default="Execute the selected immutable route node and emit its completion evidence."); p.add_argument("--subsession-id"); p.add_argument("--subsession-index",type=int); p.add_argument("--subsession-count",type=int); p.add_argument("--subsession-mode",choices=("serial","parallel")); p.add_argument("--subsession-purpose",choices=("planned","gap-retry"),default="planned"); p.add_argument("--session-chain-id"); p.add_argument("--phase-brief"); p.add_argument("--stage-authority",choices=(0,1),type=int,default=1); p.add_argument("--fixed-file",action="append",default=[]); p.add_argument("--narrow-verify"); p.add_argument("--expected-round-trips",type=int); p.add_argument("--state-dir"); p.add_argument("--attempt-id"); p.add_argument("adapter_args",nargs=argparse.REMAINDER)
  a=p.parse_args(); route=json.loads(Path(a.route).read_text()); subprocess.run([sys.executable,str(ROOT/"utilities/capability-route.py"),"verify","--route",a.route,"--cwd",route["cwd"]],check=True,stdout=subprocess.DEVNULL)
  node=next((x for x in route["nodes"] if x["id"]==a.node),None)
  if not node: raise SystemExit("unknown route node")
+ sub_values=(a.subsession_id,a.subsession_index,a.subsession_count,a.subsession_mode,a.session_chain_id,a.phase_brief,a.narrow_verify,a.expected_round_trips,a.attempt_id)
+ if any(value is not None for value in sub_values) and not all(value is not None for value in sub_values):
+  print("check=failed\nreason=subsession-arguments-incomplete\nchild_spawned=0"); raise SystemExit(64)
+ if a.subsession_id and a.stage_authority != 0:
+  print("check=failed\nreason=subsession-stage-authority-forbidden\nchild_spawned=0"); raise SystemExit(64)
+ if not a.subsession_id and a.stage_authority != 1:
+  print("check=failed\nreason=stage-authority-zero-without-subsession\nchild_spawned=0"); raise SystemExit(64)
  try:
   reject_generated_argument_overrides(a.adapter_args)
  except DispatchNodeError as e:
@@ -278,6 +289,10 @@ def main():
    print("check=failed"); print(f"reason={e.reason}")
    for k,v in e.fields.items(): print(f"{k}={v}")
    raise SystemExit(65)
+ if a.subsession_id:
+  argv += ["--subsession-id",a.subsession_id,"--subsession-index",str(a.subsession_index),"--subsession-count",str(a.subsession_count),"--subsession-mode",a.subsession_mode,"--subsession-purpose",a.subsession_purpose,"--session-chain-id",a.session_chain_id,"--phase-brief",a.phase_brief,"--stage-authority",str(a.stage_authority),"--narrow-verify",a.narrow_verify,"--expected-round-trips",str(a.expected_round_trips),"--attempt-id",a.attempt_id]
+  for fixed_file in a.fixed_file: argv += ["--fixed-file",fixed_file]
+  if a.state_dir: argv += ["--state-dir",a.state_dir]
  argv += ["--model-role",node.get("role","fast implementer")]
  if node.get("model_profile"):
   argv += ["--model-profile",node["model_profile"]]

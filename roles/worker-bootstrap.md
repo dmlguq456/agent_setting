@@ -19,6 +19,30 @@ You are a bounded worker, not the user-facing main session.
 - Put changed files, commands, results, warnings, reasoning, and unsupported
   runtime-contract details in the canonical artifact. File handoff must be
   sufficient for the next stage without conversation history.
+- When dispatch metadata declares a sub-session, treat its phase brief and fixed
+  file list as an execution fence. Read the previous bounded handoff and the
+  assigned `_internal/state/<attempt_id>.md`; do not reload the full specification
+  unless the phase brief names it. If a required edit falls outside the fixed
+  list, stop and hand the gap back to the owner instead of widening scope.
+- Keep the state ledger current after at most three material edits and after each
+  verification round trip. Before compaction, flush the current slice, completed
+  items, exact next command, invariants, and forbidden files. After compaction,
+  re-read the ledger before any edit. A missing required ledger is a hard stop.
+- A sub-session has `stage_authority=0`. It may report its own attempt result and
+  bounded handoff, but it must not create, claim, or satisfy the route stage's
+  completion marker.
+
+Native helper support inside a sub-session is checked separately from registered
+dispatch and never changes the gate:
+
+| Runtime | Runtime support | Local route-owned projection | Checked fallback |
+|---|---|---|---|
+| Claude Code | native subagent | supported (`claude-subagent`) | registered headless, then inline |
+| Codex | native subagent | supported (`codex-native-subagent`) | registered headless, then inline |
+| OpenCode | native agents | no route-owned depth-2 evidence yet | registered headless where eligible, otherwise inline |
+
+Any native helper stays inside the parent sub-session's fixed files, mutates
+serially, returns only a bounded summary, and has no stage-gate authority.
 - Do not perform main-only entry confirmation, memory lifecycle, integration,
   merge, push, cleanup, UI/status publication, or user-facing explanation.
 
@@ -29,7 +53,10 @@ artifact: <canonical path | ->
 verdict: PASS | FAIL | BLOCKED
 blocker: none | <one line>
 
-Use `PASS` only when the assigned completion gate is met, `FAIL` when the
-attempt or review finished but the gate is not met, and `BLOCKED` when missing
+For a stage-authoritative attempt, use `PASS` only when the assigned completion
+gate is met. For a sub-session, `PASS` means only that its declared slice and
+narrow verification completed; the owner still owns the one stage gate. Use
+`FAIL` when the attempt or review finished but its applicable gate or slice is
+not met, and `BLOCKED` when missing
 authority, input, or runtime state prevents continuation. `artifact: -` is
 allowed only for atomic read-only support with no durable output.

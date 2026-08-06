@@ -384,3 +384,16 @@ adapters directly. The immutable v3 route binds the checked tuple and stable
 attempt identity; register/start are atomically claimed in the canonical
 registry. The retired broker retains diagnostic `status`/`stop` only, and
 historical v1/v2 broker routes are read-only.
+
+## Stage-session capacity contract (2026-08-06)
+
+- **Runtime support:** Claude Code exposes native `PreCompact` and `PostCompact`
+  hooks and native subagents.
+- **Adapter realization:** the wrapper records the portable sub-session identity,
+  phase brief, exact fixed files, expected round trips, ledger, and
+  `stage_authority=0`. Edit hooks enforce the ledger/file fence; compact hooks
+  flush and re-read it. The depth-1 owner aggregates all PASS/quiescent attempts
+  into the route node's one marker.
+- **Parity boundary:** a native Claude helper is allowed only inside its parent
+  slice, returns a bounded summary, mutates serially, and never owns the stage
+  gate. The registered-headless chain remains the checked fallback.

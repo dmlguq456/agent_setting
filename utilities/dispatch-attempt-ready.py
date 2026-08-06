@@ -86,6 +86,12 @@ def classify(rows: list[tuple[list[str], dict[str, str]]]) -> dict[str, object]:
         elif status == "done" and (
             note == "completed-marker"
             or metadata.get("attempt_schema_version") != "2"
+            or (
+                metadata.get("subsession_id")
+                and metadata.get("stage_authority") in {"0", "false"}
+                and note == "completed-supervisor"
+                and metadata.get("failure_class") == "pass"
+            )
         ):
             readiness = "ready"
         elif status == "done":

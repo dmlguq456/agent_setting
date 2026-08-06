@@ -122,6 +122,14 @@ semantics and are not mandatory literal headings):
    - Each step specifies the target file and expected changes.
    - Mark dependency order between phases and between steps within a phase.
    - Independent steps within the same phase can be parallelized during execution.
+   - For each execution slice, include a machine-readable `slice` block with
+     `fixed_files`, one `narrow_verify` command, and `expected_round_trips`.
+     `fixed_files` is exhaustive for that slice; use a codemod slice for a broad
+     mechanical change rather than listing an unbounded glob.
+   - Add optional phase hints `session_hint: single|serial|parallel` and
+     `ownership` for non-overlapping parallel files. These are advisory inputs to
+     the dispatch-depth-1 owner, which retains the decision to split or combine
+     sessions while preserving one gate for the stage.
 4. **Risks**: potential side effects and caveats.
 5. **Verification**: concrete, executable test commands when possible — these are
    consumed by the test stage after execution.
@@ -191,6 +199,9 @@ When the prompt does NOT include a "QA review file" path (called with user memos
 - Check for implicit contracts (None checks, `.shape` assumptions, dict key access)
   that a change might break.
 - If scope is too large for a single plan, recommend splitting and explain the split.
+- Before listing files for a signature or symbol change, run the portable ripple
+  map (or an equivalent checked reference scan) and include every discovered target
+  or explicitly bound exclusion.
 
 ## Constraints
 

@@ -92,7 +92,62 @@ def _qualifying_retry_evidence(route_id: str, node_id: str, current_attempt: str
         rows = FALLBACK.registry_rows(jobs_path, route_id, node_id)
     except (OSError, ValueError):
         return False
-    return any(row.get("attempt_id") and row.get("attempt_id") != current_attempt for row in rows)
+    current = next((row for row in rows if row.get("attempt_id") == current_attempt), None)
+    if current and current.get("subsession_purpose") == "planned":
+        return False
+    return any(
+        row.get("attempt_id")
+        and row.get("attempt_id") != current_attempt
+        and (
+            not row.get("subsession_id")
+            or row.get("subsession_purpose") == "gap-retry"
+        )
+        for row in rows
+    )
+
+
+def _qualifying_subsession_lineage(
+    route_id: str, node_id: str, current_attempt: str | None
+) -> bool:
+    """A planned serial slice may consume a prior slice without becoming a retry."""
+    jobs_env = os.environ.get("AGENT_DISPATCH_JOBS")
+    if not jobs_env or not current_attempt:
+        return False
+    jobs_path = Path(jobs_env)
+    if not jobs_path.is_absolute() or not jobs_path.is_file():
+        return False
+    try:
+        rows = FALLBACK.registry_rows(jobs_path, route_id, node_id)
+    except (OSError, ValueError):
+        return False
+    current = next((row for row in rows if row.get("attempt_id") == current_attempt), None)
+    if not current or (
+        current.get("stage_authority") not in {"0", "false"}
+        or current.get("subsession_purpose") != "planned"
+        or current.get("subsession_mode") != "serial"
+        or not current.get("session_chain_id")
+    ):
+        return False
+    try:
+        current_index = int(current.get("subsession_index", "0"))
+        current_count = int(current.get("subsession_count", "0"))
+    except ValueError:
+        return False
+    if not 2 <= current_index <= current_count:
+        return False
+    return any(
+        row.get("attempt_id") != current_attempt
+        and row.get("session_chain_id") == current.get("session_chain_id")
+        and row.get("subsession_purpose") == "planned"
+        and row.get("stage_authority") in {"0", "false"}
+        and row.get("_status") == "done"
+        and row.get("failure_class") == "pass"
+        and row.get("note") == "completed-supervisor"
+        and row.get("subsession_count") == current.get("subsession_count")
+        and str(row.get("subsession_index", "")).isdigit()
+        and int(row["subsession_index"]) == current_index - 1
+        for row in rows
+    )
 
 
 def validate_route_contract(route_path: str | Path, node_id: str, cwd: str | Path,
@@ -149,7 +204,11 @@ def validate_route_contract(route_path: str | Path, node_id: str, cwd: str | Pat
                       and node_id in route.get("resume_retry_boundaries", ())
                       and _qualifying_retry_evidence(route["route_id"], node_id, current_attempt)
                       and _is_first_parent_descendant(actual_cwd, route["source_commit"], git["head"]))
-        if not (downstream_ok or mutation_retry_ok):
+        planned_subsession_ok = (_direct_mutation_node(node)
+                      and node_id in route.get("resume_retry_boundaries", ())
+                      and _qualifying_subsession_lineage(route["route_id"], node_id, current_attempt)
+                      and _is_first_parent_descendant(actual_cwd, route["source_commit"], git["head"]))
+        if not (downstream_ok or mutation_retry_ok or planned_subsession_ok):
             raise _fail("route-source-commit-mismatch", f"expected={route['source_commit']} observed={git['head']}", rid)
     return route, node, git
 

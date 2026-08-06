@@ -73,6 +73,15 @@ def read_rows(jobs):
     return rows
 
 
+def fold_key(meta):
+    """Keep declared sub-sessions first-class while folding ordinary retries."""
+    return (
+        meta.get("route_id"),
+        meta.get("route_node"),
+        meta.get("subsession_id") or "__stage__",
+    )
+
+
 def matches(row, args):
     meta = row["meta"]
     checks = ((args.session, meta.get("session_id") or meta.get("parent_sid")),
@@ -85,8 +94,8 @@ def current(rows):
     newest = {}
     passthrough = []
     for row in rows:
-        key = (row["meta"].get("route_id"), row["meta"].get("route_node"))
-        if all(key) and row["meta"].get("attempt_id"):
+        key = fold_key(row["meta"])
+        if all(key[:2]) and row["meta"].get("attempt_id"):
             newest[key] = row
         else: passthrough.append(row)
     return passthrough + sorted(newest.values(), key=lambda row: row["order"])
@@ -445,8 +454,8 @@ def classify(row, args, newest_orders, rows=None):
             if record_status == "ok" and incomplete and has_orphaned_dependents(row, rows, incomplete, args):
                 return "orphan", "dead-parent-orphaned", "dead-parent-orphaned"
         return "exact-dead", exact["rule"], "dead-exact-pid"
-    key = (meta.get("route_id"), meta.get("route_node"))
-    if all(key) and newest_orders.get(key) == row["order"]:
+    key = fold_key(meta)
+    if all(key[:2]) and newest_orders.get(key) == row["order"]:
         proven, reason = terminal_marker(row, args.agent_home)
         if proven: return "stale-terminal", reason, "dead-stale-terminal"
     worktree = Path(row["worktree"])
@@ -482,8 +491,8 @@ def reconcile(rows, args):
     selected = [row for row in rows if matches(row, args)]
     newest = {}
     for row in rows:
-        key = (row["meta"].get("route_id"), row["meta"].get("route_node"))
-        if all(key): newest[key] = row["order"]
+        key = fold_key(row["meta"])
+        if all(key[:2]): newest[key] = row["order"]
     decisions = []
     for row in selected:
         category, reason, note = classify(row, args, newest, rows)
@@ -503,8 +512,8 @@ def reconcile(rows, args):
                     return False
                 latest = {}
                 for item in fresh_rows:
-                    key = (item["meta"].get("route_id"), item["meta"].get("route_node"))
-                    if all(key): latest[key] = item["order"]
+                    key = fold_key(item["meta"])
+                    if all(key[:2]): latest[key] = item["order"]
                 fresh_category, fresh_reason, fresh_note = classify(fresh, args, latest, fresh_rows)
                 fresh_decision.update(category=fresh_category, reason=fresh_reason, note=fresh_note)
                 return fresh_note == note and fresh_category == category
@@ -549,8 +558,8 @@ _CASCADE_TERMINAL_CATEGORIES = {
 def _newest_orders(rows):
     newest = {}
     for row in rows:
-        key = (row["meta"].get("route_id"), row["meta"].get("route_node"))
-        if all(key):
+        key = fold_key(row["meta"])
+        if all(key[:2]):
             newest[key] = row["order"]
     return newest
 
@@ -1000,8 +1009,8 @@ def emit_orphan_status(rows, args):
         return 0
     newest = {}
     for item in rows:
-        key = (item["meta"].get("route_id"), item["meta"].get("route_node"))
-        if all(key): newest[key] = item["order"]
+        key = fold_key(item["meta"])
+        if all(key[:2]): newest[key] = item["order"]
     category, reason, note = classify(row, args, newest, rows)
     if note == "dead-parent-orphaned":
         route_id, route_file, _ = resolve_owner_route(row, rows)
@@ -1021,7 +1030,7 @@ def emit_orphan_status(rows, args):
                     return False
                 latest = {}
                 for item in fresh_rows:
-                    key = (item["meta"].get("route_id"), item["meta"].get("route_node"))
+                    key = fold_key(item["meta"])
                     if all(key): latest[key] = item["order"]
                 _, _, fresh_note = classify(fresh, args, latest, fresh_rows)
                 return fresh_note == "dead-parent-orphaned"
@@ -1058,8 +1067,8 @@ def emit_orphan_scan(rows, args):
     """
     newest = {}
     for item in rows:
-        key = (item["meta"].get("route_id"), item["meta"].get("route_node"))
-        if all(key): newest[key] = item["order"]
+        key = fold_key(item["meta"])
+        if all(key[:2]): newest[key] = item["order"]
     orphans = []
     for row in rows:
         if row["status"] not in OPEN: continue

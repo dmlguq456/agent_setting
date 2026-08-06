@@ -4,7 +4,7 @@ set -eu
 
 script="${1:-}"
 case "$script" in
-  sessionstart-lifecycle.py|sessionend-lifecycle.py|stop-lifecycle.py|userprompt-lifecycle.py|permissionrequest-lifecycle.py|posttooluse-interaction-clear.py|pretooluse-write-guard.py|posttooluse-design-check.py|posttooluse-read-marker.py)
+  sessionstart-lifecycle.py|sessionend-lifecycle.py|stop-lifecycle.py|userprompt-lifecycle.py|permissionrequest-lifecycle.py|posttooluse-interaction-clear.py|pretooluse-write-guard.py|posttooluse-design-check.py|posttooluse-read-marker.py|worker-state-compact.py)
     ;;
   *)
     printf '%s\n' "unsupported Codex hook bridge: ${script:-<empty>}" >&2
@@ -36,4 +36,5 @@ else
   fi
 fi
 
-AGENT_HOME="$agent_root" exec python3 "$agent_root/adapters/codex/hooks/$script"
+shift
+AGENT_HOME="$agent_root" exec python3 "$agent_root/adapters/codex/hooks/$script" "$@"

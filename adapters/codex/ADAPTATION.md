@@ -770,3 +770,17 @@ attestation before logs, registry state, or a child process are created.
 This source change does not install projections or alter trust. Automatic
 enforcement begins only after the integrated source is installed as
 `AGENT_HOME` and the existing projection/current-hash trust check passes.
+
+## Stage-session capacity contract (2026-08-06)
+
+- **Runtime support:** current Codex hook schema exposes native `PreCompact` and
+  `PostCompact`; Codex also exposes checked native subagents.
+- **Adapter realization:** every registered wrapper uses the same portable
+  sub-session axes. The generated prompt includes a persistent ledger anchor;
+  `preflight write` enforces exact files and a three-edit update cadence, while
+  compact hooks flush/re-anchor. A sub-session is terminal evidence only and is
+  rejected by `capability-route complete`; the owner alone publishes one
+  aggregate stage marker.
+- **Fallback:** untrusted/uninstalled hooks require explicit ledger commands;
+  checked registered headless remains authoritative. Native helpers stay within
+  one slice, mutate serially, return summary only, and have no gate authority.

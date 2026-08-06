@@ -26,6 +26,7 @@ from replica_batch_contract import (
     ReplicaBatchContractError,
     verify_manifest,
 )
+from stage_session_contract import load_manifest
 
 
 ELIGIBILITY = {"supported", "unsupported", "unknown"}
@@ -34,6 +35,8 @@ STANDARD_PLUS_INTENSITIES = frozenset(
     {"standard", "strong", "thorough", "adversarial"}
 )
 ATTEMPT_SCHEMA_VERSION = 2
+SUBSESSION_ID_RE = re.compile(r"^ss-[A-Za-z0-9._-]{4,200}$")
+SESSION_CHAIN_ID_RE = re.compile(r"^ssc-[A-Za-z0-9._-]{4,200}$")
 SUPERVISOR_LEASE_KIND = "flock-v1"
 SUPERVISOR_LEASE_NONCE_RE = re.compile(r"[0-9a-f]{64}")
 PARENT_LIVENESS_METADATA_KEYS = (
@@ -2190,6 +2193,71 @@ def validate_attempt_metadata(
     if registered_headless_wrapper and (surface != "registered-headless" or not registered):
         raise DispatchContractError("headless-wrapper-surface-mismatch", surface)
 
+    # A route stage owns one semantic gate; optional sub-sessions are only
+    # execution-capacity attempts below that stage. Legacy/current ordinary
+    # attempts omit these fields and remain stage-authoritative.
+    subsession_id = str(metadata.get("subsession_id", ""))
+    raw_authority = metadata.get("stage_authority", "1")
+    stage_authority = _registered_worker(raw_authority)
+    if subsession_id:
+        if not SUBSESSION_ID_RE.fullmatch(subsession_id):
+            raise DispatchContractError("subsession-id-invalid", subsession_id)
+        if stage_authority:
+            raise DispatchContractError("subsession-stage-authority-forbidden", subsession_id)
+        if dispatch_depth != 2:
+            raise DispatchContractError("subsession-depth-invalid", str(dispatch_depth))
+        required = (
+            "route_id", "route_node", "session_chain_id", "subsession_index",
+            "subsession_count", "subsession_mode", "subsession_purpose",
+            "phase_brief", "phase_brief_sha256", "state_ledger", "fixed_files_sha256",
+            "narrow_verify_sha256", "expected_round_trips",
+        )
+        missing = [key for key in required if not str(metadata.get(key, ""))]
+        if missing:
+            raise DispatchContractError("subsession-metadata-missing", ",".join(missing))
+        chain_id = str(metadata["session_chain_id"])
+        if not SESSION_CHAIN_ID_RE.fullmatch(chain_id):
+            raise DispatchContractError("session-chain-id-invalid", chain_id)
+        mode = str(metadata["subsession_mode"])
+        if mode not in {"serial", "parallel"}:
+            raise DispatchContractError("subsession-mode-invalid", mode)
+        purpose = str(metadata["subsession_purpose"])
+        if purpose not in {"planned", "gap-retry"}:
+            raise DispatchContractError("subsession-purpose-invalid", purpose)
+        try:
+            index = int(str(metadata["subsession_index"]))
+            count = int(str(metadata["subsession_count"]))
+            rounds = int(str(metadata["expected_round_trips"]))
+        except ValueError as exc:
+            raise DispatchContractError("subsession-number-invalid", str(exc)) from exc
+        if not 1 <= index <= count <= 16 or not 1 <= rounds <= 20:
+            raise DispatchContractError(
+                "subsession-number-out-of-range", f"index={index},count={count},rounds={rounds}"
+            )
+        if purpose == "planned" and str(metadata.get("capacity_retry", "0")) == "1":
+            raise DispatchContractError(
+                "planned-subsession-retry-conflation", subsession_id
+            )
+        for key in (
+            "phase_brief_sha256", "fixed_files_sha256", "narrow_verify_sha256"
+        ):
+            value = str(metadata[key])
+            if re.fullmatch(r"[0-9a-f]{64}", value) is None:
+                raise DispatchContractError("subsession-digest-invalid", f"{key}={value}")
+        for key in ("phase_brief", "state_ledger"):
+            if not Path(str(metadata[key])).is_absolute():
+                raise DispatchContractError(
+                    "subsession-path-not-absolute", f"{key}={metadata[key]}"
+                )
+        if mode == "parallel" and not (
+            metadata.get("parallel_group") or metadata.get("batch_group")
+        ):
+            raise DispatchContractError("parallel-subsession-batch-required", subsession_id)
+    elif not stage_authority:
+        raise DispatchContractError(
+            "stage-authority-zero-without-subsession", str(metadata.get("route_node", ""))
+        )
+
 
 def headless_attempt_policy(
     *,
@@ -2589,6 +2657,29 @@ def completion_marker_is_current(
                 and marker.get("fallback_hop") is None
             )
 
+        if marker.get("stage_authority") == "owner-chain":
+            manifest_path = Path(str(marker.get("subsession_manifest", "")))
+            if (
+                not manifest_path.is_absolute()
+                or not manifest_path.is_file()
+                or hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+                != marker.get("subsession_manifest_sha256")
+            ):
+                return False
+            manifest = load_manifest(manifest_path, node=node)
+            return (
+                manifest.get("route_id") == route.get("route_id")
+                and manifest.get("route_hash") == route.get("route_hash")
+                and manifest.get("chain_id") == marker.get("session_chain_id")
+                and marker.get("attempt_id")
+                == "att-stage-" + str(marker.get("subsession_manifest_sha256"))[:32]
+                and marker.get("dispatch_depth") == node.get("dispatch_depth")
+                and marker.get("transport") == "headless"
+                and marker.get("execution_surface") == "inline"
+                and marker.get("registered_worker") is False
+                and marker.get("fallback_hop") == "inline"
+            )
+
         attempt_id = marker.get("attempt_id")
         if not isinstance(attempt_id, str) or not attempt_id:
             return False
@@ -2638,6 +2729,8 @@ def completion_attempt_readiness(
 ) -> AttemptReadiness:
     """Combine a current semantic marker with its exact governed process state."""
 
+    if marker.get("stage_authority") == "owner-chain":
+        return AttemptReadiness("ready", "subsession-chain-quiescence-verified-at-stage-gate")
     if node.get("kind") == "resource-runner" or marker.get("registered_worker") is False:
         return AttemptReadiness("ready", "semantic-terminal-no-registered-process")
     attempt_id = marker.get("attempt_id")
