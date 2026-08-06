@@ -23,7 +23,8 @@ class WideNameCapTest(unittest.TestCase):
         # 120→118 for the floor sample: F-58 (_HMW 42→32) returns 10 more cells to the ladder,
         # so 120 now sits one rung ABOVE the floor (30). The floor itself did not move — the
         # width at which the ladder leaves it did (128→118), which is the same -10 horizontal
-        # translation the frozen ledger proves. 118 is the last floor width.
+        # translation the frozen ledger proves. F-65's final 38→40 widening moves that edge
+        # two cells right again; 118 remains a stable below-cap acceptance sample.
         # 168: 40→36→32→40 — F-54 (_HMW 33→38, then the v40 correction 38→42) charged 9 more
         # cells to the fixed row and pushed 168 off the cap; F-57 (v41) then reclaimed the
         # dead `_CTX_W` (24) reservation and the `_CTX_BOOST` (12) skim, moving the ladder
@@ -37,12 +38,13 @@ class WideNameCapTest(unittest.TestCase):
             self.assertLess(render._wide_name_width(w), render._NAME_WIDE_MAX)
 
     def test_wide_widths_are_clamped_to_the_cap(self):
-        # 168→172→176→140→130→136 for the first sample: F-54 shifted the ladder right by 5
+        # 168→172→176→140→130→136→138 for the first sample: F-54 shifted the ladder right by 5
         # then 4 (v40), F-57 (v41) shifted it 36 back left, F-58 (v44) another 10, and F-64
-        # (v49, _HMW 32→35→38) 6 back right, so the cap is first reached at 136. The clamp
+        # (v49, _HMW 32→35→38) 6 back right, and F-65 (v51, 38→40) another 2,
+        # so the cap is first reached at 138. The clamp
         # rule is unchanged — every width at or past the first capped width still returns
         # exactly _NAME_WIDE_MAX, however wide it gets.
-        for w in (136, 176, 200, 400, 10000):
+        for w in (138, 176, 200, 400, 10000):
             self.assertEqual(render._wide_name_width(w), render._NAME_WIDE_MAX)
 
     def test_lower_bound_still_wins_on_tiny_terminals(self):

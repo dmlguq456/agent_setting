@@ -616,16 +616,15 @@ _wt_count = gitinfo.worktree_count
 # stay aligned for comparison. Job flow never sits under branch/gate.
 _HW = 16                      # Bare harness-badge width — narrow/stack L1 badges and the
                               # dispatch-prefix budget math still use this unmerged value.
-_HMW = 38                     # F-33 (v19 spacing hotfix): WIDE-layout harness field with one
-                              # extra trailing cell before the session column. 33→38→42→32→35→38
-                              # (F-64, v49, 2026-08-05 사용자 "harness의 열의 폭을 조금 더" 재차):
+_HMW = 40                     # F-33/F-64/F-65: WIDE-layout harness field. The latest small
+                              # expansion is 38→40 (user 2026-08-06) so a depth-2 spawned row
+                              # retains two more cells after paying for its hierarchy prefix.
                               # the labels that actually render are `claude code (Opus 5·xhigh)`
-                              # at 26 cells and `codex (gpt-5.6-sol·xhigh)` at 25; at 38 the
+                              # at 26 cells and `codex (gpt-5.6-sol·xhigh)` at 25; at 40 the
                               # 33-cell `opencode (claude-sonnet-4-5·high)` worst case fits even
-                              # behind the depth-1 arrow (38-5=33) and the depth-2 field keeps
-                              # 30 ≥ the 26-cell live labels under the F-64 3-cell ladder, while
-                              # staying 4 under the blank-heavy 42 that F-58 rolled back. The
-                              # cells
+                              # behind the depth-1 prefix (40-5=35) and the depth-2 field keeps
+                              # 32 cells under the F-64 ladder, while staying below the
+                              # blank-heavy 42 that F-58 rolled back. These two cells
                               # shift the whole wide row right and are charged to the _wide_slack
                               # budget; the _NW_S/_NAME_WIDE_MAX allocation rules are unchanged
                               # and the context track (_CTX_TRACK_MAX) is independent of this
@@ -1519,7 +1518,7 @@ def _dispatch_prefix(j, orphan=False):
     # the unit. depth≥2 keeps the ↳ spawn arrow (user 2026-07-16: indent-only depth-2 rows
     # lost their arrow), TWO cells deeper per level past the depth-1 seat — the rail now
     # carries the unit boundary, so the ladder no longer needs the 3-cell step. The harness
-    # field absorbs the prefix (_HMW - len: depth-1 38-4=34, depth-2 38-8=30 ≥ the 26-cell
+    # field absorbs the prefix (_HMW - len: depth-1 40-4=36, depth-2 40-8=32 ≥ the 26-cell
     # worst-case live label).
     #
     # Project-level orphans (parent dead/off-screen, surfaced as a project fallback) intentionally

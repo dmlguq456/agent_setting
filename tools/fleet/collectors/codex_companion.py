@@ -165,15 +165,8 @@ def _rollout_for_thread(thread_id, home=None):
     `sessions/`); a recursive walk of every rollout would cost a full tree scan per tick for a
     lookup that is already exact.
     """
-    if not isinstance(thread_id, str) or codex._sid("rollout-x-%s.jsonl" % thread_id) != thread_id:
-        return None
-    root = os.path.join(home or codex._home(), "sessions")
-    pattern = "rollout-*-%s.jsonl" % thread_id
-    paths = set(glob.glob(os.path.join(root, "*", "*", "*", pattern)))
-    paths |= set(glob.glob(os.path.join(root, pattern)))
-    if len(paths) != 1:
-        return None                          # 0 = no thread on disk, 2+ = ambiguous → deficit
-    return paths.pop()
+    return codex.exact_rollout_for_session_id(
+        thread_id, homes=[home or codex._home()])
 
 
 def _telemetry(record, home=None):

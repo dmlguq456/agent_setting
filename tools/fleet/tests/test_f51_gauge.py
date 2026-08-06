@@ -140,22 +140,23 @@ class F51GaugeTest(unittest.TestCase):
         future edit to the wide slack ladder cannot silently regress without this fixture
         failing.
 
-        Re-frozen for F-64 (v49; renamed from `..._v44.json` ← `..._v41.json` ←
+        Re-frozen for F-65 (v51; filename retained for compatibility; originally renamed
+        for F-64 from `..._v44.json` ← `..._v41.json` ←
         `..._v40.json` ← `..._v38.json` ← `..._v35.json`; frozen twice within v49 as the
-        user widened `_HMW` 32→35→38). Like F-58, each F-64 step moves ONE constant, so
-        each freeze is a single exact TRANSLATION of the previous ledger, proved before
-        the values were written (net vs v44 below):
+        user widened `_HMW` 32→35→38, then F-65 widened 38→40). Like F-58, each
+        step moves ONE constant, so each freeze is a single exact TRANSLATION of the
+        previous ledger, proved before the values were written (net vs v44 below):
 
           * `wide_slack` — `_HMW` only enters through `_NAME_COL` in `fixed_row`, which
-            grows by exactly 6 net, so every entry loses 6 cells: `v49[w] == v44[w] - 6`
+            grows by exactly 8 net, so every entry loses 8 cells: `v51[w] == v44[w] - 8`
             for all w in 60..400 (each 3-cell step verified 341/341 at its re-freeze).
             A VERTICAL shift.
-          * `wide_name_width` — the same 6 cells reach the title 6 columns later:
-            `v49[w] == v44[w-6]` for all w in 66..400 (each step verified 338/338), and
+          * `wide_name_width` — the same 8 cells reach the title 8 columns later:
+            `v51[w] == v44[w-8]` for all w in 68..400, and
             the low end sits on the `_NW_S` floor either way. A HORIZONTAL shift, so the
             ladder's SHAPE is unchanged — same `_NW_S` floor (28), same `_NAME_WIDE_MAX`
             cap (40), still monotonic. Only the width at which each rung is reached moved:
-            the 40-col name cap is now first reached at 136 cols (was 130 at v44)."""
+            the 40-col name cap is now first reached at 138 cols (was 130 at v44)."""
         path = os.path.join(os.path.dirname(__file__), "fixtures", "f51_wide_ledger_v49.json")
         with open(path, encoding="utf-8") as fh:
             ledger = json.load(fh)

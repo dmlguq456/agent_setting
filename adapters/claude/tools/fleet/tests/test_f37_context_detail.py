@@ -484,7 +484,7 @@ class ClaudeStreamSessionTest(unittest.TestCase):
             }]},
         }
 
-    def test_attempt_stream_recovers_exact_session_and_active_tokens_without_window(self):
+    def test_attempt_stream_uses_one_million_window_default_while_live(self):
         job = self._job()
         self._write_log(job, [
             {"type": "system", "session_id": "sid-child"},
@@ -494,9 +494,24 @@ class ClaudeStreamSessionTest(unittest.TestCase):
         dispatch_collector._enrich_claude_stream_session(job)
         self.assertEqual(job._runtime_session_id, "sid-child")
         self.assertEqual(job.active_context_tokens, 160)
+        self.assertEqual(job.context_window_tokens, 1_000_000)
+        self.assertEqual(job.ctx_pct, 0)
         self.assertTrue(job._dispatch_context_owned)
         self.assertIsNone(job.context)
-        self.assertIsNone(job._context_evidence)
+        self.assertIsNotNone(job._context_evidence)
+        visible = text(render._dispatch_summary_detail_row(job, depth=2, term_width=168))
+        self.assertIn("0%", visible)
+
+    def test_explicit_runtime_window_overrides_one_million_default(self):
+        job = self._job()
+        self._write_log(job, [
+            self._assistant("sid-child", "claude-fable-5", 160),
+            {"type": "result", "session_id": "sid-child",
+             "modelUsage": {"claude-fable-5": {"contextWindow": 2000}}},
+        ])
+        dispatch_collector._enrich_claude_stream_session(job)
+        self.assertEqual(job.context_window_tokens, 2000)
+        self.assertEqual(job.ctx_pct, 8)
 
     def test_stream_usage_and_same_attempt_model_window_create_context(self):
         job = self._job()
@@ -710,6 +725,10 @@ class CodexAttemptTelemetryTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.logs = os.path.join(self.tmp.name, ".dispatch", "logs")
         os.makedirs(self.logs)
+        self.worktree = os.path.join(self.tmp.name, "worktree")
+        self.nested_home = os.path.join(
+            self.worktree, ".dispatch", "nested-codex-home")
+        os.makedirs(self.nested_home)
         self.env = mock.patch.dict(os.environ, {"AGENT_HOME": self.tmp.name})
         self.env.start()
         dispatch_collector._CODEX_ATTEMPT_CACHE.clear()
@@ -721,10 +740,30 @@ class CodexAttemptTelemetryTest(unittest.TestCase):
 
     def _job(self):
         job = DispatchJob(key="code", slug="owner", harness="codex",
-                          attempt_id="att-codex-exact", liveness="working")
+                          attempt_id="att-codex-exact", liveness="working",
+                          depth=2, cwd=self.worktree)
         job._log_file = os.path.join(
             self.logs, "owner.att-codex-exact.codex.jsonl")
         return job
+
+    def _write_rollout(self, thread_id, home=None):
+        sessions = os.path.join(home or self.nested_home, "sessions", "2026", "08", "06")
+        os.makedirs(sessions, exist_ok=True)
+        path = os.path.join(sessions, "rollout-2026-08-06T00-00-00-%s.jsonl" % thread_id)
+        with open(path, "w", encoding="utf-8") as stream:
+            stream.write(json.dumps({
+                "type": "event_msg",
+                "payload": {"type": "token_count", "info": {
+                    "last_token_usage": {"total_tokens": 100000},
+                    "total_token_usage": {
+                        "input_tokens": 120000, "cached_input_tokens": 30000,
+                        "output_tokens": 5000, "reasoning_output_tokens": 1000,
+                        "total_tokens": 156000,
+                    },
+                    "model_context_window": 200000,
+                }},
+            }) + "\n")
+        return path
 
     def test_exact_token_usage_and_open_command_are_projected(self):
         job = self._job()
@@ -762,6 +801,38 @@ class CodexAttemptTelemetryTest(unittest.TestCase):
                 stream.write(json.dumps(row) + "\n")
         dispatch_collector._enrich_codex_attempt_session(job)
         self.assertIsNone(job.exec_tool)
+
+    def test_depth2_raw_exec_joins_exact_projected_rollout_context(self):
+        thread_id = "019fd56f-1e8a-77f0-9964-dc8cba43d344"
+        self._write_rollout(thread_id)
+        job = self._job()
+        with open(job._log_file, "w", encoding="utf-8") as stream:
+            stream.write(json.dumps({"type": "thread.started", "thread_id": thread_id}) + "\n")
+            stream.write(json.dumps({"type": "turn.started"}) + "\n")
+
+        dispatch_collector._enrich_codex_attempt_session(job)
+        projection.attach_projections([], [job], now=100.0)
+
+        self.assertEqual(job._runtime_session_id, thread_id)
+        self.assertEqual(job.context_window_tokens, 200000)
+        self.assertEqual(job.active_context_tokens, 100000)
+        self.assertEqual(job.context.used_pct, 47)
+        self.assertEqual(job._context_evidence.source, "codex-attempt-rollout")
+
+    def test_depth2_duplicate_projected_rollouts_fail_closed(self):
+        thread_id = "019fd56f-1e8a-77f0-9964-dc8cba43d344"
+        self._write_rollout(thread_id)
+        second = os.path.join(self.worktree, ".dispatch", "codex-home")
+        self._write_rollout(thread_id, home=second)
+        job = self._job()
+        with open(job._log_file, "w", encoding="utf-8") as stream:
+            stream.write(json.dumps({"type": "thread.started", "thread_id": thread_id}) + "\n")
+
+        dispatch_collector._enrich_codex_attempt_session(job)
+
+        self.assertIsNone(job.context_window_tokens)
+        self.assertIsNone(job.ctx_pct)
+        self.assertIsNone(job._context_evidence)
 
 
 if __name__ == "__main__":

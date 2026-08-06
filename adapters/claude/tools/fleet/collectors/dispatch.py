@@ -38,7 +38,7 @@ from codex_dispatch_terminal import terminal_envelope_observed  # noqa: E402
 
 from .. import model
 from ..model import ContextEvidence, DispatchJob, etime_to_min
-from ..token_budget import telemetry_from_explicit
+from ..token_budget import parse_codex_token_count, telemetry_from_explicit
 from . import procscan
 
 _AUTOPILOT = re.compile(r"/autopilot-([a-z-]+)")
@@ -839,6 +839,7 @@ def _proj_home():
 
 _CLAUDE_STREAM_TAIL_BYTES = 512 * 1024
 _CLAUDE_SUBAGENT_SCAN_BYTES = 8 * 1024 * 1024
+_CLAUDE_DISPATCH_CONTEXT_WINDOW_DEFAULT = 1_000_000
 _CLAUDE_STREAM_CACHE = {}       # path -> (mtime_ns, size, parsed)
 _CODEX_ATTEMPT_CACHE = {}       # path -> (mtime_ns, size, parsed)
 
@@ -1074,10 +1075,17 @@ def _enrich_claude_stream_session(job):
         job.association_ambiguity = parsed["ambiguity"]
         return
     job._dispatch_context_owned = True
+    active_context_tokens = parsed.get("active_context_tokens")
+    context_window_tokens = parsed.get("context_window_tokens")
+    # Claude's live JSON stream commonly omits modelUsage/contextWindow until the
+    # terminal result. Fleet uses 1M as the live dispatch default; an explicit
+    # same-attempt runtime value always takes precedence.
+    if context_window_tokens is None and active_context_tokens is not None:
+        context_window_tokens = _CLAUDE_DISPATCH_CONTEXT_WINDOW_DEFAULT
     telemetry = telemetry_from_explicit(
         adapter="claude", session_id=parsed.get("session_id"),
-        active_context_tokens=parsed.get("active_context_tokens"),
-        context_window_tokens=parsed.get("context_window_tokens"),
+        active_context_tokens=active_context_tokens,
+        context_window_tokens=context_window_tokens,
         session_input_tokens=parsed.get("session_input_tokens"),
         session_cached_input_tokens=parsed.get("session_cached_input_tokens"),
         session_output_tokens=parsed.get("session_output_tokens"))
@@ -1138,6 +1146,7 @@ def _parse_codex_attempt_tail(path):
     if start and lines:
         lines = lines[1:]
     latest_usage = None
+    thread_ids = set()
     open_commands = {}
     for line in lines:
         try:
@@ -1147,7 +1156,11 @@ def _parse_codex_attempt_tail(path):
         if not isinstance(payload, dict):
             continue
         row_type = payload.get("type")
-        if row_type == "dispatch.supervisor.token_usage":
+        if row_type == "thread.started":
+            thread_id = payload.get("thread_id")
+            if isinstance(thread_id, str) and thread_id:
+                thread_ids.add(thread_id)
+        elif row_type == "dispatch.supervisor.token_usage":
             usage = payload.get("token_usage")
             if isinstance(usage, dict):
                 latest_usage = usage
@@ -1164,11 +1177,34 @@ def _parse_codex_attempt_tail(path):
             if isinstance(item, dict):
                 open_commands.pop(item.get("id"), None)
     parsed = {"token_usage": latest_usage,
+              "thread_id": next(iter(thread_ids)) if len(thread_ids) == 1 else None,
+              "thread_ambiguity": len(thread_ids) > 1,
               "exec_tool": next(reversed(open_commands.values())) if open_commands else None}
     _CODEX_ATTEMPT_CACHE[path] = (cache_key[0], cache_key[1], parsed)
     if len(_CODEX_ATTEMPT_CACHE) > 128:
         _CODEX_ATTEMPT_CACHE.pop(next(iter(_CODEX_ATTEMPT_CACHE)))
     return parsed
+
+
+def _codex_attempt_rollout(job, thread_id):
+    """Resolve a raw ``codex exec --json`` attempt to one exact projected rollout."""
+    try:
+        from . import codex as codex_collector
+    except Exception:
+        return None
+    homes = []
+    cwd = getattr(job, "cwd", None)
+    if isinstance(cwd, str) and cwd:
+        dispatch_dir = os.path.join(os.path.realpath(cwd), ".dispatch")
+        homes.extend((
+            os.path.join(dispatch_dir, "nested-codex-home"),
+            os.path.join(dispatch_dir, "codex-home"),
+        ))
+    env_home = os.environ.get("CODEX_HOME")
+    if env_home:
+        homes.append(env_home)
+    homes.append(os.path.expanduser("~/.codex"))
+    return codex_collector.exact_rollout_for_session_id(thread_id, homes=homes)
 
 
 def _enrich_codex_attempt_session(job):
@@ -1179,6 +1215,12 @@ def _enrich_codex_attempt_session(job):
     if parsed is None:
         return
     job._dispatch_context_owned = True
+    thread_id = parsed.get("thread_id")
+    if parsed.get("thread_ambiguity"):
+        job.association_ambiguity = "multiple-attempt-thread-ids"
+        thread_id = None
+    elif thread_id:
+        job._runtime_session_id = thread_id
     usage = parsed.get("token_usage") or {}
     last = usage.get("last") if isinstance(usage.get("last"), dict) else {}
     total = usage.get("total") if isinstance(usage.get("total"), dict) else {}
@@ -1191,6 +1233,22 @@ def _enrich_codex_attempt_session(job):
         session_output_tokens=total.get("output_tokens"),
         session_reasoning_output_tokens=total.get("reasoning_output_tokens"),
         session_total_tokens=total.get("total_tokens"))
+    evidence_path = path
+    evidence_source = "codex-attempt-app-server"
+    if telemetry.context_used_pct is None and thread_id:
+        rollout = _codex_attempt_rollout(job, thread_id)
+        if rollout:
+            try:
+                from . import codex as codex_collector
+                line = codex_collector._tail_token_count(rollout)
+            except Exception:
+                line = None
+            if line:
+                rollout_telemetry = parse_codex_token_count(line, session_id=thread_id)
+                if rollout_telemetry.active_context_tokens is not None:
+                    telemetry = rollout_telemetry
+                    evidence_path = rollout
+                    evidence_source = "codex-attempt-rollout"
     for field_name in (
             "active_context_tokens", "context_window_tokens", "session_input_tokens",
             "session_cached_input_tokens", "session_output_tokens",
@@ -1200,10 +1258,10 @@ def _enrich_codex_attempt_session(job):
     job.exec_tool = parsed.get("exec_tool")
     if job.ctx_pct is not None:
         try:
-            st = os.stat(path)
+            st = os.stat(evidence_path)
             sequence = (st.st_mtime_ns, st.st_size)
             job._context_evidence = ContextEvidence(
-                used_pct=job.ctx_pct, source="codex-attempt-app-server",
+                used_pct=job.ctx_pct, source=evidence_source,
                 sequence=sequence, source_head_sequence=sequence,
                 observed_at=st.st_mtime, fresh_until=st.st_mtime + 900)
         except OSError:

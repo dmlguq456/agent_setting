@@ -22,6 +22,7 @@ formula. Cumulative total_token_usage is NOT context occupancy — it double-cou
 A per-tick cache (cwd → newest rollout path) is built from cheap line-1 reads of all rollouts
 (≈200 files); the expensive last-token-count parse touches only a 64 KB tail of the matched file.
 """
+import glob
 import json
 import os
 import re
@@ -457,6 +458,35 @@ def _index(home):
 def _sid(path):
     match = _SID_RE.search(os.path.basename(path))
     return match.group(1) if match else None
+
+
+def exact_rollout_for_session_id(session_id, homes=None):
+    """Return the one rollout with this exact session id across fixed runtime homes.
+
+    Dispatch worktrees project their active Codex home under ``.dispatch``.  Accepting an
+    explicit home set lets the dispatch collector use that projection without walking every
+    runtime directory. Realpath dedup keeps a projection symlink and its target from looking
+    ambiguous; genuinely distinct duplicate rollouts fail closed.
+    """
+    if not isinstance(session_id, str) or _sid("rollout-x-%s.jsonl" % session_id) != session_id:
+        return None
+    raw_homes = list(homes) if homes is not None else [_home()]
+    paths = set()
+    seen_homes = set()
+    pattern = "rollout-*-%s.jsonl" % session_id
+    for raw_home in raw_homes:
+        if not isinstance(raw_home, (str, bytes, os.PathLike)):
+            continue
+        home = os.path.realpath(os.path.expanduser(os.fspath(raw_home)))
+        if home in seen_homes:
+            continue
+        seen_homes.add(home)
+        root = os.path.join(home, "sessions")
+        for path in glob.glob(os.path.join(root, "*", "*", "*", pattern)):
+            paths.add(os.path.realpath(path))
+        for path in glob.glob(os.path.join(root, pattern)):
+            paths.add(os.path.realpath(path))
+    return paths.pop() if len(paths) == 1 else None
 
 
 def _is_subagent(meta):
