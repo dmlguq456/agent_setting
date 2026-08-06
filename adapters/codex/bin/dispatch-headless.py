@@ -53,7 +53,7 @@ from dispatch_contract import (  # noqa: E402
     validate_nested_eligibility,
     wait_governor_reservation_claim,
 )
-from dispatch_summary import launch_summary_owner  # noqa: E402
+from dispatch_summary import launch_summary_owner, owner_root  # noqa: E402
 from dispatch_lifecycle import (  # noqa: E402
     DETACHED,
     FOREGROUND_SCOPED,
@@ -875,9 +875,20 @@ def nested_owner_writable_dirs(args: argparse.Namespace) -> tuple[Path, ...]:
     claude_config = Path(
         os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude"
     ).expanduser()
+    # SD-72: depth-2 launches inside the owner sandbox spawn a summary owner
+    # that writes exact-attempt state under the fleet titles root; without
+    # write access the pre-release fence closes every child as
+    # `summary-owner-launch-failed`/`never-launched`. A spec-backed owner also
+    # records its own PRD-read marker under `.spec-grounding`.
+    summary_owner_root = owner_root()
+    summary_owner_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    spec_grounding = Path(args.agent_home) / ".spec-grounding"
+    spec_grounding.mkdir(mode=0o700, parents=True, exist_ok=True)
     candidates = (
         Path(args.agent_home) / ".core-grounding",
         claude_config / "session-env",
+        spec_grounding,
+        summary_owner_root,
     )
     return tuple(path.resolve() for path in candidates if path.is_dir())
 
