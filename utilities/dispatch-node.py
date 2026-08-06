@@ -290,9 +290,13 @@ def main():
    for k,v in e.fields.items(): print(f"{k}={v}")
    raise SystemExit(65)
  if a.subsession_id:
-  argv += ["--subsession-id",a.subsession_id,"--subsession-index",str(a.subsession_index),"--subsession-count",str(a.subsession_count),"--subsession-mode",a.subsession_mode,"--subsession-purpose",a.subsession_purpose,"--session-chain-id",a.session_chain_id,"--phase-brief",a.phase_brief,"--stage-authority",str(a.stage_authority),"--narrow-verify",a.narrow_verify,"--expected-round-trips",str(a.expected_round_trips),"--attempt-id",a.attempt_id]
+  argv += ["--subsession-id",a.subsession_id,"--subsession-index",str(a.subsession_index),"--subsession-count",str(a.subsession_count),"--subsession-mode",a.subsession_mode,"--subsession-purpose",a.subsession_purpose,"--session-chain-id",a.session_chain_id,"--phase-brief",a.phase_brief,"--stage-authority",str(a.stage_authority),"--narrow-verify",a.narrow_verify,"--expected-round-trips",str(a.expected_round_trips)]
   for fixed_file in a.fixed_file: argv += ["--fixed-file",fixed_file]
   if a.state_dir: argv += ["--state-dir",a.state_dir]
+ # Batch-reserved attempt identity travels through this named argument for every
+ # leg shape; adapter_args rejects it as a protected override (the 2026-08-06
+ # eiren-m4 frame batch died there when only the subsession path forwarded it).
+ if a.attempt_id: argv += ["--attempt-id",a.attempt_id]
  argv += ["--model-role",node.get("role","fast implementer")]
  if node.get("model_profile"):
   argv += ["--model-profile",node["model_profile"]]
