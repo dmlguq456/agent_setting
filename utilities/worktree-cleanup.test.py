@@ -242,6 +242,42 @@ class WorktreeCleanupTests(unittest.TestCase):
         self.assertIn("status=no-candidates", result.stdout)
         self.assertTrue(registered.exists())
 
+    def test_recycled_pid_row_is_stale_not_active(self):
+        # pid 1 is always live but its /proc starttime can never equal the recorded
+        # pid_start=1 — a bare-pid probe would call this row active; identity must not.
+        path = self.fx.add_worktree("recycled", with_commit=True)
+        self.fx.merge_and_push("recycled")
+        self.fx.jobs.write_text(
+            f"2026-07-14T00:00:00Z\topen\t{path}\t{path}\trecycled\t"
+            "capability=autopilot-code,harness=codex,depth=1,pid=1,pid_start=1\n",
+            encoding="utf-8",
+        )
+        result = self.fx.cleanup(path)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("status=eligible", result.stdout)
+        self.assertIn("stale_registry_rows=1", result.stdout)
+
+    def test_matching_pid_identity_row_is_active(self):
+        path = self.fx.add_worktree("identity", with_commit=True)
+        self.fx.merge_and_push("identity")
+        proc = subprocess.Popen(["sleep", "60"], cwd=self.fx.root)
+        try:
+            with open(f"/proc/{proc.pid}/stat") as f:
+                data = f.read()
+            start = data[data.rindex(")") + 1:].split()[19]
+            self.fx.jobs.write_text(
+                f"2026-07-14T00:00:00Z\topen\t{path}\t{path}\tidentity\t"
+                f"capability=autopilot-code,harness=codex,depth=1,"
+                f"pid={proc.pid},pid_start={start}\n",
+                encoding="utf-8",
+            )
+            result = self.fx.cleanup(path)
+            self.assertEqual(result.returncode, 3)
+            self.assertIn("active-process", result.stdout)
+        finally:
+            proc.terminate()
+            proc.wait(timeout=5)
+
     def test_all_eligible_current_axes_without_attempt_cannot_authorize_removal(self):
         registered = self.fx.add_worktree("attemptless")
         self.fx.jobs.write_text(

@@ -161,14 +161,20 @@ def parse_registry(jobs: Path, target: Path) -> tuple[int, list[int]]:
         if normalize(fields[3]) != target:
             continue
         match = re.search(r"(?:^|,)pid=([0-9]+)(?:,|$)", fields[5])
-        if match and pid_is_live(int(match.group(1))):
+        start = re.search(r"(?:^|,)pid_start=([0-9]+)(?:,|$)", fields[5])
+        if match and pid_is_live(int(match.group(1)), start.group(1) if start else None):
             active.append(int(match.group(1)))
         else:
             stale += 1
     return stale, sorted(set(active))
 
 
-def pid_is_live(pid: int) -> bool:
+def pid_is_live(pid: int, pid_start: str | None = None) -> bool:
+    """(pid, start-time) identity when the registry recorded `pid_start`: a live
+    pid whose /proc starttime differs is a host PID reuse, not this attempt.
+    Bare-pid probing survives only for legacy rows that never captured it."""
+    if pid_start is not None:
+        return read_proc_start(pid) == pid_start
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -176,6 +182,24 @@ def pid_is_live(pid: int) -> bool:
     except PermissionError:
         return True
     return True
+
+
+def read_proc_start(pid: int) -> str | None:
+    """/proc/<pid>/stat field 22 (starttime) as str, else None. comm (field 2) is
+    parenthesized and may contain spaces/parens, so split after the last ')';
+    zombies are terminal and count as gone."""
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            data = f.read()
+    except (OSError, ValueError):
+        return None
+    try:
+        rest = data[data.rindex(")") + 1:].split()
+        if rest[0] == "Z":
+            return None
+        return rest[19]
+    except (ValueError, IndexError):
+        return None
 
 
 def process_cwds(target: Path) -> tuple[str, list[int]]:
