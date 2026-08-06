@@ -17,10 +17,15 @@ Each tuple answers "may the parent of a dispatch-depth-2 node spawn that child?"
 session running the probe**. Take the defaults; they resolve that parent for you.
 
 ```bash
+OWNER_PROFILE_ARGS=()
+if [ "$OWNER_HARNESS" = codex ]; then
+  OWNER_PROFILE_ARGS+=(--prospective-standard-owner)
+fi
 for CHILD in claude codex; do
   python3 "$AGENT_HOME/utilities/nested-dispatch-eligibility.py" \
     --parent-harness "$OWNER_HARNESS" --child-harness "$CHILD" \
-    --launch-authority conductor --worktree "$WORKTREE" --json
+    --launch-authority conductor --worktree "$WORKTREE" \
+    "${OWNER_PROFILE_ARGS[@]}" --json
 done   # collect into {"tuples": [...], "native_subagent": []} for --dispatch-evidence
 ```
 
@@ -31,6 +36,8 @@ be the adapter the owner will actually run as; bind that decision by passing the
 to the launch, `dispatch-owner --route-evidence "$ROUTE_FILE" --start ...`, so the adapter
 cascade cannot select a harness the tuples never probed. Getting any of this wrong does not stop
 the cycle — it silently exhausts hops 1 and 2 for every node and runs the whole route inline.
+`--prospective-standard-owner` is only for this pre-owner Codex check. Once the Codex owner is
+running, omit it: the probe then requires the launcher's actual network marker.
 Dispatch every durable node through `utilities/dispatch-node.py`; it binds the route identity,
 node, write scope, completion gate, exact fallback tuple, and current attempt axes to the
 selected adapter wrapper:

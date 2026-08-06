@@ -19,6 +19,7 @@ from dispatch_contract import (  # noqa: E402
     CANONICAL_PARENT_TRANSPORTS,
     PARENT_TRANSPORT_BY_DISPATCH_DEPTH,
     WRAPPER_PARENT_SANDBOXES,
+    codex_standard_owner_network_enabled,
 )
 
 # WHOSE RUNTIME THIS PROBE DESCRIBES
@@ -187,11 +188,27 @@ def preflight_failure_reason(output: str) -> str:
 def evaluate(args: argparse.Namespace) -> dict[str, str]:
     args.parent_harness, harness_failure = resolve_parent_harness(args.parent_harness)
     args.parent_transport, transport_failure = resolve_parent_transport(args.parent_transport)
+    prospective_owner = getattr(args, "prospective_standard_owner", False)
     sandbox_failure = ""
     if not harness_failure:
         args.parent_sandbox, sandbox_failure = resolve_parent_sandbox(
             args.parent_harness, args.parent_sandbox
         )
+    codex_owner_tuple = (
+        args.parent_harness == "codex"
+        and args.parent_transport == "headless"
+        and args.parent_sandbox == "workspace-write"
+    )
+    prospective_profile_applies = codex_owner_tuple and codex_standard_owner_network_enabled(
+        dispatch_depth=1,
+        worker_type="owner",
+        intensity="standard",
+        sandbox=args.parent_sandbox,
+    )
+    owner_marker = os.environ.get("AGENT_NESTED_HEADLESS_NETWORK") == "1"
+    current_dispatch_depth = os.environ.get("AGENT_DISPATCH_DEPTH", "0")
+    probe_scope = "active-owner-runtime"
+    next_check = ""
     if harness_failure:
         status, source, failure = "unsupported", "parent-harness-vocabulary", harness_failure
     elif sandbox_failure:
@@ -206,23 +223,35 @@ def evaluate(args: argparse.Namespace) -> dict[str, str]:
         )
     elif transport_failure:
         status, source, failure = "unsupported", "parent-transport-vocabulary", transport_failure
+    elif prospective_owner and current_dispatch_depth != "0":
+        status, source, failure = (
+            "unsupported",
+            "codex-prospective-standard-owner-contract",
+            "prospective-owner-check-inside-dispatch",
+        )
+    elif prospective_owner and not prospective_profile_applies:
+        status, source, failure = (
+            "unsupported",
+            "codex-prospective-standard-owner-contract",
+            "prospective-owner-profile-inapplicable",
+        )
     elif args.child_harness == "opencode":
         status, source, failure = (
             "unsupported",
             "dispatch-contract-v3",
             "opencode-standard-depth2-unsupported",
         )
-    elif (
-        args.parent_harness == "codex"
-        and args.parent_transport == "headless"
-        and args.parent_sandbox == "workspace-write"
-        and os.environ.get("AGENT_NESTED_HEADLESS_NETWORK") != "1"
-    ):
+    elif codex_owner_tuple and not owner_marker and not prospective_owner:
         status, source, failure = "unsupported", "codex-owner-network-contract", "nested-network-unconfirmed"
+        next_check = "--prospective-standard-owner"
     else:
         status, source, failure = command_check(args.child_harness, args.worktree)
         if status == "supported" and args.parent_harness == "codex":
-            source = "codex-owner-network-contract+" + source
+            if prospective_owner and not owner_marker:
+                source = "codex-prospective-standard-owner-contract+" + source
+                probe_scope = "prospective-standard-owner"
+            else:
+                source = "codex-owner-network-contract+" + source
     return {
         "parent_harness": args.parent_harness,
         "parent_transport": args.parent_transport,
@@ -233,6 +262,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, str]:
         "probe_source": source,
         "probe_time": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "failure_class": failure,
+        "probe_scope": probe_scope,
+        "next_check": next_check,
     }
 
 
@@ -260,6 +291,12 @@ def main() -> int:
     p.add_argument("--child-harness", required=True, choices=("claude", "codex", "opencode"))
     p.add_argument("--launch-authority", required=True, choices=("conductor", "ancestor-broker"))
     p.add_argument("--worktree", required=True)
+    p.add_argument(
+        "--prospective-standard-owner",
+        action="store_true",
+        help="check the standard+ depth-1 Codex owner profile before that owner exists;"
+             " inside an active owner, omit this and require its runtime network marker",
+    )
     p.add_argument("--json", action="store_true")
     args = p.parse_args()
     row = evaluate(args)

@@ -22,6 +22,7 @@ class NestedEligibilityTest(unittest.TestCase):
             child_harness="codex",
             launch_authority="conductor",
             worktree=worktree,
+            prospective_standard_owner=False,
         )
 
     def test_codex_auth_status_is_required_without_leaking_output(self):
@@ -68,6 +69,50 @@ class NestedEligibilityTest(unittest.TestCase):
             row = N.evaluate(self.args(worktree))
         self.assertEqual(row["status"], "unsupported")
         self.assertEqual(row["failure_class"], "nested-network-unconfirmed")
+        self.assertEqual(row["probe_scope"], "active-owner-runtime")
+        self.assertEqual(row["next_check"], "--prospective-standard-owner")
+        checked.assert_not_called()
+
+    def test_prospective_codex_owner_uses_launcher_contract_without_spoofing_marker(self):
+        with tempfile.TemporaryDirectory() as worktree, \
+             mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch.object(
+                 N, "command_check",
+                 return_value=("supported", "direct-auth+headless-check", ""),
+             ) as checked:
+            args = self.args(worktree)
+            args.prospective_standard_owner = True
+            row = N.evaluate(args)
+            self.assertNotIn("AGENT_NESTED_HEADLESS_NETWORK", os.environ)
+        self.assertEqual(row["status"], "supported")
+        self.assertEqual(
+            row["probe_source"],
+            "codex-prospective-standard-owner-contract+direct-auth+headless-check",
+        )
+        self.assertEqual(row["probe_scope"], "prospective-standard-owner")
+        checked.assert_called_once_with("codex", worktree)
+
+    def test_prospective_owner_mode_rejects_a_non_codex_owner_tuple(self):
+        with tempfile.TemporaryDirectory() as worktree, \
+             mock.patch.object(N, "command_check") as checked:
+            args = self.args(worktree)
+            args.parent_harness = "claude"
+            args.parent_sandbox = "adapter-default"
+            args.prospective_standard_owner = True
+            row = N.evaluate(args)
+        self.assertEqual(row["status"], "unsupported")
+        self.assertEqual(row["failure_class"], "prospective-owner-profile-inapplicable")
+        checked.assert_not_called()
+
+    def test_prospective_owner_mode_cannot_bypass_an_active_dispatch_marker(self):
+        with tempfile.TemporaryDirectory() as worktree, \
+             mock.patch.dict(os.environ, {"AGENT_DISPATCH_DEPTH": "1"}, clear=True), \
+             mock.patch.object(N, "command_check") as checked:
+            args = self.args(worktree)
+            args.prospective_standard_owner = True
+            row = N.evaluate(args)
+        self.assertEqual(row["status"], "unsupported")
+        self.assertEqual(row["failure_class"], "prospective-owner-check-inside-dispatch")
         checked.assert_not_called()
 
     def test_checked_owner_profile_and_auth_surface_is_supported(self):

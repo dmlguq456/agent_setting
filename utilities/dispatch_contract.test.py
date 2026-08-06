@@ -11,6 +11,19 @@ from replica_batch_contract import build_manifest
 CURRENT="attempt_schema_version=2,dispatch_depth=2,transport=headless,execution_surface=registered-headless,registered_worker=1,fallback_hop=same-harness-headless"
 
 class DispatchContractTest(unittest.TestCase):
+ def test_codex_standard_owner_network_profile_is_exactly_scoped(self):
+  self.assertTrue(D.codex_standard_owner_network_enabled(
+   dispatch_depth=1, worker_type="owner", intensity="standard",
+   sandbox="workspace-write"))
+  for changed in (
+   {"dispatch_depth":2}, {"worker_type":"stage"}, {"intensity":"quick"},
+   {"sandbox":"danger-full-access"},
+  ):
+   values={"dispatch_depth":1, "worker_type":"owner", "intensity":"standard",
+           "sandbox":"workspace-write"}
+   values.update(changed)
+   self.assertFalse(D.codex_standard_owner_network_enabled(**values), changed)
+
  def owner_row(self,attempt,pid,start,slug="owner",extra=""):
   return (f"2026-07-23T00:00:00Z\topen\t/repo\t/wt\t{slug}\t"
           "attempt_schema_version=2,dispatch_depth=1,transport=headless,"

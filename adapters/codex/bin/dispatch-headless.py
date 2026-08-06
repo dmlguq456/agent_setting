@@ -27,6 +27,7 @@ from dispatch_contract import (  # noqa: E402
     GROUP_REAP_PROOF,
     GOVERNOR_RESERVATION_ENV,
     REPLICA_RESERVATION_ROW_KEYS,
+    STANDARD_PLUS_INTENSITIES,
     SUPERVISOR_LEASE_KIND,
     anchored_capacity_failure,
     annotate_attempt_row,
@@ -35,6 +36,7 @@ from dispatch_contract import (  # noqa: E402
     claim_attempt_row,
     close_attempt_row,
     completion_marker_gate,
+    codex_standard_owner_network_enabled,
     ensure_global_registry_writable,
     headless_attempt_policy,
     launch_orphan_watch,
@@ -100,7 +102,7 @@ QA_FROM_INTENSITY = {
 INTENSITY_LEVELS = {"direct", "quick", "standard", "strong", "thorough", "adversarial"}
 # standard+ per OPERATIONS.md §5.10 — the SD-78 runtime-owned completion clause
 # is scoped to this set for owner (conductor) launches only.
-_STANDARD_PLUS_INTENSITY = {"standard", "strong", "thorough", "adversarial"}
+_STANDARD_PLUS_INTENSITY = STANDARD_PLUS_INTENSITIES
 
 # SD-15 (OPERATIONS §5.10 ⑨): immediate limit/auth failure patterns — homomorphic port of the Claude
 # wrapper's DEATH_PATTERNS. codex exec surfaces provider limit/auth failures as JSON
@@ -1267,11 +1269,11 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
 def nested_headless_network_enabled(args: argparse.Namespace) -> bool:
     """Grant network only to a standard+ dispatch-depth-1 Codex capability owner."""
 
-    return (
-        args.dispatch_depth == 1
-        and args.worker_type == "owner"
-        and args.intensity in {"standard", "strong", "thorough", "adversarial"}
-        and args.sandbox == "workspace-write"
+    return codex_standard_owner_network_enabled(
+        dispatch_depth=args.dispatch_depth,
+        worker_type=args.worker_type,
+        intensity=args.intensity,
+        sandbox=args.sandbox,
     )
 
 

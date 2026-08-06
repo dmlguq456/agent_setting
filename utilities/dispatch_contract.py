@@ -30,6 +30,9 @@ from replica_batch_contract import (
 
 ELIGIBILITY = {"supported", "unsupported", "unknown"}
 LAUNCH_AUTHORITIES = {"conductor", "ancestor-broker"}
+STANDARD_PLUS_INTENSITIES = frozenset(
+    {"standard", "strong", "thorough", "adversarial"}
+)
 ATTEMPT_SCHEMA_VERSION = 2
 SUPERVISOR_LEASE_KIND = "flock-v1"
 SUPERVISOR_LEASE_NONCE_RE = re.compile(r"[0-9a-f]{64}")
@@ -159,6 +162,21 @@ _CAPACITY_TERMINAL_RE = re.compile(
     r"(?:is\s+)?at\s+capacity[.!]?",
     re.I,
 )
+
+
+def codex_standard_owner_network_enabled(
+    *, dispatch_depth: int, worker_type: str, intensity: str, sandbox: str
+) -> bool:
+    """Return whether the Codex wrapper grants its scoped nested network profile."""
+
+    return (
+        dispatch_depth == 1
+        and worker_type == "owner"
+        and intensity in STANDARD_PLUS_INTENSITIES
+        and sandbox == "workspace-write"
+    )
+
+
 GOVERNOR_RESERVATION_ENV = "AGENT_MODEL_GOVERNOR_RESERVATION_TOKEN"
 PID_HOST_NAMESPACE_PROOF = "nspid-procfs-root-v1"
 GROUP_REAP_PROOF = "pgid-empty-v1"
