@@ -296,11 +296,21 @@ class MaterialRouteGuardTest(unittest.TestCase):
 
     def test_stale_source_commit_and_tampered_record_are_denied(self) -> None:
         self.assertEqual(self.bind().returncode, 0)
+        source = subprocess.run(
+            ["git", "-C", str(self.repo), "rev-parse", "HEAD"],
+            text=True, capture_output=True, check=True).stdout.strip()
+        # SD-67: a first-parent descendant HEAD is mid-cycle progress — the
+        # route stays valid across the cycle's own commits.
         subprocess.run(["git", "-C", str(self.repo), "commit", "--allow-empty", "-qm", "advance"], check=True)
+        advanced = self.guard("--tool", "Edit", "--file", str(self.repo / "app.py"))
+        self.assertEqual(advanced.returncode, 0, advanced.stderr)
+        # Rewritten history is not a descendant: still stale.
+        subprocess.run(["git", "-C", str(self.repo), "reset", "--hard", "-q", "HEAD^"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "commit", "--allow-empty", "--amend", "-qm", "rewritten"], check=True)
         stale = self.guard("--tool", "Edit", "--file", str(self.repo / "app.py"))
         self.assertEqual(stale.returncode, 2)
         self.assertIn("route-source-commit-stale", stale.stderr)
-        subprocess.run(["git", "-C", str(self.repo), "reset", "--hard", "-q", "HEAD^"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "reset", "--hard", "-q", source], check=True)
         value = json.loads(self.route.read_text())
         value["route_id"] = "rt-tampered"
         self.route.write_text(json.dumps(value), encoding="utf-8")

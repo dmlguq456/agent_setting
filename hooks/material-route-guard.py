@@ -331,6 +331,23 @@ def current_commit(root: Path) -> str:
     return result.stdout.strip() if result.returncode == 0 else "unversioned"
 
 
+def _first_parent_descendant(root: Path, source_commit: str, head: str) -> bool:
+    """SD-67: a moved HEAD is mid-cycle progress, not a stale route, when it is
+    a first-parent descendant of the pinned ``source_commit``.
+
+    ``worker-route-guard.py`` accepts exactly this lineage for declared retry
+    boundaries; this guard denying it froze every multi-commit route after its
+    first commit — each later material edit and ``git commit`` died
+    ``route-source-commit-stale`` for the rest of the cycle (observed
+    2026-08-07, dispatch-orphan-fixes owner). Rewritten, reset, or divergent
+    history is still stale: only the same line of work, advanced, passes.
+    """
+    if not source_commit or head == "unversioned":
+        return False
+    result = _run(["git", "-C", str(root), "rev-list", "--first-parent", head])
+    return result.returncode == 0 and source_commit in result.stdout.split()
+
+
 def _load_route(path: Path) -> dict[str, Any]:
     try:
         if not path.is_absolute() or path.is_symlink() or path.stat().st_size > 2_000_000:
@@ -400,7 +417,10 @@ def verify_route(
         if _verifier_crashed(result):
             raise RouteError("route-verifier-crashed")
         raise RouteError("route-record-verification-failed")
-    if route.get("source_commit") != current_commit(expected_root):
+    head = current_commit(expected_root)
+    if route.get("source_commit") != head and not _first_parent_descendant(
+        expected_root, str(route.get("source_commit") or ""), head
+    ):
         raise RouteError("route-source-commit-stale")
     if expected_route_id and route.get("route_id") != expected_route_id:
         raise RouteError("route-id-mismatch")
