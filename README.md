@@ -56,8 +56,8 @@ actually discovers.
 ### Install
 
 ```bash
-curl -fsSL https://github.com/dmlguq456/agent_setting/releases/latest/download/install.sh | sh
-~/.local/bin/harness runtime doctor --runtime all --strict
+curl -fsSL https://github.com/dmlguq456/hearting/releases/latest/download/install.sh | sh
+~/.local/bin/hearting runtime doctor --runtime all --strict
 ```
 
 The installer and distribution logic come from the same immutable Release tag;
@@ -70,22 +70,24 @@ When Codex is installed, the same transaction also installs a reversible
 `~/.local/bin/codex` launcher. Plain interactive `codex`, `codex resume`, and
 `codex fork` enter the harness-managed App Server automatically; `codex exec`,
 plugin administration, login, and other non-interactive commands pass through to
-the recorded real CLI. Updates repair the launcher, and `harness uninstall codex`
+the recorded real CLI. Updates repair the launcher, and `hearting uninstall codex`
 restores the exact previous command binding. If Codex is not installed yet, this
 step is reported as skipped and can be applied by a later runtime refresh.
 
 Once `~/.local/bin` is on your `PATH`, manage it with:
 
 ```bash
-harness runtime status --runtime all
-harness update
-harness auto-update status
-harness runtime doctor --runtime all --strict
+hearting runtime status --runtime all
+hearting update
+hearting auto-update status
+hearting runtime doctor --runtime all --strict
 
 fleet          # live cross-harness dashboard; --once for a plain snapshot
 ```
 
-The installer also drops a `fleet` launcher into `~/.local/bin`. The live
+The installer puts both `hearting` and `harness` on your `PATH` — the same
+launcher under two names, so anything written against the old name keeps
+working. It also drops a `fleet` launcher into `~/.local/bin`. The live
 full-screen view needs `curses`; `fleet --once` and `fleet --json` do not, so
 scripting and snapshots work anywhere Python does.
 
@@ -96,7 +98,7 @@ explicitly without changing the scheduler configuration. For a periodic
 LaunchAgent, `active` means the job is loaded and scheduled; its updater process
 does not need to remain running between triggers.
 
-`harness update` stages and verifies a new release before switching the active
+`hearting update` stages and verifies a new release before switching the active
 pointer, and rolls back on failure. Existing agent sessions still follow their
 runtime-specific re-invocation, new-session, or restart boundary; check
 `runtime status` after an update.
@@ -108,7 +110,7 @@ boundary; it is not an independent signature.
 To pin a version or disable scheduled checks:
 
 ```bash
-curl -fsSL https://github.com/dmlguq456/agent_setting/releases/download/v2.0.0/install.sh | sh -s -- --no-auto-update
+curl -fsSL https://github.com/dmlguq456/hearting/releases/download/v2.0.0/install.sh | sh -s -- --no-auto-update
 ```
 
 ## Use natural language
@@ -207,7 +209,7 @@ databases, logs, and foreign caches remain outside its ownership. See
 Maintainers can keep a live checkout instead of the managed release:
 
 ```bash
-git clone https://github.com/dmlguq456/agent_setting.git ~/agent_setting
+git clone https://github.com/dmlguq456/hearting.git ~/agent_setting
 cd ~/agent_setting
 ./tools/install/harness.sh runtime activate --runtime all --mode linked
 ```

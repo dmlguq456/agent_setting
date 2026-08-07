@@ -386,7 +386,7 @@ def status(scope="global"):
     manifest_data = manifest._load_manifest(manifest._manifest_path("opencode", scope))
     drift = manifest.check_drift(["opencode"], scope=scope)
 
-    pointer_path = paths.runtime_home("opencode", scope) / "agent-harness"
+    pointer_path = paths.runtime_home("opencode", scope) / "hearting"
     pointer_present = pointer_path.is_symlink() or pointer_path.exists()
 
     config_merged = False

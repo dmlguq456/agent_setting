@@ -51,7 +51,7 @@ full masking.
 | Native skills | `adapters/opencode/skills/` |
 | Native agents | `adapters/opencode/agents/` |
 | Native commands | `adapters/opencode/commands/` |
-| Native guard plugin | `adapters/opencode/plugins/agent-harness-guards.js` |
+| Native guard plugin | `adapters/opencode/plugins/hearting-guards.js` |
 | Capabilities | `capabilities/README.md` |
 | Role profiles | `roles/README.md` |
 | Hook and guard scripts | `hooks/`, `utilities/` |
@@ -64,7 +64,7 @@ full masking.
 |---|---|
 | capability | Read `capabilities/README.md` for meaning; run `adapters/opencode/bin/preflight.sh capability-info <capability>` to confirm OpenCode realization; use `adapters/opencode/skills/<capability>/SKILL.md` as OpenCode-native guidance |
 | native skill/command/agent surface | Skills are materialized under `adapters/opencode/skills/`; agents are materialized under `adapters/opencode/agents/`; commands are materialized under `adapters/opencode/commands/`. Future output must be generated from portable capability/role sources and verified with OpenCode discoverability (`opencode debug skill`, `opencode debug agent`, `opencode debug config`) |
-| native plugin hook surface | `adapters/opencode/plugins/agent-harness-guards.js` uses `chat.message` to retain the current user prompt only until `experimental.chat.system.transform` runs the bounded memory candidate probe, then discards it; the transform also supplies prompt lifecycle context. `tool.execute.before` bridges write/edit/patch targets to `preflight.sh write` with the native message/turn ID, including same-turn recall-opportunity and core-first gates. `experimental.session.compacting` flushes a worker ledger and `session.compacted` re-reads it. `command.execute.before` bridges `autopilot-code`/`autopilot-spec` to `preflight.sh capability`, and `tool.execute.after` bridges `prd.md` / `core/*.md` reads and design saves; explicit preflight remains fallback |
+| native plugin hook surface | `adapters/opencode/plugins/hearting-guards.js` uses `chat.message` to retain the current user prompt only until `experimental.chat.system.transform` runs the bounded memory candidate probe, then discards it; the transform also supplies prompt lifecycle context. `tool.execute.before` bridges write/edit/patch targets to `preflight.sh write` with the native message/turn ID, including same-turn recall-opportunity and core-first gates. `experimental.session.compacting` flushes a worker ledger and `session.compacted` re-reads it. `command.execute.before` bridges `autopilot-code`/`autopilot-spec` to `preflight.sh capability`, and `tool.execute.after` bridges `prd.md` / `core/*.md` reads and design saves; explicit preflight remains fallback |
 | stage-session capacity | `dispatch-headless.py` projects the same phase brief, fixed-file fence, ledger, and `stage_authority=0` metadata as Claude/Codex. OpenCode's native-agent surface is not yet route-owned depth-2 evidence, so the checked registered/inline fallback remains authoritative and no native parity is claimed. |
 | role profile | Use `roles/README.md` for meaning; use `adapters/opencode/agents/<role>/<role>.md` as OpenCode-native role guidance, and use Claude agent files only as compatibility references |
 | role mode | Run `adapters/opencode/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes report `fallback=reference-only` when no OpenCode-native runtime surface exists |
@@ -78,7 +78,7 @@ full masking.
 | harness status snapshot | Run `adapters/opencode/bin/preflight.sh status [cwd] [session-id]` for read-only artifact, notes, worktree, and git-risk signals. This does not replace OpenCode native model/context/session UI |
 | token self-regulation v2 | Phase 2 automatic hook accounting and the Phase 3 isolated experiment CLI are deferred. Shared Fleet modules may be inspected as portable source, but OpenCode projects no token-budget utility, production hook, activation flag, or runtime-config mutation |
 | adapter readiness | Run `adapters/opencode/bin/preflight.sh doctor` to check manifest freshness, native projections, and boundary rules in one command |
-| headless dispatch | Tool-contract check: `adapters/opencode/bin/preflight.sh headless --check <worktree>` verifies the worktree, `opencode run` availability, and installed OpenCode runtime projection (`agent-harness`, native Skills path, native Agents, native Commands, and guard plugin). Use `adapters/opencode/bin/preflight.sh dispatch --dry-run|--register|--start --worktree <path> --slug <slug> --capability <name> --capability-mode <mode> [--worker-mode <family/mode>] --qa <level> [--agent <agent>] (--model-profile <deep|balanced-deep|light|mini> [--model-role <portable-role>]|--model-role <portable-role>|--model <model> --variant <variant>|--inherit-model-settings)` to build the command and register open jobs. The optional worker mode is a non-owner projection that must equal the selected portable unit; `_kernel/owner` rejects a stage mode and accepts a route-sealed owner profile alone. Route-bound profiles resolve through `config/models.conf`, caller model/variant replacement is rejected, and substantive registered `mini` is denied. OpenCode currently collapses `balanced-deep` to `deep`, records `profile_granularity=collapsed-balanced-deep`, and omits `--variant` when the resolved value is `runtime-default`. Registry/Fleet rows keep capability mode, worker mode, role, profile, tier, and granularity separate. `--start` reruns the same runtime projection check before launching. Use `liveness` while waiting and `harvest --mark-done` after main-session harvest; merge and cleanup remain outside the wrapper |
+| headless dispatch | Tool-contract check: `adapters/opencode/bin/preflight.sh headless --check <worktree>` verifies the worktree, `opencode run` availability, and installed OpenCode runtime projection (`hearting`, native Skills path, native Agents, native Commands, and guard plugin). Use `adapters/opencode/bin/preflight.sh dispatch --dry-run|--register|--start --worktree <path> --slug <slug> --capability <name> --capability-mode <mode> [--worker-mode <family/mode>] --qa <level> [--agent <agent>] (--model-profile <deep|balanced-deep|light|mini> [--model-role <portable-role>]|--model-role <portable-role>|--model <model> --variant <variant>|--inherit-model-settings)` to build the command and register open jobs. The optional worker mode is a non-owner projection that must equal the selected portable unit; `_kernel/owner` rejects a stage mode and accepts a route-sealed owner profile alone. Route-bound profiles resolve through `config/models.conf`, caller model/variant replacement is rejected, and substantive registered `mini` is denied. OpenCode currently collapses `balanced-deep` to `deep`, records `profile_granularity=collapsed-balanced-deep`, and omits `--variant` when the resolved value is `runtime-default`. Registry/Fleet rows keep capability mode, worker mode, role, profile, tier, and granularity separate. `--start` reruns the same runtime projection check before launching. Use `liveness` while waiting and `harvest --mark-done` after main-session harvest; merge and cleanup remain outside the wrapper |
 | QA policy mapping | `adapters/opencode/bin/preflight.sh qa-policy <level> [code|research|doc|general]` maps portable QA levels from `core/CONVENTIONS.md` to OpenCode assurance scope, selected-pass reviewer budgets, external-adversary requirements, max rounds, and inline fallback reporting. `stage_graph_selector=intensity-not-qa` means these budgets do not open stages or depth by themselves |
 | artifact-order gate | `core/HOOKS.md` defines the invariant; run `adapters/opencode/bin/preflight.sh write <file> [session-id] [turn-id]` before writes |
 | core-first gate | `core/HOOKS.md` defines marker/check semantics; plugin read markers plus `preflight.sh write` deny ungrounded `adapters/**` edits. Run `preflight.sh read <core-doc.md>` manually after core reads when plugins are unavailable |
@@ -199,7 +199,7 @@ expose `adapters/claude/commands/` as OpenCode-native commands.
 
 ## Native Guard Plugin Projection
 
-`adapters/opencode/plugins/agent-harness-guards.js` contains an OpenCode-native
+`adapters/opencode/plugins/hearting-guards.js` contains an OpenCode-native
 JS plugin that runs adapter preflight guards around tool and command execution.
 `tool.execute.before` delegates write safety checks to `preflight.sh write`;
 `command.execute.before` enforces the spec read gate for `autopilot-code` /
@@ -209,7 +209,7 @@ read` on a `prd.md` read and delegates design HTML saves to `preflight.sh
 design`:
 
 ```bash
-node --check adapters/opencode/plugins/agent-harness-guards.js
+node --check adapters/opencode/plugins/hearting-guards.js
 ```
 
 Expose it to OpenCode by symlinking the generated projection into a project or
@@ -217,7 +217,7 @@ global plugin directory:
 
 ```bash
 mkdir -p .opencode/plugins
-ln -sfn "$AGENT_HOME/opencode_setting/opencode-plugins/agent-harness-guards.js" .opencode/plugins/agent-harness-guards.js
+ln -sfn "$AGENT_HOME/opencode_setting/opencode-plugins/hearting-guards.js" .opencode/plugins/hearting-guards.js
 ```
 
 The plugin bridges to `adapters/opencode/bin/preflight.sh`; it does not copy or
@@ -244,7 +244,7 @@ in the config. At minimum, the OpenCode adapter should expose a stable pointer
 back to the neutral repo:
 
 ```text
-$HOME/.config/opencode/agent-harness -> $HOME/agent_setting
+$HOME/.config/opencode/hearting -> $HOME/agent_setting
 ```
 
 The `instructions` array in `opencode.json`/`opencode.jsonc` should include the

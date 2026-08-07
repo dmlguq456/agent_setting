@@ -53,7 +53,7 @@ def build_parser():
     p = _UsageExitParser(
         prog="harness",
         description=(
-            "agent-harness installer — managed releases for users, "
+            "hearting installer — managed releases for users, "
             "linked checkouts for maintainers."
         ),
     )

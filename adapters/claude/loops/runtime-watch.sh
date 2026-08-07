@@ -16,7 +16,7 @@ esac
 
 AGENT_HOME="${AGENT_HOME:-${CLAUDE_HOME:-$HOME/agent_setting}}"
 STATE_DIR="${RUNTIME_WATCH_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/agent-runtime-watch}"
-AGENT_LOOP_ENV="${AGENT_LOOP_ENV:-$HOME/.config/agent-harness/loops.env}"
+AGENT_LOOP_ENV="${AGENT_LOOP_ENV:-$HOME/.config/hearting/loops.env}"
 [ -f "$AGENT_LOOP_ENV" ] && . "$AGENT_LOOP_ENV"
 AGENT_NOTES_ROOT="${AGENT_NOTES_ROOT:-$HOME/agent-notes}"
 OUT_DIR="${RUNTIME_WATCH_OUT_DIR:-$AGENT_NOTES_ROOT/runtime-watch}"

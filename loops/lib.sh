@@ -6,8 +6,8 @@
 export PATH="$HOME/.local/bin:$PATH"
 
 # Machine-local loop roots: personal paths live outside the repo.
-# Priority: existing env > ~/.config/agent-harness/loops.env > generic defaults.
-AGENT_LOOP_ENV="${AGENT_LOOP_ENV:-$HOME/.config/agent-harness/loops.env}"
+# Priority: existing env > ~/.config/hearting/loops.env > generic defaults.
+AGENT_LOOP_ENV="${AGENT_LOOP_ENV:-$HOME/.config/hearting/loops.env}"
 if [ -f "$AGENT_LOOP_ENV" ]; then . "$AGENT_LOOP_ENV"; fi
 AGENT_NOTES_ROOT="${AGENT_NOTES_ROOT:-$HOME/agent-notes}"
 AGENT_SCAN_ROOT="${AGENT_SCAN_ROOT:-$HOME}"

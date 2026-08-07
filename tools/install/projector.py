@@ -43,9 +43,9 @@ _CLAUDE_TABLE = (
 
 # (destination under runtime_home, source relpath); an empty source points to AGENT_HOME.
 _CODEX_FIXED_SYMLINKS = [
-    ("agent-harness", ""),
+    ("hearting", ""),
     ("AGENTS.md", "codex_setting/AGENTS.md"),
-    ("agent-harness-readme.md", "codex_setting/README.md"),
+    ("hearting-readme.md", "codex_setting/README.md"),
     ("agent-core", "codex_setting/core"),
     ("agent-capabilities", "codex_setting/capabilities"),
     ("agent-roles", "codex_setting/roles"),
@@ -91,9 +91,9 @@ _CODEX_TABLE = (
 # ---------------------------------------------------------------------------
 
 _OPENCODE_FIXED_SYMLINKS = [
-    ("agent-harness", ""),
+    ("hearting", ""),
     ("agent-agents.md", "opencode_setting/AGENTS.md"),
-    ("agent-harness-readme.md", "opencode_setting/README.md"),
+    ("hearting-readme.md", "opencode_setting/README.md"),
     ("agent-core", "opencode_setting/core"),
     ("agent-capabilities", "opencode_setting/capabilities"),
     ("agent-roles", "opencode_setting/roles"),
@@ -103,7 +103,7 @@ _OPENCODE_FIXED_SYMLINKS = [
     ("agent-skills", "opencode_setting/opencode-skills"),
     ("agent-agents", "opencode_setting/opencode-agents"),
     ("agent-commands", "opencode_setting/opencode-commands"),
-    ("plugins/agent-harness-guards.js", "opencode_setting/opencode-plugins/agent-harness-guards.js"),
+    ("plugins/hearting-guards.js", "opencode_setting/opencode-plugins/hearting-guards.js"),
 ]
 
 _OPENCODE_TABLE = (

@@ -110,7 +110,7 @@ def _state(home: Path) -> dict:
         raise LauncherError(f"real Codex command is unavailable: {real}")
     if _is_harness_wrapper(real):
         raise LauncherError(
-            f"real Codex command resolves to an agent-harness launcher wrapper: {real}"
+            f"real Codex command resolves to an hearting launcher wrapper: {real}"
         )
     value["real_command"] = str(real)
     return value
@@ -124,7 +124,7 @@ def _is_harness_wrapper(command: Path) -> bool:
         payload = command.read_bytes()
     except OSError:
         return False
-    return b"agent-harness" in payload and b"codex-launcher.py" in payload
+    return b"hearting" in payload and b"codex-launcher.py" in payload
 
 
 def _first_positional(args: list[str]) -> str | None:
@@ -205,7 +205,7 @@ def workspace(args: list[str]) -> Path:
 
 def managed_command(args: list[str], home: Path, real: Path) -> list[str]:
     agent_home_raw = os.environ.get("AGENT_HOME")
-    agent_home = Path(agent_home_raw) if agent_home_raw else home / "agent-harness"
+    agent_home = Path(agent_home_raw) if agent_home_raw else home / "hearting"
     entry = agent_home / "utilities" / "codex-managed-entry.py"
     if not entry.is_file():
         raise LauncherError(f"managed-entry projection is unavailable: {entry}")
@@ -259,7 +259,7 @@ def main() -> int:
             command = [str(real), *args]
         os.execv(command[0], command)
     except (LauncherError, OSError) as exc:
-        print(f"agent-harness: Codex launcher failed: {exc}", file=sys.stderr)
+        print(f"hearting: Codex launcher failed: {exc}", file=sys.stderr)
         return 69
 
 

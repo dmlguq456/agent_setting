@@ -130,7 +130,7 @@ test -f "$SNAPSHOT/reference.md"
 test "$(find "$SNAPSHOT" -type f ! -name '*.md' | wc -l | tr -d ' ')" = 0
 test "$(stat -c %a "$SNAPSHOT/SKILL.md")" = 444
 grep -q "^name: $PHYSICAL$" "$SNAPSHOT/SKILL.md"
-python3 - "$XDG_STATE_HOME/agent-harness/extensions/registry.json" "$SNAPSHOT" "$CODEX_HOME" <<'PY'
+python3 - "$XDG_STATE_HOME/hearting/extensions/registry.json" "$SNAPSHOT" "$CODEX_HOME" <<'PY'
 import json
 import sys
 
@@ -171,18 +171,18 @@ test ! -e "$SNAPSHOT"
 
 # A normal failure rolls back every runtime link, registry generation, and journal.
 printf '\nRollback candidate.\n' >>"$SOURCE/skill/reference.md"
-REGISTRY="$XDG_STATE_HOME/agent-harness/extensions/registry.json"
+REGISTRY="$XDG_STATE_HOME/hearting/extensions/registry.json"
 REGISTRY_BEFORE=$(sha256sum "$REGISTRY" | awk '{print $1}')
 expect_exit 3 env HARNESS_EXTENSION_FAIL_AFTER=1 "$HARNESS" extension update "$CANONICAL" --json >"$TMP/fail.json"
 assert_links "$UPDATED_SNAPSHOT" "$PHYSICAL"
 test "$REGISTRY_BEFORE" = "$(sha256sum "$REGISTRY" | awk '{print $1}')"
-test ! -e "$XDG_STATE_HOME/agent-harness/extensions/transaction.json"
+test ! -e "$XDG_STATE_HOME/hearting/extensions/transaction.json"
 
 # A hard process exit leaves a journal; the next mutation recovers before applying.
 printf '\nCrash candidate.\n' >>"$SOURCE/skill/reference.md"
 cp "$REGISTRY" "$TMP/registry.precrash"
 expect_exit 97 env HARNESS_EXTENSION_HARD_EXIT_AFTER=1 "$HARNESS" extension update "$CANONICAL" --json >"$TMP/crash.json"
-test -f "$XDG_STATE_HOME/agent-harness/extensions/transaction.json"
+test -f "$XDG_STATE_HOME/hearting/extensions/transaction.json"
 python3 - "$REGISTRY" <<'PY'
 import json
 import sys
@@ -195,16 +195,16 @@ with open(path, "w", encoding="utf-8") as handle:
 PY
 expect_exit 3 "$HARNESS" extension update "$CANONICAL" --json >"$TMP/recovery-conflict.json"
 test "$(json_value "$TMP/recovery-conflict.json" 'data["reason"]')" = recovery-conflict
-test -f "$XDG_STATE_HOME/agent-harness/extensions/transaction.json"
+test -f "$XDG_STATE_HOME/hearting/extensions/transaction.json"
 cp "$TMP/registry.precrash" "$REGISTRY"
 "$HARNESS" extension update "$CANONICAL" --json >"$TMP/recovered.json"
 RECOVERED_SNAPSHOT=$(json_value "$TMP/recovered.json" 'data["extension"]["snapshot"]')
 test "$(json_value "$TMP/recovered.json" 'data["extension"]["recovered"]')" = True
 assert_links "$RECOVERED_SNAPSHOT" "$PHYSICAL"
-test ! -e "$XDG_STATE_HOME/agent-harness/extensions/transaction.json"
+test ! -e "$XDG_STATE_HOME/hearting/extensions/transaction.json"
 
 # Replacing a snapshot parent with a symlink must not read or delete the target.
-SNAPSHOT_PARENT="$XDG_DATA_HOME/agent-harness/extensions/fixture-labs/portable-review"
+SNAPSHOT_PARENT="$XDG_DATA_HOME/hearting/extensions/fixture-labs/portable-review"
 mv "$SNAPSHOT_PARENT" "$SNAPSHOT_PARENT.saved"
 mkdir "$TMP/external-snapshot-parent"
 printf 'keep\n' >"$TMP/external-snapshot-parent/marker"
@@ -243,7 +243,7 @@ test "$(json_value "$TMP/registry-tamper.json" 'data["reason"]')" = registry-inv
 cp "$TMP/registry.saved" "$REGISTRY"
 
 # A held writer lock fails closed when explicit non-blocking mode is requested.
-LOCK="$XDG_STATE_HOME/agent-harness/extensions/.lock"
+LOCK="$XDG_STATE_HOME/hearting/extensions/.lock"
 MARKER="$TMP/lock-held"
 python3 - "$LOCK" "$MARKER" <<'PY' &
 import fcntl

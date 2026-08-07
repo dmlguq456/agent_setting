@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agent-harness.local/schemas/figure-semantic-manifest-v1.json",
+  "$id": "https://hearting.local/schemas/figure-semantic-manifest-v1.json",
   "title": "Report spectrogram semantic evidence manifest",
   "type": "object",
   "additionalProperties": false,

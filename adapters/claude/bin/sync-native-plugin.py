@@ -30,7 +30,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 ADAPTER = ROOT / "adapters" / "claude"
-PLUGIN_NAME = "agent-harness-claude"
+PLUGIN_NAME = "hearting-claude"
 MARKETPLACE_ROOT = ADAPTER / "plugin-marketplace"
 MARKETPLACE = MARKETPLACE_ROOT / ".claude-plugin" / "marketplace.json"
 PLUGIN_ROOT = MARKETPLACE_ROOT / "plugins" / PLUGIN_NAME
@@ -95,16 +95,16 @@ def plugin_json() -> dict:
             "Claude Code — see PRD .agent_reports/spec/harness-installer/prd.md."
         ),
         "author": {
-            "name": "agent-harness",
+            "name": "hearting",
         },
     }
 
 
 def marketplace_json() -> dict:
     return {
-        "name": "agent-harness",
+        "name": "hearting",
         "owner": {
-            "name": "agent-harness",
+            "name": "hearting",
         },
         "plugins": [
             {

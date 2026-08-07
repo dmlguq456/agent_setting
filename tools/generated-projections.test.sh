@@ -28,9 +28,9 @@ PY
 
 python3 "$ROOT/tools/generate.py" >/dev/null
 grep -q "GENERATOR_SENTINEL" "$ROOT/adapters/claude/skills/post-it/SKILL.md"
-grep -q "GENERATOR_SENTINEL" "$ROOT/adapters/claude/plugin-marketplace/plugins/agent-harness-claude/skills/post-it/SKILL.md"
+grep -q "GENERATOR_SENTINEL" "$ROOT/adapters/claude/plugin-marketplace/plugins/hearting-claude/skills/post-it/SKILL.md"
 grep -q "GENERATOR_SENTINEL" "$ROOT/adapters/codex/skills/post-it/SKILL.md"
-grep -q "GENERATOR_SENTINEL" "$ROOT/adapters/codex/plugins/agent-harness-codex/skills/post-it/SKILL.md"
+grep -q "GENERATOR_SENTINEL" "$ROOT/adapters/codex/plugins/hearting-codex/skills/post-it/SKILL.md"
 grep -q "GENERATOR_SENTINEL" "$ROOT/adapters/opencode/skills/post-it/SKILL.md"
 
 python3 - "$MANIFEST" <<'PY'
@@ -50,9 +50,9 @@ grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/manifest.json"
 grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/tools/skill-conformance/invocation-policy.tsv"
 grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/skills/autopilot-code/SKILL.md"
 grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/adapters/claude/skills/autopilot-code/SKILL.md"
-grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/adapters/claude/plugin-marketplace/plugins/agent-harness-claude/skills/autopilot-code/SKILL.md"
+grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/adapters/claude/plugin-marketplace/plugins/hearting-claude/skills/autopilot-code/SKILL.md"
 grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md"
-grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/adapters/codex/plugins/agent-harness-codex/skills/autopilot-code/SKILL.md"
+grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/adapters/codex/plugins/hearting-codex/skills/autopilot-code/SKILL.md"
 grep -q "GENERATOR_ROUTE_SENTINEL" "$ROOT/adapters/opencode/skills/autopilot-code/SKILL.md"
 
 cp "$TMP/harness-manifest.json" "$MANIFEST"
@@ -70,10 +70,10 @@ probe_resolved=false
 rm -f "$PROBE"
 [ "$probe_resolved" = true ]
 
-find "$ROOT/capabilities" "$ROOT/adapters/claude/skills" "$ROOT/adapters/claude/plugin-marketplace/plugins/agent-harness-claude" "$ROOT/adapters/codex/skills" "$ROOT/adapters/codex/agents" "$ROOT/adapters/codex/modes" "$ROOT/adapters/codex/plugins/agent-harness-codex" "$ROOT/adapters/opencode/skills" "$ROOT/adapters/opencode/commands" "$ROOT/adapters/opencode/agents" -type f -print | sort | xargs sha256sum > "$TMP/first.sha"
+find "$ROOT/capabilities" "$ROOT/adapters/claude/skills" "$ROOT/adapters/claude/plugin-marketplace/plugins/hearting-claude" "$ROOT/adapters/codex/skills" "$ROOT/adapters/codex/agents" "$ROOT/adapters/codex/modes" "$ROOT/adapters/codex/plugins/hearting-codex" "$ROOT/adapters/opencode/skills" "$ROOT/adapters/opencode/commands" "$ROOT/adapters/opencode/agents" -type f -print | sort | xargs sha256sum > "$TMP/first.sha"
 sha256sum "$ROOT/tools/skill-conformance/invocation-policy.tsv" >> "$TMP/first.sha"
 python3 "$ROOT/tools/generate.py" >/dev/null
-find "$ROOT/capabilities" "$ROOT/adapters/claude/skills" "$ROOT/adapters/claude/plugin-marketplace/plugins/agent-harness-claude" "$ROOT/adapters/codex/skills" "$ROOT/adapters/codex/agents" "$ROOT/adapters/codex/modes" "$ROOT/adapters/codex/plugins/agent-harness-codex" "$ROOT/adapters/opencode/skills" "$ROOT/adapters/opencode/commands" "$ROOT/adapters/opencode/agents" -type f -print | sort | xargs sha256sum > "$TMP/second.sha"
+find "$ROOT/capabilities" "$ROOT/adapters/claude/skills" "$ROOT/adapters/claude/plugin-marketplace/plugins/hearting-claude" "$ROOT/adapters/codex/skills" "$ROOT/adapters/codex/agents" "$ROOT/adapters/codex/modes" "$ROOT/adapters/codex/plugins/hearting-codex" "$ROOT/adapters/opencode/skills" "$ROOT/adapters/opencode/commands" "$ROOT/adapters/opencode/agents" -type f -print | sort | xargs sha256sum > "$TMP/second.sha"
 sha256sum "$ROOT/tools/skill-conformance/invocation-policy.tsv" >> "$TMP/second.sha"
 cmp "$TMP/first.sha" "$TMP/second.sha"
 
@@ -208,7 +208,7 @@ grep -Fq 'agent-chosen memory recall' "$ROOT/capabilities/analyze-project.md"
 for owner in \
   "$ROOT/skills/analyze-project/references/owner-execution.md" \
   "$ROOT/adapters/claude/skills/analyze-project/references/owner-execution.md" \
-  "$ROOT/adapters/claude/plugin-marketplace/plugins/agent-harness-claude/skills/analyze-project/references/owner-execution.md"; do
+  "$ROOT/adapters/claude/plugin-marketplace/plugins/hearting-claude/skills/analyze-project/references/owner-execution.md"; do
   grep -Fq 'agent-chosen memory recall' "$owner" || {
     echo "not ok - post-approval owner contract missing from $owner" >&2
     exit 1
@@ -244,11 +244,11 @@ test -L "$ROOT/adapters/claude/tools/figure-semantic-verify.py"
 grep -Fq '### Step 4c: Report figure semantic gate' "$ROOT/skills/autopilot-draft/references/pipeline-steps.md"
 grep -Fq 'PNG existence, dimensions, count, and links alone are not a pass' "$ROOT/skills/code-test/SKILL.md"
 cmp -s "$ROOT/adapters/codex/skills/analyze-project/SKILL.md" \
-  "$ROOT/adapters/codex/plugins/agent-harness-codex/skills/analyze-project/SKILL.md"
+  "$ROOT/adapters/codex/plugins/hearting-codex/skills/analyze-project/SKILL.md"
 cmp -s "$ROOT/adapters/claude/skills/code-test/SKILL.md" \
-  "$ROOT/adapters/claude/plugin-marketplace/plugins/agent-harness-claude/skills/code-test/SKILL.md"
+  "$ROOT/adapters/claude/plugin-marketplace/plugins/hearting-claude/skills/code-test/SKILL.md"
 cmp -s "$ROOT/utilities/artifact-root.sh" \
-  "$ROOT/adapters/claude/plugin-marketplace/plugins/agent-harness-claude/utilities/artifact-root.sh"
+  "$ROOT/adapters/claude/plugin-marketplace/plugins/hearting-claude/utilities/artifact-root.sh"
 python3 "$ROOT/tools/figure-semantic-verify.test.py" >/dev/null
 
 WRAPPER_FIXTURE="$TMP/figure-wrapper"

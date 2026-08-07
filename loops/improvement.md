@@ -46,7 +46,7 @@ A loop may not:
 Use `tools/improvement/proposals.py`. The default store is:
 
 ```text
-${XDG_STATE_HOME:-~/.local/state}/agent-harness/improvement
+${XDG_STATE_HOME:-~/.local/state}/hearting/improvement
 ```
 
 It is intentionally outside the repository, runtime homes, managed releases,

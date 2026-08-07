@@ -85,7 +85,7 @@ PY
 
   test -L "$HOME/.codex/hooks.json" || fail "$mode lost Codex kernel hooks"
   test -L "$HOME/.claude/hooks/artifact-guard.sh" || fail "$mode lost Claude kernel hooks"
-  test -L "$HOME/.config/opencode/plugins/agent-harness-guards.js" || fail "$mode lost OpenCode kernel guard plugin"
+  test -L "$HOME/.config/opencode/plugins/hearting-guards.js" || fail "$mode lost OpenCode kernel guard plugin"
 
   harness runtime status --runtime all --json > "$TMP/$mode-status.json"
   python3 - "$TMP/$mode-status.json" <<'PY'

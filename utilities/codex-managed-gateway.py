@@ -43,7 +43,7 @@ MAX_CONTROL_BYTES = 16 * 1024
 MAX_CONTEXT_BYTES = 2048
 MAX_LEDGER_BYTES = 4 * 1024 * 1024
 MAX_DELIVERIES = 4096
-INTERNAL_ID_PREFIX = "agent-harness-managed:"
+INTERNAL_ID_PREFIX = "hearting-managed:"
 ID_PATTERN = re.compile(r"^[A-Za-z0-9._:@/+\-=]{1,256}$")
 FLEET_SESSION_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,256}$")
 ALLOWED_RECEIPT_KEYS = {
@@ -1331,7 +1331,7 @@ class ManagedGateway:
             "input": [],
             "clientUserMessageId": delivery_id,
             "additionalContext": {
-                "agent-harness-completion": {
+                "hearting-completion": {
                     "kind": "application",
                     "value": context,
                 }

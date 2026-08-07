@@ -75,12 +75,12 @@ def xdg_data_home():
 
 def extension_state_dir():
     """Harness-owned state for optional external extensions."""
-    return xdg_state_home() / "agent-harness" / "extensions"
+    return xdg_state_home() / "hearting" / "extensions"
 
 
 def extension_data_dir():
     """Harness-owned immutable snapshots for optional external extensions."""
-    return xdg_data_home() / "agent-harness" / "extensions"
+    return xdg_data_home() / "hearting" / "extensions"
 
 
 def harness_state_dir(runtime, scope="global"):

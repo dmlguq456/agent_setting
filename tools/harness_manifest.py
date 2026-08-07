@@ -125,7 +125,7 @@ def validate(data: dict, root: Path = ROOT) -> None:
 
     product = data["product"]
     _expect(isinstance(product, dict), "product must be an object")
-    _expect(product.get("id") == "agent-harness", "product.id must be agent-harness")
+    _expect(product.get("id") == "hearting", "product.id must be hearting")
     _expect(isinstance(product.get("manifest_version"), str), "product.manifest_version must be a string")
     runtimes = _expect_string_list(product.get("runtimes"), "product.runtimes")
     _expect(runtimes == ["claude", "codex", "opencode"], "product.runtimes must be sorted and complete")

@@ -23,7 +23,7 @@ def agent_home() -> Path:
         if (candidate / "core" / "CORE.md").is_file():
             return candidate
     codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
-    installed = (codex_home / "agent-harness").expanduser().resolve(strict=False)
+    installed = (codex_home / "hearting").expanduser().resolve(strict=False)
     if (installed / "core" / "CORE.md").is_file():
         return installed
     return Path(__file__).resolve().parents[1]

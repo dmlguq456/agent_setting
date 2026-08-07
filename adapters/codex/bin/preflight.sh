@@ -571,7 +571,7 @@ strict_tool_contract_check=adapters/codex/bin/preflight.sh headless --check --re
 command_template=codex exec --cd <worktree> --sandbox workspace-write (--model <main-selected-model> -c model_reasoning_effort=<main-selected-reasoning>|inherit) -c approval_policy=never --json -
 model_selection_policy=main-orchestrator-must-select-per-job
 model_selection_surface=--model-profile <deep|balanced-deep|light|mini> [--model-role <portable-role>]|--model-role <portable-role>|--model <model> --reasoning <effort>|--inherit-model-settings
-runtime_projection_requires=agent-harness,AGENTS.md,hooks.json,native-skills,native-agents,native-modes
+runtime_projection_requires=hearting,AGENTS.md,hooks.json,native-skills,native-agents,native-modes
 runtime_projection_strict_requires=complete-codex-hook-trust
 job_registry=<agent-home>/.dispatch/jobs.log (immutable AGENT_DISPATCH_JOBS for descendants)
 nested_eligibility_check=adapters/codex/bin/preflight.sh nested-headless --parent-harness <h> --parent-transport <t> --parent-sandbox <s> --child-harness <h> --launch-authority <a> --worktree <path>

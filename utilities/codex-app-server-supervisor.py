@@ -503,7 +503,7 @@ def main(argv: list[str] | None = None) -> int:
             "initialize",
             {
                 "clientInfo": {
-                    "name": "agent-harness-dispatch-supervisor",
+                    "name": "hearting-dispatch-supervisor",
                     "title": "Hearting Dispatch Supervisor",
                     "version": "1",
                 },

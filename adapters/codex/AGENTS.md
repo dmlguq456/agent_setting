@@ -7,7 +7,7 @@ are siblings and none is another's reference implementation. Edit core first.
 ## Source Order
 
 Codex has already loaded this file through the global instruction chain. Resolve
-`<agent-home>` from `${CODEX_HOME:-$HOME/.codex}/agent-harness` (falling back to
+`<agent-home>` from `${CODEX_HOME:-$HOME/.codex}/hearting` (falling back to
 the adapter's `agent-home.sh` resolver), and interpret every harness path below
 relative to that installed root, never relative to the working repository. Do
 not probe `<cwd>/core/CORE.md` or report it as a missing project file. Treat

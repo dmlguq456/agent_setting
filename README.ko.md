@@ -59,8 +59,8 @@ Hearting은 지원되는 코딩 에이전트 런타임에서 조사, 계획, 구
 ### 설치
 
 ```bash
-curl -fsSL https://github.com/dmlguq456/agent_setting/releases/latest/download/install.sh | sh
-~/.local/bin/harness runtime doctor --runtime all --strict
+curl -fsSL https://github.com/dmlguq456/hearting/releases/latest/download/install.sh | sh
+~/.local/bin/hearting runtime doctor --runtime all --strict
 ```
 
 installer와 distribution logic은 동일한 immutable Release tag에서 오며, 그 exact
@@ -73,26 +73,28 @@ Codex가 설치되어 있으면 같은 transaction이 복구 가능한
 `~/.local/bin/codex` launcher도 설치합니다. 평범하게 `codex`, `codex resume`,
 `codex fork`를 실행하면 자동으로 harness-managed App Server로 들어가고,
 `codex exec`, plugin 관리, login 등 비대화형 명령은 기록해 둔 실제 CLI로
-그대로 전달됩니다. Update는 launcher를 복구하며 `harness uninstall codex`는
+그대로 전달됩니다. Update는 launcher를 복구하며 `hearting uninstall codex`는
 설치 전 command binding을 정확히 복원합니다. Codex가 아직 없으면 이 단계만
 skip으로 보고하고 나중에 runtime refresh로 적용할 수 있습니다.
 
 `~/.local/bin`을 `PATH`에 넣은 뒤에는 다음처럼 관리합니다.
 
 ```bash
-harness runtime status --runtime all
-harness update
-harness auto-update status
-harness runtime doctor --runtime all --strict
+hearting runtime status --runtime all
+hearting update
+hearting auto-update status
+hearting runtime doctor --runtime all --strict
 
 fleet          # 라이브 cross-harness 대시보드, 단순 스냅숏은 --once
 ```
 
-installer는 `~/.local/bin`에 `fleet` launcher도 함께 설치합니다. 전체 화면
+installer는 `~/.local/bin`에 `hearting`과 `harness`를 함께 놓습니다. 같은
+launcher의 두 이름이라 예전 이름으로 쓰던 것이 그대로 동작합니다. `fleet`
+launcher도 함께 설치합니다. 전체 화면
 라이브 뷰에는 `curses`가 필요하지만 `fleet --once`와 `fleet --json`은 필요
 없어서, Python이 도는 곳이면 스크립팅과 스냅숏이 그대로 동작합니다.
 
-`harness update`는 새 release를 staging에서 검증한 뒤 active pointer를
+`hearting update`는 새 release를 staging에서 검증한 뒤 active pointer를
 전환하고 실패하면 이전 release로 rollback합니다. 이미 열린 agent session이
 자동으로 지침을 다시 읽는 것은 아니므로 update 뒤 `runtime status`에서
 재호출, 새 session 또는 restart 필요 여부를 확인하세요.
@@ -103,7 +105,7 @@ Checksum sidecar는 전송 또는 asset 손상을 탐지합니다. Publisher 진
 Version 고정 또는 자동 확인 제외:
 
 ```bash
-curl -fsSL https://github.com/dmlguq456/agent_setting/releases/download/v2.0.0/install.sh | sh -s -- --no-auto-update
+curl -fsSL https://github.com/dmlguq456/hearting/releases/download/v2.0.0/install.sh | sh -s -- --no-auto-update
 ```
 
 ## 자연어로 사용하기
@@ -202,7 +204,7 @@ cache는 소유하지 않습니다. 자세한 매핑은
 Maintainer는 managed release 대신 live checkout을 사용할 수 있습니다.
 
 ```bash
-git clone https://github.com/dmlguq456/agent_setting.git ~/agent_setting
+git clone https://github.com/dmlguq456/hearting.git ~/agent_setting
 cd ~/agent_setting
 ./tools/install/harness.sh runtime activate --runtime all --mode linked
 ```

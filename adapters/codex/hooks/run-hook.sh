@@ -26,8 +26,8 @@ else
   local_root="$(CDPATH= cd -- "$script_dir/../../.." && pwd)"
   if valid_root "$local_root"; then
     agent_root="$local_root"
-  elif valid_root "${HOME:-}/.codex/agent-harness"; then
-    agent_root="$HOME/.codex/agent-harness"
+  elif valid_root "${HOME:-}/.codex/hearting"; then
+    agent_root="$HOME/.codex/hearting"
   elif valid_root "${HOME:-}/agent_setting"; then
     agent_root="$HOME/agent_setting"
   else

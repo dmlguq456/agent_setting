@@ -55,7 +55,7 @@ is_mechanized_install_layout() {
 check_mechanized_install_projection() {
   runtime=$1
   expected_ids=$2
-  out="${TMPDIR:-/tmp}/agent-harness-install-plan-$runtime-$$.json"
+  out="${TMPDIR:-/tmp}/hearting-install-plan-$runtime-$$.json"
 
   if [ ! -x tools/install/harness.sh ]; then
     fail_msg "tools/install/harness.sh must be executable because the installed harness launcher points to it"
@@ -71,7 +71,7 @@ check_mechanized_install_projection() {
     return
   fi
 
-  if ! AGENT_HOME="$ROOT" HOME="${TMPDIR:-/tmp}/agent-harness-layout-home" \
+  if ! AGENT_HOME="$ROOT" HOME="${TMPDIR:-/tmp}/hearting-layout-home" \
     tools/install/harness.sh install "$runtime" --dry-run --json > "$out"; then
     fail_msg "mechanized $runtime install dry-run failed"
     rm -f "$out"
@@ -222,7 +222,7 @@ check_non_claude_projection_runtime_caches() {
 check_codex_plugin_marketplace_projection_boundary() {
   root="adapters/codex/plugin-marketplace"
   marketplace="$root/.agents/plugins/marketplace.json"
-  plugin_link="$root/plugins/agent-harness-codex"
+  plugin_link="$root/plugins/hearting-codex"
 
   if [ ! -d "$root" ]; then
     fail_msg "$root is missing"
@@ -240,13 +240,13 @@ check_codex_plugin_marketplace_projection_boundary() {
   fi
   if [ ! -L "$plugin_link" ]; then
     fail_msg "$plugin_link must project the concrete Codex plugin"
-  elif [ "$(readlink "$plugin_link")" != "../../plugins/agent-harness-codex" ]; then
-    fail_msg "$plugin_link points to $(readlink "$plugin_link"); expected ../../plugins/agent-harness-codex"
+  elif [ "$(readlink "$plugin_link")" != "../../plugins/hearting-codex" ]; then
+    fail_msg "$plugin_link points to $(readlink "$plugin_link"); expected ../../plugins/hearting-codex"
   fi
   if [ -e "$root/ADAPTATION.md" ] || [ -e "$root/bin" ] || [ -e "$root/hooks" ] || [ -e "$root/skills" ]; then
     fail_msg "$root must expose only the Codex marketplace layout, not the whole adapter"
   fi
-  if ! grep -Fq '"path": "./plugins/agent-harness-codex"' "$marketplace"; then
+  if ! grep -Fq '"path": "./plugins/hearting-codex"' "$marketplace"; then
     fail_msg "$marketplace must point at the marketplace-local plugin path"
   fi
 }
@@ -316,7 +316,7 @@ check_non_claude_adapter_symlink_boundaries() {
     for link in $links; do
       target=$(readlink "$link")
       case "$link:$target" in
-        adapters/codex/plugin-marketplace/plugins/agent-harness-codex:../../plugins/agent-harness-codex|\
+        adapters/codex/plugin-marketplace/plugins/hearting-codex:../../plugins/hearting-codex|\
         adapters/codex/tools/memory/apply-distill-actions.py:../../../../tools/memory/apply-distill-actions.py|\
         adapters/codex/utilities/agent-worklog-state.sh:../../../utilities/agent-worklog-state.sh|\
         adapters/codex/utilities/artifact-root.sh:../../../utilities/artifact-root.sh|\
@@ -474,7 +474,7 @@ check_install_layout_codex_projection() {
 
   if is_mechanized_install_layout; then
     check_mechanized_install_projection codex \
-      "codex.symlink.agent-harness codex.symlink.AGENTS.md codex.symlink.agent-harness-readme.md codex.symlink.agent-core codex.symlink.agent-capabilities codex.symlink.agent-roles codex.symlink.agent-bin codex.symlink.agent-tools codex.symlink.agent-utilities codex.symlink.agent-scaffolds codex.symlink.agent-skills codex.symlink.agent-modes codex.symlink.agent-agents codex.symlink.agent-hooks codex.symlink.agent-config codex.symlink.hooks.json"
+      "codex.symlink.hearting codex.symlink.AGENTS.md codex.symlink.hearting-readme.md codex.symlink.agent-core codex.symlink.agent-capabilities codex.symlink.agent-roles codex.symlink.agent-bin codex.symlink.agent-tools codex.symlink.agent-utilities codex.symlink.agent-scaffolds codex.symlink.agent-skills codex.symlink.agent-modes codex.symlink.agent-agents codex.symlink.agent-hooks codex.symlink.agent-config codex.symlink.hooks.json"
     return
   fi
 
@@ -483,8 +483,8 @@ check_install_layout_codex_projection() {
       fail_msg "INSTALL_LAYOUT.md must include Codex projection install step for codex_setting/$p"
     fi
   done
-  if ! grep -Fq 'ln -sfn "$AGENT_HOME" "$HOME/.codex/agent-harness"' INSTALL_LAYOUT.md; then
-    fail_msg "INSTALL_LAYOUT.md must install the Codex hook command agent-harness pointer"
+  if ! grep -Fq 'ln -sfn "$AGENT_HOME" "$HOME/.codex/hearting"' INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must install the Codex hook command hearting pointer"
   fi
   if ! grep -Fq "non_claude_runtime_re='adapters/claude|claude_setting|settings\\.json|statusline\\.sh|CLAUDE\\.md|agent-modes|allowedTools|/\\.claude/'" INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must define a shared non-Claude runtime output deny regex"
@@ -535,7 +535,7 @@ check_install_layout_codex_projection() {
   fi
   if ! grep -Fq 'codex_setting/bin/preflight.sh capability-info autopilot-code >/tmp/codex-capability.txt' INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^native_skill_path=adapters/codex/skills/autopilot-code/SKILL.md$' /tmp/codex-capability.txt" INSTALL_LAYOUT.md \
-    || ! grep -Fq "rg '^native_plugin_skill_path=adapters/codex/plugins/agent-harness-codex/skills/autopilot-code/SKILL.md$' /tmp/codex-capability.txt" INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg '^native_plugin_skill_path=adapters/codex/plugins/hearting-codex/skills/autopilot-code/SKILL.md$' /tmp/codex-capability.txt" INSTALL_LAYOUT.md \
     || ! grep -Fq "rg '^compat_reference=not-projected$' /tmp/codex-capability.txt" INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must validate Codex capability-info native projections without root Skill compat references"
   fi
@@ -612,7 +612,7 @@ check_install_layout_opencode_projection() {
 
   if is_mechanized_install_layout; then
     check_mechanized_install_projection opencode \
-      "opencode.symlink.agent-harness opencode.symlink.agent-agents.md opencode.symlink.agent-harness-readme.md opencode.symlink.agent-core opencode.symlink.agent-capabilities opencode.symlink.agent-roles opencode.symlink.agent-bin opencode.symlink.agent-tools opencode.symlink.agent-utilities opencode.symlink.agent-skills opencode.symlink.agent-agents opencode.symlink.agent-commands opencode.symlink.agent-harness-guards.js"
+      "opencode.symlink.hearting opencode.symlink.agent-agents.md opencode.symlink.hearting-readme.md opencode.symlink.agent-core opencode.symlink.agent-capabilities opencode.symlink.agent-roles opencode.symlink.agent-bin opencode.symlink.agent-tools opencode.symlink.agent-utilities opencode.symlink.agent-skills opencode.symlink.agent-agents opencode.symlink.agent-commands opencode.symlink.hearting-guards.js"
     return
   fi
 
@@ -621,8 +621,8 @@ check_install_layout_opencode_projection() {
       fail_msg "INSTALL_LAYOUT.md must include OpenCode projection install step for opencode_setting/$p"
     fi
   done
-  if ! grep -Fq 'ln -sfn "$AGENT_HOME" "$HOME/.config/opencode/agent-harness"' INSTALL_LAYOUT.md; then
-    fail_msg "INSTALL_LAYOUT.md must install the OpenCode agent-harness pointer"
+  if ! grep -Fq 'ln -sfn "$AGENT_HOME" "$HOME/.config/opencode/hearting"' INSTALL_LAYOUT.md; then
+    fail_msg "INSTALL_LAYOUT.md must install the OpenCode hearting pointer"
   fi
 
   if ! grep -Fq 'OPENCODE_CONFIG_CONTENT=' INSTALL_LAYOUT.md \
@@ -639,9 +639,9 @@ check_install_layout_opencode_projection() {
     || ! grep -Fq "! rg '/.claude/' /tmp/opencode-bootstrap.json" INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must validate OpenCode bootstrap instructions and skill path config"
   fi
-  if ! grep -Fq 'opencode_setting/opencode-plugins/agent-harness-guards.js' INSTALL_LAYOUT.md \
+  if ! grep -Fq 'opencode_setting/opencode-plugins/hearting-guards.js' INSTALL_LAYOUT.md \
     || ! grep -Fq 'opencode debug config >/tmp/opencode-plugin.json' INSTALL_LAYOUT.md \
-    || ! grep -Fq "rg 'agent-harness-guards.js' /tmp/opencode-plugin.json" INSTALL_LAYOUT.md \
+    || ! grep -Fq "rg 'hearting-guards.js' /tmp/opencode-plugin.json" INSTALL_LAYOUT.md \
     || ! grep -Fq '! rg "$non_claude_runtime_re" /tmp/opencode-plugin.json' INSTALL_LAYOUT.md; then
     fail_msg "INSTALL_LAYOUT.md must validate the OpenCode native plugin projection"
   fi
@@ -795,7 +795,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'preflight.sh dispatch [--dry-run|--register|--start]' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'headless [--check] [--require-hook-trust]' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'strict_tool_contract_check=adapters/codex/bin/preflight.sh headless --check --require-hook-trust <worktree>' adapters/codex/bin/preflight.sh \
-    || ! grep -Fq 'runtime_projection_requires=agent-harness,AGENTS.md,hooks.json,native-skills,native-agents,native-modes' adapters/codex/bin/preflight.sh \
+    || ! grep -Fq 'runtime_projection_requires=hearting,AGENTS.md,hooks.json,native-skills,native-agents,native-modes' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'runtime_projection_strict_requires=complete-codex-hook-trust' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'liveness_surface=codex-session-jsonl-mtime' adapters/codex/bin/preflight.sh \
     || ! grep -Fq 'liveness_check=adapters/codex/bin/preflight.sh liveness [jobs.log]' adapters/codex/bin/preflight.sh \
@@ -1111,7 +1111,7 @@ check_codex_bin_wrappers() {
     || ! grep -Fq 'verification-runner' capabilities/code-test.md \
     || ! grep -Fq 'test_logs/' adapters/codex/skills/code-test/SKILL.md \
     || ! grep -Fq '`code-report` alone updates `pipeline_summary.md`' adapters/codex/skills/code-test/SKILL.md \
-    || ! grep -Fq 'verification-runner' adapters/codex/plugins/agent-harness-codex/skills/code-test/SKILL.md; then
+    || ! grep -Fq 'verification-runner' adapters/codex/plugins/hearting-codex/skills/code-test/SKILL.md; then
     fail_msg "code-test portable spec and Codex projections must describe the verification-runner contract"
   fi
   if ! grep -Fq 'compat_reference=not-projected' adapters/codex/bin/capability-map.sh \
@@ -1252,8 +1252,8 @@ check_codex_utility_projection() {
     || grep -Fq 'if [ "${AGENT_HOME:-}" ]; then' adapters/codex/utilities/agent-home.sh; then
     fail_msg "adapters/codex/utilities/agent-home.sh must validate AGENT_HOME before returning it"
   fi
-  if ! grep -Fq '$HOME/.codex/agent-harness' adapters/codex/utilities/agent-home.sh; then
-    fail_msg "adapters/codex/utilities/agent-home.sh must support the Codex runtime agent-harness pointer"
+  if ! grep -Fq '$HOME/.codex/hearting' adapters/codex/utilities/agent-home.sh; then
+    fail_msg "adapters/codex/utilities/agent-home.sh must support the Codex runtime hearting pointer"
   fi
 
   for p in artifact-root.sh agent-worklog-state.sh harness-status.sh worktree-cleanup.py token-budget.py token-budget-experiment.py worker_bootstrap.py; do
@@ -1594,7 +1594,7 @@ check_codex_native_skill_projection() {
 }
 
 check_codex_native_plugin_projection() {
-  plugin_root="adapters/codex/plugins/agent-harness-codex"
+  plugin_root="adapters/codex/plugins/hearting-codex"
   plugin_manifest="$plugin_root/.codex-plugin/plugin.json"
   marketplace="adapters/codex/plugin-marketplace/.agents/plugins/marketplace.json"
 
@@ -1610,7 +1610,7 @@ check_codex_native_plugin_projection() {
 
   plugin_entries=$(find adapters/codex/plugins -mindepth 1 -maxdepth 1 -exec basename {} \; 2>/dev/null || true)
   for entry in $plugin_entries; do
-    if [ "$entry" != "agent-harness-codex" ]; then
+    if [ "$entry" != "hearting-codex" ]; then
       fail_msg "adapters/codex/plugins/$entry is not an approved Codex plugin projection"
     fi
   done
@@ -1657,16 +1657,16 @@ check_codex_native_plugin_projection() {
     fail_msg "Codex native plugin projection must not expose Claude-native surfaces:"
     printf '%s\n' "$bad"
   fi
-  if ! grep -Fq '"name": "agent-harness-codex"' "$plugin_manifest" \
+  if ! grep -Fq '"name": "hearting-codex"' "$plugin_manifest" \
     || ! grep -Fq '"skills": "./skills/"' "$plugin_manifest"; then
-    fail_msg "$plugin_manifest must define the agent-harness-codex plugin and plugin-local skills path"
+    fail_msg "$plugin_manifest must define the hearting-codex plugin and plugin-local skills path"
   fi
   if grep -Eq 'Claude-native|Claude Code|adapters/claude|claude_setting' "$plugin_manifest"; then
     fail_msg "$plugin_manifest must not expose Claude implementation names in Codex runtime-facing metadata"
   fi
-  if ! grep -Fq '"name": "agent-harness"' "$marketplace" \
-    || ! grep -Fq '"path": "./plugins/agent-harness-codex"' "$marketplace"; then
-    fail_msg "$marketplace must expose agent-harness-codex through the repo-local plugin path"
+  if ! grep -Fq '"name": "hearting"' "$marketplace" \
+    || ! grep -Fq '"path": "./plugins/hearting-codex"' "$marketplace"; then
+    fail_msg "$marketplace must expose hearting-codex through the repo-local plugin path"
   fi
 
   if ! grep -Fq "Custom prompts are deprecated" adapters/codex/README.md; then
@@ -1911,7 +1911,7 @@ check_codex_native_hook_projection() {
     fi
   done
   if ! grep -Fq '[ -f \"$root/core/CORE.md\" ]' "$hook_json" \
-    || grep -Fq "\${AGENT_HOME:-\$HOME/.codex/agent-harness}/adapters/codex/hooks/" "$hook_json"; then
+    || grep -Fq "\${AGENT_HOME:-\$HOME/.codex/hearting}/adapters/codex/hooks/" "$hook_json"; then
     fail_msg "$hook_json must validate harness roots before launching Codex hook bridges"
   fi
   if ! grep -Fq '"SessionStart"' "$hook_json" || ! grep -Fq 'sessionstart-lifecycle.py' "$hook_json"; then
@@ -2307,8 +2307,8 @@ check_opencode_utility_projection() {
     || grep -Fq 'if [ "${AGENT_HOME:-}" ]; then' adapters/opencode/utilities/agent-home.sh; then
     fail_msg "adapters/opencode/utilities/agent-home.sh must validate AGENT_HOME before returning it"
   fi
-  if ! grep -Fq '$HOME/.config/opencode/agent-harness' adapters/opencode/utilities/agent-home.sh; then
-    fail_msg "adapters/opencode/utilities/agent-home.sh must support the OpenCode runtime agent-harness pointer"
+  if ! grep -Fq '$HOME/.config/opencode/hearting' adapters/opencode/utilities/agent-home.sh; then
+    fail_msg "adapters/opencode/utilities/agent-home.sh must support the OpenCode runtime hearting pointer"
   fi
 
   for p in artifact-root.sh agent-worklog-state.sh harness-status.sh worktree-cleanup.py worker_bootstrap.py; do
@@ -2717,10 +2717,10 @@ check_opencode_native_command_projection() {
 }
 
 check_opencode_native_plugin_projection() {
-  plugin="adapters/opencode/plugins/agent-harness-guards.js"
+  plugin="adapters/opencode/plugins/hearting-guards.js"
   plugin_entries=$(find adapters/opencode/plugins -mindepth 1 -maxdepth 1 -exec basename {} \; 2>/dev/null || true)
   for entry in $plugin_entries; do
-    if [ "$entry" != "agent-harness-guards.js" ]; then
+    if [ "$entry" != "hearting-guards.js" ]; then
       fail_msg "adapters/opencode/plugins/$entry is not an approved OpenCode plugin projection"
     fi
   done
@@ -3206,7 +3206,7 @@ check_adaptation_inventory_native_surfaces() {
     || ! grep -Fq 'hook-trust-status.py' adapters/codex/bin/check-runtime-projection.sh \
     || ! grep -Fq 'current_hash=verified' adapters/codex/bin/check-runtime-projection.sh \
     || ! grep -Fq 'CODEX_REQUIRE_HOOK_TRUST=1' adapters/codex/bin/check-runtime-projection.sh \
-    || ! grep -Fq 'agent-harness-readme' adapters/codex/bin/check-runtime-projection.sh \
+    || ! grep -Fq 'hearting-readme' adapters/codex/bin/check-runtime-projection.sh \
     || ! grep -Fq 'agent-capabilities' adapters/codex/bin/check-runtime-projection.sh \
     || ! grep -Fq 'agent-roles' adapters/codex/bin/check-runtime-projection.sh \
     || ! grep -Fq 'agent-bin' adapters/codex/bin/check-runtime-projection.sh \
@@ -3873,10 +3873,10 @@ check_language_neutrality_contract() {
   if grep -Fq 'def auto_recall' tools/memory/mem.py \
     || grep -Fq '"--auto"' tools/memory/mem.py \
     || grep -Fq 'run_preflight("recall"' adapters/codex/hooks/userprompt-lifecycle.py \
-    || grep -Fq 'collectPreflight("recall"' adapters/opencode/plugins/agent-harness-guards.js \
+    || grep -Fq 'collectPreflight("recall"' adapters/opencode/plugins/hearting-guards.js \
     || ! grep -Fq 'mem-recall-inject.sh' adapters/claude/settings.json \
     || ! grep -Fq 'def candidate_context' adapters/codex/hooks/userprompt-lifecycle.py \
-    || ! grep -Fq 'collectCandidates([' adapters/opencode/plugins/agent-harness-guards.js; then
+    || ! grep -Fq 'collectCandidates([' adapters/opencode/plugins/hearting-guards.js; then
     fail_msg "active runtimes must expose mechanical capsule candidates while leaving semantic adoption to the agent"
   fi
 

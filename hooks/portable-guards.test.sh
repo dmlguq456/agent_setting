@@ -427,15 +427,15 @@ else
   bad "codex projection preflight should resolve harness root"
 fi
 mkdir -p "$TMP/codex_pointer_home/.codex"
-ln -s "$ROOT" "$TMP/codex_pointer_home/.codex/agent-harness"
+ln -s "$ROOT" "$TMP/codex_pointer_home/.codex/hearting"
 if env -u AGENT_HOME HOME="$TMP/codex_pointer_home" "$ROOT/adapters/codex/utilities/agent-home.sh" >/tmp/codex_agent_home.out 2>/tmp/codex_agent_home.err \
-  && grep -q "^$TMP/codex_pointer_home/.codex/agent-harness$" /tmp/codex_agent_home.out; then
+  && grep -q "^$TMP/codex_pointer_home/.codex/hearting$" /tmp/codex_agent_home.out; then
   ok "codex agent-home wrapper resolves runtime pointer"
 else
   bad "codex agent-home wrapper should resolve runtime pointer"
 fi
 if AGENT_HOME="$TMP/not-agent-home" HOME="$TMP/codex_pointer_home" "$ROOT/adapters/codex/utilities/agent-home.sh" >/tmp/codex_agent_home_invalid.out 2>/tmp/codex_agent_home_invalid.err \
-  && grep -q "^$TMP/codex_pointer_home/.codex/agent-harness$" /tmp/codex_agent_home_invalid.out; then
+  && grep -q "^$TMP/codex_pointer_home/.codex/hearting$" /tmp/codex_agent_home_invalid.out; then
   ok "codex agent-home wrapper ignores invalid AGENT_HOME"
 else
   bad "codex agent-home wrapper should ignore invalid AGENT_HOME"
@@ -895,7 +895,7 @@ if "$CODEX" headless >/tmp/codex_headless.out 2>/tmp/codex_headless.err \
   && grep -q '^runtime_surface=codex-exec-headless$' /tmp/codex_headless.out \
   && grep -q '^tool_contract=headless-dispatch$' /tmp/codex_headless.out \
   && grep -q '^strict_tool_contract_check=adapters/codex/bin/preflight.sh headless --check --require-hook-trust <worktree>$' /tmp/codex_headless.out \
-  && grep -q '^runtime_projection_requires=agent-harness,AGENTS.md,hooks.json,native-skills,native-agents,native-modes$' /tmp/codex_headless.out \
+  && grep -q '^runtime_projection_requires=hearting,AGENTS.md,hooks.json,native-skills,native-agents,native-modes$' /tmp/codex_headless.out \
   && grep -q '^runtime_projection_strict_requires=complete-codex-hook-trust$' /tmp/codex_headless.out \
   && grep -q '^model_selection_policy=main-orchestrator-must-select-per-job$' /tmp/codex_headless.out \
   && grep -q '^model_selection_surface=--model-profile <deep|balanced-deep|light|mini> \[--model-role <portable-role>\]|--model-role <portable-role>|--model <model> --reasoning <effort>|--inherit-model-settings$' /tmp/codex_headless.out \
@@ -1963,8 +1963,8 @@ if grep -q 'core/WORKFLOW.md §0.2' "$ROOT/adapters/codex/skills/autopilot-code/
   && grep -q 'capabilities/autopilot-code.md' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
   && grep -q 'preflight.sh capability-info autopilot-code' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
   && grep -q 'entry-router' "$ROOT/adapters/codex/skills/autopilot-code/SKILL.md" \
-  && grep -q 'capabilities/autopilot-code.md' "$ROOT/adapters/codex/plugins/agent-harness-codex/skills/autopilot-code/SKILL.md" \
-  && grep -q 'preflight.sh capability-info autopilot-code' "$ROOT/adapters/codex/plugins/agent-harness-codex/skills/autopilot-code/SKILL.md" \
+  && grep -q 'capabilities/autopilot-code.md' "$ROOT/adapters/codex/plugins/hearting-codex/skills/autopilot-code/SKILL.md" \
+  && grep -q 'preflight.sh capability-info autopilot-code' "$ROOT/adapters/codex/plugins/hearting-codex/skills/autopilot-code/SKILL.md" \
   && grep -q 'spec-significance' "$ROOT/capabilities/autopilot-code.md" \
   && grep -q 'pipeline_summary.md' "$ROOT/capabilities/autopilot-code.md" \
   && grep -q 'code-plan' "$ROOT/capabilities/autopilot-code.md" \
@@ -2010,15 +2010,15 @@ fi
 if command -v codex >/dev/null 2>&1; then
   mkdir -p "$TMP/codex_plugin_home"
   if [ -f "$ROOT/codex_setting/codex-plugin-marketplace/.agents/plugins/marketplace.json" ] \
-    && [ -L "$ROOT/codex_setting/codex-plugin-marketplace/plugins/agent-harness-codex" ] \
+    && [ -L "$ROOT/codex_setting/codex-plugin-marketplace/plugins/hearting-codex" ] \
     && [ ! -e "$ROOT/codex_setting/codex-plugin-marketplace/bin" ] \
     && [ ! -e "$ROOT/codex_setting/codex-plugin-marketplace/hooks" ] \
     && CODEX_HOME="$TMP/codex_plugin_home" codex plugin marketplace add "$ROOT/codex_setting/codex-plugin-marketplace" --json >/tmp/codex_plugin_marketplace.out 2>/tmp/codex_plugin_marketplace.err \
     && CODEX_HOME="$TMP/codex_plugin_home" codex plugin list --available --json >/tmp/codex_plugin_list.out 2>/tmp/codex_plugin_list.err \
-    && grep -q '"pluginId": "agent-harness-codex@agent-harness"' /tmp/codex_plugin_list.out \
-    && CODEX_HOME="$TMP/codex_plugin_home" codex plugin add agent-harness-codex@agent-harness --json >/tmp/codex_plugin_add.out 2>/tmp/codex_plugin_add.err \
+    && grep -q '"pluginId": "hearting-codex@hearting"' /tmp/codex_plugin_list.out \
+    && CODEX_HOME="$TMP/codex_plugin_home" codex plugin add hearting-codex@hearting --json >/tmp/codex_plugin_add.out 2>/tmp/codex_plugin_add.err \
     && CODEX_HOME="$TMP/codex_plugin_home" codex debug prompt-input 'autopilot-code' >/tmp/codex_plugin_prompt.out 2>/tmp/codex_plugin_prompt.err \
-    && grep -q -- '- agent-harness-codex:autopilot-code:' /tmp/codex_plugin_prompt.out \
+    && grep -q -- '- hearting-codex:autopilot-code:' /tmp/codex_plugin_prompt.out \
     && ! grep -q 'adapters/claude/skills' /tmp/codex_plugin_prompt.out; then
     ok "codex native plugin projection is installable and discovers generated skills"
   else
@@ -2176,7 +2176,7 @@ else
   bad "codex native mode projection should embed sanitized portable mode contracts"
 fi
 mkdir -p "$TMP/codex_hook_home/.codex"
-ln -s "$ROOT" "$TMP/codex_hook_home/.codex/agent-harness"
+ln -s "$ROOT" "$TMP/codex_hook_home/.codex/hearting"
 ln -s "$ROOT/codex_setting/codex-hooks/hooks.json" "$TMP/codex_hook_home/.codex/hooks.json"
 if python3 -m json.tool "$TMP/codex_hook_home/.codex/hooks.json" >/tmp/codex_hook_json.out 2>/tmp/codex_hook_json.err \
   && grep -q 'sessionstart-lifecycle.py' /tmp/codex_hook_json.out \
@@ -2189,14 +2189,14 @@ if python3 -m json.tool "$TMP/codex_hook_home/.codex/hooks.json" >/tmp/codex_hoo
   && grep -q 'posttooluse-design-check.py' /tmp/codex_hook_json.out \
   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); h=d["hooks"]["PreToolUse"]; assert len(h)==1; assert h[0]["matcher"]==r"Write|Edit|MultiEdit|apply_patch|functions\.apply_patch|Bash|Shell|functions\.exec_command"; assert "AGENT_PARENT_PARK_ONLY=1" not in h[0]["hooks"][0]["command"]; assert "stop-lifecycle.py" in d["hooks"]["Stop"][0]["hooks"][0]["command"]' "$TMP/codex_hook_home/.codex/hooks.json" \
   && printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo/f" "$TMP/repo" \
-    | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_hook.out 2>/tmp/codex_hook.err \
+    | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_hook.out 2>/tmp/codex_hook.err \
   && [ ! -s /tmp/codex_hook.out ]; then
   ok "codex native hook projection bridges clean writes to preflight"
 else
   bad "codex native hook projection should bridge clean writes to preflight"
 fi
 if printf '{"tool_name":"Bash","tool_input":{"command":"printf x > %s"},"session_id":"shellwritesid","cwd":"%s"}\n' "$TMP/runtime/projects/abc/memory/SHELL.md" "$TMP/runtime" \
-  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_write_hook.out 2>/tmp/codex_shell_write_hook.err \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_write_hook.out 2>/tmp/codex_shell_write_hook.err \
   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); assert d["decision"]=="block"; assert "memory" in d["reason"].lower() or "기억" in d["reason"]' /tmp/codex_shell_write_hook.out; then
   ok "codex native hook projection blocks obvious shell write targets"
 else
@@ -2205,14 +2205,14 @@ fi
 
 # A3: the Codex shell PreToolUse bridge runs worktree-path before material-route.
 if printf '{"tool_name":"Bash","tool_input":{"command":"git worktree add /tmp/somewhere-else/slug"},"session_id":"codex-worktree-deny","cwd":"%s"}\n' "$TMP/repo" \
-  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_worktree_deny.out 2>/tmp/codex_worktree_deny.err \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_worktree_deny.out 2>/tmp/codex_worktree_deny.err \
   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); assert d["decision"]=="block"' /tmp/codex_worktree_deny.out; then
   ok "codex native hook projection denies git worktree add outside <repo>-wt/"
 else
   bad "codex native hook projection should deny git worktree add outside <repo>-wt/"
 fi
 if printf '{"tool_name":"Bash","tool_input":{"command":"git worktree add %s-wt/slug -b slug HEAD"},"session_id":"codex-worktree-pass","cwd":"%s"}\n' "$TMP/repo" "$TMP/repo" \
-  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_worktree_pass.out 2>/tmp/codex_worktree_pass.err \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_worktree_pass.out 2>/tmp/codex_worktree_pass.err \
   && [ ! -s /tmp/codex_worktree_pass.out ]; then
   ok "codex native hook projection passes canonical <repo>-wt/ worktree add"
 else
@@ -2225,7 +2225,7 @@ codex_source="$TMP/repo/source.py"
 printf 'print(1)\n' > "$codex_source"
 git -C "$TMP/repo" add "$codex_source"
 no_route_write=$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"codex-no-route","cwd":"%s"}\n' "$codex_source" "$TMP/repo" \
-  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py")
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py")
 if python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert d["decision"]=="block"; assert "material-route" in d["reason"] or "route" in d["reason"]' "$no_route_write"; then
   ok "codex Write without material route returns native JSON denial"
 else
@@ -2236,14 +2236,14 @@ import json,sys
 print(json.dumps({"tool_name":"functions.apply_patch","input":f"*** Begin Patch\n*** Update File: {sys.argv[1]}\n@@\n-print(1)\n+print(2)\n*** End Patch\n","session_id":"codex-patch-no-route","cwd":sys.argv[2]}))
 PY
 )
-patch_decision=$(printf '%s\n' "$patch_payload" | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py")
+patch_decision=$(printf '%s\n' "$patch_payload" | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py")
 if python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert d["decision"]=="block"' "$patch_decision"; then
   ok "qualified functions.apply_patch without route is denied"
 else
   bad "qualified functions.apply_patch without route should be denied [$patch_decision]"
 fi
 commit_decision=$(printf '%s\n' "{\"tool_name\":\"functions.exec_command\",\"input\":{\"command\":\"git commit -am source\"},\"session_id\":\"codex-commit-no-route\",\"cwd\":\"$TMP/repo\"}" \
-  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py")
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py")
 if python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert d["decision"]=="block"' "$commit_decision"; then
   ok "source-bearing functions.exec_command commit is denied"
 else
@@ -2255,17 +2255,17 @@ mkdir -p "$TMP/repo/.agent_reports"
 recall_opportunity "$TMP/repo" codex-bind
 if eval "$codex_compile" >"$TMP/codex_compile.out" 2>"$TMP/codex_compile.err" \
   && printf '%s\n' "{\"tool_name\":\"functions.exec_command\",\"input\":{\"command\":\"$codex_compile\"},\"session_id\":\"codex-bind\",\"cwd\":\"$TMP/repo\"}" \
-  | AGENT_HOME="$ROOT" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-read-marker.py" >"$TMP/codex_bind.out" 2>"$TMP/codex_bind.err" \
+  | AGENT_HOME="$ROOT" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/posttooluse-read-marker.py" >"$TMP/codex_bind.out" 2>"$TMP/codex_bind.err" \
   && [ ! -s "$TMP/codex_bind.out" ] && [ ! -s "$TMP/codex_bind.err" ] \
   && printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"codex-bind","cwd":"%s"}\n' "$codex_source" "$TMP/repo" \
-    | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >"$TMP/codex_bind_allow.out" 2>"$TMP/codex_bind_allow.err" \
+    | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >"$TMP/codex_bind_allow.out" 2>"$TMP/codex_bind_allow.err" \
   && [ ! -s "$TMP/codex_bind_allow.out" ] && [ ! -s "$TMP/codex_bind_allow.err" ]; then
   ok "trusted local Codex compile binds silently and same cwd/session allows Write"
 else
   bad "trusted local Codex compile should bind silently and allow same cwd/session [route=$(test -f "$codex_route" && echo yes || echo no) bind_out=$(cat "$TMP/codex_bind.out") bind_err=$(cat "$TMP/codex_bind.err") allow_out=$(cat "$TMP/codex_bind_allow.out") allow_err=$(cat "$TMP/codex_bind_allow.err")]"
 fi
 foreign_bind=$(printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"codex-foreign","cwd":"%s"}\n' "$codex_source" "$TMP/repo" \
-  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py")
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py")
 if python3 -c 'import json,sys; assert json.loads(sys.argv[1])["decision"]=="block"' "$foreign_bind"; then
   ok "foreign session cannot reuse trusted Codex material route"
 else
@@ -2274,14 +2274,14 @@ fi
 codex_bind_marker_hash=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(b"material-route-session-v1\0" + sys.argv[1].encode()).hexdigest())' codex-bind)
 codex_bind_marker="$ROOT/.route-grounding/$codex_bind_marker_hash.json"
 printf '{"hook_event_name":"Stop","session_id":"codex-bind","cwd":"%s"}\n' "$TMP/repo" \
-  | MEM_STORE="$TMP/codex_hook_mem_stop" AGENT_HOME="$ROOT" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/stop-lifecycle.py" >/tmp/codex_stop_retention.out 2>/tmp/codex_stop_retention.err || true
+  | MEM_STORE="$TMP/codex_hook_mem_stop" AGENT_HOME="$ROOT" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/stop-lifecycle.py" >/tmp/codex_stop_retention.out 2>/tmp/codex_stop_retention.err || true
 if [ -f "$codex_bind_marker" ] && [ ! -s /tmp/codex_stop_retention.out ] && [ ! -s /tmp/codex_stop_retention.err ]; then
   ok "Codex Stop is a silent no-op and retains material route marker"
 else
   bad "Codex Stop should be a silent no-op that retains material route marker"
 fi
 if printf '{"hook_event_name":"SessionEnd","session_id":"codex-bind","cwd":"%s"}\n' "$TMP/repo" \
-  | MEM_STORE="$TMP/codex_hook_mem" AGENT_HOME="$ROOT" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/sessionend-lifecycle.py" >"$TMP/codex_sessionend.out" 2>"$TMP/codex_sessionend.err" \
+  | MEM_STORE="$TMP/codex_hook_mem" AGENT_HOME="$ROOT" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/sessionend-lifecycle.py" >"$TMP/codex_sessionend.out" 2>"$TMP/codex_sessionend.err" \
   && [ ! -s "$TMP/codex_sessionend.out" ] \
   && [ ! -e "$codex_bind_marker" ] \
   && ! grep -q 'material-route\|route-guard' "$TMP/codex_sessionend.err"; then
@@ -2290,7 +2290,7 @@ else
   bad "Codex SessionEnd should clear the exact material marker without clear-path output [marker=$(test -e "$codex_bind_marker" && echo present || echo absent) out=$(cat "$TMP/codex_sessionend.out") err=$(cat "$TMP/codex_sessionend.err")]"
 fi
 if printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"parked","cwd":"%s"}\n' "$codex_source" "$TMP/repo" \
-  | AGENT_PARENT_PARK_ONLY=1 HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_parent_park_only.out 2>/tmp/codex_parent_park_only.err \
+  | AGENT_PARENT_PARK_ONLY=1 HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_parent_park_only.out 2>/tmp/codex_parent_park_only.err \
   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); assert d["decision"]=="block"; assert "route" in d["reason"]' /tmp/codex_parent_park_only.out \
   && [ ! -s /tmp/codex_parent_park_only.err ]; then
   ok "retired parent-park-only marker cannot bypass the material guard"
@@ -2298,47 +2298,47 @@ else
   bad "retired parent-park-only marker must not bypass the material guard"
 fi
 if printf '{"tool_name":"Bash","tool_input":{"command":"printf x | tee %s"},"session_id":"shellteesid","cwd":"%s"}\n' "$TMP/runtime/projects/abc/memory/TEE.md" "$TMP/runtime" \
-  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_tee_hook.out 2>/tmp/codex_shell_tee_hook.err \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_tee_hook.out 2>/tmp/codex_shell_tee_hook.err \
   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); assert d["decision"]=="block"; assert "memory" in d["reason"].lower() or "기억" in d["reason"]' /tmp/codex_shell_tee_hook.out \
   && printf '{"tool_name":"Bash","tool_input":{"command":"rm %s"},"session_id":"shellrmsid","cwd":"%s"}\n' "$TMP/runtime/projects/abc/memory/RM.md" "$TMP/runtime" \
-    | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_rm_hook.out 2>/tmp/codex_shell_rm_hook.err \
+    | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_rm_hook.out 2>/tmp/codex_shell_rm_hook.err \
   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); assert d["decision"]=="block"; assert "memory" in d["reason"].lower() or "기억" in d["reason"]' /tmp/codex_shell_rm_hook.out; then
   ok "codex native hook projection blocks common shell mutation targets"
 else
   bad "codex native hook projection should block common shell mutation targets"
 fi
 if printf '{"tool_name":"Bash","tool_input":{"command":"cp %s %s"},"session_id":"shellcpsourcesid","cwd":"%s"}\n' "$TMP/runtime/projects/abc/memory/SOURCE.md" "$TMP/repo/copied-source.md" "$TMP/runtime" \
-  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_cp_source_hook.out 2>/tmp/codex_shell_cp_source_hook.err \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_cp_source_hook.out 2>/tmp/codex_shell_cp_source_hook.err \
   && [ ! -s /tmp/codex_shell_cp_source_hook.out ] \
   && printf '{"tool_name":"Bash","tool_input":{"command":"cp %s %s"},"session_id":"shellcpdestsid","cwd":"%s"}\n' "$TMP/repo/source.md" "$TMP/runtime/projects/abc/memory/COPIED.md" "$TMP/runtime" \
-    | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_cp_dest_hook.out 2>/tmp/codex_shell_cp_dest_hook.err \
+    | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_cp_dest_hook.out 2>/tmp/codex_shell_cp_dest_hook.err \
   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); assert d["decision"]=="block"; assert "memory" in d["reason"].lower() or "기억" in d["reason"]' /tmp/codex_shell_cp_dest_hook.out; then
   ok "codex native hook projection treats cp destination as the shell write target"
 else
   bad "codex native hook projection should treat cp destination as the shell write target"
 fi
 if printf '{"tool_name":"Bash","tool_input":{"command":"install %s %s"},"session_id":"shellinstallsid","cwd":"%s"}\n' "$TMP/repo/source.md" "$TMP/runtime/projects/abc/memory/INSTALLED.md" "$TMP/runtime" \
-  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_install_hook.out 2>/tmp/codex_shell_install_hook.err \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_install_hook.out 2>/tmp/codex_shell_install_hook.err \
   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); assert d["decision"]=="block"; assert "memory" in d["reason"].lower() or "기억" in d["reason"]' /tmp/codex_shell_install_hook.out \
   && printf '{"tool_name":"Bash","tool_input":{"command":"rsync %s %s"},"session_id":"shellrsyncsid","cwd":"%s"}\n' "$TMP/repo/source.md" "$TMP/runtime/projects/abc/memory/RSYNCED.md" "$TMP/runtime" \
-    | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_rsync_hook.out 2>/tmp/codex_shell_rsync_hook.err \
+    | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_rsync_hook.out 2>/tmp/codex_shell_rsync_hook.err \
   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); assert d["decision"]=="block"; assert "memory" in d["reason"].lower() or "기억" in d["reason"]' /tmp/codex_shell_rsync_hook.out; then
   ok "codex native hook projection blocks install and rsync destinations"
 else
   bad "codex native hook projection should block install and rsync destinations"
 fi
 if printf '{"tool_name":"Bash","tool_input":{"command":"dd if=%s of=%s"},"session_id":"shellddsid","cwd":"%s"}\n' "$TMP/repo/source.md" "$TMP/runtime/projects/abc/memory/DD.md" "$TMP/runtime" \
-  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_dd_hook.out 2>/tmp/codex_shell_dd_hook.err \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_dd_hook.out 2>/tmp/codex_shell_dd_hook.err \
   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); assert d["decision"]=="block"; assert "memory" in d["reason"].lower() or "기억" in d["reason"]' /tmp/codex_shell_dd_hook.out \
   && printf '{"tool_name":"Bash","tool_input":{"command":"sed -i s/a/b/ %s"},"session_id":"shellsedisid","cwd":"%s"}\n' "$TMP/runtime/projects/abc/memory/SED.md" "$TMP/runtime" \
-    | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_sedi_hook.out 2>/tmp/codex_shell_sedi_hook.err \
+    | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_shell_sedi_hook.out 2>/tmp/codex_shell_sedi_hook.err \
   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); assert d["decision"]=="block"; assert "memory" in d["reason"].lower() or "기억" in d["reason"]' /tmp/codex_shell_sedi_hook.out; then
   ok "codex native hook projection blocks dd output and sed inline edits"
 else
   bad "codex native hook projection should block dd output and sed inline edits"
 fi
 if printf '{"tool":"Write","input":{"path":"%s"},"session_id":"nestedpayloadsid","cwd":"%s"}\n' "$TMP/repo/nested-f" "$TMP/repo" \
-  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_hook_nested.out 2>/tmp/codex_hook_nested.err \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_hook_nested.out 2>/tmp/codex_hook_nested.err \
   && [ ! -s /tmp/codex_hook_nested.out ]; then
   ok "codex native hook projection accepts string-tool nested input payloads"
 else
@@ -2368,7 +2368,7 @@ else
 fi
 if (cd "$TMP/repo" && MEM_STORE="$TMP/codex_hook_mem" python3 "$ROOT/tools/memory/mem.py" add durable thread "세션 시작 기억 주입 확인: Codex SessionStart bridge는 mem inject 결과를 hookSpecificOutput additionalContext로 전달해야 한다" >/tmp/codex_session_seed.out 2>/tmp/codex_session_seed.err) \
   && printf '{"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo" \
-  | MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/sessionstart-lifecycle.py" >/tmp/codex_session_hook_default.out 2>/tmp/codex_session_hook_default.err \
+  | MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/sessionstart-lifecycle.py" >/tmp/codex_session_hook_default.out 2>/tmp/codex_session_hook_default.err \
   && [ ! -s /tmp/codex_session_hook_default.out ] \
   && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_session_hook_default.out /tmp/codex_session_hook_default.err; then
   ok "codex native hook projection keeps session start context silent by default"
@@ -2376,7 +2376,7 @@ else
   bad "codex native hook projection should keep session start context silent by default"
 fi
 if printf '{"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo" \
-  | CODEX_SESSION_MEMORY_INJECT=1 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/sessionstart-lifecycle.py" >/tmp/codex_session_hook.out 2>/tmp/codex_session_hook.err \
+  | CODEX_SESSION_MEMORY_INJECT=1 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/sessionstart-lifecycle.py" >/tmp/codex_session_hook.out 2>/tmp/codex_session_hook.err \
   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); out=d["hookSpecificOutput"]; assert out["hookEventName"]=="SessionStart"; assert "세션 시작 기억 주입 확인" in out["additionalContext"]' /tmp/codex_session_hook.out \
   && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_session_hook.out /tmp/codex_session_hook.err; then
   ok "codex native hook projection can opt into session start memory context"
@@ -2384,7 +2384,7 @@ else
   bad "codex native hook projection should opt into session start memory context"
 fi
 if printf '{"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo" \
-  | MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/sessionend-lifecycle.py" >/tmp/codex_session_end_hook.out 2>/tmp/codex_session_end_hook.err \
+  | MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/sessionend-lifecycle.py" >/tmp/codex_session_end_hook.out 2>/tmp/codex_session_end_hook.err \
   && [ ! -s /tmp/codex_session_end_hook.out ] \
   && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_session_end_hook.out /tmp/codex_session_end_hook.err; then
   ok "codex native hook projection bridges session end lifecycle with silent success output"
@@ -2413,7 +2413,7 @@ else
   bad "adapter loop runtime logs should be ignored"
 fi
 if printf '{"prompt":"plain prompt","session_id":"promptlifecyclesid","cwd":"%s"}\n' "$TMP/flowproj" \
-  | MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_prompt_hook_tracked.out 2>/tmp/codex_prompt_hook_tracked.err \
+  | MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_prompt_hook_tracked.out 2>/tmp/codex_prompt_hook_tracked.err \
   && [ ! -s /tmp/codex_prompt_hook_tracked.out ] \
   && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_prompt_hook_tracked.out /tmp/codex_prompt_hook_tracked.err; then
   ok "codex native hook projection injects no workflow-mode banner (retired)"
@@ -2424,7 +2424,7 @@ budget_sid=12345678-1234-1234-1234-123456789abc
 budget_rollout="$TMP/codex_hook_home/.codex/sessions/2026/07/13/rollout-test-$budget_sid.jsonl"
 mkdir -p "$(dirname "$budget_rollout")" "$TMP/codex_budget_state"
 printf '%s\n' '{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"total_tokens":82000},"total_token_usage":{"input_tokens":120000,"cached_input_tokens":70000,"output_tokens":20000,"reasoning_output_tokens":10000,"total_tokens":150000},"model_context_window":112000}}}' > "$budget_rollout"
-budget_preflight="$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/bin/preflight.sh"
+budget_preflight="$TMP/codex_hook_home/.codex/hearting/adapters/codex/bin/preflight.sh"
 if CODEX_HOME="$TMP/codex_hook_home/.codex" "$budget_preflight" token-budget "$TMP/flowproj" "$budget_sid" kv >/tmp/codex_budget_kv.out 2>/tmp/codex_budget_kv.err \
   && grep -q '^active_context_tokens=82000$' /tmp/codex_budget_kv.out \
   && grep -q '^session_total_tokens=150000$' /tmp/codex_budget_kv.out \
@@ -2434,17 +2434,17 @@ else
   bad "codex token-budget preflight should expose exact-session telemetry"
 fi
 if printf '{"prompt":"plain prompt","session_id":"%s","cwd":"%s"}\n' "$budget_sid" "$TMP/flowproj" \
-  | CODEX_HOME="$TMP/codex_hook_home/.codex" XDG_STATE_HOME="$TMP/codex_budget_state" MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_budget_hook_first.out 2>/tmp/codex_budget_hook_first.err \
+  | CODEX_HOME="$TMP/codex_hook_home/.codex" XDG_STATE_HOME="$TMP/codex_budget_state" MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_budget_hook_first.out 2>/tmp/codex_budget_hook_first.err \
   && grep -q 'TOKEN_BUDGET=tight' /tmp/codex_budget_hook_first.out \
   && python3 -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); out=d["hookSpecificOutput"]; assert out["hookEventName"]=="UserPromptSubmit"; ctx=out["additionalContext"]; line=[x for x in ctx.splitlines() if x.startswith("TOKEN_BUDGET=")]; assert len(line)==1; assert len((line[0]+"\n").encode()) <= 240; assert "required work" in line[0] and "tests" in line[0] and "input context unchanged" in line[0]' /tmp/codex_budget_hook_first.out \
   && printf '{"prompt":"plain prompt","session_id":"%s","cwd":"%s"}\n' "$budget_sid" "$TMP/flowproj" \
-  | CODEX_HOME="$TMP/codex_hook_home/.codex" XDG_STATE_HOME="$TMP/codex_budget_state" MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_budget_hook_repeat.out 2>/tmp/codex_budget_hook_repeat.err \
+  | CODEX_HOME="$TMP/codex_hook_home/.codex" XDG_STATE_HOME="$TMP/codex_budget_state" MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_budget_hook_repeat.out 2>/tmp/codex_budget_hook_repeat.err \
   && [ ! -s /tmp/codex_budget_hook_repeat.out ]; then
   ok "codex prompt hook injects token budget only on pressure-band transition"
 else
   bad "codex prompt hook should keep same-band token budget reinjection at zero bytes"
 fi
-codex_accounting_dir="$TMP/codex_budget_state/agent-harness/token-budget/accounting"
+codex_accounting_dir="$TMP/codex_budget_state/hearting/token-budget/accounting"
 if CODEX_HOME="$TMP/codex_hook_home/.codex" XDG_STATE_HOME="$TMP/codex_budget_state" "$budget_preflight" token-budget "$TMP/flowproj" "$budget_sid" kv >"$TMP/codex_budget_accounting_kv.out" 2>"$TMP/codex_budget_accounting_kv.err" \
   && grep -q '^accounting.hook_invocations=2$' "$TMP/codex_budget_accounting_kv.out" \
   && python3 - "$codex_accounting_dir" "$budget_sid" <<'PY'
@@ -2474,7 +2474,7 @@ else
   bad "codex prompt hook should record bounded exact accounting without diagnostic reinjection"
 fi
 if printf '{"prompt":"remember this project context","session_id":"promptlifecyclesid","cwd":"%s"}\n' "$TMP/flowproj" \
-  | MEM_NUDGE_INTERVAL=1 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_prompt_hook.out 2>/tmp/codex_prompt_hook.err \
+  | MEM_NUDGE_INTERVAL=1 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_prompt_hook.out 2>/tmp/codex_prompt_hook.err \
   && [ ! -s /tmp/codex_prompt_hook.out ] \
   && grep -q '^0$' "$TMP/codex_hook_mem/.codex-turn-state-promptlifecyclesid" \
   && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_prompt_hook.out /tmp/codex_prompt_hook.err; then
@@ -2483,7 +2483,7 @@ else
   bad "codex native hook projection should reset the turn-nudge counter on every prompt"
 fi
 if printf '{"context":{"cwd":"%s","session_id":"permissionsid"}}\n' "$TMP/flowproj" \
-  | FLEET_INTERACTION_STATE_DIR="$TMP/codex-interactions" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/permissionrequest-lifecycle.py" >/tmp/codex_permission_hook.out 2>/tmp/codex_permission_hook.err \
+  | FLEET_INTERACTION_STATE_DIR="$TMP/codex-interactions" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/permissionrequest-lifecycle.py" >/tmp/codex_permission_hook.out 2>/tmp/codex_permission_hook.err \
   && [ ! -s /tmp/codex_permission_hook.out ] \
   && [ -f "$TMP/codex-interactions/codex/permissionsid.json" ] \
   && grep -q '"session_id":"permissionsid"' "$TMP/codex-interactions/codex/permissionsid.json" \
@@ -2496,7 +2496,7 @@ else
 fi
 if (cd "$TMP/flowproj" && MEM_STORE="$TMP/codex_hook_mem" python3 "$ROOT/tools/memory/mem.py" add durable thread "지난번 결정론 우선 설계가 핵심이라고 배웠다" >/tmp/codex_nested_prompt_seed.out 2>/tmp/codex_nested_prompt_seed.err) \
   && printf '{"input":{"messages":[{"role":"user","content":[{"type":"text","text":"지난번 결정론 내용을 다시 확인"}]}]},"session_id":"nestedpromptsid","cwd":"%s"}\n' "$TMP/flowproj" \
-  | MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_nested_prompt_hook.out 2>/tmp/codex_nested_prompt_hook.err \
+  | MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_nested_prompt_hook.out 2>/tmp/codex_nested_prompt_hook.err \
   && ! grep -q '우선 설계가 핵심' /tmp/codex_nested_prompt_hook.out; then
   ok "codex native prompt hook does not classify nested message content for recall"
 else
@@ -2506,7 +2506,7 @@ if (cd "$TMP/flowproj" && MEM_STORE="$TMP/codex_hook_mem" python3 "$ROOT/tools/m
   "This durable record keeps direct-body-marker outside prompt context" \
   --headline "Deterministic recall capsule" --alias "deterministic recall" >/tmp/codex_direct_prompt_seed.out 2>/tmp/codex_direct_prompt_seed.err) \
   && printf '{"prompt":"deterministic recall","session_id":"directpromptsid","turn_id":"directturnid","cwd":"%s"}\n' "$TMP/flowproj" \
-  | MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" MEM_RECALL_RECEIPTS="$MEM_RECALL_RECEIPTS" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_direct_prompt_hook.out 2>/tmp/codex_direct_prompt_hook.err \
+  | MEM_NUDGE_INTERVAL=100 MEM_STORE="$TMP/codex_hook_mem" MEM_RECALL_RECEIPTS="$MEM_RECALL_RECEIPTS" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/userprompt-lifecycle.py" >/tmp/codex_direct_prompt_hook.out 2>/tmp/codex_direct_prompt_hook.err \
   && grep -q 'Deterministic recall capsule' /tmp/codex_direct_prompt_hook.out \
   && ! grep -q 'direct-body-marker' /tmp/codex_direct_prompt_hook.out; then
   ok "codex native prompt hook exposes bounded capsule candidates without record bodies"
@@ -2516,7 +2516,7 @@ fi
 mkdir -p "$TMP/repo/.agent_reports/spec" "$TMP/codex_marker_home"
 printf 'prd\n' > "$TMP/repo/.agent_reports/spec/prd.md"
 if printf '{"tool_name":"Read","tool_input":{"file_path":"%s"},"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo/.agent_reports/spec/prd.md" "$TMP/repo" \
-  | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_read_hook.out 2>/tmp/codex_read_hook.err \
+  | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_read_hook.out 2>/tmp/codex_read_hook.err \
   && find "$TMP/codex_marker_home/.spec-grounding" -type f -name 'testsid__*' -print -quit | grep -q . \
   && ! grep -q 'adapters/claude\|claude_setting\|statusline.sh' /tmp/codex_read_hook.out /tmp/codex_read_hook.err; then
   ok "codex native hook projection records spec read markers"
@@ -2524,7 +2524,7 @@ else
   bad "codex native hook projection should record spec read markers"
 fi
 if printf '{"tool_name":"Bash","tool_input":{"command":"cat .agent_reports/spec/prd.md"},"session_id":"shellreadsid","cwd":"%s"}\n' "$TMP/repo" \
-  | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_shell_read_hook.out 2>/tmp/codex_shell_read_hook.err \
+  | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_shell_read_hook.out 2>/tmp/codex_shell_read_hook.err \
   && find "$TMP/codex_marker_home/.spec-grounding" -type f -name 'shellreadsid__*' -print -quit | grep -q .; then
   ok "codex native read hook marks obvious shell spec reads"
 else
@@ -2533,35 +2533,35 @@ fi
 mkdir -p "$TMP/repo/core"
 printf 'core\n' > "$TMP/repo/core/MEMORY.md"
 if printf '{"tool_name":"Read","tool_input":{"file_path":"%s"},"session_id":"corereadsid","cwd":"%s"}\n' "$TMP/repo/core/MEMORY.md" "$TMP/repo" \
-  | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_core_read_hook.out 2>/tmp/codex_core_read_hook.err \
+  | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_core_read_hook.out 2>/tmp/codex_core_read_hook.err \
   && find "$TMP/codex_marker_home/.core-grounding" -type f -name 'corereadsid__*' -print -quit | grep -q .; then
   ok "codex native hook projection records core read markers"
 else
   bad "codex native hook projection should record core read markers"
 fi
 if printf '{"tool_name":"Bash","tool_input":{"command":"cat core/MEMORY.md"},"session_id":"shellcorereadsid","cwd":"%s"}\n' "$TMP/repo" \
-  | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_shell_core_read_hook.out 2>/tmp/codex_shell_core_read_hook.err \
+  | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_shell_core_read_hook.out 2>/tmp/codex_shell_core_read_hook.err \
   && find "$TMP/codex_marker_home/.core-grounding" -type f -name 'shellcorereadsid__*' -print -quit | grep -q .; then
   ok "codex native read hook marks obvious shell core reads"
 else
   bad "codex native read hook should mark obvious shell core reads"
 fi
 if printf '{"tool":{"name":"Read","input":{"path":"%s"}},"session_id":"nestedreadsid","cwd":"%s"}\n' "$TMP/repo/.agent_reports/spec/prd.md" "$TMP/repo" \
-  | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_read_hook_nested.out 2>/tmp/codex_read_hook_nested.err \
+  | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_read_hook_nested.out 2>/tmp/codex_read_hook_nested.err \
   && find "$TMP/codex_marker_home/.spec-grounding" -type f -name 'nestedreadsid__*' -print -quit | grep -q .; then
   ok "codex native read hook accepts nested tool input payloads"
 else
   bad "codex native read hook should accept nested tool input payloads"
 fi
 if printf '{"tool_name":"Read","tool_input":{"file_path":".agent_reports/spec/prd.md"},"session":{"id":"nestedctxreadsid"},"workspace":{"cwd":"%s"}}\n' "$TMP/repo" \
-  | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_read_hook_nested_context.out 2>/tmp/codex_read_hook_nested_context.err \
+  | AGENT_HOME="$TMP/codex_marker_home" HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/posttooluse-read-marker.py" >/tmp/codex_read_hook_nested_context.out 2>/tmp/codex_read_hook_nested_context.err \
   && find "$TMP/codex_marker_home/.spec-grounding" -type f -name 'nestedctxreadsid__*' -print -quit | grep -q .; then
   ok "codex native read hook resolves nested cwd/session payloads"
 else
   bad "codex native read hook should resolve nested cwd/session payloads"
 fi
 if printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"testsid","cwd":"%s"}\n' "$TMP/runtime/projects/abc/memory/MEMORY.md" "$TMP/runtime" \
-  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_hook_block.out 2>/tmp/codex_hook_block.err \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_hook_block.out 2>/tmp/codex_hook_block.err \
   && grep -q '"decision": "block"' /tmp/codex_hook_block.out \
   && grep -q 'memory' /tmp/codex_hook_block.out; then
   ok "codex native hook projection blocks guarded writes"
@@ -2569,7 +2569,7 @@ else
   bad "codex native hook projection should block guarded writes"
 fi
 if printf '{"tool_name":"Write","tool_input":{"file_path":"projects/abc/memory/NESTED.md"},"session":{"id":"nestedcontextsid"},"context":{"cwd":"%s"}}\n' "$TMP/runtime" \
-  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_nested_context_block.out 2>/tmp/codex_nested_context_block.err \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_nested_context_block.out 2>/tmp/codex_nested_context_block.err \
   && grep -q '"decision": "block"' /tmp/codex_nested_context_block.out \
   && grep -q 'memory' /tmp/codex_nested_context_block.out; then
   ok "codex native write hook resolves nested cwd/session payloads"
@@ -2577,7 +2577,7 @@ else
   bad "codex native write hook should resolve nested cwd/session payloads"
 fi
 if printf '{"tool_name":"MultiEdit","tool_input":{"file_path":"%s","edits":[]},"session_id":"testsid","cwd":"%s"}\n' "$TMP/runtime/projects/abc/memory/MEMORY.md" "$TMP/runtime" \
-  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_multiedit_block.out 2>/tmp/codex_multiedit_block.err \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_multiedit_block.out 2>/tmp/codex_multiedit_block.err \
   && grep -q '"decision": "block"' /tmp/codex_multiedit_block.out \
   && grep -q 'memory' /tmp/codex_multiedit_block.out; then
   ok "codex native hook projection blocks guarded MultiEdit writes"
@@ -2597,7 +2597,7 @@ print(json.dumps({
 PY
 )
 if printf '%s\n' "$codex_qualified_patch_payload" \
-  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_qualified_patch_block.out 2>/tmp/codex_qualified_patch_block.err \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_qualified_patch_block.out 2>/tmp/codex_qualified_patch_block.err \
   && grep -q '"decision": "block"' /tmp/codex_qualified_patch_block.out \
   && grep -q 'memory' /tmp/codex_qualified_patch_block.out; then
   ok "codex native hook projection blocks qualified apply_patch writes"
@@ -2617,7 +2617,7 @@ print(json.dumps({
 PY
 )
 if printf '%s\n' "$codex_freeform_patch_payload" \
-  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_freeform_patch_block.out 2>/tmp/codex_freeform_patch_block.err \
+  | HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/pretooluse-write-guard.py" >/tmp/codex_freeform_patch_block.out 2>/tmp/codex_freeform_patch_block.err \
   && grep -q '"decision": "block"' /tmp/codex_freeform_patch_block.out \
   && grep -q 'memory' /tmp/codex_freeform_patch_block.out; then
   ok "codex native hook projection parses freeform tool_input strings"
@@ -2627,7 +2627,7 @@ fi
 mkdir -p "$TMP/repo/spec/design"
 printf '<!doctype html><title>ok</title>\n' > "$TMP/repo/spec/design/preview.html"
 if printf '{"tool_name":"Write","tool_input":{"file_path":"%s"},"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo/spec/design/preview.html" "$TMP/repo" \
-  | DESIGN_POSTWRITE_HOOK=0 HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-design-check.py" >/tmp/codex_design_hook.out 2>/tmp/codex_design_hook.err \
+  | DESIGN_POSTWRITE_HOOK=0 HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/posttooluse-design-check.py" >/tmp/codex_design_hook.out 2>/tmp/codex_design_hook.err \
   && [ ! -s /tmp/codex_design_hook.out ] \
   && [ ! -s /tmp/codex_design_hook.err ]; then
   ok "codex native hook projection bridges design post-write checks"
@@ -2635,7 +2635,7 @@ else
   bad "codex native hook projection should bridge design post-write checks"
 fi
 if printf '{"toolUse":{"name":"Write","input":{"path":"%s"}},"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo/spec/design/preview.html" "$TMP/repo" \
-  | DESIGN_POSTWRITE_HOOK=0 HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-design-check.py" >/tmp/codex_design_hook_nested.out 2>/tmp/codex_design_hook_nested.err \
+  | DESIGN_POSTWRITE_HOOK=0 HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/posttooluse-design-check.py" >/tmp/codex_design_hook_nested.out 2>/tmp/codex_design_hook_nested.err \
   && [ ! -s /tmp/codex_design_hook_nested.out ] \
   && [ ! -s /tmp/codex_design_hook_nested.err ]; then
   ok "codex native design hook accepts toolUse input payloads"
@@ -2643,7 +2643,7 @@ else
   bad "codex native design hook should accept toolUse input payloads"
 fi
 if printf '{"tool_name":"MultiEdit","tool_input":{"file_path":"%s","edits":[]},"session_id":"testsid","cwd":"%s"}\n' "$TMP/repo/spec/design/preview.html" "$TMP/repo" \
-  | DESIGN_POSTWRITE_HOOK=0 HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-design-check.py" >/tmp/codex_design_hook_multiedit.out 2>/tmp/codex_design_hook_multiedit.err \
+  | DESIGN_POSTWRITE_HOOK=0 HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/posttooluse-design-check.py" >/tmp/codex_design_hook_multiedit.out 2>/tmp/codex_design_hook_multiedit.err \
   && [ ! -s /tmp/codex_design_hook_multiedit.out ] \
   && [ ! -s /tmp/codex_design_hook_multiedit.err ]; then
   ok "codex native design hook accepts MultiEdit payloads"
@@ -2651,10 +2651,10 @@ else
   bad "codex native design hook should accept MultiEdit payloads"
 fi
 if printf '{"tool_name":"Bash","tool_input":{"command":"printf %s > spec/design/preview.html"},"session_id":"testsid","cwd":"%s"}\n' "'<!doctype html><title>ok</title>'" "$TMP/repo" \
-  | DESIGN_POSTWRITE_HOOK=0 HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-design-check.py" >/tmp/codex_design_hook_shell.out 2>/tmp/codex_design_hook_shell.err \
+  | DESIGN_POSTWRITE_HOOK=0 HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/posttooluse-design-check.py" >/tmp/codex_design_hook_shell.out 2>/tmp/codex_design_hook_shell.err \
   && [ ! -s /tmp/codex_design_hook_shell.out ] \
   && [ ! -s /tmp/codex_design_hook_shell.err ] \
-  && python3 - "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-design-check.py" "$TMP/repo" <<'PY'
+  && python3 - "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/posttooluse-design-check.py" "$TMP/repo" <<'PY'
 import sys
 
 path, cwd = sys.argv[1], sys.argv[2]
@@ -2699,7 +2699,7 @@ print(json.dumps({
 PY
 )
 if printf '%s\n' "$codex_design_patch_payload" \
-  | DESIGN_POSTWRITE_HOOK=0 HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/agent-harness/adapters/codex/hooks/posttooluse-design-check.py" >/tmp/codex_design_hook_qualified_patch.out 2>/tmp/codex_design_hook_qualified_patch.err \
+  | DESIGN_POSTWRITE_HOOK=0 HOME="$TMP/codex_hook_home" python3 "$TMP/codex_hook_home/.codex/hearting/adapters/codex/hooks/posttooluse-design-check.py" >/tmp/codex_design_hook_qualified_patch.out 2>/tmp/codex_design_hook_qualified_patch.err \
   && [ ! -s /tmp/codex_design_hook_qualified_patch.out ] \
   && [ ! -s /tmp/codex_design_hook_qualified_patch.err ]; then
   ok "codex native design hook accepts qualified apply_patch payloads"
@@ -2999,8 +2999,8 @@ fi
 if AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/install-runtime-projection.sh" >"$TMP/codex_rp1.out" 2>"$TMP/codex_rp1.err" \
   && grep -q '^status=ok' "$TMP/codex_rp1.out" \
   && AGENT_HOME="$ROOT" CODEX_HOME="$RPHOME" "$ROOT/adapters/codex/bin/check-runtime-projection.sh" >"$TMP/codex_rp2.out" 2>"$TMP/codex_rp2.err" \
-  && grep -q '^check=agent-harness:ok' "$TMP/codex_rp2.out" \
-  && grep -q '^check=agent-harness-readme:ok' "$TMP/codex_rp2.out" \
+  && grep -q '^check=hearting:ok' "$TMP/codex_rp2.out" \
+  && grep -q '^check=hearting-readme:ok' "$TMP/codex_rp2.out" \
   && grep -q '^check=agent-capabilities:ok' "$TMP/codex_rp2.out" \
   && grep -q '^check=agent-roles:ok' "$TMP/codex_rp2.out" \
   && grep -q '^check=agent-bin:ok' "$TMP/codex_rp2.out" \
@@ -3175,15 +3175,15 @@ else
   bad "opencode projection preflight should resolve harness root"
 fi
 mkdir -p "$TMP/opencode_pointer_home/.config/opencode"
-ln -s "$ROOT" "$TMP/opencode_pointer_home/.config/opencode/agent-harness"
+ln -s "$ROOT" "$TMP/opencode_pointer_home/.config/opencode/hearting"
 if env -u AGENT_HOME HOME="$TMP/opencode_pointer_home" "$ROOT/adapters/opencode/utilities/agent-home.sh" >/tmp/opencode_agent_home.out 2>/tmp/opencode_agent_home.err \
-  && grep -q "^$TMP/opencode_pointer_home/.config/opencode/agent-harness$" /tmp/opencode_agent_home.out; then
+  && grep -q "^$TMP/opencode_pointer_home/.config/opencode/hearting$" /tmp/opencode_agent_home.out; then
   ok "opencode agent-home wrapper resolves runtime pointer"
 else
   bad "opencode agent-home wrapper should resolve runtime pointer"
 fi
 if AGENT_HOME="$TMP/not-agent-home" HOME="$TMP/opencode_pointer_home" "$ROOT/adapters/opencode/utilities/agent-home.sh" >/tmp/opencode_agent_home_invalid.out 2>/tmp/opencode_agent_home_invalid.err \
-  && grep -q "^$TMP/opencode_pointer_home/.config/opencode/agent-harness$" /tmp/opencode_agent_home_invalid.out; then
+  && grep -q "^$TMP/opencode_pointer_home/.config/opencode/hearting$" /tmp/opencode_agent_home_invalid.out; then
   ok "opencode agent-home wrapper ignores invalid AGENT_HOME"
 else
   bad "opencode agent-home wrapper should ignore invalid AGENT_HOME"
@@ -3288,7 +3288,7 @@ echo "== opencode plugin spec-gate bridge =="
 # Verify the JS plugin handlers (not just the preflight CLI) wire the gate:
 # command.execute.before throws (= blocks command) when ungrounded, and
 # tool.execute.after on a prd.md read drops the grounding marker so it then passes.
-PLUGIN="$ROOT/adapters/opencode/plugins/agent-harness-guards.js"
+PLUGIN="$ROOT/adapters/opencode/plugins/hearting-guards.js"
 BRIDGEPROJ="$TMP/bridgeproj"
 mkdir -p "$BRIDGEPROJ/.agent_reports/spec"
 printf 'prd\n' > "$BRIDGEPROJ/.agent_reports/spec/prd.md"
@@ -3422,13 +3422,13 @@ mkdir -p "$TMP/opencode_headless_home/.config/opencode/agents" \
   "$TMP/opencode_headless_home/.config/opencode/commands" \
   "$TMP/opencode_headless_home/.config/opencode/skills" \
   "$TMP/opencode_headless_home/.config/opencode/plugins"
-ln -s "$ROOT" "$TMP/opencode_headless_home/.config/opencode/agent-harness"
+ln -s "$ROOT" "$TMP/opencode_headless_home/.config/opencode/hearting"
 ln -s "$ROOT/opencode_setting/opencode-skills/autopilot-code" "$TMP/opencode_headless_home/.config/opencode/skills/autopilot-code"
 # 재홈 2026-07-22: runtime team agents retired — the projected native agent is the
 # kernel helper memory-scout (agents/memory-scout/memory-scout.md).
 ln -s "$ROOT/opencode_setting/opencode-agents/memory-scout" "$TMP/opencode_headless_home/.config/opencode/agents/memory-scout"
 ln -s "$ROOT/opencode_setting/opencode-commands/autopilot-code.md" "$TMP/opencode_headless_home/.config/opencode/commands/autopilot-code.md"
-ln -s "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js" "$TMP/opencode_headless_home/.config/opencode/plugins/agent-harness-guards.js"
+ln -s "$ROOT/opencode_setting/opencode-plugins/hearting-guards.js" "$TMP/opencode_headless_home/.config/opencode/plugins/hearting-guards.js"
 if HOME="$TMP/opencode_headless_home" XDG_CONFIG_HOME="$TMP/opencode_headless_home/.config" \
   "$OPENCODE" headless --check "$TMP/repo" >/tmp/opencode_headless_check.out 2>/tmp/opencode_headless_check.err \
   && grep -q '^runtime_projection=ok$' /tmp/opencode_headless_check.out \
@@ -3442,11 +3442,11 @@ fi
 mkdir -p "$TMP/opencode_headless_config_home/.config/opencode/agent" \
   "$TMP/opencode_headless_config_home/.config/opencode/command" \
   "$TMP/opencode_headless_config_home/.config/opencode/plugins"
-ln -s "$ROOT" "$TMP/opencode_headless_config_home/.config/opencode/agent-harness"
+ln -s "$ROOT" "$TMP/opencode_headless_config_home/.config/opencode/hearting"
 # 재홈 2026-07-22: singular-layout variant keeps a flat agent/memory-scout.md link.
 ln -s "$ROOT/opencode_setting/opencode-agents/memory-scout/memory-scout.md" "$TMP/opencode_headless_config_home/.config/opencode/agent/memory-scout.md"
 ln -s "$ROOT/opencode_setting/opencode-commands/autopilot-code.md" "$TMP/opencode_headless_config_home/.config/opencode/command/autopilot-code.md"
-ln -s "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js" "$TMP/opencode_headless_config_home/.config/opencode/plugins/agent-harness-guards.js"
+ln -s "$ROOT/opencode_setting/opencode-plugins/hearting-guards.js" "$TMP/opencode_headless_config_home/.config/opencode/plugins/hearting-guards.js"
 if OPENCODE_CONFIG_CONTENT='{"skills":{"paths":["/tmp/opencode-\u0073kills"]}}' \
   HOME="$TMP/opencode_headless_config_home" XDG_CONFIG_HOME="$TMP/opencode_headless_config_home/.config" \
   "$OPENCODE" headless --check "$TMP/repo" >/tmp/opencode_headless_config_check.out 2>/tmp/opencode_headless_config_check.err \
@@ -3853,12 +3853,12 @@ else
 fi
 if command -v opencode >/dev/null 2>&1; then
   mkdir -p "$TMP/opencode_plugin_project/.opencode/plugins" "$TMP/opencode_plugin_home/.config" "$TMP/opencode_plugin_home/.local/share"
-  ln -s "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js" "$TMP/opencode_plugin_project/.opencode/plugins/agent-harness-guards.js"
+  ln -s "$ROOT/opencode_setting/opencode-plugins/hearting-guards.js" "$TMP/opencode_plugin_project/.opencode/plugins/hearting-guards.js"
   if (
     cd "$TMP/opencode_plugin_project" || exit 1
     HOME="$TMP/opencode_plugin_home" XDG_CONFIG_HOME="$TMP/opencode_plugin_home/.config" XDG_DATA_HOME="$TMP/opencode_plugin_home/.local/share" \
       opencode debug config >/tmp/opencode_plugin.out 2>/tmp/opencode_plugin.err
-  ) && grep -q 'agent-harness-guards.js' /tmp/opencode_plugin.out \
+  ) && grep -q 'hearting-guards.js' /tmp/opencode_plugin.out \
     && ! grep -q 'adapters/claude/hooks' /tmp/opencode_plugin.out; then
     ok "opencode native plugin projection is discoverable without Claude hooks"
   else
@@ -3868,7 +3868,7 @@ else
   ok "opencode native plugin runtime discovery skipped (opencode not installed)"
 fi
 if node --input-type=module >/tmp/opencode_plugin_hook.out 2>/tmp/opencode_plugin_hook.err <<EOF
-import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/hearting-guards.js"
 const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
 await plugin["tool.execute.before"]({ tool: "write", sessionID: "testsid" }, { args: { filePath: "$TMP/repo/f" } })
 EOF
@@ -3885,7 +3885,7 @@ EOF
 chmod +x "$TMP/fake_agent_home/adapters/opencode/bin/preflight.sh"
 if node --input-type=module >/tmp/opencode_plugin_invalid_home.out 2>/tmp/opencode_plugin_invalid_home.err <<EOF
 process.env.AGENT_HOME = "$TMP/fake_agent_home"
-const mod = await import("$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js")
+const mod = await import("$ROOT/opencode_setting/opencode-plugins/hearting-guards.js")
 const plugin = await mod.AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
 await plugin["tool.execute.before"]({ tool: "write", sessionID: "testsid" }, { args: { filePath: "$TMP/repo/f" } })
 EOF
@@ -3895,10 +3895,10 @@ else
   bad "opencode native plugin should validate AGENT_HOME"
 fi
 mkdir -p "$TMP/opencode_copied_plugin"
-cp "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js" "$TMP/opencode_copied_plugin/agent-harness-guards.js"
+cp "$ROOT/opencode_setting/opencode-plugins/hearting-guards.js" "$TMP/opencode_copied_plugin/hearting-guards.js"
 if node --input-type=module >/tmp/opencode_plugin_copy.out 2>/tmp/opencode_plugin_copy.err <<EOF
 process.env.AGENT_HOME = "$ROOT"
-const mod = await import("$TMP/opencode_copied_plugin/agent-harness-guards.js")
+const mod = await import("$TMP/opencode_copied_plugin/hearting-guards.js")
 const plugin = await mod.AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
 await plugin["tool.execute.before"]({ tool: "write", sessionID: "testsid" }, { args: { filePath: "$TMP/repo/f" } })
 EOF
@@ -3908,7 +3908,7 @@ else
   bad "opencode native plugin copy should resolve harness through AGENT_HOME"
 fi
 if node --input-type=module >/tmp/opencode_plugin_lifecycle.out 2>/tmp/opencode_plugin_lifecycle.err <<EOF
-import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/hearting-guards.js"
 const plugin = await AgentHarnessGuards({ directory: "$TMP/flowproj", worktree: "$TMP/flowproj" })
 if (!plugin["chat.message"]) process.exit(1)
 await plugin["chat.message"]({ sessionID: "oplifecyclesid", messageID: "opturn" }, { parts: [{ type: "text", text: "ordinary lifecycle prompt" }] })
@@ -3936,7 +3936,7 @@ EOF
 chmod +x "$OPENCODE_WORKER_ROOT/adapters/opencode/bin/preflight.sh"
 if AGENT_HOME="$OPENCODE_WORKER_ROOT" AGENT_SESSION_ROLE=worker \
   node --input-type=module >/tmp/opencode_plugin_worker.out 2>/tmp/opencode_plugin_worker.err <<EOF
-import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/hearting-guards.js"
 const plugin = await AgentHarnessGuards({ directory: "$TMP/flowproj", worktree: "$TMP/flowproj" })
 const output = { system: [] }
 await plugin["experimental.chat.system.transform"]({ sessionID: "op-worker", model: {} }, output)
@@ -3958,7 +3958,7 @@ else
   bad "opencode worker plugin must separate lifecycle from safety guards"
 fi
 if node --input-type=module >/tmp/opencode_plugin_hook_block.out 2>/tmp/opencode_plugin_hook_block.err <<EOF
-import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/hearting-guards.js"
 const plugin = await AgentHarnessGuards({ directory: "$TMP/runtime", worktree: "$TMP/runtime" })
 try {
   await plugin["tool.execute.before"]({ tool: "write", sessionID: "testsid" }, { args: { filePath: "$TMP/runtime/projects/abc/memory/MEMORY.md" } })
@@ -3973,7 +3973,7 @@ else
   bad "opencode native plugin write hook should block guarded writes"
 fi
 if DESIGN_POSTWRITE_HOOK=0 node --input-type=module >/tmp/opencode_plugin_design_hook.out 2>/tmp/opencode_plugin_design_hook.err <<EOF
-import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/hearting-guards.js"
 const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
 await plugin["tool.execute.after"]({ tool: "write", sessionID: "testsid", args: { filePath: "$TMP/repo/spec/design/preview.html" } }, {})
 EOF
@@ -3990,7 +3990,7 @@ opencode_plugin_source="$TMP/repo/opencode_plugin_source.py"
 printf 'print(1)\n' > "$opencode_plugin_source"
 git -C "$TMP/repo" add "$opencode_plugin_source"
 if node --input-type=module >/tmp/opencode_plugin_write_route.out 2>/tmp/opencode_plugin_write_route.err <<EOF
-import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/hearting-guards.js"
 const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
 try {
   await plugin["tool.execute.before"]({ tool: "write", sessionID: "opencode-plugin-no-route" }, { args: { filePath: "$opencode_plugin_source" } })
@@ -4005,7 +4005,7 @@ else
   bad "opencode plugin tool.execute.before should deny a route-less material write end-to-end"
 fi
 if node --input-type=module >/tmp/opencode_plugin_bash_commit.out 2>/tmp/opencode_plugin_bash_commit.err <<EOF
-import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/hearting-guards.js"
 const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
 try {
   await plugin["tool.execute.before"]({ tool: "bash", sessionID: "opencode-plugin-bash-commit" }, { args: { command: "git commit -am 'opencode_plugin_source'" } })
@@ -4018,7 +4018,7 @@ else
   bad "opencode plugin bash git commit of material content should be denied"
 fi
 if node --input-type=module >/tmp/opencode_plugin_bash_wt_deny.out 2>/tmp/opencode_plugin_bash_wt_deny.err <<EOF
-import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/hearting-guards.js"
 const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
 try {
   await plugin["tool.execute.before"]({ tool: "bash", sessionID: "opencode-plugin-bash-wt" }, { args: { command: "git worktree add .claude/worktrees/foo -b foo" } })
@@ -4031,7 +4031,7 @@ else
   bad "opencode plugin bash git worktree add outside -wt/ should be denied"
 fi
 if node --input-type=module >/tmp/opencode_plugin_bash_wt_pass.out 2>/tmp/opencode_plugin_bash_wt_pass.err <<EOF
-import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/hearting-guards.js"
 const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
 await plugin["tool.execute.before"]({ tool: "bash", sessionID: "opencode-plugin-bash-wt-pass" }, { args: { command: "git worktree add /home/x/repo-wt/slug -b slug main" } })
 EOF
@@ -4041,7 +4041,7 @@ else
   bad "opencode plugin should pass canonical <repo>-wt/ worktree add"
 fi
 if node --input-type=module >/tmp/opencode_plugin_bash_neutral.out 2>/tmp/opencode_plugin_bash_neutral.err <<EOF
-import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/hearting-guards.js"
 const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
 await plugin["tool.execute.before"]({ tool: "bash", sessionID: "opencode-plugin-bash-neutral" }, { args: { command: "git worktree remove /home/x/repo-wt/slug" } })
 await plugin["tool.execute.before"]({ tool: "bash", sessionID: "opencode-plugin-bash-neutral" }, { args: { command: "ls -la && git status" } })
@@ -4052,7 +4052,7 @@ else
   bad "opencode plugin should leave non-add worktree subcommands and neutral commands alone"
 fi
 if node --input-type=module >/tmp/opencode_plugin_bash_verbatim.out 2>/tmp/opencode_plugin_bash_verbatim.err <<EOF
-import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/hearting-guards.js"
 const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
 // Irregular internal spacing would break a token-rejoining classifier but not
 // a verbatim single-argv passthrough; both the neutral command and the
@@ -4069,7 +4069,7 @@ else
   bad "opencode plugin should pass the raw bash command through verbatim as one argv element"
 fi
 if node --input-type=module >/tmp/opencode_plugin_shell_env.out 2>/tmp/opencode_plugin_shell_env.err <<EOF
-import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/agent-harness-guards.js"
+import { AgentHarnessGuards } from "$ROOT/opencode_setting/opencode-plugins/hearting-guards.js"
 const plugin = await AgentHarnessGuards({ directory: "$TMP/repo", worktree: "$TMP/repo" })
 const withSid = { env: {} }
 await plugin["shell.env"]({ cwd: "$TMP/repo", sessionID: "opencode-shell-env-sid" }, withSid)

@@ -1,14 +1,14 @@
 {
-  "name": "agent-harness",
+  "name": "hearting",
   "interface": {
     "displayName": "Hearting"
   },
   "plugins": [
     {
-      "name": "agent-harness-codex",
+      "name": "hearting-codex",
       "source": {
         "source": "local",
-        "path": "./plugins/agent-harness-codex"
+        "path": "./plugins/hearting-codex"
       },
       "policy": {
         "installation": "AVAILABLE",

@@ -57,18 +57,18 @@ index = tmp / "release.json"
 os.environ["HARNESS_RELEASE_INDEX_URL"] = index.as_uri()
 
 required = {
-    "agent-harness/harness-manifest.json": "{}\n",
-    "agent-harness/core/CORE.md": "# core\n",
-    "agent-harness/tools/install/harness.sh": "#!/bin/sh\n",
-    "agent-harness/tools/install/installer.py": "# fixture\n",
-    "agent-harness/tools/install/distribution.py": "# fixture\n",
+    "hearting/harness-manifest.json": "{}\n",
+    "hearting/core/CORE.md": "# core\n",
+    "hearting/tools/install/harness.sh": "#!/bin/sh\n",
+    "hearting/tools/install/installer.py": "# fixture\n",
+    "hearting/tools/install/distribution.py": "# fixture\n",
 }
 
 def make_release(version, attack=None, wrong_checksum=False):
     archive = assets / f"{version}.tar.gz"
     with tarfile.open(archive, "w:gz") as bundle:
         files = dict(required)
-        files["agent-harness/RELEASE_VERSION"] = version + "\n"
+        files["hearting/RELEASE_VERSION"] = version + "\n"
         for name, text in files.items():
             payload = text.encode()
             info = tarfile.TarInfo(name)
@@ -81,24 +81,24 @@ def make_release(version, attack=None, wrong_checksum=False):
             info.size = len(payload)
             bundle.addfile(info, io.BytesIO(payload))
         elif attack == "symlink":
-            info = tarfile.TarInfo("agent-harness/escape-link")
+            info = tarfile.TarInfo("hearting/escape-link")
             info.type = tarfile.SYMTYPE
             info.linkname = "../../escape"
             bundle.addfile(info)
         elif attack == "hardlink":
-            info = tarfile.TarInfo("agent-harness/escape-hardlink")
+            info = tarfile.TarInfo("hearting/escape-hardlink")
             info.type = tarfile.LNKTYPE
             info.linkname = "../../escape"
             bundle.addfile(info)
         elif attack == "fifo":
-            info = tarfile.TarInfo("agent-harness/fifo")
+            info = tarfile.TarInfo("hearting/fifo")
             info.type = tarfile.FIFOTYPE
             bundle.addfile(info)
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     checksum = assets / f"{version}.sha256"
     checksum.write_text(
         (("0" * 64) if wrong_checksum else digest)
-        + "  agent-harness.tar.gz\n"
+        + "  hearting.tar.gz\n"
     )
     index.write_text(
         json.dumps(
@@ -106,11 +106,11 @@ def make_release(version, attack=None, wrong_checksum=False):
                 "tag_name": version,
                 "assets": [
                     {
-                        "name": "agent-harness.tar.gz",
+                        "name": "hearting.tar.gz",
                         "browser_download_url": archive.as_uri(),
                     },
                     {
-                        "name": "agent-harness.tar.gz.sha256",
+                        "name": "hearting.tar.gz.sha256",
                         "browser_download_url": checksum.as_uri(),
                     },
                 ],
@@ -237,7 +237,7 @@ def successful_launch_probe(command, **kwargs):
 d.subprocess.run = successful_launch_probe
 try:
     allowed, complete_output = real_probe_command([
-        "launchctl", "print", f"gui/{os.getuid()}/com.agent-harness.update",
+        "launchctl", "print", f"gui/{os.getuid()}/com.hearting.update",
     ])
     assert allowed and complete_output == launch_output.strip()
     assert "last exit code = 0" in complete_output
@@ -502,15 +502,15 @@ archive, archive_checksum, release_installer, installer_checksum = first
 assert release_installer.stat().st_mode & 0o111
 installer_text = release_installer.read_text()
 assert "RELEASE_VERSION='v3.0.0'" in installer_text
-assert "REPOSITORY='dmlguq456/agent_setting'" in installer_text
+assert "REPOSITORY='dmlguq456/hearting'" in installer_text
 assert "fixture distribution" in installer_text
 assert "--version \"$RELEASE_VERSION\"" in installer_text
-assert "agent-harness.tar.gz" in archive_checksum.read_text()
+assert "hearting.tar.gz" in archive_checksum.read_text()
 assert "install.sh" in installer_checksum.read_text()
 with tarfile.open(archive, "r:gz") as bundle:
     names = bundle.getnames()
-    assert "agent-harness/RELEASE_VERSION" in names
-    assert not any(name.startswith("agent-harness/.agent_reports") for name in names)
+    assert "hearting/RELEASE_VERSION" in names
+    assert not any(name.startswith("hearting/.agent_reports") for name in names)
 
 print("ok - managed release install/update/rollback/security/scheduler/build")
 PY
@@ -537,7 +537,7 @@ import tarfile
 
 root = Path(sys.argv[1])
 target = Path(sys.argv[2])
-archive = target / "assets/agent-harness.tar.gz"
+archive = target / "assets/hearting.tar.gz"
 listed = subprocess.run(
     ["git", "-C", str(root), "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
     check=True,
@@ -556,22 +556,22 @@ with tarfile.open(archive, "w:gz") as bundle:
     for relative in paths:
         source = root / relative
         if source.exists() or source.is_symlink():
-            bundle.add(source, arcname="agent-harness/" + relative, recursive=False)
+            bundle.add(source, arcname="hearting/" + relative, recursive=False)
     marker = b"v0.0.0-integration\n"
-    info = tarfile.TarInfo("agent-harness/RELEASE_VERSION")
+    info = tarfile.TarInfo("hearting/RELEASE_VERSION")
     info.mode = 0o644
     info.size = len(marker)
     bundle.addfile(info, io.BytesIO(marker))
 digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-checksum = target / "assets/agent-harness.tar.gz.sha256"
-checksum.write_text(digest + "  agent-harness.tar.gz\n")
+checksum = target / "assets/hearting.tar.gz.sha256"
+checksum.write_text(digest + "  hearting.tar.gz\n")
 (target / "release.json").write_text(
     json.dumps(
         {
             "tag_name": "v0.0.0-integration",
             "assets": [
-                {"name": "agent-harness.tar.gz", "browser_download_url": archive.as_uri()},
-                {"name": "agent-harness.tar.gz.sha256", "browser_download_url": checksum.as_uri()},
+                {"name": "hearting.tar.gz", "browser_download_url": archive.as_uri()},
+                {"name": "hearting.tar.gz.sha256", "browser_download_url": checksum.as_uri()},
             ],
         }
     )
@@ -623,7 +623,7 @@ installed = json.load(open(sys.argv[1]))
 doctor = json.load(open(sys.argv[2]))
 updated = json.load(open(sys.argv[3]))
 state = json.load(
-    open(os.path.join(os.environ["XDG_STATE_HOME"], "agent-harness/distribution.json"))
+    open(os.path.join(os.environ["XDG_STATE_HOME"], "hearting/distribution.json"))
 )
 assert installed["status"] == "installed"
 assert installed["version"] == "v0.0.0-integration"

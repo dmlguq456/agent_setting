@@ -36,15 +36,15 @@ make_fixture() {
     "$root/adapters/codex/bin" "$root/adapters/codex/hooks" \
     "$root/adapters/codex/modes/dev" "$root/adapters/codex/skills/demo" \
     "$root/adapters/codex/agents" \
-    "$root/adapters/codex/plugins/agent-harness-codex/.codex-plugin" \
-    "$root/adapters/codex/plugins/agent-harness-codex/skills/demo" \
+    "$root/adapters/codex/plugins/hearting-codex/.codex-plugin" \
+    "$root/adapters/codex/plugins/hearting-codex/skills/demo" \
     "$root/adapters/claude/agent-modes/dev" "$root/adapters/claude/skills/demo" \
     "$root/adapters/claude/agents" "$root/adapters/claude/commands" \
     "$root/adapters/claude/hooks" "$root/adapters/claude/bin" \
     "$root/adapters/claude/tools/memory" "$root/adapters/claude/utilities" \
     "$root/adapters/claude/scaffolds" \
-    "$root/adapters/claude/plugin-marketplace/plugins/agent-harness-claude/.claude-plugin" \
-    "$root/adapters/claude/plugin-marketplace/plugins/agent-harness-claude/skills/demo" \
+    "$root/adapters/claude/plugin-marketplace/plugins/hearting-claude/.claude-plugin" \
+    "$root/adapters/claude/plugin-marketplace/plugins/hearting-claude/skills/demo" \
     "$root/adapters/opencode/skills/demo" "$root/adapters/opencode/agents/memory-scout" \
     "$root/adapters/opencode/commands" "$root/adapters/opencode/plugins"
 
@@ -61,10 +61,10 @@ make_fixture() {
     > "$root/adapters/codex/skills/demo/SKILL.md"
   printf '%s\n' 'name = "memory-scout"' 'description = "demo"' \
     > "$root/adapters/codex/agents/memory-scout.toml"
-  printf '%s\n' '{"name":"agent-harness-codex","version":"1.0.0"}' \
-    > "$root/adapters/codex/plugins/agent-harness-codex/.codex-plugin/plugin.json"
+  printf '%s\n' '{"name":"hearting-codex","version":"1.0.0"}' \
+    > "$root/adapters/codex/plugins/hearting-codex/.codex-plugin/plugin.json"
   cp "$root/adapters/codex/skills/demo/SKILL.md" \
-    "$root/adapters/codex/plugins/agent-harness-codex/skills/demo/SKILL.md"
+    "$root/adapters/codex/plugins/hearting-codex/skills/demo/SKILL.md"
 
   printf '%s\n' '# Claude instructions' > "$root/adapters/claude/CLAUDE.md"
   printf '%s\n' '# mode' > "$root/adapters/claude/agent-modes/dev/refactor.md"
@@ -83,10 +83,10 @@ make_fixture() {
   printf '%s\n' \
     '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"sh $HOME/.claude/utilities/fixture.sh"}]}]}}' \
     > "$root/adapters/claude/settings.json"
-  printf '%s\n' '{"name":"agent-harness-claude","version":"1.0.0"}' \
-    > "$root/adapters/claude/plugin-marketplace/plugins/agent-harness-claude/.claude-plugin/plugin.json"
+  printf '%s\n' '{"name":"hearting-claude","version":"1.0.0"}' \
+    > "$root/adapters/claude/plugin-marketplace/plugins/hearting-claude/.claude-plugin/plugin.json"
   cp "$root/adapters/claude/skills/demo/SKILL.md" \
-    "$root/adapters/claude/plugin-marketplace/plugins/agent-harness-claude/skills/demo/SKILL.md"
+    "$root/adapters/claude/plugin-marketplace/plugins/hearting-claude/skills/demo/SKILL.md"
 
   printf '%s\n' '# OpenCode instructions' > "$root/adapters/opencode/AGENTS.md"
   printf '%s\n' '---' 'name: demo' 'description: demo' '---' '# demo opencode' \
@@ -94,7 +94,7 @@ make_fixture() {
   printf '%s\n' '# demo agent' > "$root/adapters/opencode/agents/memory-scout/demo.md"
   printf '%s\n' '# demo command' > "$root/adapters/opencode/commands/demo.md"
   printf '%s\n' 'export const AgentHarnessGuards = async () => ({})' \
-    > "$root/adapters/opencode/plugins/agent-harness-guards.js"
+    > "$root/adapters/opencode/plugins/hearting-guards.js"
 
   git -C "$root" init -q
   git -C "$root" config user.email fixture@example.com
@@ -158,7 +158,7 @@ PY
 test -L "$HOME/.config/opencode/skills/demo" || fail "OpenCode plural skills projection missing"
 test -L "$HOME/.config/opencode/agents/demo.md" || fail "OpenCode plural agents projection missing"
 test -L "$HOME/.config/opencode/commands/demo.md" || fail "OpenCode plural commands projection missing"
-test -L "$HOME/.config/opencode/plugins/agent-harness-guards.js" \
+test -L "$HOME/.config/opencode/plugins/hearting-guards.js" \
   || fail "OpenCode local plugin projection missing"
 test -L "$HOME/.claude/tools" || fail "Claude tools projection missing"
 test -L "$HOME/.claude/utilities" || fail "Claude utilities projection missing"
@@ -252,26 +252,26 @@ ok "packaged bundle checksum detects mutation and refresh rebuilds it"
 harness runtime activate --runtime all --mode linked --source "$SRC" --json \
   > "$TMP/relinked.json"
 mkdir -p "$HOME/.codex/plugins/cache/fixture/codex/.codex-plugin"
-printf '%s\n' '{"name":"agent-harness-codex"}' \
+printf '%s\n' '{"name":"hearting-codex"}' \
   > "$HOME/.codex/plugins/cache/fixture/codex/.codex-plugin/plugin.json"
-printf '%s\n' '[plugins."agent-harness-codex@fixture"]' 'enabled = true' \
+printf '%s\n' '[plugins."hearting-codex@fixture"]' 'enabled = true' \
   > "$HOME/.codex/config.toml"
 mkdir -p "$HOME/.claude/plugins/cache/fixture/claude/.claude-plugin"
-printf '%s\n' '{"name":"agent-harness-claude"}' \
+printf '%s\n' '{"name":"hearting-claude"}' \
   > "$HOME/.claude/plugins/cache/fixture/claude/.claude-plugin/plugin.json"
 mkdir -p "$HOME/.claude/plugins"
 printf '%s\n' \
-  '{"version":2,"plugins":{"agent-harness-claude@fixture":[{"scope":"user","installPath":"fixture"}],"foreign@fixture":[{"scope":"user"}]}}' \
+  '{"version":2,"plugins":{"hearting-claude@fixture":[{"scope":"user","installPath":"fixture"}],"foreign@fixture":[{"scope":"user"}]}}' \
   > "$HOME/.claude/plugins/installed_plugins.json"
 python3 - "$HOME/.claude/settings.json" <<'PY'
 import json, sys
 path=sys.argv[1]
 data=json.load(open(path))
-data["enabledPlugins"]={"agent-harness-claude@fixture": True, "foreign@fixture": True}
+data["enabledPlugins"]={"hearting-claude@fixture": True, "foreign@fixture": True}
 with open(path, "w") as handle:
     json.dump(data, handle)
 PY
-printf '%s\n' '{"plugin":["agent-harness-opencode@1.0.0"],"theme":"user"}' \
+printf '%s\n' '{"plugin":["hearting-opencode@1.0.0"],"theme":"user"}' \
   > "$HOME/.config/opencode/opencode.json"
 
 for runtime in codex claude opencode; do
@@ -298,7 +298,7 @@ PY
 python3 - "$HOME/.claude/plugins/installed_plugins.json" <<'PY'
 import json, sys
 plugins=json.load(open(sys.argv[1]))["plugins"]
-assert "agent-harness-claude@fixture" not in plugins
+assert "hearting-claude@fixture" not in plugins
 assert "foreign@fixture" in plugins
 PY
 python3 - "$HOME/.claude/settings.json" <<'PY'
@@ -306,13 +306,13 @@ import json, sys
 settings=json.load(open(sys.argv[1]))
 assert settings["theme"] == "user"
 assert len(settings["hooks"]["SessionStart"]) == 1
-assert settings["enabledPlugins"]["agent-harness-claude@fixture"] is False
+assert settings["enabledPlugins"]["hearting-claude@fixture"] is False
 assert settings["enabledPlugins"]["foreign@fixture"] is True
 PY
 python3 - "$HOME/.codex/config.toml" <<'PY'
 import sys
 text=open(sys.argv[1]).read()
-assert '[plugins."agent-harness-codex@fixture"]' in text
+assert '[plugins."hearting-codex@fixture"]' in text
 assert 'enabled = false' in text
 PY
 test -d "$HOME/.codex/.harness/disabled-plugins" || fail "Codex plugin quarantine missing"
@@ -323,9 +323,9 @@ python3 - "$HOME/.config/opencode/opencode.json" <<'PY'
 import json, sys
 path=sys.argv[1]
 data=json.load(open(path))
-data["note"]="agent-harness is documentation, not a plugin entry"
+data["note"]="hearting is documentation, not a plugin entry"
 data["plugin"]=[
-    ["agent-harness-opencode@1.2.3", {"fixture": True}],
+    ["hearting-opencode@1.2.3", {"fixture": True}],
     ["foreign-opencode-plugin@1.0.0", {"foreign": True}],
 ]
 with open(path, "w") as handle:
@@ -339,11 +339,11 @@ harness runtime activate --runtime opencode --mode linked --source "$SRC" --json
 python3 - "$HOME/.config/opencode/opencode.json" <<'PY'
 import json, sys
 data=json.load(open(sys.argv[1]))
-assert data["note"] == "agent-harness is documentation, not a plugin entry"
+assert data["note"] == "hearting is documentation, not a plugin entry"
 assert data["plugin"] == [["foreign-opencode-plugin@1.0.0", {"foreign": True}]]
 PY
 printf '%s\n' '{' \
-  '  // "plugin": ["agent-harness-opencode@comment-only"],' \
+  '  // "plugin": ["hearting-opencode@comment-only"],' \
   '  "theme": "user",' \
   '}' > "$HOME/.config/opencode/opencode.jsonc"
 harness runtime activate --runtime opencode --mode linked --source "$SRC" --json \
@@ -356,7 +356,7 @@ if harness runtime activate --runtime opencode --mode linked --source "$SRC" --j
 fi
 printf '%s\n' '{' \
   '  "plugin": [[' \
-  '    "agent-harness-opencode@1.0.0",' \
+  '    "hearting-opencode@1.0.0",' \
   '    {"fixture": true},' \
   '  ]],' \
   '}' \
@@ -608,8 +608,8 @@ ok "claude status flags a registered hook whose command file is missing"
 
 harness uninstall codex > "$TMP/uninstall-codex.log" 2>&1 \
   || { cat "$TMP/uninstall-codex.log" >&2; fail "codex uninstall failed"; }
-test ! -e "$HOME/.codex/agent-harness" && test ! -L "$HOME/.codex/agent-harness" \
-  || fail "uninstall left the codex agent-harness projection"
+test ! -e "$HOME/.codex/hearting" && test ! -L "$HOME/.codex/hearting" \
+  || fail "uninstall left the codex hearting projection"
 test ! -e "$HOME/.codex/AGENTS.md" && test ! -L "$HOME/.codex/AGENTS.md" \
   || fail "uninstall left the codex AGENTS.md projection"
 harness runtime status --runtime codex --json > "$TMP/uninstalled-codex.json" || true

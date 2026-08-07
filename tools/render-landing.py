@@ -26,9 +26,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
-REPO_URL = "https://github.com/dmlguq456/agent_setting"
+REPO_URL = "https://github.com/dmlguq456/hearting"
 INSTALL_CMD = (
-    "curl -fsSL https://github.com/dmlguq456/agent_setting/"
+    "curl -fsSL https://github.com/dmlguq456/hearting/"
     "releases/latest/download/install.sh | sh"
 )
 
@@ -769,7 +769,7 @@ STAGE_MODEL_MAP = [
 ]
 
 FLEET_ROWS = [
-    ("w", "●", "agent_setting", "claude · owner d1", "working", "12m", False),
+    ("w", "●", "hearting", "claude · owner d1", "working", "12m", False),
     ("w", "│", "code-execute", "claude · light", "working", "4m", True),
     ("dn", "│", "impl-review", "codex · light", "done", "2m", True),
     ("b2", "│", "failure-mode", "codex · deep", "blocked", "1m", True),

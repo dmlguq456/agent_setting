@@ -104,9 +104,9 @@ real() { readlink -f "$1" 2>/dev/null || true; }
 S="$AGENT_HOME/codex_setting"
 
 # Stable harness pointers consumed by the Codex adapter at runtime.
-link "$AGENT_HOME"                       "$CODEX_HOME/agent-harness"
+link "$AGENT_HOME"                       "$CODEX_HOME/hearting"
 link "$S/AGENTS.md"                      "$CODEX_HOME/AGENTS.md"
-link "$S/README.md"                      "$CODEX_HOME/agent-harness-readme.md"
+link "$S/README.md"                      "$CODEX_HOME/hearting-readme.md"
 link "$S/core"                           "$CODEX_HOME/agent-core"
 link "$S/capabilities"                   "$CODEX_HOME/agent-capabilities"
 link "$S/roles"                          "$CODEX_HOME/agent-roles"
@@ -163,7 +163,7 @@ printf 'agents_linked=%s\n' "$agents_linked"
 if [ "$install_plugin" = "1" ]; then
   if command -v codex >/dev/null 2>&1; then
     CODEX_HOME="$CODEX_HOME" codex plugin marketplace add "$S/codex-plugin-marketplace" >/dev/null 2>&1 || true
-    CODEX_HOME="$CODEX_HOME" codex plugin add agent-harness-codex@agent-harness >/dev/null 2>&1 || true
+    CODEX_HOME="$CODEX_HOME" codex plugin add hearting-codex@hearting >/dev/null 2>&1 || true
     printf 'plugin_install=attempted\n'
   else
     printf 'plugin_install=skipped reason=codex-command-not-found\n'

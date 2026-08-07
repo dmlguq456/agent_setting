@@ -189,8 +189,8 @@ class AdapterV11Test(unittest.TestCase):
    self.assertTrue((home/"auth.json").is_symlink())
    self.assertEqual((home/"auth.json").resolve(),(source/"auth.json").resolve())
    self.assertTrue((home/"config.toml").is_symlink())
-   self.assertTrue((home/"agent-harness").is_symlink())
-   self.assertEqual((home/"agent-harness").resolve(),wrapper.resolve_agent_home().resolve())
+   self.assertTrue((home/"hearting").is_symlink())
+   self.assertEqual((home/"hearting").resolve(),wrapper.resolve_agent_home().resolve())
    self.assertEqual(home.parent,worktree/".dispatch")
  def test_detached_selection_is_promoted_before_launch_without_failure_exposure(self):
   for harness in ("codex","claude"):

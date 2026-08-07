@@ -136,7 +136,7 @@ def locate_latest_for_worktree(con: sqlite3.Connection, worktree: str) -> tuple[
 def heartbeat_age_min(agent_home: Path, slug: str, now: float) -> float | None:
     """Return the heartbeat file age in minutes, or None when no heartbeat exists.
 
-    The plugin agent-harness-guards.js touches
+    The plugin hearting-guards.js touches
     <agent-home>/.dispatch/logs/<slug>.heartbeat on every session.idle event
     when OPENCODE_DISPATCH_SLUG is set (i.e., the session is a dispatched
     headless worker). A missing or aging heartbeat is a secondary liveness
@@ -158,7 +158,7 @@ def plugin_loaded_for_slug(agent_home: Path, slug: str) -> bool:
     """True when the plugin-load marker for this dispatch slug exists.
 
     dispatch-headless.py exports OPENCODE_DISPATCH_SLUG to the runtime child;
-    agent-harness-guards.js writes <agent-home>/.dispatch/plugin-load.<slug>.mark
+    hearting-guards.js writes <agent-home>/.dispatch/plugin-load.<slug>.mark
     once at plugin init. A missing marker means the plugin did not load in the
     headless runtime — a strong DEAD signal even when the OpenCode SQLite
     session is alive (the session is running but no harness guards are active).

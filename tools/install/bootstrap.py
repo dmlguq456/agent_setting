@@ -62,6 +62,9 @@ def restore_memory(mem_store=None):
 
 
 LAUNCHERS = (
+    # `hearting` is the product name; `harness` predates the rename and stays
+    # installed beside it so existing shells and scripts keep working.
+    ("hearting", "tools/install/harness.sh"),
     ("harness", "tools/install/harness.sh"),
     ("fleet", "tools/fleet/fleet.sh"),
 )

@@ -20,8 +20,8 @@ import verifier
 RUNTIME = "claude"
 
 _MARKETPLACE_SOURCE_RELPATH = "adapters/claude/plugin-marketplace"
-_MARKETPLACE_NAME = "agent-harness"
-_PLUGIN_SPEC = f"agent-harness-claude@{_MARKETPLACE_NAME}"
+_MARKETPLACE_NAME = "hearting"
+_PLUGIN_SPEC = f"hearting-claude@{_MARKETPLACE_NAME}"
 
 
 def _dev_channel_active(scope="global"):

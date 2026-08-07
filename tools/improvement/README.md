@@ -7,7 +7,7 @@ self-edit or activation tool.
 Default state:
 
 ```text
-${XDG_STATE_HOME:-~/.local/state}/agent-harness/improvement/
+${XDG_STATE_HOME:-~/.local/state}/hearting/improvement/
   proposals/<id>/record.json
   proposals/<id>/evidence/*
 ```
@@ -29,7 +29,7 @@ Every incident starts from a strict JSON context:
       "name": "codex",
       "version": "0.144.3",
       "plugin": {
-        "name": "agent-harness-codex",
+        "name": "hearting-codex",
         "version": "1.0.0",
         "fingerprint": "sha256:..."
       }

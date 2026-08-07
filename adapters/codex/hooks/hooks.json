@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/agent-harness\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" worker-state-compact.py compact-before; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
+            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/hearting\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" worker-state-compact.py compact-before; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
             "timeout": 10
           }
         ]
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/agent-harness\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" worker-state-compact.py compact-after; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
+            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/hearting\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" worker-state-compact.py compact-after; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
             "timeout": 10
           }
         ]
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/agent-harness\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" sessionstart-lifecycle.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
+            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/hearting\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" sessionstart-lifecycle.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
             "timeout": 30
           }
         ]
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/agent-harness\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then CODEX_HOOK_EVENT=SessionEnd exec \"$root/adapters/codex/hooks/run-hook.sh\" sessionend-lifecycle.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
+            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/hearting\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then CODEX_HOOK_EVENT=SessionEnd exec \"$root/adapters/codex/hooks/run-hook.sh\" sessionend-lifecycle.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
             "timeout": 3
           }
         ]
@@ -51,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/agent-harness\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" stop-lifecycle.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
+            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/hearting\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" stop-lifecycle.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
             "timeout": 30
           }
         ]
@@ -62,7 +62,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/agent-harness\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" userprompt-lifecycle.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
+            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/hearting\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" userprompt-lifecycle.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
             "timeout": 30
           }
         ]
@@ -73,7 +73,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/agent-harness\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" permissionrequest-lifecycle.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
+            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/hearting\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" permissionrequest-lifecycle.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
             "timeout": 30
           }
         ]
@@ -85,7 +85,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/agent-harness\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" pretooluse-write-guard.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
+            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/hearting\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" pretooluse-write-guard.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
             "timeout": 30
           }
         ]
@@ -97,7 +97,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/agent-harness\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" posttooluse-interaction-clear.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
+            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/hearting\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" posttooluse-interaction-clear.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
             "timeout": 30
           }
         ]
@@ -107,7 +107,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/agent-harness\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" posttooluse-read-marker.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
+            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/hearting\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" posttooluse-read-marker.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
             "timeout": 30
           }
         ]
@@ -117,7 +117,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/agent-harness\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" posttooluse-design-check.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
+            "command": "sh -c 'for root in \"${AGENT_HOME:-}\" \"$HOME/.codex/hearting\"; do if [ -f \"$root/core/CORE.md\" ] && [ -x \"$root/adapters/codex/hooks/run-hook.sh\" ]; then exec \"$root/adapters/codex/hooks/run-hook.sh\" posttooluse-design-check.py; fi; done; echo \"agent harness Codex hook launcher not found\" >&2; exit 69'",
             "timeout": 30
           }
         ]

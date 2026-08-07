@@ -18,14 +18,14 @@ targets = [
     home / ".codex/config.toml",
     home / ".config/opencode/opencode.json",
     home / ".config/opencode/opencode.jsonc",
-    home / ".config/opencode/plugins/agent-harness-guards.js",
+    home / ".config/opencode/plugins/hearting-guards.js",
 ]
 for base in (home / ".claude/plugins/cache", home / ".codex/plugins/cache"):
     if base.is_dir():
         targets.extend(
             path
             for path in base.rglob("*")
-            if "agent-harness" in path.as_posix() and (path.is_file() or path.is_symlink())
+            if "hearting" in path.as_posix() and (path.is_file() or path.is_symlink())
         )
 digest = hashlib.sha256()
 for path in sorted(set(targets), key=lambda item: str(item)):

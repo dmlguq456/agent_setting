@@ -24,7 +24,7 @@ Runtime code should resolve it in this order:
 
 1. `AGENT_HOME`
 2. adapter-specific compatibility variables such as `CLAUDE_HOME`
-3. `${XDG_DATA_HOME:-$HOME/.local/share}/agent-harness/current` when a managed release is installed
+3. `${XDG_DATA_HOME:-$HOME/.local/share}/hearting/current` when a managed release is installed
 4. `$HOME/agent_setting` when a linked checkout is present
 5. the adapter's legacy default install path, currently `$HOME/.claude` for the Claude Code adapter
 
@@ -33,8 +33,8 @@ Use `utilities/agent-home.sh` in shell code when a concrete path is needed.
 Supported physical layouts:
 
 ```text
-$HOME/.local/share/agent-harness/releases/<version>/  # immutable managed release
-$HOME/.local/share/agent-harness/current              # atomic pointer to active release
+$HOME/.local/share/hearting/releases/<version>/  # immutable managed release
+$HOME/.local/share/hearting/current              # atomic pointer to active release
 $HOME/agent_setting/                                  # linked maintainer checkout
 $HOME/.claude/              # Claude Code runtime home, mostly runtime-owned
 $HOME/.codex/               # Codex runtime home, mostly runtime-owned

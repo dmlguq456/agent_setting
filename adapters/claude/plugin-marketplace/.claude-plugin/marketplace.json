@@ -1,12 +1,12 @@
 {
-  "name": "agent-harness",
+  "name": "hearting",
   "owner": {
-    "name": "agent-harness"
+    "name": "hearting"
   },
   "plugins": [
     {
-      "name": "agent-harness-claude",
-      "source": "./plugins/agent-harness-claude",
+      "name": "hearting-claude",
+      "source": "./plugins/hearting-claude",
       "description": "Portable agent harness — skills/agents/hooks projection for Claude Code."
     }
   ]

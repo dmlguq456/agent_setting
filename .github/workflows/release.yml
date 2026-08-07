@@ -130,8 +130,8 @@ jobs:
             *-*) set -- --prerelease ;;
           esac
           gh release create "$RELEASE_TAG" \
-            dist/agent-harness.tar.gz \
-            dist/agent-harness.tar.gz.sha256 \
+            dist/hearting.tar.gz \
+            dist/hearting.tar.gz.sha256 \
             dist/install.sh \
             dist/install.sh.sha256 \
             --verify-tag \

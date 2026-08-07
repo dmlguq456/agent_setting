@@ -20,8 +20,8 @@ import codex_launcher
 RUNTIME = "codex"
 
 _MARKETPLACE_SOURCE_RELPATH = "codex_setting/codex-plugin-marketplace"
-_MARKETPLACE_NAME = "agent-harness"
-_PLUGIN_SPEC = f"agent-harness-codex@{_MARKETPLACE_NAME}"
+_MARKETPLACE_NAME = "hearting"
+_PLUGIN_SPEC = f"hearting-codex@{_MARKETPLACE_NAME}"
 
 
 def _plugin_action(dry_run):
@@ -305,7 +305,7 @@ def status(scope="global"):
     else:
         version = manifest_data.get("version", "none")
 
-    pointer_present = (paths.runtime_home("codex", scope) / "agent-harness").is_symlink()
+    pointer_present = (paths.runtime_home("codex", scope) / "hearting").is_symlink()
     plugin_marketplace_source_present = paths.resolve_source(
         "adapters/codex/plugin-marketplace"
     ).exists()

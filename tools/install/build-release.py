@@ -15,11 +15,11 @@ import tempfile
 from pathlib import Path
 
 
-ARCHIVE_NAME = "agent-harness.tar.gz"
+ARCHIVE_NAME = "hearting.tar.gz"
 INSTALLER_NAME = "install.sh"
 INSTALLER_CHECKSUM_NAME = INSTALLER_NAME + ".sha256"
 INSTALLER_MARKER = "__AGENT_HARNESS_DISTRIBUTION_PY_V1__"
-DEFAULT_REPOSITORY = "dmlguq456/agent_setting"
+DEFAULT_REPOSITORY = "dmlguq456/hearting"
 VERSION_RE = re.compile(
     r"^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
     r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
@@ -78,7 +78,7 @@ REPOSITORY='{repository}'
 for arg in "$@"; do
   case "$arg" in
     --version|--version=*|--repository|--repository=*)
-      echo "agent-harness: this installer is fixed to $REPOSITORY@$RELEASE_VERSION; use the install.sh asset from the requested repository and release tag" >&2
+      echo "hearting: this installer is fixed to $REPOSITORY@$RELEASE_VERSION; use the install.sh asset from the requested repository and release tag" >&2
       exit 64
       ;;
   esac
@@ -86,11 +86,11 @@ done
 
 PY=$(command -v python3 || command -v python || true)
 if [ -z "$PY" ]; then
-  echo "agent-harness: Python 3.10+ is required." >&2
+  echo "hearting: Python 3.10+ is required." >&2
   exit 1
 fi
 
-TMP=$(mktemp -d "${{TMPDIR:-/tmp}}/agent-harness-bootstrap.XXXXXX")
+TMP=$(mktemp -d "${{TMPDIR:-/tmp}}/hearting-bootstrap.XXXXXX")
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 MODULE="$TMP/distribution.py"
 
@@ -122,14 +122,14 @@ def build(
     archive_path = output / ARCHIVE_NAME
     checksum_path = output / (ARCHIVE_NAME + ".sha256")
 
-    with tempfile.TemporaryDirectory(prefix="agent-harness-release-") as temp:
+    with tempfile.TemporaryDirectory(prefix="hearting-release-") as temp:
         tar_path = Path(temp) / "source.tar"
         with tar_path.open("wb") as handle:
             _run_git(
                 root,
                 "archive",
                 "--format=tar",
-                "--prefix=agent-harness/",
+                "--prefix=hearting/",
                 ref,
                 "--",
                 ".",
@@ -139,7 +139,7 @@ def build(
                 ":(exclude).route-grounding",
                 stdout=handle,
             )
-        marker = tarfile.TarInfo("agent-harness/RELEASE_VERSION")
+        marker = tarfile.TarInfo("hearting/RELEASE_VERSION")
         marker.mode = 0o644
         marker.uid = marker.gid = 0
         marker.uname = marker.gname = "root"

@@ -24,8 +24,8 @@ through native discovery paths and adapter bootstrap files.
 ## Target Layout
 
 ```text
-$HOME/.local/share/agent-harness/releases/<version>/  # managed immutable release
-$HOME/.local/share/agent-harness/current              # atomic active pointer
+$HOME/.local/share/hearting/releases/<version>/  # managed immutable release
+$HOME/.local/share/hearting/current              # atomic active pointer
 $HOME/agent_setting/                                  # optional maintainer checkout
 $HOME/.claude/              # Claude Code runtime home
 $HOME/.codex/               # Codex runtime home
@@ -42,7 +42,7 @@ the machine-readable source of truth for source root, source/active revision,
 projection digest, discovery paths, duplicates, freshness, and session action.
 
 ```bash
-curl -fsSL https://github.com/dmlguq456/agent_setting/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/dmlguq456/hearting/releases/latest/download/install.sh | sh
 harness runtime status --runtime all --json
 harness runtime doctor --runtime all --strict
 ```
@@ -272,7 +272,7 @@ harness install opencode
 |---|---|---|
 | `AGENTS.md`/core/capabilities/roles/bin/tools/utilities | symlink using `agent-*` pointer names | Routes through generated projections under `opencode_setting/` |
 | OpenCode-native skills/agents/commands | symlink fan-out (`skills/*`, `agents/*.md`, `commands/*.md`) | Uses the current official plural discovery paths |
-| guard plugin | `opencode_setting/opencode-plugins/agent-harness-guards.js` | JS/TS plugin hook surface; OpenCode has no marketplace or bundle format, so installer symlinks are the only channel |
+| guard plugin | `opencode_setting/opencode-plugins/hearting-guards.js` | JS/TS plugin hook surface; OpenCode has no marketplace or bundle format, so installer symlinks are the only channel |
 | `opencode.json`/`opencode.jsonc` `instructions[]`/`plugin[]` | non-destructive merge | Preserves user config; reports conflicts and stops instead of guessing an automatic merge |
 
 `runtime activate` uses the official plural convention directories. Singular

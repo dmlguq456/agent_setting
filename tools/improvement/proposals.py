@@ -99,7 +99,7 @@ def default_store() -> Path:
         return Path(override).expanduser()
     state = os.environ.get("XDG_STATE_HOME")
     base = Path(state).expanduser() if state else Path.home() / ".local" / "state"
-    return base / "agent-harness" / "improvement"
+    return base / "hearting" / "improvement"
 
 
 def _resolved(path: Path) -> Path:
@@ -128,7 +128,7 @@ def _protected_roots() -> List[Path]:
         Path(os.environ.get("CLAUDE_CONFIG_DIR", home / ".claude")).expanduser(),
         Path(os.environ.get("CODEX_HOME", home / ".codex")).expanduser(),
         Path(os.environ.get("OPENCODE_CONFIG_DIR", xdg_config / "opencode")).expanduser(),
-        xdg_data / "agent-harness",
+        xdg_data / "hearting",
     ]
     result: List[Path] = []
     for value in values:

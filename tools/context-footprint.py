@@ -143,14 +143,14 @@ def plugin_install(
     except (AttributeError, json.JSONDecodeError):
         return None, None
     for item in installed:
-        if not isinstance(item, dict) or item.get("name") != "agent-harness-codex":
+        if not isinstance(item, dict) or item.get("name") != "hearting-codex":
             continue
         if not item.get("installed") or not item.get("enabled"):
             return False, None
         marketplace = item.get("marketplaceName")
         version = item.get("version")
         if isinstance(marketplace, str) and isinstance(version, str):
-            skills = codex_home / "plugins" / "cache" / marketplace / "agent-harness-codex" / version / "skills"
+            skills = codex_home / "plugins" / "cache" / marketplace / "hearting-codex" / version / "skills"
             if skills.is_dir():
                 return True, skills
         return True, None
@@ -284,7 +284,7 @@ def main() -> int:
     print("\n[skill-metadata]")
     codex_local, codex_local_path, codex_local_count, codex_local_names = skill_meta(root / "adapters/codex/skills")
     codex_plugin, codex_plugin_path, codex_plugin_count, codex_plugin_names = skill_meta(
-        root / "adapters/codex/plugins/agent-harness-codex/skills", "agent-harness-codex:"
+        root / "adapters/codex/plugins/hearting-codex/skills", "hearting-codex:"
     )
     opencode, opencode_path, opencode_count, _ = skill_meta(root / "adapters/opencode/skills")
     claude, claude_path, claude_count, _ = skill_meta(root / "adapters/claude/skills")
@@ -311,7 +311,7 @@ def main() -> int:
     for label, base in (
         ("canonical", root / "skills"),
         ("claude", root / "adapters/claude/skills"),
-        ("claude-plugin", root / "adapters/claude/plugin-marketplace/plugins/agent-harness-claude/skills"),
+        ("claude-plugin", root / "adapters/claude/plugin-marketplace/plugins/hearting-claude/skills"),
         ("codex", root / "adapters/codex/skills"),
         ("opencode", root / "adapters/opencode/skills"),
     ):
@@ -342,7 +342,7 @@ def main() -> int:
                 warnings.append("codex active plugin cache path unavailable for exact metadata measurement")
                 active_local_path += codex_plugin_path
             else:
-                _, installed_path_chars, _, _ = skill_meta(installed_plugin_skills, "agent-harness-codex:")
+                _, installed_path_chars, _, _ = skill_meta(installed_plugin_skills, "hearting-codex:")
                 active_local_path += installed_path_chars
             active_labels.append("plugin")
         if not active_labels:

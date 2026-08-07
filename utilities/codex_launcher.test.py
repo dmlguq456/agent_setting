@@ -65,7 +65,7 @@ class CodexLauncherRuntimeTest(unittest.TestCase):
             root = Path(temporary)
             home = root / ".codex"
             home.mkdir()
-            agent_home = root / "agent-harness"
+            agent_home = root / "hearting"
             entry = agent_home / "utilities" / "codex-managed-entry.py"
             entry.parent.mkdir(parents=True)
             entry.write_text("# fixture\n", encoding="utf-8")
@@ -89,7 +89,7 @@ class CodexLauncherRuntimeTest(unittest.TestCase):
             root = Path(temporary)
             home = root / ".codex"
             home.mkdir()
-            agent_home = root / "agent-harness"
+            agent_home = root / "hearting"
             entry = agent_home / "utilities" / "codex-managed-entry.py"
             entry.parent.mkdir(parents=True)
             entry.write_text("# fixture\n", encoding="utf-8")
@@ -128,8 +128,8 @@ class CodexLauncherRuntimeTest(unittest.TestCase):
             wrapper = root / "other" / "codex"
             wrapper.parent.mkdir()
             wrapper.write_bytes(
-                b"#!/bin/sh\nexec python3 $HOME/.codex/agent-harness/utilities/"
-                b"codex-launcher.py \"$@\"\n# agent-harness ingress\n"
+                b"#!/bin/sh\nexec python3 $HOME/.codex/hearting/utilities/"
+                b"codex-launcher.py \"$@\"\n# hearting ingress\n"
             )
             wrapper.chmod(0o755)
             state = state_dir / "codex-launcher.json"

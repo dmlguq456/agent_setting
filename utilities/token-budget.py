@@ -106,7 +106,7 @@ def state_path(args) -> Path | None:
         return None
     base = Path(args.state_dir) if args.state_dir else Path(
         os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state"
-    ) / "agent-harness" / "token-budget"
+    ) / "hearting" / "token-budget"
     digest = session_digest(args.session_id)
     return base / (digest + ".json")
 

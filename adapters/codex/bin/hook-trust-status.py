@@ -145,7 +145,7 @@ def inspect_trust(
             "initialize",
             {
                 "clientInfo": {
-                    "name": "agent-harness-hook-trust-check",
+                    "name": "hearting-hook-trust-check",
                     "title": "Hearting Hook Trust Check",
                     "version": "1",
                 },

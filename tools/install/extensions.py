@@ -826,7 +826,7 @@ def _extension_root(kind: str, *, create: bool) -> Path:
     except ValueError as exc:
         raise ExtensionError("invalid-xdg-root", str(exc)) from exc
     current = base
-    for index, part in enumerate(("agent-harness", "extensions")):
+    for index, part in enumerate(("hearting", "extensions")):
         label = f"XDG {kind} root" if index == 0 else f"extension {kind} root"
         if create:
             _ensure_plain_dir(current, label)

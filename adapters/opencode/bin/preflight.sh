@@ -182,9 +182,9 @@ opencode_runtime_projection_check() {
     printf 'check=failed\nreason=opencode-config-home-unset\n'
     return 69
   fi
-  harness="$opencode_home/agent-harness"
+  harness="$opencode_home/hearting"
   if [ ! -f "$harness/core/CORE.md" ]; then
-    printf 'check=failed\nreason=opencode-agent-harness-missing\nopencode_home=%s\nexpected=%s\n' "$opencode_home" "$harness"
+    printf 'check=failed\nreason=opencode-hearting-missing\nopencode_home=%s\nexpected=%s\n' "$opencode_home" "$harness"
     return 69
   fi
   # Kernel helper is the projection liveness probe: runtime team agents retired
@@ -202,8 +202,8 @@ opencode_runtime_projection_check() {
     printf 'check=failed\nreason=opencode-native-commands-missing\nopencode_home=%s\nexpected=%s|%s\n' "$opencode_home" "$opencode_home/commands/autopilot-code.md" "$opencode_home/command/autopilot-code.md"
     return 69
   fi
-  if [ ! -f "$opencode_home/plugins/agent-harness-guards.js" ]; then
-    printf 'check=failed\nreason=opencode-native-plugin-missing\nopencode_home=%s\nexpected=%s\n' "$opencode_home" "$opencode_home/plugins/agent-harness-guards.js"
+  if [ ! -f "$opencode_home/plugins/hearting-guards.js" ]; then
+    printf 'check=failed\nreason=opencode-native-plugin-missing\nopencode_home=%s\nexpected=%s\n' "$opencode_home" "$opencode_home/plugins/hearting-guards.js"
     return 69
   fi
   if [ ! -d "$opencode_home/skills" ] && [ ! -d "$opencode_home/agent-skills" ] && ! opencode_config_content_has_opencode_skills "${OPENCODE_CONFIG_CONTENT:-}"; then
@@ -211,7 +211,7 @@ opencode_runtime_projection_check() {
     return 69
   fi
   if rg -q 'adapters/claude|claude_setting|settings\.json|statusline\.sh|CLAUDE\.md|agent-modes|allowedTools|/\.claude/' \
-    "$native_agent" "$native_command" "$opencode_home/plugins/agent-harness-guards.js" 2>/dev/null; then
+    "$native_agent" "$native_command" "$opencode_home/plugins/hearting-guards.js" 2>/dev/null; then
     printf 'check=failed\nreason=opencode-runtime-projection-exposes-claude-surface\nopencode_home=%s\n' "$opencode_home"
     return 69
   fi

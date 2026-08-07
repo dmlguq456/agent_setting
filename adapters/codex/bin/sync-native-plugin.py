@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 ADAPTER = ROOT / "adapters" / "codex"
-PLUGIN_NAME = "agent-harness-codex"
+PLUGIN_NAME = "hearting-codex"
 PLUGIN_VERSION = "0.1.0+codex.20260715015036"
 PLUGIN_ROOT = ADAPTER / "plugins" / PLUGIN_NAME
 MARKETPLACE_ROOT = ADAPTER / "plugin-marketplace"
@@ -53,7 +53,7 @@ def plugin_json() -> dict:
 
 def marketplace_json() -> dict:
     return {
-        "name": "agent-harness",
+        "name": "hearting",
         "interface": {
             "displayName": "Hearting",
         },

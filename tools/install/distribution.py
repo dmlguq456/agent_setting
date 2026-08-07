@@ -29,8 +29,8 @@ from pathlib import Path, PurePosixPath
 from typing import Iterable, Optional
 
 
-DEFAULT_REPOSITORY = "dmlguq456/agent_setting"
-ARCHIVE_NAME = "agent-harness.tar.gz"
+DEFAULT_REPOSITORY = "dmlguq456/hearting"
+ARCHIVE_NAME = "hearting.tar.gz"
 CHECKSUM_NAME = ARCHIVE_NAME + ".sha256"
 STATE_SCHEMA = 1
 RUNTIMES = ("claude", "codex", "opencode")
@@ -83,11 +83,11 @@ def _xdg_config_home() -> Path:
 
 
 def data_root() -> Path:
-    return _env_path("HARNESS_DATA_ROOT", _xdg_data_home() / "agent-harness")
+    return _env_path("HARNESS_DATA_ROOT", _xdg_data_home() / "hearting")
 
 
 def state_root() -> Path:
-    return _env_path("HARNESS_STATE_ROOT", _xdg_state_home() / "agent-harness")
+    return _env_path("HARNESS_STATE_ROOT", _xdg_state_home() / "hearting")
 
 
 def state_path() -> Path:
@@ -99,6 +99,16 @@ def bin_dir() -> Path:
 
 
 def launcher_path() -> Path:
+    return bin_dir() / "hearting"
+
+
+def legacy_launcher_path() -> Path:
+    """`harness` predates the rename to Hearting and stays installed beside it.
+
+    Existing shells, scripts, and scheduler units all reach for `harness`;
+    dropping it would break them for no gain, so both names point at the same
+    launcher and removing either is a user decision, not an install step.
+    """
     return bin_dir() / "harness"
 
 
@@ -246,7 +256,7 @@ def _read_url(url: str, limit: int) -> bytes:
         url,
         headers={
             "Accept": "application/vnd.github+json",
-            "User-Agent": "agent-harness-installer/1",
+            "User-Agent": "hearting-installer/1",
             "X-GitHub-Api-Version": "2022-11-28",
         },
     )
@@ -333,7 +343,7 @@ def _expected_checksum(url: str) -> str:
 def _download_archive(url: str, destination: Path, expected: str) -> None:
     _allow_url(url)
     request = urllib.request.Request(
-        url, headers={"User-Agent": "agent-harness-installer/1"}
+        url, headers={"User-Agent": "hearting-installer/1"}
     )
     digest = hashlib.sha256()
     total = 0
@@ -365,7 +375,7 @@ def _normal_member_path(name: str) -> PurePosixPath:
     if not name or "\\" in name:
         raise DistributionError(f"invalid archive member path: {name!r}")
     path = PurePosixPath(name)
-    if path.is_absolute() or ".." in path.parts or path.parts[0] != "agent-harness":
+    if path.is_absolute() or ".." in path.parts or path.parts[0] != "hearting":
         raise DistributionError(f"archive member escapes release root: {name}")
     return path
 
@@ -390,7 +400,7 @@ def _normal_link_target(member: tarfile.TarInfo, path: PurePosixPath) -> None:
             normalized.pop()
         else:
             normalized.append(part)
-    if not normalized or normalized[0] != "agent-harness":
+    if not normalized or normalized[0] != "hearting":
         raise DistributionError(
             f"archive link escapes release root: {member.name} -> {target}"
         )
@@ -426,9 +436,9 @@ def _safe_extract(archive: Path, extraction_root: Path, version: str) -> Path:
         extraction_root.mkdir(parents=True, exist_ok=False)
         bundle.extractall(extraction_root)
 
-    root = extraction_root / "agent-harness"
+    root = extraction_root / "hearting"
     if root.is_symlink() or not root.is_dir():
-        raise DistributionError("release archive lacks one agent-harness root")
+        raise DistributionError("release archive lacks one hearting root")
     resolved_root = root.resolve(strict=True)
     for relative in REQUIRED_RELEASE_FILES:
         candidate = root / relative
@@ -447,7 +457,7 @@ def _safe_extract(archive: Path, extraction_root: Path, version: str) -> Path:
 
 
 def _release_metadata_path(root: Path) -> Path:
-    return root / ".agent-harness-release.json"
+    return root / ".hearting-release.json"
 
 
 def _publish_release(
@@ -570,6 +580,15 @@ def _repair_managed_pointers(state: dict) -> bool:
     desired = current / "tools/install/harness.sh"
     if not launcher.is_symlink() or Path(os.readlink(launcher)) != desired:
         _atomic_symlink(launcher, desired)
+        changed = True
+
+    legacy = legacy_launcher_path()
+    if legacy.exists() and not legacy.is_symlink():
+        raise DistributionError(f"harness launcher already exists and is not owned: {legacy}")
+    if legacy.is_symlink() and not _launcher_is_harness_link(legacy):
+        raise DistributionError(f"harness launcher is a foreign symlink: {legacy}")
+    if not legacy.is_symlink() or Path(os.readlink(legacy)) != desired:
+        _atomic_symlink(legacy, desired)
         changed = True
     return changed
 
@@ -780,6 +799,7 @@ def _install_or_update(
             activation = _activate_release(target, selected)
             _atomic_symlink(current, target)
             _atomic_symlink(launcher, current / "tools/install/harness.sh")
+            _atomic_symlink(legacy_launcher_path(), current / "tools/install/harness.sh")
             next_state = {
                 "schema": STATE_SCHEMA,
                 "repository": repository,
@@ -938,7 +958,7 @@ def scheduler_kind() -> str:
 
 def _systemd_paths() -> tuple[Path, Path]:
     root = _xdg_config_home() / "systemd/user"
-    return root / "agent-harness-update.service", root / "agent-harness-update.timer"
+    return root / "hearting-update.service", root / "hearting-update.timer"
 
 
 def _systemd_quote(path: Path) -> str:
@@ -1011,14 +1031,14 @@ def _write_systemd_units() -> tuple[Path, Path]:
 
 
 def _launch_agent_path() -> Path:
-    return _home() / "Library/LaunchAgents/com.agent-harness.update.plist"
+    return _home() / "Library/LaunchAgents/com.hearting.update.plist"
 
 
 def _write_launch_agent() -> Path:
     path = _launch_agent_path()
     payload = plistlib.dumps(
         {
-            "Label": "com.agent-harness.update",
+            "Label": "com.hearting.update",
             "ProgramArguments": [str(launcher_path()), "update", "--auto"],
             "RunAtLoad": False,
             "StartInterval": 86400,
@@ -1050,14 +1070,14 @@ def _probe_command(command: list[str]) -> tuple[bool, str]:
     """Run one exact, read-only scheduler inspection command."""
     allowed = {
         (
-            "systemctl", "--user", "show", "agent-harness-update.timer",
+            "systemctl", "--user", "show", "hearting-update.timer",
             "--property=LoadState,ActiveState,UnitFileState,LastTriggerUSec",
         ),
         (
-            "systemctl", "--user", "show", "agent-harness-update.service",
+            "systemctl", "--user", "show", "hearting-update.service",
             "--property=Result,ExecMainCode,ExecMainStatus",
         ),
-        ("launchctl", "print", f"gui/{os.getuid()}/com.agent-harness.update"),
+        ("launchctl", "print", f"gui/{os.getuid()}/com.hearting.update"),
     }
     if tuple(command) not in allowed:
         return False, "status probe command is not allowlisted"
@@ -1153,7 +1173,7 @@ def _probe_systemd() -> dict:
 
 
 def _probe_launch_agent() -> dict:
-    domain = f"gui/{os.getuid()}/com.agent-harness.update"
+    domain = f"gui/{os.getuid()}/com.hearting.update"
     ok, output = _probe_command(["launchctl", "print", domain])
     if not ok:
         return _probe_result("launch-agent", output)
@@ -1361,7 +1381,7 @@ def _print_result(result: dict, as_json: bool) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="agent-harness-distribution")
+    parser = argparse.ArgumentParser(prog="hearting-distribution")
     sub = parser.add_subparsers(dest="command", required=True)
     bootstrap_parser = sub.add_parser("bootstrap")
     bootstrap_parser.add_argument(

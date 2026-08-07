@@ -350,7 +350,7 @@ def _linked_entries(
 
     if runtime == "codex":
         fixed = [
-            (source_root, home / "agent-harness", "instructions"),
+            (source_root, home / "hearting", "instructions"),
             (source_root / "adapters/codex/AGENTS.md", home / "AGENTS.md", "instructions"),
             (source_root / "core", home / "agent-core", "instructions"),
             (source_root / "capabilities", home / "agent-capabilities", "instructions"),
@@ -385,7 +385,7 @@ def _linked_entries(
 
     elif runtime == "claude":
         fixed = [
-            (source_root, home / "agent-harness", "instructions"),
+            (source_root, home / "hearting", "instructions"),
             (source_root / "adapters/claude/CLAUDE.md", home / "CLAUDE.md", "instructions"),
             (source_root / "core", home / "core", "instructions"),
             (source_root / "capabilities", home / "capabilities", "instructions"),
@@ -424,7 +424,7 @@ def _linked_entries(
 
     elif runtime == "opencode":
         fixed = [
-            (source_root, home / "agent-harness", "instructions"),
+            (source_root, home / "hearting", "instructions"),
             (source_root / "adapters/opencode/AGENTS.md", home / "AGENTS.md", "instructions"),
             (source_root / "core", home / "agent-core", "instructions"),
             (source_root / "capabilities", home / "agent-capabilities", "instructions"),
@@ -452,8 +452,8 @@ def _linked_entries(
                 "*.md",
             )
         )
-        plugin = source_root / "adapters/opencode/plugins/agent-harness-guards.js"
-        entries.append(_entry(plugin, home / "plugins/agent-harness-guards.js", "hook_config"))
+        plugin = source_root / "adapters/opencode/plugins/hearting-guards.js"
+        entries.append(_entry(plugin, home / "plugins/hearting-guards.js", "hook_config"))
     else:
         raise ActivationError(f"unsupported runtime: {runtime}")
 
@@ -561,9 +561,9 @@ def _desired_entries(
 def _plugin_roots(runtime: str, scope: str = "global") -> List[Path]:
     home = paths.runtime_home(runtime, scope)
     if runtime == "codex":
-        marker, expected = ".codex-plugin/plugin.json", "agent-harness-codex"
+        marker, expected = ".codex-plugin/plugin.json", "hearting-codex"
     elif runtime == "claude":
-        marker, expected = ".claude-plugin/plugin.json", "agent-harness-claude"
+        marker, expected = ".claude-plugin/plugin.json", "hearting-claude"
     else:
         return []
     roots = []
@@ -599,7 +599,7 @@ def _native_present(runtime: str, scope: str = "global") -> bool:
         candidates.extend((home / "agents").glob("*.md"))
     elif runtime == "opencode":
         candidates.extend((home / "skills").glob("*"))
-        candidates.append(home / "plugins/agent-harness-guards.js")
+        candidates.append(home / "plugins/hearting-guards.js")
     for candidate in candidates:
         if not candidate.is_symlink():
             continue
@@ -831,7 +831,7 @@ def _is_harness_npm_plugin_entry(value) -> bool:
 
 def _is_harness_npm_plugin(value: str) -> bool:
     token = value.rstrip("/").rsplit("/", 1)[-1].lower()
-    return bool(re.match(r"^agent-harness(?:-opencode)?(?:@[^/]*)?$", token))
+    return bool(re.match(r"^hearting(?:-opencode)?(?:@[^/]*)?$", token))
 
 
 def _config_backup(runtime: str, scope: str, path: Path, original: bytes) -> dict:
@@ -864,7 +864,7 @@ def _codex_plugin_ranges(lines: List[str]) -> List[tuple[int, int]]:
     starts = []
     for index, line in enumerate(lines):
         match = header.match(line.rstrip("\r\n"))
-        if match and match.group(1).split("@", 1)[0] == "agent-harness-codex":
+        if match and match.group(1).split("@", 1)[0] == "hearting-codex":
             starts.append(index)
     ranges = []
     for start in starts:
@@ -933,7 +933,7 @@ def _disable_codex_plugin(scope: str = "global") -> Optional[dict]:
     return {
         "kind": "codex-plugin-disabled",
         "path": str(config),
-        "disabled": ["agent-harness-codex"],
+        "disabled": ["hearting-codex"],
         "backup": _config_backup("codex", scope, config, original),
     }
 
@@ -951,7 +951,7 @@ def _claude_plugin_active(scope: str = "global") -> bool:
             data = None
         plugins = data.get("plugins", {}) if isinstance(data, dict) else {}
         if isinstance(plugins, dict) and any(
-            key.split("@", 1)[0] == "agent-harness-claude" for key in plugins
+            key.split("@", 1)[0] == "hearting-claude" for key in plugins
         ):
             return True
     settings = _config_path("claude", scope, "settings.json")
@@ -963,7 +963,7 @@ def _claude_plugin_active(scope: str = "global") -> bool:
         return False
     enabled = data.get("enabledPlugins", {}) if isinstance(data, dict) else {}
     return isinstance(enabled, dict) and any(
-        key.split("@", 1)[0] == "agent-harness-claude" and value is not False
+        key.split("@", 1)[0] == "hearting-claude" and value is not False
         for key, value in enabled.items()
     )
 
@@ -981,7 +981,7 @@ def _disable_claude_plugin(scope: str = "global") -> Optional[dict]:
         raise ActivationError(f"invalid Claude plugin registry object: {registry}")
     plugins = data.setdefault("plugins", {})
     removed = [
-        key for key in plugins if key.split("@", 1)[0] == "agent-harness-claude"
+        key for key in plugins if key.split("@", 1)[0] == "hearting-claude"
     ]
     if not removed:
         return None
@@ -1029,7 +1029,7 @@ def _merge_claude_hooks(
     disabled_plugins = []
     if isinstance(enabled_plugins, dict):
         for key, value in list(enabled_plugins.items()):
-            if key.split("@", 1)[0] == "agent-harness-claude" and value is not False:
+            if key.split("@", 1)[0] == "hearting-claude" and value is not False:
                 enabled_plugins[key] = False
                 disabled_plugins.append(key)
     hooks = data.setdefault("hooks", {})
@@ -1137,7 +1137,7 @@ def _hook_command_files_present(hooks: dict) -> bool:
 
 
 def _disable_opencode_npm(scope: str = "global") -> List[dict]:
-    """Remove only explicit agent-harness npm entries from JSON config.
+    """Remove only explicit hearting npm entries from JSON config.
 
     JSONC is intentionally read-only because stdlib cannot preserve comments.
     The caller receives the original bytes for transaction rollback; removed
@@ -1209,7 +1209,7 @@ def duplicate_sources(runtime: str, scope: str = "global") -> List[str]:
         return ["native+plugin"] if native and _codex_plugin_active(scope) else []
     if runtime == "claude":
         return ["native+plugin"] if native and _claude_plugin_active(scope) else []
-    local_plugin = (paths.runtime_home(runtime, scope) / "plugins/agent-harness-guards.js").exists()
+    local_plugin = (paths.runtime_home(runtime, scope) / "plugins/hearting-guards.js").exists()
     return ["local+npm"] if local_plugin and _opencode_npm_present(scope) else []
 
 
@@ -1349,15 +1349,15 @@ def _journal_dest_allowed(runtime: str, dest: Path, scope: str) -> bool:
         return True
     exact = {
         "codex": {
-            "agent-harness", "AGENTS.md", "agent-core", "agent-capabilities",
+            "hearting", "AGENTS.md", "agent-core", "agent-capabilities",
             "agent-roles", "agent-bin", "agent-hooks", "hooks.json", "agent-modes",
         },
         "claude": {
-            "agent-harness", "CLAUDE.md", "core", "capabilities", "roles",
+            "hearting", "CLAUDE.md", "core", "capabilities", "roles",
             "agent-modes", "bin", "tools", "utilities", "scaffolds",
         },
         "opencode": {
-            "agent-harness", "AGENTS.md", "agent-core", "agent-capabilities",
+            "hearting", "AGENTS.md", "agent-core", "agent-capabilities",
             "agent-roles",
         },
     }[runtime]
@@ -1382,12 +1382,12 @@ def _journal_dest_allowed(runtime: str, dest: Path, scope: str) -> bool:
     ):
         return True
     if runtime == "opencode" and relative.parts == (
-        "plugins", "agent-harness-guards.js"
+        "plugins", "hearting-guards.js"
     ):
         return True
     expected_plugin = {
-        "codex": "agent-harness-codex",
-        "claude": "agent-harness-claude",
+        "codex": "hearting-codex",
+        "claude": "hearting-claude",
     }.get(runtime)
     if expected_plugin:
         plugin_cache = home / "plugins" / "cache"
@@ -1470,8 +1470,8 @@ def _trusted_owned(
 
     home = paths.runtime_home(runtime, scope)
     plugin_prefixes = {
-        "codex": home / "plugins/cache/agent-harness/agent-harness-codex",
-        "claude": home / "plugins/cache/agent-harness/agent-harness-claude",
+        "codex": home / "plugins/cache/hearting/hearting-codex",
+        "claude": home / "plugins/cache/hearting/hearting-claude",
     }
     for item in state.get("owned_paths", []):
         value = item.get("dest")

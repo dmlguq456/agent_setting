@@ -49,7 +49,7 @@ stage_graph_contract=""
 plan_policy=""
 note="Codex has no native skill/plugin realization for this capability yet; read the portable catalog and task-relevant docs, then use preflight guards. Legacy compatibility references are not native input."
 native_skill_path="adapters/codex/skills/$cap/SKILL.md"
-native_plugin_skill_path="adapters/codex/plugins/agent-harness-codex/skills/$cap/SKILL.md"
+native_plugin_skill_path="adapters/codex/plugins/hearting-codex/skills/$cap/SKILL.md"
 if [ -f "$ROOT/$native_skill_path" ]; then
   native_skill=1
   realization="codex-native-skill"

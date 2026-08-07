@@ -93,7 +93,7 @@ BRIEFING_DESK="${MEM_BRIEFING_DESK:-$DEFAULT_BRIEFING_DESK}"
 TODAY="$(date +%F)"
 # MEM_BRIEFING_ONCALL is a test-isolation override; the production default
 # resolves through the machine-local loop env (personal roots stay untracked).
-AGENT_LOOP_ENV="${AGENT_LOOP_ENV:-${HOME:-}/.config/agent-harness/loops.env}"
+AGENT_LOOP_ENV="${AGENT_LOOP_ENV:-${HOME:-}/.config/hearting/loops.env}"
 [ -f "$AGENT_LOOP_ENV" ] && . "$AGENT_LOOP_ENV"
 AGENT_NOTES_ROOT="${AGENT_NOTES_ROOT:-${HOME:-}/agent-notes}"
 ONCALL="${MEM_BRIEFING_ONCALL:-$AGENT_NOTES_ROOT/oncall/$TODAY.md}"

@@ -60,7 +60,7 @@ expect_link() {  # <linkpath> <expected-target> <checkname>
   fi
 }
 
-expect_link "$CODEX_HOME/agent-harness"            "$AGENT_HOME"                  agent-harness
+expect_link "$CODEX_HOME/hearting"            "$AGENT_HOME"                  hearting
 expect_link "$CODEX_HOME/AGENTS.md"                "$S/AGENTS.md"                 agents-md
 expect_link "$CODEX_HOME/agent-core"               "$S/core"                      agent-core
 expect_link "$CODEX_HOME/agent-capabilities"       "$S/capabilities"              agent-capabilities
@@ -68,7 +68,7 @@ expect_link "$CODEX_HOME/agent-roles"              "$S/roles"                   
 expect_link "$CODEX_HOME/agent-bin"                "$S/bin"                       agent-bin
 expect_link "$CODEX_HOME/agent-hooks"              "$S/codex-hooks"               agent-hooks
 if [ "$native_managed" -eq 1 ]; then
-  for name in agent-harness-readme agent-tools agent-utilities agent-scaffolds agent-skills agent-agents agent-config agent-plugin-marketplace; do
+  for name in hearting-readme agent-tools agent-utilities agent-scaffolds agent-skills agent-agents agent-config agent-plugin-marketplace; do
     printf 'check=%s:skipped reason=runtime-managed\n' "$name"
   done
   printf 'check=agent-modes:ok reason=runtime-managed-per-file\n'
@@ -79,7 +79,7 @@ if [ "$native_managed" -eq 1 ]; then
     fails=$((fails + 1))
   fi
 else
-  expect_link "$CODEX_HOME/agent-harness-readme.md"  "$S/README.md"                 agent-harness-readme
+  expect_link "$CODEX_HOME/hearting-readme.md"  "$S/README.md"                 hearting-readme
   expect_link "$CODEX_HOME/agent-tools"              "$S/tools"                     agent-tools
   expect_link "$CODEX_HOME/agent-utilities"          "$S/utilities"                 agent-utilities
   expect_link "$CODEX_HOME/agent-scaffolds"          "$S/scaffolds"                 agent-scaffolds
@@ -157,7 +157,7 @@ detect_plugin_state() {
   fi
   plugin_out=""
   if plugin_out=$(CODEX_HOME="$CODEX_HOME" timeout "$CLI_TIMEOUT" codex plugin list --json 2>/dev/null); then
-    if printf '%s\n' "$plugin_out" | grep -q 'agent-harness-codex'; then
+    if printf '%s\n' "$plugin_out" | grep -q 'hearting-codex'; then
       plugin_state=installed
     else
       plugin_state=missing
@@ -180,7 +180,7 @@ print_plugin_check() {
     missing)
       printf 'check=plugin:missing\n'
       printf 'plugin_install_1=codex plugin marketplace add %s/codex-plugin-marketplace\n' "$S"
-      printf 'plugin_install_2=codex plugin add agent-harness-codex@agent-harness\n'
+      printf 'plugin_install_2=codex plugin add hearting-codex@hearting\n'
       printf 'plugin_hint=run install-runtime-projection.sh --install-plugin\n'
       ;;
     skipped_cli)
@@ -192,7 +192,7 @@ print_plugin_check() {
     list_failed)
       printf 'check=plugin:missing reason=codex-plugin-list-failed exit=%s\n' "${plugin_rc:-unknown}"
       printf 'plugin_install_1=codex plugin marketplace add %s/codex-plugin-marketplace\n' "$S"
-      printf 'plugin_install_2=codex plugin add agent-harness-codex@agent-harness\n'
+      printf 'plugin_install_2=codex plugin add hearting-codex@hearting\n'
       printf 'plugin_hint=run install-runtime-projection.sh --install-plugin\n'
       ;;
     command_not_found|*)

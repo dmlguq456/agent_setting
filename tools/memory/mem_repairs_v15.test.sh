@@ -78,7 +78,7 @@ print(m.project_key(m.Path(sys.argv[1]), seed=False))
 PY
 )"
 RENAMED_NOW="$(q "$DB" "SELECT cwd_origin FROM records WHERE id='leg_rename'")"
-if [ "$LIVE_KEY" = "git:github.com/dmlguq456/agent_setting" ]; then
+if [ "$LIVE_KEY" = "git:github.com/dmlguq456/hearting" ]; then
   [ "$RENAMED_NOW" = "$LIVE_KEY" ] \
     && ok "claude_setting rename remapped to live-derived key" || bad "rename not applied: $RENAMED_NOW"
 else

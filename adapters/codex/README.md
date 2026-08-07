@@ -30,7 +30,7 @@ separate surface.
 Codex native Skill projection is materialized under `adapters/codex/skills/`
 from `capabilities/`. Codex custom agent projections are materialized under
 `adapters/codex/agents/` from `roles/`. A Codex plugin projection is materialized under
-`adapters/codex/plugins/agent-harness-codex` and exposed through the repo-local
+`adapters/codex/plugins/hearting-codex` and exposed through the repo-local
 marketplace projection at `adapters/codex/plugin-marketplace/`. Do not
 project Claude Skill, Agent, command, hook, or statusline files into Codex.
 
@@ -53,7 +53,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | Native skills | `adapters/codex/skills/` |
 | Native agents | `adapters/codex/agents/` |
 | Native mode guides | `adapters/codex/modes/` |
-| Native plugin | `adapters/codex/plugins/agent-harness-codex` |
+| Native plugin | `adapters/codex/plugins/hearting-codex` |
 | Native hooks | `adapters/codex/hooks/` |
 | Design scaffolds | `adapters/codex/scaffolds/` |
 | Selected tool projection | `adapters/codex/tools/` |
@@ -64,7 +64,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | Core Concept | Codex Implementation |
 |---|---|
 | capability | Read `capabilities/README.md` for meaning; run `adapters/codex/bin/preflight.sh capability-info <capability>` to confirm Codex realization; use `adapters/codex/skills/<capability>/SKILL.md` as Codex-native guidance |
-| native skill/plugin surface | Skills are materialized under `adapters/codex/skills/`; the installable plugin projection is materialized under `adapters/codex/plugins/agent-harness-codex`. Command-like capability entrypoints use these native Skills/plugin surfaces and are verified with Codex discoverability (`codex debug prompt-input`) |
+| native skill/plugin surface | Skills are materialized under `adapters/codex/skills/`; the installable plugin projection is materialized under `adapters/codex/plugins/hearting-codex`. Command-like capability entrypoints use these native Skills/plugin surfaces and are verified with Codex discoverability (`codex debug prompt-input`) |
 | native hook surface | `adapters/codex/hooks/hooks.json` registers Codex `SessionStart` lifecycle prep, synchronous `SessionEnd`, a silent `Stop` boundary, `UserPromptSubmit` bounded capsule candidates plus prompt signals and turn nudges, privacy-minimal `PermissionRequest` approval-wait publication, targeted `PreToolUse` material/write guards, `PostToolUse` approval-wait release, spec/core read markers, design HTML checks, and worker-only `PreCompact`/`PostCompact` ledger flush/re-anchor. Interaction bridges keep stdout empty and never own approve/deny; Stop has no completion authority or wildcard parent park |
 | stage-session capacity | All registered wrappers share the portable sub-session axes. Codex supplies the phase brief plus a persistent ledger anchor in the generated prompt and environment; `preflight write` enforces the three-edit cadence and fixed-file fence. Sub-sessions cannot publish a stage marker. One chain command registers the exact set and synchronously joins it inside the App Server-supervised owner, so that owner returns once after the chain. |
 | shell I/O hook boundary | Structured write tools (`Write`, `Edit`, `MultiEdit`, `apply_patch`, `functions.apply_patch`) and structured `Read` are guarded. Shell/Bash/`functions.exec_command` gets targeted detection for obvious write redirects, common mutation commands (`tee`, `touch`, `cp`, `mv`, `rm`, `install`, `rsync`), `dd of=...`, `sed -i`, direct `spec/prd.md` / `core/*.md` reads, and design HTML save paths; target-ambiguous shell I/O still requires explicit `preflight.sh write`, `preflight.sh read`, or `preflight.sh design` before touching guarded paths |
@@ -72,7 +72,7 @@ project Claude Skill, Agent, command, hook, or statusline files into Codex.
 | role mode | Run `adapters/codex/bin/preflight.sh mode-info <family/mode>` before using a `roles/modes/` fragment; use the reported `native_mode_path` under `adapters/codex/modes/`; portable modes can be used directly, tool-contract modes require equivalent tools, unsupported modes report `fallback=reference-only` when no Codex-native runtime surface exists |
 | native mode surface | Mode guides are generated under `adapters/codex/modes/` from `roles/modes/`; design modes additionally require the Codex visual-harness tool contract before claiming rendered visual completion |
 | adapter bootstrap | Load `adapters/codex/AGENTS.md`, then `core/CORE.md` plus task-relevant shared docs; do not treat `CLAUDE.md` as portable bootstrap |
-| agent home | A valid explicit `AGENT_HOME` wins. Otherwise Codex-owned wrappers resolve the canonical `$HOME/agent_setting` or `$HOME/.codex/agent-harness` installation before falling back to their source checkout; invoking `preflight.sh` through a linked feature worktree therefore does not activate that worktree as the runtime harness root |
+| agent home | A valid explicit `AGENT_HOME` wins. Otherwise Codex-owned wrappers resolve the canonical `$HOME/agent_setting` or `$HOME/.codex/hearting` installation before falling back to their source checkout; invoking `preflight.sh` through a linked feature worktree therefore does not activate that worktree as the runtime harness root |
 | permission model | Run `adapters/codex/bin/preflight.sh permissions`; use Codex native approval policy and sandbox settings, not Claude `allowedTools` |
 | MCP config | Run `adapters/codex/bin/preflight.sh mcp [--check]`; use Codex native `codex mcp`/config surfaces, not Claude `settings.json` MCP payloads |
 | artifact root | primary-checkout canonical `.agent_reports` via `utilities/artifact-root.sh`; linked-worktree snapshots are read-only; legacy fallback only at the canonical root |
@@ -203,7 +203,7 @@ time because it duplicates skill metadata in Codex's initial context. Do not exp
 
 ## Native Plugin Projection
 
-`adapters/codex/plugins/agent-harness-codex` is an optional distribution
+`adapters/codex/plugins/hearting-codex` is an optional distribution
 artifact copied from the Codex-native Skill projection. It is deliberately
 outside `tools/generate.py`, runtime activation, `doctor`, and core `verify`.
 
@@ -213,11 +213,11 @@ Codex adapter:
 
 ```bash
 codex plugin marketplace add "$AGENT_HOME/codex_setting/codex-plugin-marketplace"
-codex plugin add agent-harness-codex@agent-harness
+codex plugin add hearting-codex@hearting
 ```
 
 The plugin copies generated Codex Skill files into plugin-local `skills/` so
-Codex discovers them as `agent-harness-codex:<capability>`. Do not build the
+Codex discovers them as `hearting-codex:<capability>`. Do not build the
 plugin from Claude Skill files.
 
 ## Native Agent Projection
@@ -284,7 +284,7 @@ rendered visual verification.
 Custom prompts are deprecated in Codex. Do not generate a `prompts/` projection
 or copy Claude slash-command files into Codex. Reusable command-like capability
 entrypoints are represented by Codex-native Skills and the installable
-`agent-harness-codex` plugin.
+`hearting-codex` plugin.
 
 ## Native Hook Projection
 
@@ -362,7 +362,7 @@ $HOME/.codex/               # Codex runtime home
 Codex runtime state such as `auth.json`, logs, SQLite state, sessions, model caches, and shell snapshots should stay in `$HOME/.codex`. The neutral harness should be referenced from Codex through explicit bootstrap instructions, symlinks, or wrapper configuration. At minimum, the Codex adapter should expose a stable pointer back to the neutral repo, for example:
 
 ```text
-$HOME/.codex/agent-harness -> $HOME/agent_setting
+$HOME/.codex/hearting -> $HOME/agent_setting
 ```
 
 Further Codex-specific files can be added under `adapters/codex/` and symlinked or generated into `$HOME/.codex` as the adapter matures.

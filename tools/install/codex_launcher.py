@@ -51,12 +51,12 @@ def wrapper_bytes() -> bytes:
     return b"""#!/bin/sh
 set -eu
 codex_runtime_home=${CODEX_HOME:-$HOME/.codex}
-launcher=$codex_runtime_home/agent-harness/utilities/codex-launcher.py
+launcher=$codex_runtime_home/hearting/utilities/codex-launcher.py
 if [ ! -f "$launcher" ]; then
-  launcher=$HOME/.codex/agent-harness/utilities/codex-launcher.py
+  launcher=$HOME/.codex/hearting/utilities/codex-launcher.py
 fi
 if [ ! -f "$launcher" ]; then
-  echo "agent-harness: Codex launcher projection is missing from runtime and default homes" >&2
+  echo "hearting: Codex launcher projection is missing from runtime and default homes" >&2
   exit 69
 fi
 exec python3 "$launcher" "$@"
@@ -146,7 +146,7 @@ def is_harness_wrapper(command: Path) -> bool:
         payload = command.read_bytes()
     except OSError:
         return False
-    return b"agent-harness" in payload and b"codex-launcher.py" in payload
+    return b"hearting" in payload and b"codex-launcher.py" in payload
 
 
 def _validate_real_command(command: Path, target: Path) -> Path:
@@ -157,7 +157,7 @@ def _validate_real_command(command: Path, target: Path) -> Path:
         raise CodexLauncherError(f"real Codex command is unavailable: {command}")
     if is_harness_wrapper(command):
         raise CodexLauncherError(
-            f"real Codex command resolves to an agent-harness launcher wrapper: {command}"
+            f"real Codex command resolves to an hearting launcher wrapper: {command}"
         )
     return command
 

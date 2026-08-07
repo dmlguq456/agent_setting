@@ -84,7 +84,7 @@ def resolve_owner(owner: Path) -> None:
 OWNER_TREES = (
     "skills",
     "adapters/claude/skills",
-    "adapters/claude/plugin-marketplace/plugins/agent-harness-claude/skills",
+    "adapters/claude/plugin-marketplace/plugins/hearting-claude/skills",
 )
 for tree in OWNER_TREES + ("adapters/codex/skills", "adapters/opencode/skills"):
     sizes = []
