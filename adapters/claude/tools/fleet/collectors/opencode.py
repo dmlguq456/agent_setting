@@ -22,9 +22,12 @@ from .. import titles
 _COLS = ("id, slug, agent, model, cost, tokens_input, tokens_output, tokens_reasoning, "
          "time_updated, parent_id")
 
-_REG = {"ts": 0.0, "map": None}          # model-id/leaf → context window (from models.json)
+_REG = {"ts": 0.0, "map": None, "by_provider": None}   # → context window (from models.json)
 _REG_TTL = 300.0
-_MESSAGE_TABLES = ("message", "session_message", "part")
+# `part` first — the `message` table carries only per-message metadata (role/tokens/cost/
+# modelID), never conversational text, so a refresh cursor anchored there advances over
+# rows that can never produce a title or summary. Fixed order, no schema guessing.
+_MESSAGE_TABLES = ("part", "message", "session_message")
 
 
 def _attempt_sidecar_fallback(sess):
@@ -66,35 +69,55 @@ def _observed_cursor(con, table, sid):
         return None
 
 
-def _model_ctx_limit(model_id):
+def _load_model_registry():
+    """Build (provider-scoped, provider-agnostic) context-window maps. Cached 5 min."""
+    now = time.time()
+    if _REG["map"] is not None and now - _REG["ts"] <= _REG_TTL:
+        return _REG["by_provider"] or {}, _REG["map"] or {}
+    scoped, flat = {}, {}
+    path = os.environ.get("OPENCODE_MODELS") or os.path.expanduser("~/.cache/opencode/models.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            reg = json.load(f)
+        for pkey, prov in (reg.items() if isinstance(reg, dict) else []):
+            models = prov.get("models") if isinstance(prov, dict) else None
+            if not isinstance(models, dict):
+                continue
+            pid = (prov.get("id") if isinstance(prov, dict) else None) or pkey
+            for mkey, mdef in models.items():
+                lim = mdef.get("limit") if isinstance(mdef, dict) else None
+                ctx = lim.get("context") if isinstance(lim, dict) else None
+                if not isinstance(ctx, (int, float)) or ctx <= 0:
+                    continue
+                for k in (mkey, mkey.split("/")[-1]):   # bare id or provider/org-prefixed
+                    scoped.setdefault((pid, k), int(ctx))
+                    if flat.get(k, 0) < ctx:
+                        flat[k] = int(ctx)
+    except Exception:
+        scoped, flat = {}, {}
+    _REG.update(ts=now, map=flat, by_provider=scoped)
+    return scoped, flat
+
+
+def _model_ctx_limit(model_id, provider=None):
     """Context window for a model id, from opencode's models.dev registry cache
     (~/.cache/opencode/models.json — the same source opencode's own TUI uses for context%).
-    None when unavailable → ctx% stays '—'. Cached 5 min."""
+    None when unavailable → ctx% stays '—'. Cached 5 min.
+
+    The same model id is published by many providers with different windows (glm-5.2 is
+    1,000,000 on opencode-go but 1,048,576 on nano-gpt), so the session's own providerID
+    decides. The provider-agnostic max is only a last resort for an unknown provider —
+    an over-large window understates ctx%, which is the safer direction to be wrong.
+    """
     if not model_id:
         return None
-    now = time.time()
-    if _REG["map"] is None or now - _REG["ts"] > _REG_TTL:
-        m = {}
-        path = os.environ.get("OPENCODE_MODELS") or os.path.expanduser("~/.cache/opencode/models.json")
-        try:
-            with open(path, encoding="utf-8") as f:
-                reg = json.load(f)
-            for prov in (reg.values() if isinstance(reg, dict) else []):
-                models = prov.get("models") if isinstance(prov, dict) else None
-                if not isinstance(models, dict):
-                    continue
-                for mkey, mdef in models.items():
-                    lim = mdef.get("limit") if isinstance(mdef, dict) else None
-                    ctx = lim.get("context") if isinstance(lim, dict) else None
-                    if isinstance(ctx, (int, float)) and ctx > 0:
-                        for k in (mkey, mkey.split("/")[-1]):      # match bare id or provider/org-prefixed
-                            if m.get(k, 0) < ctx:
-                                m[k] = int(ctx)
-        except Exception:
-            m = {}
-        _REG.update(ts=now, map=m)
-    reg = _REG["map"] or {}
-    return reg.get(model_id) or reg.get(model_id.split("/")[-1])
+    scoped, flat = _load_model_registry()
+    leaf = model_id.split("/")[-1]
+    if provider:
+        for key in ((provider, model_id), (provider, leaf)):
+            if key in scoped:
+                return scoped[key]
+    return flat.get(model_id) or flat.get(leaf)
 
 
 def _db():
@@ -229,10 +252,12 @@ def enrich(sess):
         sess.session_id = sid
     if slug:
         sess.slug = slug
+    provider = None
     if model_j:
         try:
             mj = json.loads(model_j) or {}
             sess.model = mj.get("id") or model_j
+            provider = mj.get("providerID") or None
             # opencode reasoning effort = model JSON 'variant' (e.g. high/low) — user 2026-07-01
             if mj.get("variant"):
                 sess.effort = mj.get("variant")
@@ -256,7 +281,7 @@ def enrich(sess):
     ctx_for_pct = last_ctx if last_ctx else (ti if isinstance(ti, (int, float)) else None)
     if isinstance(ctx_for_pct, (int, float)) and ctx_for_pct:
         sess.active_context_tokens = int(ctx_for_pct)
-        lim = _model_ctx_limit(sess.model)
+        lim = _model_ctx_limit(sess.model, provider)
         if lim:
             sess.context_window_tokens = int(lim)
             sess.ctx_pct = min(99, round(100 * ctx_for_pct / lim))

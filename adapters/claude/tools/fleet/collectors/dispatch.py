@@ -842,10 +842,11 @@ _CLAUDE_SUBAGENT_SCAN_BYTES = 8 * 1024 * 1024
 _CLAUDE_DISPATCH_CONTEXT_WINDOW_DEFAULT = 1_000_000
 _CLAUDE_STREAM_CACHE = {}       # path -> (mtime_ns, size, parsed)
 _CODEX_ATTEMPT_CACHE = {}       # path -> (mtime_ns, size, parsed)
+_OPENCODE_ATTEMPT_CACHE = {}    # path -> (mtime_ns, size, parsed)
 
 
 def _owned_attempt_log_path(job):
-    """Return one exact Claude/Codex attempt log, or fail closed.
+    """Return one exact Claude/Codex/OpenCode attempt log, or fail closed.
 
     ``--log-dir`` may place registered-worker streams either under the dispatch
     registry or below the canonical artifact root.  ``log_file`` is registry data,
@@ -855,7 +856,7 @@ def _owned_attempt_log_path(job):
     raw = getattr(job, "_log_file", None)
     attempt_id = getattr(job, "attempt_id", None)
     harness = getattr(job, "harness", None)
-    if harness not in ("claude", "codex") or not raw or not attempt_id:
+    if harness not in ("claude", "codex", "opencode") or not raw or not attempt_id:
         return None
     path = os.path.realpath(raw)
     roots = [os.path.realpath(os.path.join(_registry_home(), ".dispatch", "logs"))]
@@ -1266,6 +1267,116 @@ def _enrich_codex_attempt_session(job):
                 observed_at=st.st_mtime, fresh_until=st.st_mtime + 900)
         except OSError:
             pass
+
+
+def _parse_opencode_attempt_tail(path):
+    """Read the last step's prompt size from an `opencode run --format json` attempt log.
+
+    Every event is an envelope ``{"type":..., "sessionID":..., "part":{...}}``.  Only
+    ``step_finish`` carries ``part.tokens``; its ``input + cache.read + cache.write`` is
+    the prompt the model actually saw on that request — the same context-side definition
+    the session-level opencode collector uses.  ``output``/``reasoning`` are excluded, and
+    the per-step numbers are never summed: a bounded tail cannot prove a session total.
+    """
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    cache_key = (st.st_mtime_ns, st.st_size)
+    cached = _OPENCODE_ATTEMPT_CACHE.get(path)
+    if cached and cached[:2] == cache_key:
+        return cached[2]
+    start = max(0, st.st_size - _CLAUDE_STREAM_TAIL_BYTES)
+    try:
+        with open(path, "rb") as stream:
+            stream.seek(start)
+            raw = stream.read(_CLAUDE_STREAM_TAIL_BYTES)
+    except OSError:
+        return None
+    lines = raw.decode("utf-8", "replace").splitlines()
+    if start > 0 and lines:
+        lines = lines[1:]                       # a seek mid-file truncates the first line
+    session_ids = set()
+    active = None
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        sid = event.get("sessionID")
+        if isinstance(sid, str) and sid:
+            session_ids.add(sid)
+        if event.get("type") != "step_finish":
+            continue
+        part = event.get("part")
+        tokens = part.get("tokens") if isinstance(part, dict) else None
+        if not isinstance(tokens, dict):
+            continue
+        cache = tokens.get("cache") if isinstance(tokens.get("cache"), dict) else {}
+        parts = [_counter(tokens.get("input")), _counter(cache.get("read")),
+                 _counter(cache.get("write"))]
+        if any(value is not None for value in parts):
+            active = sum(value or 0 for value in parts)     # last one wins = current context
+    parsed = {
+        "session_id": next(iter(session_ids)) if len(session_ids) == 1 else None,
+        "ambiguity": "multiple-stream-session-ids" if len(session_ids) > 1 else None,
+        "active_context_tokens": active,
+    }
+    _OPENCODE_ATTEMPT_CACHE[path] = (cache_key[0], cache_key[1], parsed)
+    if len(_OPENCODE_ATTEMPT_CACHE) > 128:
+        _OPENCODE_ATTEMPT_CACHE.pop(next(iter(_OPENCODE_ATTEMPT_CACHE)))
+    return parsed
+
+
+def _opencode_job_context_window(job):
+    """Registry ``model`` is ``<providerID>/<model-id>``; resolve its declared window."""
+    model = getattr(job, "model", None)
+    if not isinstance(model, str) or not model:
+        return None
+    provider, _, model_id = model.rpartition("/")
+    try:
+        from . import opencode as opencode_collector
+        return opencode_collector._model_ctx_limit(model_id or model, provider or None)
+    except Exception:
+        return None
+
+
+def _enrich_opencode_attempt_session(job):
+    path = _owned_attempt_log_path(job)
+    if getattr(job, "harness", None) != "opencode" or path is None:
+        return
+    parsed = _parse_opencode_attempt_tail(path)
+    if not parsed:
+        return
+    if parsed.get("ambiguity"):
+        job.association_ambiguity = parsed["ambiguity"]
+        return
+    job._dispatch_context_owned = True
+    if parsed.get("session_id"):
+        job._runtime_session_id = parsed["session_id"]
+    telemetry = telemetry_from_explicit(
+        adapter="opencode", session_id=parsed.get("session_id"),
+        active_context_tokens=parsed.get("active_context_tokens"),
+        context_window_tokens=_opencode_job_context_window(job))
+    for field_name in ("active_context_tokens", "context_window_tokens"):
+        setattr(job, field_name, getattr(telemetry, field_name))
+    job.ctx_pct = telemetry.context_used_pct
+    if job.ctx_pct is None:
+        return
+    try:
+        st = os.stat(path)
+        sequence = (st.st_mtime_ns, st.st_size)
+        job._context_evidence = ContextEvidence(
+            used_pct=job.ctx_pct, source="opencode-attempt-stream",
+            sequence=sequence, source_head_sequence=sequence,
+            observed_at=st.st_mtime, fresh_until=st.st_mtime + 900)
+    except OSError:
+        pass
 
 
 def _enc(path):
@@ -2409,6 +2520,7 @@ def collect(jobs_path=None, harness_filter=None):
     for j in jobs:
         _enrich_claude_stream_session(j)
         _enrich_codex_attempt_session(j)
+        _enrich_opencode_attempt_session(j)
         _enrich_attempt_summary(j)
     for j in jobs:
         j.liveness = _dispatch_liveness(j, now, codex_index=codex_index)

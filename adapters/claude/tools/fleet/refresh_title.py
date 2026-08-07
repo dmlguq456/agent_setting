@@ -229,7 +229,15 @@ def read_delta(transcript, last_offset, harness="claude"):
     return text, size
 
 
-OPENCODE_MESSAGE_TABLES = ("message", "session_message", "part")
+# `part` first: the `message` table holds only per-message metadata (role/tokens/cost/
+# modelID) and never conversational text, so refreshing against it burns the cursor and
+# records an empty title. The text lives in `part` rows. Fixed order, no schema guessing.
+OPENCODE_MESSAGE_TABLES = ("part", "message", "session_message")
+
+# Event types that carry no conversational text. Only the inner part types are listed:
+# the JSONL stream's outer envelope (`tool_use`, `step_finish`, …) is filtered by the part
+# it wraps, so an envelope kind never needs its own entry here.
+_OPENCODE_SKIP_TYPES = {"tool", "system", "internal", "patch", "step-start", "step-finish"}
 
 
 def _opencode_signature(path):
@@ -334,9 +342,14 @@ def _opencode_text(value):
         return value
     if isinstance(value, dict):
         role = str(value.get("role") or value.get("type") or "").lower()
-        if role in {"tool", "system", "internal", "patch", "step-start", "step-finish"}:
+        if role in _OPENCODE_SKIP_TYPES:
             return ""
-        for key in ("text", "content", "message", "parts", "output"):
+        # `part` (singular) is the envelope `opencode run --format json` wraps every event
+        # in — {"type":"text","part":{"type":"text","text":...}}. Without it a dispatch
+        # attempt transcript yields no text at all, the refresher records an empty title
+        # and never reaches the summary stage. The nested part declares its own type, so
+        # tool/step envelopes still fall out at the skip check above.
+        for key in ("text", "content", "message", "part", "parts", "output"):
             if key in value:
                 text = _opencode_text(value[key])
                 if text:
