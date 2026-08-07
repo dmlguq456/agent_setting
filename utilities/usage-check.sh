@@ -17,7 +17,7 @@
 #                            expired. This means "no known block," not guaranteed capacity.
 #     unknown                jobs.log is unavailable; the orchestrator decides.
 #
-#   Usage: usage-check.sh [--harness claude|codex|all] [--jobs <path>]
+#   Usage: usage-check.sh [--harness claude|codex|opencode|all] [--jobs <path>]
 #                         [--unknown-window-min <N>]
 #   Output: one parseable `<harness> <state>` line per harness, then
 #   `bias <harness>`. This informational command always exits 0.
@@ -44,7 +44,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$JOBS" ] || JOBS="$AGENT_HOME/.dispatch/jobs.log"
-case "$HARNESS" in all) HARNESSES="claude codex" ;; *) HARNESSES="$HARNESS" ;; esac
+case "$HARNESS" in all) HARNESSES="claude codex opencode" ;; *) HARNESSES="$HARNESS" ;; esac
 
 now=$(date +%s)
 

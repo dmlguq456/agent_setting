@@ -76,7 +76,7 @@ def _sealed_owner_harnesses(path):
         for row in rows
         if isinstance(row, dict) and row.get("status") == "supported"
     }
-    harnesses &= _defaults.KNOWN_HARNESSES
+    harnesses &= _defaults.DISPATCHABLE_HARNESSES
     if not harnesses:
         raise OwnerError("route-evidence-no-supported-owner-harness")
     return harnesses
@@ -89,7 +89,7 @@ def _caller_harness(env):
         "AGENT_DISPATCH_CURRENT_HARNESS"
     )
     if explicit:
-        if explicit not in _defaults.KNOWN_HARNESSES:
+        if explicit not in _defaults.DISPATCHABLE_HARNESSES:
             raise OwnerError("caller-harness-invalid")
         return explicit
     detected = set()
@@ -216,11 +216,11 @@ def _usage(jobs):
     states = {}
     for line in result.stdout.splitlines():
         fields = line.split()
-        if len(fields) == 2 and fields[0] in _defaults.KNOWN_HARNESSES:
+        if len(fields) == 2 and fields[0] in _defaults.DISPATCHABLE_HARNESSES:
             if fields[0] in states:
                 raise OwnerError("eligibility-malformed")
             states[fields[0]] = fields[1]
-    if set(states) != set(_defaults.KNOWN_HARNESSES):
+    if set(states) != set(_defaults.DISPATCHABLE_HARNESSES):
         raise OwnerError("eligibility-malformed")
     return states
 
@@ -239,7 +239,7 @@ def _audit(status, adapter, source, configured, explicit, states, rejected=(), f
         lines.append(f"fallback.1={fallback}:configured-candidates-ineligible")
     lines += [
         "trace.1=cascade=explicit>hard-eligibility>configured-normal",
-        f"trace.2=explicit={explicit or 'none'};authorized={int(bool(explicit and explicit in _defaults.KNOWN_HARNESSES))}",
+        f"trace.2=explicit={explicit or 'none'};authorized={int(bool(explicit and explicit in _defaults.DISPATCHABLE_HARNESSES))}",
         "trace.3=eligibility=" + ",".join(f"{h}:{states[h]}" for h in sorted(states)),
         f"trace.4=configured={','.join(configured)};selected={adapter or '-'};source={source};deviation_reason={reason}",
     ]
@@ -258,7 +258,10 @@ def main(argv):
         explicit, values, forwarded, route_evidence = _parse(argv)
         config = _load_defaults()
         configured = list(_defaults.query_owners(config))
-        if explicit is not None and explicit not in _defaults.KNOWN_HARNESSES:
+        # DISPATCHABLE (not KNOWN): SD-66 relief-only policy names an explicit
+        # --adapter opencode as a legitimate relief path; opencode stays out of
+        # the configured/last-resort candidate sets below.
+        if explicit is not None and explicit not in _defaults.DISPATCHABLE_HARNESSES:
             raise OwnerError("explicit-adapter-unauthorized")
         sealed = _sealed_owner_harnesses(route_evidence) if route_evidence else None
         if sealed is not None:

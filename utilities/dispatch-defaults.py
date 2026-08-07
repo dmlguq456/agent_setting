@@ -12,6 +12,15 @@ import os
 import sys
 
 KNOWN_HARNESSES = {"claude", "codex"}
+# Relief-only harnesses (SD-66 `opencode.relief_only`): never a configured
+# depth1_owner default, but a legitimate launch target through an explicit
+# --adapter, an explicit config cell, or checked route evidence — the policy
+# text in profiles/dispatch-defaults.yaml and OPERATIONS §5.10 ("its
+# quick/relief surfaces") both name that path. Launch-surface authorization
+# uses DISPATCHABLE_HARNESSES; configured-default validation stays on
+# KNOWN_HARNESSES.
+RELIEF_HARNESSES = {"opencode"}
+DISPATCHABLE_HARNESSES = KNOWN_HARNESSES | RELIEF_HARNESSES
 AFFINITY_VALUES = {"claude", "codex", "opencode", "diverse"}
 TOP_LEVEL_KEYS = {"schema_version", "depth1_owner", "opencode", "capabilities"}
 

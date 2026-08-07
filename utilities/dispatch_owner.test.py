@@ -181,6 +181,28 @@ class DispatchOwnerTests(unittest.TestCase):
         self.assert_model_map(result, "codex")
         self.assertIn("selection_source=explicit", result.stdout)
 
+    def test_explicit_opencode_relief_path_is_authorized(self):
+        # SD-66 relief-only: opencode is never a configured/default candidate,
+        # but an explicit --adapter opencode is a documented relief path and
+        # must clear the authorization gate (OPERATIONS §5.10 quick/relief).
+        result = self.run_owner("claude", ("--adapter", "opencode"))
+        self.assert_model_map(result, "opencode")
+        self.assertIn("selection_source=explicit", result.stdout)
+        self.assertIn("eligibility.opencode=", result.stdout)
+
+    def test_opencode_never_selected_without_explicit_adapter(self):
+        # Relief-only also means: with every configured candidate limited,
+        # the unsealed last resort still never lands on opencode by itself.
+        stamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        self.jobs.write_text(
+            "\n".join(
+                f"{stamp}\tdone\trepo\t{ROOT}\tx\tnote=dead-session-limit,harness={h}"
+                for h in ("claude", "codex")
+            ) + "\n", encoding="utf-8",
+        )
+        result = self.run_owner()
+        self.assertNotIn("adapter=opencode", result.stdout)
+
     def test_limited_configured_candidate_demotes_with_auditable_reason(self):
         stamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         self.jobs.write_text(f"{stamp}\tdone\trepo\t{ROOT}\tx\tnote=dead-session-limit,harness=claude\n", encoding="utf-8")
