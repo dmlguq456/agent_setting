@@ -583,12 +583,17 @@ def wrapper_command(
 
 
 def direct_env() -> dict[str, str]:
-    """Never project a retired broker binding into a direct adapter call."""
+    """Never project a retired broker binding or an owner's own route binding
+    into a direct adapter call. A node launch always supplies its own
+    ``--route-file``, so an inherited ``AGENT_OWNER_ROUTE_*`` triple (set by
+    ``dispatch-owner.py`` for the owner's own identity) makes the wrapper's
+    owner/node tuple check reject the launch outright."""
 
     return {
         key: value
         for key, value in os.environ.items()
         if not key.startswith("AGENT_DISPATCH_BROKER_")
+        and not key.startswith("AGENT_OWNER_ROUTE_")
     }
 
 

@@ -246,5 +246,17 @@ class FallbackTest(unittest.TestCase):
    self.assertIn("child_proof=registry-exact-pid",result.stdout)
   finally:
    proc.terminate();proc.wait()
+ def test_direct_env_strips_owner_route_binding_but_keeps_node_binding(self):
+  extra={"AGENT_OWNER_ROUTE_FILE":"/tmp/owner-route.json","AGENT_OWNER_ROUTE_ID":"rt-owner",
+         "AGENT_OWNER_ROUTE_HASH":"sha256:owner","AGENT_DISPATCH_BROKER_TOKEN":"x",
+         "AGENT_ROUTE_FILE":"/tmp/node-route.json","AGENT_ROUTE_ID":"rt-node"}
+  with mock.patch.dict(os.environ,extra):
+   result=F.direct_env()
+  self.assertNotIn("AGENT_OWNER_ROUTE_FILE",result)
+  self.assertNotIn("AGENT_OWNER_ROUTE_ID",result)
+  self.assertNotIn("AGENT_OWNER_ROUTE_HASH",result)
+  self.assertNotIn("AGENT_DISPATCH_BROKER_TOKEN",result)
+  self.assertEqual(result["AGENT_ROUTE_FILE"],"/tmp/node-route.json")
+  self.assertEqual(result["AGENT_ROUTE_ID"],"rt-node")
 
 if __name__=="__main__": unittest.main()

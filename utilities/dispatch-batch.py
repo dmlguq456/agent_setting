@@ -1074,11 +1074,21 @@ def main(argv: list[str] | None = None) -> int:
                 str(leg["ordinal"]),
             ]
             env = {
-                **os.environ,
+                # This launches a depth-2 node (dispatch-node.py), which
+                # always supplies its own --route via `command` above. An
+                # inherited AGENT_OWNER_ROUTE_* triple (the calling owner's
+                # own identity, per dispatch-owner.py) must not ride along:
+                # the adapter wrapper rejects a node launch that carries an
+                # owner route binding alongside an explicit route file.
+                key: value
+                for key, value in os.environ.items()
+                if not key.startswith("AGENT_OWNER_ROUTE_")
+            }
+            env.update({
                 GOVERNOR_RESERVATION_ENV: token,
                 "AGENT_MODEL_GOVERNOR_ROOT": str(governor_root),
                 "AGENT_DISPATCH_JOBS": str(jobs),
-            }
+            })
             try:
                 proc = subprocess.Popen(
                     command,
