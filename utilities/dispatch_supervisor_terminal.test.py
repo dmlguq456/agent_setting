@@ -22,6 +22,14 @@ sys.modules[SPEC.name] = JOIN
 SPEC.loader.exec_module(JOIN)
 HARVEST = ROOT / "adapters" / "codex" / "bin" / "dispatch-harvest.py"
 
+SUPERVISOR_SPEC = importlib.util.spec_from_file_location(
+    "dispatch_supervisor_terminal", ROOT / "utilities" / "dispatch_supervisor_terminal.py"
+)
+SUPERVISOR = importlib.util.module_from_spec(SUPERVISOR_SPEC)
+sys.modules[SUPERVISOR_SPEC.name] = SUPERVISOR
+SUPERVISOR_SPEC.loader.exec_module(SUPERVISOR)
+FIXTURES = ROOT / "utilities" / "fixtures" / "opencode"
+
 
 class SupervisorTerminalIntegrationTest(unittest.TestCase):
     def setUp(self):
@@ -145,6 +153,42 @@ class SupervisorTerminalIntegrationTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("matched=1", result.stdout)
         self.assertIn("terminal_verdict=FAIL", result.stdout)
+
+
+class OpencodeTerminalVocabularyTest(unittest.TestCase):
+    """Gap 1 prep (C1): the two new helpers, action-neutral until C2 wires them in."""
+
+    def test_terminal_stop_boundary_extracts_the_handoff_text(self):
+        rows, _raw = SUPERVISOR._tail_rows(FIXTURES / "terminal-stop.jsonl")
+        index, text = SUPERVISOR.opencode_terminal_boundary(rows)
+        self.assertIsNotNone(index)
+        self.assertEqual(text, "artifact: -\nverdict: PASS\nblocker: none")
+        self.assertEqual(SUPERVISOR.opencode_last_step_finish_reason(rows), "stop")
+
+    def test_truncated_permission_reject_has_no_stop_boundary_but_has_evidence(self):
+        rows, raw = SUPERVISOR._tail_rows(FIXTURES / "truncated-permission-reject.jsonl")
+        self.assertEqual(SUPERVISOR.opencode_terminal_boundary(rows), (None, None))
+        self.assertEqual(SUPERVISOR.opencode_last_step_finish_reason(rows), "tool-calls")
+        evidence = SUPERVISOR.opencode_truncation_evidence(raw)
+        self.assertIn("permission requested: external_directory", evidence)
+        self.assertIn("auto-rejecting", evidence)
+        self.assertNotIn("\x1b", evidence)
+
+    def test_broken_stream_has_no_boundary_no_reason_no_evidence(self):
+        rows, raw = SUPERVISOR._tail_rows(FIXTURES / "broken-stream.jsonl")
+        self.assertEqual(SUPERVISOR.opencode_terminal_boundary(rows), (None, None))
+        self.assertIsNone(SUPERVISOR.opencode_last_step_finish_reason(rows))
+        self.assertEqual(SUPERVISOR.opencode_truncation_evidence(raw), "")
+
+    def test_classify_supervisor_log_is_unchanged_for_claude_and_codex(self):
+        # C1 is action-neutral: classify_supervisor_log does not yet consult
+        # the new opencode helpers (that lands in C2). This locks the
+        # pre-Gap-1 fallback for opencode paths too, so the C2 diff is visible.
+        result = SUPERVISOR.classify_supervisor_log(
+            str(FIXTURES / "terminal-stop.jsonl"), "opencode"
+        )
+        self.assertEqual(result.note, "dead-protocol")
+        self.assertEqual(result.reconcile_reason, "terminal-event-missing")
 
 
 if __name__ == "__main__":

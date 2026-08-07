@@ -1,0 +1,3 @@
+{"type": "step_start", "timestamp": 1, "sessionID": "ses_test", "part": {"id": "prt_1", "type": "step-start"}}
+{"type": "text", "timestamp": 2, "sessionID": "ses_test", "part": {"id": "prt_2", "type": "text", "text": "partial output before the stream cut off"}}
+{"type":"tool_use","timestamp":3,"sessionID":"ses_test","part":{"id":"prt_3","type":"tool","tool":"bash","state":{"status":"pend

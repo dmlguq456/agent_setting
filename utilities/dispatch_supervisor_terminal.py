@@ -37,6 +37,11 @@ _PROTOCOL_REASON_RE = re.compile(
     r"thread-start|turn-start-response|join-receipt|contract",
     re.I,
 )
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+_PERMISSION_AUTO_REJECT_RE = re.compile(
+    r"permission requested:.*auto-rejecting", re.I
+)
+_TRUNCATION_TAIL_LINES = 25
 
 
 @dataclass(frozen=True)
@@ -243,24 +248,88 @@ def reconcile_supervisor_terminal(
     )
 
 
-def _tail_rows(path: Path) -> list[dict[str, Any]]:
+def _tail_rows(path: Path) -> tuple[list[dict[str, Any]], list[str]]:
     size = path.stat().st_size
     start = max(0, size - _MAX_TAIL_BYTES)
     with path.open("rb") as handle:
         handle.seek(start)
         data = handle.read()
     rows: list[dict[str, Any]] = []
+    raw_lines: list[str] = []
     lines = data.splitlines()
     if start and lines:
         lines = lines[1:]
     for raw in lines:
+        raw_lines.append(raw.decode("utf-8", "replace"))
         try:
             value = json.loads(raw)
         except (UnicodeDecodeError, ValueError):
             continue
         if isinstance(value, dict):
             rows.append(value)
-    return rows
+    return rows, raw_lines
+
+
+def opencode_last_step_finish_reason(rows: list[dict[str, Any]]) -> str | None:
+    """Return the `part.reason` of the last `step_finish` row, or None if absent.
+
+    Exposed as its own channel (separate from opencode_terminal_boundary) so a
+    caller can record the observed reason as evidence even when it is not
+    "stop" — the opencode `step_finish.reason` enum is not fully enumerated
+    from observed traffic (only `stop`/`tool-calls` confirmed), so unknown
+    values should stay visible rather than collapse into a generic failure.
+    """
+    for index in range(len(rows) - 1, -1, -1):
+        row = rows[index]
+        if row.get("type") == "step_finish":
+            part = row.get("part")
+            reason = part.get("reason") if isinstance(part, dict) else None
+            return reason if isinstance(reason, str) else None
+    return None
+
+
+def opencode_terminal_boundary(
+    rows: list[dict[str, Any]],
+) -> tuple[int | None, str | None]:
+    """Locate the opencode `run --format json` success terminal boundary.
+
+    Looks at the last `step_finish` row only (not a backward search for any
+    `reason=="stop"` row, to avoid mistaking a mid-stream stop for the final
+    one). If its `part.reason == "stop"`, returns (that row's index, the
+    `part.text` of the nearest preceding `type=="text"` row). Otherwise
+    returns (None, None).
+    """
+    for index in range(len(rows) - 1, -1, -1):
+        row = rows[index]
+        if row.get("type") != "step_finish":
+            continue
+        part = row.get("part")
+        reason = part.get("reason") if isinstance(part, dict) else None
+        if reason != "stop":
+            return (None, None)
+        for prior in range(index - 1, -1, -1):
+            if rows[prior].get("type") == "text":
+                text_part = rows[prior].get("part")
+                text = text_part.get("text") if isinstance(text_part, dict) else None
+                return (index, text if isinstance(text, str) else None)
+        return (index, None)
+    return (None, None)
+
+
+def opencode_truncation_evidence(raw_lines: list[str]) -> str:
+    """Scan the retained tail's last 25 raw lines for an ANSI permission-reject line.
+
+    opencode headless wrapper output interleaves non-JSON ANSI lines (e.g.
+    `permission requested: external_directory (...); auto-rejecting`) with the
+    JSON envelope stream. Strip ANSI escapes before matching; return the
+    cleaned matching line, or "" if none found.
+    """
+    tail = raw_lines[-_TRUNCATION_TAIL_LINES:]
+    for raw in tail:
+        cleaned = _ANSI_RE.sub("", raw)
+        if _PERMISSION_AUTO_REJECT_RE.search(cleaned):
+            return cleaned.strip()
+    return ""
 
 
 def classify_supervisor_log(path: str | Path | None, harness: str) -> SupervisorTerminal:
@@ -269,7 +338,7 @@ def classify_supervisor_log(path: str | Path | None, harness: str) -> Supervisor
     if not path:
         return classify_supervisor_error(harness, "terminal-log-missing")
     try:
-        rows = _tail_rows(Path(path))
+        rows, _raw_lines = _tail_rows(Path(path))
     except OSError:
         return classify_supervisor_error(harness, "terminal-log-unreadable")
     for index in range(len(rows) - 1, -1, -1):
