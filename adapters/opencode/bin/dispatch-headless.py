@@ -590,6 +590,37 @@ def _effective_parent_cwd(args):
     return cwd
 
 
+def resolve_parent_completion_delivery(args: argparse.Namespace) -> str:
+    """Select the checked parent-runtime completion-delivery adapter.
+
+    Ported from the Codex wrapper's resolve_parent_completion_delivery
+    (adapters/codex/bin/dispatch-headless.py), minus the Codex-only managed
+    single-ingress gateway branch -- an OpenCode parent is never a managed
+    Codex gateway target, so that probe never applies here.
+    """
+    direct_registered = (
+        getattr(args, "action", "") in {"register", "start"}
+        and args.dispatch_depth == 1
+        and args.launch_lifecycle == DETACHED
+        and args.execution_surface == "registered-headless"
+        and bool(args.registered_worker)
+        and bool(args.parent_session_id)
+        and os.environ.get("AGENT_DISPATCH_CHILD") != "1"
+    )
+    if direct_registered and args.parent_harness == "claude":
+        args.parent_completion_reason = "claude-async-rewake-resume"
+        return "claude-parent-runtime"
+    if direct_registered:
+        args.parent_completion_reason = "parent-identity-unmatched"
+        return "poll-fallback"
+    args.parent_completion_reason = "parent-attempt-owned"
+    return "parent-runtime-supervised"
+
+
+def bind_parent_completion_delivery(args: argparse.Namespace) -> None:
+    args.parent_completion_delivery = resolve_parent_completion_delivery(args)
+
+
 def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     jobs.parent.mkdir(parents=True, exist_ok=True)
     repo = subprocess.check_output(["git", "-C", args.worktree, "rev-parse", "--show-toplevel"], text=True).strip()
@@ -647,6 +678,10 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         f",model_profile={settings['profile']},model_tier={settings['tier']}"
         f",profile_granularity={settings['granularity']}"
         f",model={settings['model']},variant={settings['variant']}"
+    )
+    pipe += (
+        f",parent_completion_delivery={args.parent_completion_delivery}"
+        f",parent_completion_reason={getattr(args, 'parent_completion_reason', 'unspecified')}"
     )
     pipe += f",artifact_root={args.artifact_root},log_file={args.log_path}"
     pipe += stage_session_metadata(args)
@@ -1168,6 +1203,7 @@ def main(argv: list[str]) -> int:
     args.fallback_ordinal = int(attempt_policy["fallback_ordinal"])
     args.quick_attempt = bool(attempt_policy["quick"])
     args.quick_attempt_limit = attempt_policy["terminal_attempt_limit"]
+    bind_parent_completion_delivery(args)
     try:
         args.resolved_model_settings = resolve_model_settings(args)
     except ModelSelectionError as e:
@@ -1496,6 +1532,8 @@ def main(argv: list[str]) -> int:
     print(f"eligibility_probe={getattr(args, 'eligibility_probe', None) or '-'}")
     print(f"parent={args.parent_slug or '-'}")
     print(f"parent_session_id={args.parent_session_id or '-'}")
+    print(f"parent_completion_delivery={args.parent_completion_delivery}")
+    print(f"parent_completion_reason={getattr(args, 'parent_completion_reason', 'unspecified')}")
     print(f"worker_role={args.worker_role or '-'}")
     print(f"worker_type={args.worker_type}")
     print(f"assigned_contract={args.assigned_contract}")
