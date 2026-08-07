@@ -1,6 +1,6 @@
 # Release Policy
 
-Agent Harness releases are immutable delivery points, not snapshots of every
+Hearting releases are immutable delivery points, not snapshots of every
 documentation change. A release is created only when `main` changes something
 that can alter the installed harness or its runtime behavior.
 

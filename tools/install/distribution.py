@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Managed Agent Harness release installation and automatic updates.
+"""Managed Hearting release installation and automatic updates.
 
 This module is standalone and Python-stdlib-only so the release builder can
 embed it in the same-tag install.sh asset before a harness root exists. Runtime
@@ -988,7 +988,7 @@ def _write_systemd_units() -> tuple[Path, Path]:
     )
     service_body = (
         "[Unit]\n"
-        "Description=Update Agent Harness managed release\n\n"
+        "Description=Update Hearting managed release\n\n"
         "[Service]\n"
         "Type=oneshot\n"
         f"{environment}\n"
@@ -996,7 +996,7 @@ def _write_systemd_units() -> tuple[Path, Path]:
     )
     timer_body = (
         "[Unit]\n"
-        "Description=Check for Agent Harness updates daily\n\n"
+        "Description=Check for Hearting updates daily\n\n"
         "[Timer]\n"
         "OnBootSec=10m\n"
         "OnUnitActiveSec=24h\n"

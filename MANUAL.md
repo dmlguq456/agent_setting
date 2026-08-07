@@ -1,4 +1,4 @@
-# MANUAL — Agent Harness at a Glance
+# MANUAL — Hearting at a Glance
 
 > **Front-layer map.** This document explains how the whole harness fits
 > together along four axes. Precise definitions live in the source documents

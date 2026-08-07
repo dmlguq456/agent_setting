@@ -146,7 +146,7 @@ def inspect_trust(
             {
                 "clientInfo": {
                     "name": "agent-harness-hook-trust-check",
-                    "title": "Agent Harness Hook Trust Check",
+                    "title": "Hearting Hook Trust Check",
                     "version": "1",
                 },
                 "capabilities": None,

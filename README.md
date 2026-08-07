@@ -1,4 +1,4 @@
-<h1 align="center">Agent Harness</h1>
+<h1 align="center">Hearting</h1>
 
 <p align="center"><strong>One complete agent workflow across Claude Code, Codex, and OpenCode.</strong></p>
 
@@ -15,7 +15,7 @@
 
 <p align="center"><a href="https://dmlguq456.github.io/agent_setting/"><strong>Landing page & agent map ↗</strong></a></p>
 
-Agent Harness closes research, planning, implementation, and verification work
+Hearting closes research, planning, implementation, and verification work
 consistently across supported coding-agent runtimes. It is **not a setup for a
 single runtime**. Shared contracts are defined once, then projected only onto
 the native skill, agent, hook, mode, and command surfaces that each runtime
@@ -27,7 +27,7 @@ actually discovers.
        plan → execute → test → report + durable evidence
 ```
 
-## Why Agent Harness
+## Why Hearting
 
 - **Finish the whole cycle.** Research, specs, plans, implementation, tests,
   reports, and durable evidence stay connected.

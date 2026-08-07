@@ -68,7 +68,7 @@ def build_installer(
     installer_path = output / INSTALLER_NAME
     checksum_path = output / INSTALLER_CHECKSUM_NAME
     script = f"""#!/bin/sh
-# Generated release-bound Agent Harness installer.
+# Generated release-bound Hearting installer.
 # Bootstrap code and archive are both fixed to {repository}@{version}.
 set -eu
 

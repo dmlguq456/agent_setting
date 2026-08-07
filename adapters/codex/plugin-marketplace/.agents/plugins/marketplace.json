@@ -1,7 +1,7 @@
 {
   "name": "agent-harness",
   "interface": {
-    "displayName": "Agent Harness"
+    "displayName": "Hearting"
   },
   "plugins": [
     {

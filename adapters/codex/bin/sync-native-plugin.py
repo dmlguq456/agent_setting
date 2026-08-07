@@ -35,7 +35,7 @@ def plugin_json() -> dict:
         },
         "skills": "./skills/",
         "interface": {
-            "displayName": "Agent Harness Codex",
+            "displayName": "Hearting Codex",
             "shortDescription": "Portable agent harness capabilities for Codex.",
             "longDescription": (
                 "Adapter-owned Codex plugin projection generated from portable "
@@ -55,7 +55,7 @@ def marketplace_json() -> dict:
     return {
         "name": "agent-harness",
         "interface": {
-            "displayName": "Agent Harness",
+            "displayName": "Hearting",
         },
         "plugins": [
             {

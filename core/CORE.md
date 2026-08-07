@@ -1,4 +1,4 @@
-# Agent Harness Core
+# Hearting Core
 
 > Model-agnostic contract. This file defines the portable workflow substrate. Tool-specific files such as `adapters/claude/CLAUDE.md` are adapters that map this contract onto one runtime.
 

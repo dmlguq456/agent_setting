@@ -110,7 +110,7 @@ jobs:
           tag_object=$(
             gh api --method POST "repos/$GITHUB_REPOSITORY/git/tags" \
               -f tag="$RELEASE_TAG" \
-              -f message="Agent Harness $RELEASE_TAG" \
+              -f message="Hearting $RELEASE_TAG" \
               -f object="$RELEASE_HEAD" \
               -f type=commit \
               --jq .sha

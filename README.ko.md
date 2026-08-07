@@ -1,4 +1,4 @@
-<h1 align="center">Agent Harness</h1>
+<h1 align="center">Hearting</h1>
 
 <p align="center"><strong>Claude Code, Codex, OpenCode에서 이어지는 하나의 완결된 에이전트 워크플로.</strong></p>
 
@@ -18,7 +18,7 @@
 > 이 문서는 유지보수 기준인 [README.md](README.md)의 한국어 번역입니다.
 > 명령, 경로, 식별자와 기계 판독 계약은 영문 원문을 기준으로 합니다.
 
-Agent Harness는 지원되는 코딩 에이전트 런타임에서 조사, 계획, 구현, 검증
+Hearting은 지원되는 코딩 에이전트 런타임에서 조사, 계획, 구현, 검증
 작업을 일관되게 마무리합니다. 이는 **특정 단일 런타임을 위한 설정이
 아닙니다**. 공유 계약은 한 번만 정의하고, 각 런타임이 실제로 발견하는
 네이티브 Skill, Agent, hook, mode, command 표면에만 투영합니다.
@@ -29,7 +29,7 @@ Agent Harness는 지원되는 코딩 에이전트 런타임에서 조사, 계획
        계획 → 실행 → 테스트 → 보고 + 지속 가능한 근거
 ```
 
-## Agent Harness를 쓰는 이유
+## Hearting을 쓰는 이유
 
 - **작업 사이클 전체를 닫습니다.** 조사, 명세, 계획, 구현, 테스트, 보고서와
   지속 가능한 근거가 한 흐름으로 이어집니다.
