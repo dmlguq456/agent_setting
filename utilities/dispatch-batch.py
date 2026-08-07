@@ -47,7 +47,14 @@ if NODE_SPEC is None or NODE_SPEC.loader is None:  # pragma: no cover - install 
 DISPATCH_NODE = importlib.util.module_from_spec(NODE_SPEC)
 NODE_SPEC.loader.exec_module(DISPATCH_NODE)
 
-SUPPORTED_BATCH_HARNESSES = ("codex", "claude")
+# All three, in preference order. `candidate()` filters the node's own compiled
+# fallback_hops by child_harness, so an adapter listed here is only ever selected when
+# the route actually sealed a supported candidate for it — this list widens what may be
+# chosen, never what is authorized. OpenCode was absent without a recorded reason while
+# `dispatch-defaults.DISPATCHABLE_HARNESSES` already authorized it as a relief target,
+# and with only two entries the `>= 2 distinct harnesses` rule below had exactly one
+# legal combination, leaving cross-family placement no slack at all.
+SUPPORTED_BATCH_HARNESSES = ("codex", "claude", "opencode")
 SAFE_SLUG = re.compile(r"[^A-Za-z0-9._-]+")
 RESERVATION_TOKEN = re.compile(r"[0-9a-f]{32}")
 OUTPUT_TAIL_BYTES = 65536

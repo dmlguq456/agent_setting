@@ -12,6 +12,7 @@ import sys
 import tempfile
 import time
 import unittest
+from pathlib import Path
 
 _TOOLS_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _TOOLS_DIR not in sys.path:
@@ -661,7 +662,8 @@ class SecurityTest(_ConfigHomeMixin, unittest.TestCase):
             d = titles.read("sidInj")
             self.assertLessEqual(len(d["title"]), rt.TITLE_MAXLEN)
 
-    def test_worker_argv_blocks_all_tools(self):
+    def _run_pinned(self, provider):
+        """Run the worker with one provider pinned; return the captured argv/env."""
         captured = {}
 
         class _FakeCompleted:
@@ -676,23 +678,80 @@ class SecurityTest(_ConfigHomeMixin, unittest.TestCase):
         import shutil as _shutil
         orig_which = _shutil.which
         orig_run = subprocess.run
-        _shutil.which = lambda name: "/usr/bin/claude"
+        saved = os.environ.get("FLEET_TITLE_PROVIDER")
+        os.environ["FLEET_TITLE_PROVIDER"] = provider
+        _shutil.which = lambda name: "/usr/bin/" + name
         subprocess.run = fake_run
         try:
             rt.run_worker("some prompt")
         finally:
             _shutil.which = orig_which
             subprocess.run = orig_run
+            if saved is None:
+                os.environ.pop("FLEET_TITLE_PROVIDER", None)
+            else:
+                os.environ["FLEET_TITLE_PROVIDER"] = saved
+        return captured
 
+    def test_worker_argv_blocks_all_tools(self):
+        """Every provider is tool-free, but each runtime spells that differently.
+
+        The contract is "this worker cannot execute anything", not "this argv carries
+        --disallowedTools" — claude blocks by flag, codex by a read-only ephemeral
+        sandbox, opencode by an agent definition with every tool false. A cascade that
+        checked only claude's spelling would wave the other two straight through.
+        """
+        captured = self._run_pinned("claude")
         argv = captured["argv"]
         self.assertIn("--disallowedTools", argv)
-        idx = argv.index("--disallowedTools")
-        blocked = argv[idx + 1]
+        blocked = argv[argv.index("--disallowedTools") + 1]
         for tool in rt.DISALLOWED_TOOLS.split():
             self.assertIn(tool, blocked)
         self.assertEqual(len(rt.DISALLOWED_TOOLS.split()), 11)
         self.assertEqual(captured["env"]["FLEET_TITLE_REFRESH"], "1")
         self.assertEqual(captured["env"]["AGENT_SESSION_ROLE"], "worker")
+
+    def test_codex_provider_runs_read_only_and_ephemeral(self):
+        argv = self._run_pinned("codex")["argv"]
+        self.assertEqual(argv[:2], ["codex", "exec"])
+        self.assertIn("--sandbox", argv)
+        self.assertEqual(argv[argv.index("--sandbox") + 1], "read-only")
+        self.assertIn("--ephemeral", argv)
+
+    def test_opencode_provider_runs_a_tool_free_agent(self):
+        argv = self._run_pinned("opencode")["argv"]
+        self.assertEqual(argv[:2], ["opencode", "run"])
+        self.assertIn("--pure", argv)                      # no external plugins
+        self.assertIn("--agent", argv)
+        agent = argv[argv.index("--agent") + 1]
+        self.assertEqual(agent, "fleet-titler")
+        # The agent definition IS the tool-free contract for this runtime, so it has to
+        # exist on disk where --dir can find it, with every tool actually disabled.
+        workdir = Path(argv[argv.index("--dir") + 1])
+        definition = workdir / ".opencode" / "agent" / (agent + ".md")
+        self.assertTrue(definition.is_file())
+        body = definition.read_text(encoding="utf-8")
+        for tool in ("bash", "edit", "write", "read", "webfetch", "task"):
+            self.assertIn("%s: false" % tool, body)
+
+    def test_no_provider_installed_degrades_to_empty(self):
+        import shutil as _shutil
+        orig_which = _shutil.which
+        _shutil.which = lambda name: None
+        try:
+            self.assertEqual(rt.run_worker("some prompt"), "")
+        finally:
+            _shutil.which = orig_which
+
+    def test_cascade_skips_an_uninstalled_leader(self):
+        """opencode absent must fall through to claude, not go blank."""
+        import shutil as _shutil
+        orig_which = _shutil.which
+        _shutil.which = lambda name: None if name == "opencode" else "/usr/bin/" + name
+        try:
+            self.assertEqual(rt.active_provider(), "claude")
+        finally:
+            _shutil.which = orig_which
 
     def test_validate_caps_injected_long_string(self):
         payload = "rm -rf / ; " * 20

@@ -1391,8 +1391,9 @@ def _enc(path):
 
 
 def _model_display(mid):
-    """'claude-opus-4-8[1m]' → 'Opus 4.8' (family word + short dotted version; date/context
-    suffixes like -20251001 / [1m] dropped)."""
+    """Wire model id → display form: family word + short dotted version, with date and
+    context suffixes (-20251001, [1m]) dropped. A vendor id is not spelled out here —
+    concrete ids live only in the adapter configs (check-model-config)."""
     parts = mid.split("[", 1)[0].replace("claude-", "").split("-")
     fam = parts[0].capitalize()
     ver = ".".join(p for p in parts[1:] if p.isdigit() and len(p) <= 2)

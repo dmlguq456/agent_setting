@@ -16,7 +16,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 # Surfaces that are scanned for stray concrete model IDs.
-SCAN_DIRS = ["adapters", "core", "roles"]
+# `tools` is here because leaving it out is what actually hid the Fleet title worker's
+# `haiku` pin for a month: the blanket `/tools/fleet/` entry below reads like the reason,
+# but the canonical copy was never scanned at all — only its Claude mirror was.
+SCAN_DIRS = ["adapters", "core", "roles", "tools"]
 
 # The single sources of truth (allowed to contain concrete model IDs).
 CONFIG_SUFFIX = "config/models.conf"
@@ -43,7 +46,16 @@ EXEMPT_SUBSTRINGS = (
     "/node_modules/",                   # vendored third-party code, not a harness surface
     "/roles/units/",                    # unit catalog owned by check-unit-config.py
     "/statusline.sh",                   # model-family -> color palette (display only)
-    "/tools/fleet/",                    # Fleet render/demo palettes and fixtures (display only)
+    # Fleet: display palettes and fixtures only. Deliberately NOT the whole tree —
+    # a blanket `/tools/fleet/` exemption is what let `refresh_title.py` pin a concrete
+    # model as its title-worker default and keep it for a month after the config SoT
+    # landed. Everything else under tools/fleet/ is scanned like any other surface, so a
+    # new execution pin there fails the guard instead of hiding behind "display only".
+    "/tools/fleet/render.py",           # model-family -> color palette
+    "/tools/fleet/demo.py",             # synthetic fixture rows
+    "/tools/fleet/projection.py",       # display projection of collected values
+    "/tools/fleet/collectors/claude.py",  # /api/oauth/usage bucket keys + their labels
+    "/tools/render-fleet-svg.py",       # static SVG mockup of the dashboard
     "/loops/drill/",                    # drill fixtures pin explicit models on purpose
     ".test.",                           # test fixtures
     "/tests/",
@@ -63,6 +75,12 @@ PATTERNS = [
     re.compile(r"model:\s*(?:opus|sonnet|haiku|fable)\b"),
     re.compile(r":-\s*(?:opus|sonnet|haiku|fable)\b"),
     re.compile(r"=\s*[\"']?(?:opus|sonnet|haiku|fable)[\"']?\s*(?:;|$)"),
+    # A bare quoted alias anywhere in code. The three patterns above all anchor on an
+    # assignment shape, so none of them saw `os.environ.get("FLEET_TITLE_MODEL", "haiku")`
+    # — the alias sat in a call argument, which is exactly where a default belongs and
+    # exactly what the guard was blind to. Display/label surfaces that legitimately hold
+    # these words are named in EXEMPT_SUBSTRINGS rather than carved out of the pattern.
+    re.compile(r"[\"'](?:opus|sonnet|haiku|fable)[\"']"),
 ]
 
 GEN_OPEN = re.compile(r"<!--\s*GENERATED")

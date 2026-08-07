@@ -262,7 +262,7 @@ class Session:
     ctx_pct: Optional[int] = None      # context window used %
     rl_5h: Optional[int] = None        # legacy fixed 5h slot (Claude + old Codex payloads)
     rl_7d: Optional[int] = None        # legacy fixed 7d slot (Claude + old Codex payloads)
-    rl_ms: Optional[list] = None       # model-scoped buckets [[label, pct], ...] e.g. [["fable", 57]]
+    rl_ms: Optional[list] = None       # model-scoped buckets [[label, pct], ...]
     rl_rs: Optional[tuple] = None      # (reset_epoch_5h, reset_epoch_7d) — ↻ countdown in the meters
     rl_windows: Optional[list] = None  # dynamic account windows [[label, pct, reset_epoch], ...]; preferred over rl_5h/rl_7d when present
     cost: Optional[float] = None

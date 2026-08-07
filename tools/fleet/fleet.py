@@ -47,6 +47,10 @@ def parse_args(argv):
                    help="emit collected state as JSON to stdout")
     p.add_argument("--no-usage-api", action="store_true",
                    help="disable live usage API refreshes")
+    p.add_argument("--title-provider", choices=["opencode", "claude", "codex"], default=None,
+                   help="pin the harness that runs the title/summary worker; default walks "
+                        "the cascade (opencode, then claude, then codex) and takes the first "
+                        "one installed. The model always comes from that adapter's mini tier.")
     p.add_argument("--all", dest="show_all", action="store_true",
                    help="include stale/dead sessions and exited/stale resources (hidden by default)")
     p.add_argument("--demo", action="store_true",
@@ -159,6 +163,12 @@ def main(argv=None):
     hfilter = _harness_filter(args.harness)
     disabled = _disabled_tokens()
     disabled["api_disabled"] = bool(disabled["api_disabled"] or args.no_usage_api)
+    if args.title_provider:
+        # The refresher runs as a detached subprocess, so the pin travels by environment
+        # rather than argv — one place to set it, and every worker this run spawns
+        # inherits it. An already-set env value means the operator chose it too; the
+        # explicit flag is the more specific instruction and wins.
+        os.environ["FLEET_TITLE_PROVIDER"] = args.title_provider
 
     collector = collect_all
     if args.demo or os.environ.get("FLEET_DEMO"):   # flag OR env (env works through any launcher/alias)

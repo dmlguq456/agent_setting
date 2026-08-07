@@ -61,7 +61,10 @@ MAX_PRIORITY_START_LIMIT = 2
 START_WINDOW_SEC = 60      # 1-minute rolling window (was 600s; paired with the 16→3 limit above)
 SESSION_TICKET_MAX_AGE = 86400
 DISABLE_MARKER = ".refresh-disabled"
-MODEL = os.environ.get("FLEET_TITLE_MODEL", "haiku")
+# No default model literal lives here any more. The model comes from the selected
+# provider's own `models.conf` `mini` tier (see `provider_model`); this env var stays
+# only as an explicit per-run override.
+MODEL = os.environ.get("FLEET_TITLE_MODEL") or None
 
 _META_RE = re.compile(
     r"^(no |none\b|cannot|can.t|unable|sorry|i |there (is|are) no|untitled\b|empty\b|error\b)",
@@ -446,11 +449,132 @@ def validate_summary(raw):
     return line
 
 
+def agent_home():
+    return Path(os.environ.get("AGENT_HOME") or Path(__file__).resolve().parents[2])
+
+
+def provider_model(adapter, home=None):
+    """The adapter's `mini` model, resolved through the portable profile resolver.
+
+    Fleet must not name a concrete model: `adapters/<a>/config/models.conf` is the single
+    source of truth, and the title worker is a `mini` consumer like any other lifecycle
+    helper. Resolving here means a tier change in that config reaches Fleet with no code
+    edit — which is exactly what did NOT happen while this module hardcoded `haiku`
+    (F-17 predated the config SoT by eleven days and the guard exempted `tools/fleet/`
+    wholesale as display-only, so the pin stayed invisible for a month).
+    """
+    home = Path(home or agent_home())
+    config = home / "adapters" / adapter / "config" / "models.conf"
+    if not config.is_file():
+        return None
+    try:
+        utilities = str(home / "utilities")
+        if utilities not in sys.path:
+            sys.path.insert(0, utilities)
+        import model_profile
+        return model_profile.resolve_profile(adapter, config, "mini").get("model")
+    except Exception:
+        return None
+
+
+# Ordered provider cascade. OpenCode leads because its `mini` model is the cheapest of
+# the three and this worker is the harness's highest-frequency model caller; the rest
+# follow so a machine with only one harness installed still gets titles. Every entry is
+# tool-free, but each runtime spells that differently — claude by flag, codex by
+# read-only sandbox, opencode by an agent definition with every tool set to false.
+PROVIDER_ORDER = ("opencode", "claude", "codex")
+
+_OPENCODE_AGENT = """---
+description: "No-tools Fleet title/summary worker. Emits two labeled lines only."
+mode: primary
+tools:
+  bash: false
+  edit: false
+  write: false
+  read: false
+  grep: false
+  glob: false
+  list: false
+  patch: false
+  webfetch: false
+  todowrite: false
+  todoread: false
+  task: false
+permission:
+  bash: deny
+  edit: deny
+  webfetch: deny
+---
+You are a no-tools title worker. Output only the two labeled lines you are asked for.
+"""
+
+
+def _opencode_workdir(home):
+    """Materialize the tool-free agent the opencode provider runs as.
+
+    Mirrors `adapters/opencode/bin/distill-worker.sh`: opencode has no per-invocation
+    tool-blocking flag, so the agent definition IS the tool-free contract and it has to
+    exist on disk in a directory `--dir` can discover.
+    """
+    workdir = Path(home) / ".agent-workspace" / "fleet-title-workdir"
+    agent_file = workdir / ".opencode" / "agent" / "fleet-titler.md"
+    try:
+        if not agent_file.is_file():
+            agent_file.parent.mkdir(parents=True, exist_ok=True)
+            agent_file.write_text(_OPENCODE_AGENT, encoding="utf-8")
+        return workdir
+    except OSError:
+        return None
+
+
+def provider_command(adapter, prompt, model=None, home=None):
+    """One provider invocation as (argv, stdin_text, output_file), or None.
+
+    The three runtimes disagree on both ends of the call — claude takes the prompt in
+    argv and answers on stdout, codex takes stdin and writes its answer to a file,
+    opencode takes stdin and answers on stdout — so the caller cannot assume any one
+    shape. Returning all three fields keeps that difference here instead of leaking it
+    into `run_worker`.
+    """
+    home = Path(home or agent_home())
+    model = model or provider_model(adapter, home)
+    if not model:
+        return None
+    if adapter == "claude":
+        return (["claude", "-p", prompt, "--model", model,
+                 "--disallowedTools", DISALLOWED_TOOLS], None, None)
+    if adapter == "codex":
+        out = Path(tempfile.gettempdir()) / ("fleet-title-%d.out" % os.getpid())
+        return (["codex", "exec", "--cd", str(home), "--sandbox", "read-only",
+                 "--ephemeral", "--ignore-rules", "--skip-git-repo-check",
+                 "--output-last-message", str(out), "-m", model, "-"], prompt, out)
+    if adapter == "opencode":
+        workdir = _opencode_workdir(home)
+        if workdir is None:
+            return None
+        return (["opencode", "run", "--pure", "--dir", str(workdir),
+                 "--agent", "fleet-titler", "--format", "default", "-m", model],
+                prompt, None)
+    return None
+
+
+def selected_providers():
+    """Explicit choice wins; otherwise the cascade. `fleet --title-provider` sets the env."""
+    chosen = (os.environ.get("FLEET_TITLE_PROVIDER") or "").strip().lower()
+    if chosen in PROVIDER_ORDER:
+        return (chosen,)
+    return PROVIDER_ORDER
+
+
 def worker_argv(prompt, model=None):
-    """Build a shell-free provider argv; return ``[]`` for malformed configuration."""
-    model = model or os.environ.get("FLEET_TITLE_MODEL", MODEL)
+    """Build a shell-free provider argv; return ``[]`` for malformed configuration.
+
+    Kept as the argv-only view for callers that just need the executable; `run_worker`
+    uses `provider_command` so it also gets the stdin/output-file halves.
+    """
     template = os.environ.get("FLEET_TITLE_COMMAND")
     if template:
+        model = model or os.environ.get("FLEET_TITLE_MODEL") or ""
         try:
             parts = shlex.split(template)
         except ValueError:
@@ -462,15 +586,11 @@ def worker_argv(prompt, model=None):
         if not has_prompt:
             argv.append(prompt)
         return argv
-    return [
-        "claude",
-        "-p",
-        prompt,
-        "--model",
-        model,
-        "--disallowedTools",
-        DISALLOWED_TOOLS,
-    ]
+    for adapter in selected_providers():
+        command = provider_command(adapter, prompt, model=model)
+        if command and _executable_available(command[0]):
+            return command[0]
+    return []
 
 
 def _executable_available(argv):
@@ -705,11 +825,30 @@ def _summary_failures(sidecar):
     return max(0, min(len(SUMMARY_RETRY_DELAYS), value))
 
 
+def _resolve_command(prompt, model=None):
+    """First installed provider in the cascade, as (argv, stdin_text, output_file).
+
+    Walks `selected_providers()` and stops at the first one whose executable is actually
+    on this machine, so a host with only one harness installed still produces titles
+    instead of silently going blank. `FLEET_TITLE_COMMAND` short-circuits the whole
+    cascade — an operator naming an exact command means it, and it keeps the existing
+    argv-template contract. Returns an empty argv when nothing is available; the caller
+    already treats that as "no provider" and degrades to "".
+    """
+    if os.environ.get("FLEET_TITLE_COMMAND"):
+        return worker_argv(prompt, model=model), None, None
+    for adapter in selected_providers():
+        command = provider_command(adapter, prompt, model=model)
+        if command and _executable_available(command[0]):
+            return command
+    return [], None, None
+
+
 def run_worker(prompt, model=None, timeout=WORKER_TIMEOUT, capacity_held=False):
     """Run the configured title provider with no shell; failures degrade to ``''``."""
     if refresh_disabled():
         return ""
-    argv = worker_argv(prompt, model=model)
+    argv, stdin_text, out_file = _resolve_command(prompt, model=model)
     if not _executable_available(argv):
         return ""
     owned_slot = None
@@ -753,10 +892,26 @@ def run_worker(prompt, model=None, timeout=WORKER_TIMEOUT, capacity_held=False):
             text=True,
             timeout=timeout,
             env=env,
-            stdin=subprocess.DEVNULL,
+            input=stdin_text,
+            stdin=None if stdin_text is not None else subprocess.DEVNULL,
             shell=False,
         )
-        return (result.stdout or "") if result.returncode == 0 else ""
+        if result.returncode != 0:
+            return ""
+        if out_file is None:
+            return result.stdout or ""
+        # codex answers into a file rather than on stdout; a zero exit with no file is
+        # an empty answer, not an error, so it degrades to "" like every other miss.
+        try:
+            text = Path(out_file).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
+        finally:
+            try:
+                Path(out_file).unlink()
+            except OSError:
+                pass
+        return text
     except Exception:
         return ""
     finally:
@@ -765,8 +920,28 @@ def run_worker(prompt, model=None, timeout=WORKER_TIMEOUT, capacity_held=False):
         _remove_empty_dir(owned_slot)
 
 
+def active_provider():
+    """The adapter the cascade would pick right now, or None when none is usable.
+
+    Same predicate `_resolve_command` selects on — an installed executable plus a
+    resolvable `mini` model — so the two never disagree about who ran.
+    """
+    if os.environ.get("FLEET_TITLE_COMMAND"):
+        return "custom"
+    for adapter in selected_providers():
+        if shutil.which(adapter) and provider_model(adapter):
+            return adapter
+    return None
+
+
 def _provider_source():
-    return "refresher:custom" if os.environ.get("FLEET_TITLE_COMMAND") else "refresher:claude"
+    """Name the provider that actually answered, not the one that used to be assumed.
+
+    The sidecar's `source` is evidence — it is how a later reader tells which runtime
+    wrote a title. While this module only ever called claude, the constant was honest;
+    with a cascade it would be a lie whenever the first provider is not claude.
+    """
+    return "refresher:" + (active_provider() or "none")
 
 
 def maybe_spawn(harness, sid, transcript=None, now=None, debounce=DEBOUNCE_SEC,

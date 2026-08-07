@@ -104,10 +104,10 @@ def _model_ctx_limit(model_id, provider=None):
     (~/.cache/opencode/models.json — the same source opencode's own TUI uses for context%).
     None when unavailable → ctx% stays '—'. Cached 5 min.
 
-    The same model id is published by many providers with different windows (glm-5.2 is
-    1,000,000 on opencode-go but 1,048,576 on nano-gpt), so the session's own providerID
-    decides. The provider-agnostic max is only a last resort for an unknown provider —
-    an over-large window understates ctx%, which is the safer direction to be wrong.
+    The same model id is published by many providers at different window sizes (one id
+    in this registry spans a 48k spread across two providers), so the session's own
+    providerID decides. The provider-agnostic max is only a last resort for an unknown
+    provider — an over-large window understates ctx%, the safer direction to be wrong.
     """
     if not model_id:
         return None
