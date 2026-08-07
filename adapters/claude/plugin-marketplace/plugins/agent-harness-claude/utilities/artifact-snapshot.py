@@ -29,7 +29,11 @@ def load_route(path: Path, route_id: str, node_id: str) -> tuple[dict,dict]:
         route=json.loads(path.read_text(encoding="utf-8"))
         if route.get("route_id")!=route_id:
             raise SnapshotError("route-id-mismatch")
-        node=next(row for row in route["nodes"] if row["id"]==node_id)
+        # An owner binding carries no route node (SD-97, empty node_id by
+        # contract). There is no per-node record to look up, so use an empty
+        # node instead of letting `next()` raise StopIteration for a node id
+        # that was never meant to exist.
+        node=next(row for row in route["nodes"] if row["id"]==node_id) if node_id else {}
     except SnapshotError:
         raise
     except Exception as exc:
