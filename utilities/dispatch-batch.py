@@ -25,6 +25,7 @@ from dispatch_contract import (  # noqa: E402
     attempt_process_quiescence,
     completion_attempt_readiness,
     completion_marker_gate,
+    PRELAUNCH_PROCESS_BLOCK_REASONS,
     completion_marker_is_current,
     parse_registry_metadata,
     recover_unstarted_attempt,
@@ -832,7 +833,7 @@ def main(argv: list[str] | None = None) -> int:
     ) as exc:
         reason = getattr(exc, "reason", "batch-validation-failed")
         detail = getattr(exc, "detail", str(exc))
-        return fail(reason, 78 if reason.startswith("predecessor-process-") else 65, detail=detail)
+        return fail(reason, 78 if reason in PRELAUNCH_PROCESS_BLOCK_REASONS else 65, detail=detail)
 
     lifecycle = select_launch_lifecycle()
     required_axes = list(nodes[0].get("parallel_independence_axes", ["cross-harness"]))

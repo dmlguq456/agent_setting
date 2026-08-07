@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import fcntl, os, subprocess, sys, tempfile, time, unittest
+import fcntl, json, os, subprocess, sys, tempfile, time, unittest
 from unittest import mock
 from pathlib import Path
 
@@ -1204,5 +1204,188 @@ class DispatchContractTest(unittest.TestCase):
   D.validate_nested_eligibility(dispatch_depth=1,action="start",parent_harness="claude",
    parent_transport="interactive",parent_sandbox="adapter-default",child_harness="claude",
    launch_authority="conductor",status="supported",source="fixture")
+
+ # A-P1. The leader leaves a tagged descendant in its own session, so the
+ # recorded process group empties while the attempt is still running. The
+ # asserts on _attempt_process_quiescence_impl are the point: they pin that this
+ # fixture is red without the seam and green with it, permanently.
+ def test_escaped_attempt_descendant_refuses_a_false_quiescent_verdict(self):
+  attempt="att-escaped-descendant-fixture"
+  script=("import os,subprocess,sys\n"
+          "env=dict(os.environ,AGENT_DISPATCH_ATTEMPT_ID=sys.argv[1])\n"
+          "subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)'],\n"
+          "                 env=env,start_new_session=True)\n")
+  proc=subprocess.Popen([sys.executable,"-c",script,attempt],start_new_session=True)
+  identity=dict(D.process_launch_identity(proc.pid),attempt_id=attempt)
+  proc.wait(timeout=10)
+  probe=None
+  for _ in range(50):
+   probe=D.attempt_tagged_descendants(identity)
+   if probe.state=="populated":break
+   time.sleep(0.1)
+  try:
+   self.assertEqual(probe.state,"populated",probe.reason)
+   # Without the repair the recorded group is empty and this reads as done.
+   self.assertEqual(D._attempt_process_quiescence_impl(identity).state,"quiescent")
+   verdict=D.attempt_process_quiescence(identity)
+   self.assertEqual((verdict.state,verdict.reason),
+                    ("live","attempt-descendant-live"))
+   self.assertEqual(verdict.pid,probe.members[0][0])
+  finally:
+   for pid,_start,_state in probe.members if probe else ():
+    try:os.kill(pid,9)
+    except OSError:pass
+
+ # A-N1. A confirmed death still advances, with its original reason intact.
+ def test_confirmed_death_without_tagged_processes_stays_quiescent(self):
+  proc=subprocess.Popen([sys.executable,"-c","import time; time.sleep(30)"],
+                        start_new_session=True)
+  identity=dict(D.process_launch_identity(proc.pid),
+                attempt_id="att-confirmed-death-fixture")
+  proc.terminate();proc.wait(timeout=5)
+  self.assertEqual(D.attempt_tagged_descendants(identity).state,"empty")
+  verdict=D.attempt_process_quiescence(identity)
+  self.assertEqual(verdict.state,"quiescent")
+  self.assertEqual(verdict.reason,
+                   D._attempt_process_quiescence_impl(identity).reason)
+
+ # A-N2 is test_process_group_descendant_keeps_attempt_live_after_leader_exit:
+ # a survivor inside the recorded group is already `live`, so it never reaches
+ # the post-processing seam at all. Left where it is rather than duplicated.
+
+ # A-N3. An empty scan is only evidence of absence in the namespace that could
+ # have seen the process. A reap receipt recorded elsewhere must fail closed
+ # rather than manufacture a death.
+ def test_empty_scan_from_a_foreign_namespace_is_unverifiable(self):
+  pid=str(os.getpid())
+  receipt={
+   "pid":pid,"pgid":pid,"pid_start":D.process_start_ticks(os.getpid()),
+   "pid_ns":"pid:[foreign]","pid_observer_ns":"pid:[foreign]",
+   "launch_lifecycle":"foreground-scoped",
+   "launch_outcome":"governed-process-reaped",
+   "group_reap_proof":D.GROUP_REAP_PROOF,"group_reap_pgid":pid,
+   "attempt_id":"att-foreign-namespace-fixture",
+  }
+  self.assertEqual(D._attempt_process_quiescence_impl(receipt).state,"quiescent")
+  probe=D.attempt_tagged_descendants(receipt)
+  self.assertEqual((probe.state,probe.reason),
+                   ("unverifiable","observer-namespace-mismatch"))
+  verdict=D.attempt_process_quiescence(receipt)
+  self.assertEqual((verdict.state,verdict.reason),
+                   ("unverifiable","attempt-descendant-unverifiable"))
+  # An equivalent receipt observed from its own namespace keeps its verdict, so
+  # the seam did not break the ordinary foreground-reap path.
+  proc=subprocess.Popen([sys.executable,"-c","import time; time.sleep(30)"],
+                        start_new_session=True)
+  reaped=str(proc.pid)
+  start=D.process_start_ticks(proc.pid)
+  proc.terminate();proc.wait(timeout=5)
+  here=D.process_namespace_identity()
+  local=dict(receipt,pid=reaped,pgid=reaped,pid_start=start,
+             group_reap_pgid=reaped,pid_ns=here,pid_observer_ns=here)
+  self.assertEqual(D.attempt_tagged_descendants(local).state,"empty")
+  self.assertEqual(D.attempt_process_quiescence(local).state,"quiescent")
+
+ # Whether an empty scan proves absence is a different question from whether a
+ # recorded PID number means anything here, and the two must not be conflated:
+ # a namespace-local row is unreadable by PID yet fully scannable from the
+ # namespace that watched it launch.
+ def test_scan_authority_is_not_pid_identity_authority(self):
+  here=D.process_namespace_identity()
+  ghost={"pid":"7","pid_start":"1","pid_scope":"namespace-local",
+         "pid_ns":"pid:[inner]","pid_observer_ns":here}
+  self.assertFalse(D.local_identity_namespace_authority(ghost))
+  self.assertTrue(D.attempt_scan_namespace_authority(ghost))
+  # Proven procfs-root observation sees every descendant, whoever recorded it.
+  outer=dict(ghost,pid_observer_ns="pid:[inner]",pid_host="7",
+             pid_host_ns=here,pid_host_proof=D.PID_HOST_NAMESPACE_PROOF)
+  self.assertTrue(D.attempt_scan_namespace_authority(outer))
+  # A sibling namespace's empty scan is invisibility, not absence.
+  self.assertFalse(D.attempt_scan_namespace_authority(
+   dict(ghost,pid_observer_ns="pid:[elsewhere]")))
+  # Rows predating the observer field stay readable if they were host-visible.
+  self.assertTrue(D.attempt_scan_namespace_authority({"pid":"7"}))
+  self.assertFalse(D.attempt_scan_namespace_authority(
+   {"pid":"7","pid_scope":"namespace-local"}))
+
+ def sibling_gate_case(self,td,note,sibling_metadata,attempt="att-gate-newcomer"):
+  """Run completion_marker_gate for a node whose only sibling row is `note`."""
+  route={"dispatch_contract_version":3,"route_id":"rt-sibling-gate",
+         "nodes":[{"id":"execute","depends_on":[]}]}
+  path=Path(td)/"route.json"; path.write_text(json.dumps(route),encoding="utf-8")
+  pipe=",".join(f"{k}={v}" for k,v in {
+   **{"route_id":"rt-sibling-gate","route_node":"execute","note":note},
+   **sibling_metadata}.items())
+  lines=[f"2026-08-07T00:00:00Z\tdone\t/repo\t/wt\texecute\t{pipe}"]
+  # The newcomer's own claimed row is already in the registry when the gate
+  # runs at launch, and it has no pid yet -- it must not block itself.
+  lines.append(
+   "2026-08-07T00:00:01Z\topen\t/repo\t/wt\texecute\t"
+   f"route_id=rt-sibling-gate,route_node=execute,attempt_id={attempt}")
+  D.completion_marker_gate(str(path),"execute","start",Path(td),Path(td)/"jobs.log",
+                           registry_lines=lines,attempt_id=attempt)
+
+ # A-P2. A sibling attempt whose row was closed by a false death verdict, but
+ # whose tagged descendant is still running, stops the launch before any spawn.
+ def test_live_sibling_attempt_blocks_the_node_before_any_spawn(self):
+  attempt="att-live-sibling-fixture"
+  script=("import os,subprocess,sys\n"
+          "env=dict(os.environ,AGENT_DISPATCH_ATTEMPT_ID=sys.argv[1])\n"
+          "subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)'],\n"
+          "                 env=env,start_new_session=True)\n")
+  proc=subprocess.Popen([sys.executable,"-c",script,attempt],start_new_session=True)
+  sibling=dict(D.process_launch_identity(proc.pid),attempt_id=attempt)
+  proc.wait(timeout=10)
+  probe=None
+  for _ in range(50):
+   probe=D.attempt_tagged_descendants(sibling)
+   if probe.state=="populated":break
+   time.sleep(0.1)
+  try:
+   self.assertEqual(probe.state,"populated",probe.reason)
+   with tempfile.TemporaryDirectory() as td:
+    with self.assertRaises(D.DispatchContractError) as caught:
+     self.sibling_gate_case(td,"dead-worker-fail",sibling)
+   self.assertEqual(caught.exception.reason,"prior-attempt-still-live")
+   self.assertIn(attempt,caught.exception.detail)
+   # The one exit code every caller maps to "nothing spawned, waiting may help".
+   self.assertIn("prior-attempt-still-live",D.PRELAUNCH_PROCESS_BLOCK_REASONS)
+  finally:
+   for pid,_start,_state in probe.members if probe else ():
+    try:os.kill(pid,9)
+    except OSError:pass
+
+ # A-N4/A-N5. An ordinary retry follows a sibling that really did stop, whether
+ # it was cooled off for capacity or gave up on its own. This is the control
+ # that proves the gate does not wedge the pipeline.
+ def test_quiescent_sibling_never_blocks_an_ordinary_retry(self):
+  proc=subprocess.Popen([sys.executable,"-c","import time; time.sleep(30)"],
+                        start_new_session=True)
+  sibling=dict(D.process_launch_identity(proc.pid),
+               attempt_id="att-quiescent-sibling-fixture")
+  proc.terminate();proc.wait(timeout=5)
+  self.assertEqual(D.attempt_process_quiescence(sibling).state,"quiescent")
+  for note in ("dead-capacity","dead-no-progress","dead-worker-fail"):
+   with tempfile.TemporaryDirectory() as td:
+    self.sibling_gate_case(td,note,sibling)
+
+ # A row that never recorded a governed process cannot have leaked one, and
+ # judging it unverifiable would wedge the node permanently.
+ def test_sibling_row_without_a_recorded_process_is_not_a_claimant(self):
+  with tempfile.TemporaryDirectory() as td:
+   self.sibling_gate_case(td,"dead-claim-abandoned",
+                          {"attempt_id":"att-never-launched-fixture"})
+
+ # D-1. A legacy row carries no attempt id, so there is nothing to scan for and
+ # its existing verdict is left exactly as it was.
+ def test_legacy_row_without_attempt_id_keeps_its_verdict(self):
+  proc=subprocess.Popen([sys.executable,"-c","import time; time.sleep(30)"],
+                        start_new_session=True)
+  identity=D.process_launch_identity(proc.pid)
+  proc.terminate();proc.wait(timeout=5)
+  self.assertNotIn("attempt_id",identity)
+  self.assertEqual(D.attempt_tagged_descendants(identity).state,"unverifiable")
+  self.assertEqual(D.attempt_process_quiescence(identity),
+                   D._attempt_process_quiescence_impl(identity))
 
 if __name__=="__main__": unittest.main()

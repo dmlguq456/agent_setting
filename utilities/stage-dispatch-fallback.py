@@ -42,6 +42,7 @@ from dispatch_lifecycle import (  # noqa: E402
     select_launch_lifecycle,
 )
 from dispatch_contract import (  # noqa: E402
+    PRELAUNCH_PROCESS_BLOCK_REASONS,
     DispatchContractError,
     attempt_process_quiescence,
     resolve_live_parent_attempt,
@@ -962,10 +963,7 @@ def main() -> int:
                             fields.get("reason")
                             or (worker_failure if worker_failure != "-" else "wrapper-exit")
                         )
-                        if failure_reason in {
-                            "predecessor-process-draining",
-                            "predecessor-process-unverifiable",
-                        }:
+                        if failure_reason in PRELAUNCH_PROCESS_BLOCK_REASONS:
                             return fail(
                                 failure_reason,
                                 78,

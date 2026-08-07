@@ -32,6 +32,7 @@ from dispatch_contract import (  # noqa: E402
     claim_attempt_row,
     close_attempt_row,
     completion_marker_gate,
+    PRELAUNCH_PROCESS_BLOCK_REASONS,
     ensure_global_registry_writable,
     headless_attempt_policy,
     launch_orphan_watch,
@@ -666,6 +667,7 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
             args.agent_home,
             jobs,
             registry_lines=lines,
+            attempt_id=args.attempt_id,
         )
     args.launch_preclaim = preclaim
     return claim_attempt_row(
@@ -1027,12 +1029,13 @@ def validate_route_record(args: argparse.Namespace) -> int:
     )
     try:
         completion_marker_gate(
-            args.route_file, args.route_node, args.action, args.agent_home, early_jobs
+            args.route_file, args.route_node, args.action, args.agent_home,
+            early_jobs, attempt_id=args.attempt_id,
         )
     except DispatchContractError as e:
         return fail(
             e.reason,
-            78 if e.reason.startswith("predecessor-process-") else 65,
+            78 if e.reason in PRELAUNCH_PROCESS_BLOCK_REASONS else 65,
             detail=e.detail,
             child_spawned="0",
         )
@@ -1184,10 +1187,11 @@ def main(argv: list[str]) -> int:
         return fail(e.reason, 65, detail=e.detail, child_spawned="0")
     try:
         completion_marker_gate(
-            args.route_file, args.route_node, action, agent_home, jobs
+            args.route_file, args.route_node, action, agent_home, jobs,
+            attempt_id=args.attempt_id,
         )
     except DispatchContractError as e:
-        return fail(e.reason, 78 if e.reason.startswith("predecessor-process-") else 65,
+        return fail(e.reason, 78 if e.reason in PRELAUNCH_PROCESS_BLOCK_REASONS else 65,
                     detail=e.detail, child_spawned="0")
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
     prompt_text, prompt_source = prompt(args)

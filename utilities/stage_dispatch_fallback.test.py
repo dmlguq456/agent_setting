@@ -259,4 +259,23 @@ class FallbackTest(unittest.TestCase):
   self.assertEqual(result["AGENT_ROUTE_FILE"],"/tmp/node-route.json")
   self.assertEqual(result["AGENT_ROUTE_ID"],"rt-node")
 
+ def test_prelaunch_process_block_reasons_are_consumed_by_every_launcher(self):
+  """The sibling-gate reasons must reach exit 78 / child_spawned=0 everywhere.
+
+  They do not share the `predecessor-process-` prefix the launchers used to
+  match on, so a prefix test would have silently dropped them to exit 65 --
+  "the wrapper refused" instead of "nothing spawned, waiting may help". Every
+  launcher matches the shared tuple instead, and none may go back.
+  """
+  for reason in ("prior-attempt-still-live","prior-attempt-unverifiable",
+                 "predecessor-process-draining","predecessor-process-unverifiable"):
+   self.assertIn(reason,F.PRELAUNCH_PROCESS_BLOCK_REASONS)
+  launchers=[ROOT/"utilities/stage-dispatch-fallback.py",ROOT/"utilities/dispatch-batch.py"]
+  launchers+=[ROOT/"adapters"/name/"bin/dispatch-headless.py"
+              for name in ("claude","codex","opencode")]
+  for path in launchers:
+   source=path.read_text(encoding="utf-8")
+   self.assertIn("PRELAUNCH_PROCESS_BLOCK_REASONS",source,path)
+   self.assertNotIn('startswith("predecessor-process-")',source,path)
+
 if __name__=="__main__": unittest.main()
