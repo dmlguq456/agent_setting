@@ -23,7 +23,6 @@ read as "the stage succeeded".
 from __future__ import annotations
 
 import argparse
-import hashlib
 import importlib.util
 import json
 import os
@@ -57,6 +56,7 @@ def _load_module(name, relative):
 
 
 _RUNNER = None
+_ROUTE = None
 
 
 def runner():
@@ -65,6 +65,19 @@ def runner():
     if _RUNNER is None:
         _RUNNER = _load_module("resource_runner_cli", "utilities/resource-runner.py")
     return _RUNNER
+
+
+def route_module():
+    """Load `capability-route.py` for the shared read-only terminal-gate seam.
+
+    One-way dependency only: this module reaches into `capability-route.py`, which
+    must never import anything from `workflow_state`/`workflow-supervisor`/
+    `resource-runner` back.
+    """
+    global _ROUTE
+    if _ROUTE is None:
+        _ROUTE = _load_module("capability_route_cli", "utilities/capability-route.py")
+    return _ROUTE
 
 
 def load_route(path):
@@ -224,41 +237,13 @@ def artifact_evidence(armed):
 # completion markers
 # --------------------------------------------------------------------------------
 
-def completion_dir(route):
-    home = os.environ.get("AGENT_HOME")
-    base = Path(home).expanduser() if home else ROOT
-    return base / ".dispatch" / "completion" / route["route_id"]
-
-
 def terminal_gate_state(route):
-    """Report, per terminal node, whether its completion gate is actually proven."""
-    rows = {}
-    for node_id in WS.route_terminal_nodes(route):
-        node = WS.route_node(route, node_id) or {}
-        path = completion_dir(route) / f"{node_id}.json"
-        try:
-            marker = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            rows[node_id] = {"passed": False, "reason": "completion-marker-absent"}
-            continue
-        if (marker.get("route_id") != route["route_id"]
-                or marker.get("route_hash") != route.get("route_hash")
-                or marker.get("node_id") != node_id
-                or marker.get("completion_gate") != node.get("terminal_gate")):
-            rows[node_id] = {"passed": False, "reason": "completion-marker-identity-mismatch"}
-            continue
-        evidence = marker.get("evidence") or {}
-        try:
-            digest = hashlib.sha256(Path(evidence["path"]).read_bytes()).hexdigest()
-        except (OSError, KeyError, TypeError):
-            rows[node_id] = {"passed": False, "reason": "completion-evidence-unreadable"}
-            continue
-        if digest != evidence.get("sha256"):
-            rows[node_id] = {"passed": False, "reason": "completion-evidence-hash-mismatch"}
-            continue
-        rows[node_id] = {"passed": True, "reason": "completion-marker-verified",
-                         "evidence": evidence.get("path")}
-    return rows
+    """Report, per terminal node, whether its completion gate is actually proven.
+
+    Delegates to the shared `capability-route.py` seam so `status`/`complete` here and
+    `close`'s outcome sidecar always agree on gate truth from the same evidence.
+    """
+    return route_module().terminal_gate_observation(route)
 
 
 # --------------------------------------------------------------------------------

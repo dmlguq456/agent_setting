@@ -67,6 +67,23 @@ def dispatch_defaults_config_path(path):
   else: os.environ["DISPATCH_DEFAULTS_CONFIG"]=old
 
 class TestRoute(unittest.TestCase):
+ def setUp(self):
+  # `close_route` now reads completion markers through `resolve_agent_home()`; pin
+  # AGENT_HOME to an isolated temp dir per test so gate-observation reads/writes never
+  # touch the real installed home or leak state between tests via a shared route_id.
+  # `resolve_agent_home()` only honors AGENT_HOME when `<AGENT_HOME>/core/CORE.md`
+  # exists -- without this marker file it silently falls through to the real
+  # `~/agent_setting`, which is exactly the leak this isolation exists to prevent.
+  self._tmp_home=tempfile.TemporaryDirectory()
+  (Path(self._tmp_home.name)/"core").mkdir(parents=True,exist_ok=True)
+  (Path(self._tmp_home.name)/"core"/"CORE.md").write_text("fixture\n",encoding="utf-8")
+  self._previous_agent_home=os.environ.get("AGENT_HOME")
+  os.environ["AGENT_HOME"]=self._tmp_home.name
+  self.addCleanup(self._restore_agent_home)
+ def _restore_agent_home(self):
+  if self._previous_agent_home is None: os.environ.pop("AGENT_HOME",None)
+  else: os.environ["AGENT_HOME"]=self._previous_agent_home
+  self._tmp_home.cleanup()
  def dispatch(self,*rows):
   return {"tuples":list(rows),"native_subagent":[{
    "harness":"codex","transport":"headless",
@@ -547,8 +564,71 @@ class TestRoute(unittest.TestCase):
    self.assertTrue(created); self.assertTrue(R.outcome_path(path).is_file())
    self.assertEqual(outcome["route_hash"],route["route_hash"]); self.assertEqual(outcome["route_id"],route["route_id"])
    self.assertEqual(outcome["head_commit"],"0"*40); self.assertEqual(outcome["summary"],"demo")
+   self.assertEqual(outcome["schema_version"],3)
+   self.assertFalse(outcome["terminal_gate_proven"])
+   self.assertEqual(outcome["terminal_gates"]["inline"]["reason"],"completion-marker-absent")
+   before=R.outcome_path(path).read_bytes()
    again,created_again=R.close_route(route,path,commit="1"*40)
    self.assertFalse(created_again); self.assertEqual(again["head_commit"],"0"*40)
+   self.assertEqual(again["schema_version"],3)
+   self.assertEqual(again["terminal_gate_proven"],False)
+   # Idempotent re-close must not recompute: the sidecar's exact bytes are unchanged.
+   self.assertEqual(R.outcome_path(path).read_bytes(),before)
+ def test_close_records_false_and_warns_for_direct_unproven_gate(self):
+  # Red before P2: schema 2 outcomes carry neither `terminal_gate_proven` nor
+  # `terminal_gates`, and `close` never printed a warning at all -- this exercises the
+  # real CLI so the stderr contract, not just the in-process dict, is covered. Direct
+  # routes declare an `inline` terminal but nothing writes its marker in this test, so
+  # the aggregate must be `False`, never `None` -- a direct/inline close that silently
+  # reported "no terminal node" would hide every unproven direct closure.
+  import subprocess,sys
+  with tempfile.TemporaryDirectory() as tmp:
+   artifact_root=Path(tmp)
+   compiled=self._run_compile_cli(self._compile_cli_args(artifact_root))
+   self.assertEqual(compiled.returncode,0,compiled.stderr)
+   route=json.loads(compiled.stdout)
+   route_path=R.canonical_routes_dir(artifact_root)/f"{route['route_id']}.json"
+   result=subprocess.run([sys.executable,str(P),"close","--route",str(route_path)],
+                         capture_output=True,text=True,cwd=str(R.ROOT))
+   self.assertEqual(result.returncode,0,result.stderr)
+   outcome=json.loads(result.stdout)
+   self.assertEqual(outcome["schema_version"],3)
+   self.assertFalse(outcome["terminal_gate_proven"])
+   self.assertEqual(outcome["terminal_gates"]["inline"]["reason"],"completion-marker-absent")
+   self.assertIn("terminal-gate-unproven",result.stderr)
+   self.assertIn(route["route_id"],result.stderr)
+ def test_close_records_true_for_verified_terminal_marker(self):
+  # Red before P2: the outcome had no gate observation at all, so there was nothing to
+  # assert `True` against.
+  route=R.compile_route(**self.args())
+  node=route["nodes"][0]
+  with tempfile.TemporaryDirectory() as tmp:
+   artifact_root=Path(tmp); route=dict(route); route["artifact_root"]=str(artifact_root)
+   path=artifact_root/"demo-route.json"; path.write_text(json.dumps(route),encoding="utf-8")
+   evidence=Path(tmp)/"evidence.txt"; evidence.write_text("terminal evidence",encoding="utf-8")
+   R.write_completion_marker(route,node,node["id"],evidence)
+   outcome,created=R.close_route(route,path,commit="6"*40)
+   self.assertTrue(created)
+   self.assertEqual(outcome["schema_version"],3)
+   self.assertTrue(outcome["terminal_gate_proven"])
+   self.assertTrue(outcome["terminal_gates"][node["id"]]["passed"])
+   self.assertEqual(outcome["terminal_gates"][node["id"]]["reason"],"completion-marker-verified")
+ def test_close_records_null_only_without_terminal_nodes(self):
+  # Red before P2: the field was absent entirely, so `None` and `False` were
+  # indistinguishable -- this pins that a historical terminal-less route reports `None`,
+  # never folded into the `False` used for a declared-but-unproven gate.
+  route=json.loads(json.dumps(R.compile_route(**self.args())))
+  for node in route["nodes"]:
+   node.pop("terminal",None); node.pop("terminal_gate",None)
+  route["route_hash"]=R.route_hash(route)
+  route["route_id"]="rt-"+route["route_hash"].split(":",1)[1][:16]
+  with tempfile.TemporaryDirectory() as tmp:
+   artifact_root=Path(tmp); route["artifact_root"]=str(artifact_root)
+   path=artifact_root/"demo-route.json"; path.write_text(json.dumps(route),encoding="utf-8")
+   outcome,created=R.close_route(route,path,commit="7"*40)
+   self.assertTrue(created)
+   self.assertIsNone(outcome["terminal_gate_proven"])
+   self.assertEqual(outcome["terminal_gates"],{})
  def test_status_splits_open_from_closed_and_ignores_sidecars(self):
   route=R.compile_route(**self.args())
   with tempfile.TemporaryDirectory() as tmp:

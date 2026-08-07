@@ -887,6 +887,50 @@ def write_once(path, payload):
 def completion_dir(route_id):
     return resolve_agent_home()/".dispatch"/"completion"/route_id
 
+# Shared read-only terminal-gate seam: `close_route()` and `workflow-supervisor.py`'s
+# `status`/`complete` all need the same four-field marker-identity truth (route id,
+# route hash, node id, terminal-gate name, evidence readability, evidence hash), so it
+# lives once here and `workflow-supervisor.py` dynamically loads this module rather than
+# re-deriving it -- the dependency stays one-way (supervisor -> capability-route).
+def terminal_gate_observation(route):
+    """Per declared-terminal-node completion-gate truth, verified fresh from disk."""
+    nodes={node.get("id"):node for node in route.get("nodes",[])}
+    terminal_ids=[node_id for node_id,node in nodes.items() if node.get("terminal") is True]
+    rows={}
+    for node_id in terminal_ids:
+        node=nodes[node_id]
+        path=completion_dir(route["route_id"])/f"{node_id}.json"
+        try:
+            marker=json.loads(path.read_text(encoding="utf-8"))
+        except (OSError,ValueError):
+            rows[node_id]={"passed":False,"reason":"completion-marker-absent"}
+            continue
+        if (marker.get("route_id") != route.get("route_id")
+                or marker.get("route_hash") != route.get("route_hash")
+                or marker.get("node_id") != node_id
+                or marker.get("completion_gate") != node.get("terminal_gate")):
+            rows[node_id]={"passed":False,"reason":"completion-marker-identity-mismatch"}
+            continue
+        evidence=marker.get("evidence") or {}
+        try:
+            digest=hashlib.sha256(Path(evidence["path"]).read_bytes()).hexdigest()
+        except (OSError,KeyError,TypeError):
+            rows[node_id]={"passed":False,"reason":"completion-evidence-unreadable"}
+            continue
+        if digest != evidence.get("sha256"):
+            rows[node_id]={"passed":False,"reason":"completion-evidence-hash-mismatch"}
+            continue
+        rows[node_id]={"passed":True,"reason":"completion-marker-verified",
+                       "evidence":evidence.get("path")}
+    return rows
+
+def terminal_gate_proven(gates):
+    """Tri-state aggregate: True if every declared terminal gate passed, False if any
+    declared terminal gate is unproven, None only when no terminal node is declared."""
+    if not gates:
+        return None
+    return all(row["passed"] for row in gates.values())
+
 # D-2: route lifecycle records have exactly one canonical write location. `.resolve()`
 # follows symlinks for every existing path segment, so a `--output` whose parent is a
 # symlink pointing outside the canonical directory is classified by its real target, not
@@ -918,7 +962,12 @@ def atomic_write(path, payload):
 
 # v2 adds `registry_current`: a closure recorded against a registry that has since
 # changed is still a real closure, but it says so instead of implying currency.
-OUTCOME_SCHEMA_VERSION=2
+# v3 adds `terminal_gate_proven`/`terminal_gates`: `close` previously validated only
+# D-2 location and never consulted whether the workflow's terminal gate actually
+# passed, so a route could be closed while `WORKFLOW §0.6`'s completion condition
+# stayed false. Absence of these keys (v2 and earlier sidecars) has different
+# semantics than an explicit `false` -- readers must not fold the two together.
+OUTCOME_SCHEMA_VERSION=3
 
 def outcome_path(route_file):
     path=Path(route_file); return path.with_name(path.stem+".outcome.json")
@@ -947,6 +996,11 @@ def close_route(route, route_file, commit=None, summary=None):
     target=outcome_path(route_file)
     if target.exists():
         return json.loads(target.read_text(encoding="utf-8")), False
+    # Live, not stored: every close computes gate truth fresh from the completion
+    # markers on disk. A route closed once is never retroactively reopened to
+    # recompute this, so the sidecar's `terminal_gate_proven` reflects gate state at
+    # the moment of THIS close, not at any later inspection.
+    gates=terminal_gate_observation(route)
     outcome={"schema_version":OUTCOME_SCHEMA_VERSION,
              "route_id":route["route_id"],"route_hash":route["route_hash"],
              "route_file":str(Path(route_file).resolve()),"cwd":route["cwd"],
@@ -954,7 +1008,8 @@ def close_route(route, route_file, commit=None, summary=None):
              "closed_at":datetime.now(timezone.utc).isoformat().replace("+00:00","Z"),
              "head_commit":commit or _head_commit(route["cwd"]),"summary":summary,
              "registry_current":route.get("_registry_current",True),
-             "route_location":classify_route_location(route_file,route["artifact_root"])}
+             "route_location":classify_route_location(route_file,route["artifact_root"]),
+             "terminal_gate_proven":terminal_gate_proven(gates),"terminal_gates":gates}
     atomic_write(target,outcome)
     return outcome, True
 
@@ -1530,6 +1585,11 @@ def main():
             outcome,created=close_route(route,a.route,a.commit,a.summary)
             print(json.dumps(outcome,sort_keys=True))
             if not created: print("capability-route: route already closed",file=sys.stderr)
+            if outcome.get("terminal_gate_proven") is False:
+                reasons={node_id:row.get("reason") for node_id,row in
+                         (outcome.get("terminal_gates") or {}).items() if not row.get("passed")}
+                print(f"capability-route: terminal-gate-unproven route_id={outcome['route_id']} "
+                      f"reasons={json.dumps(reasons,sort_keys=True)}",file=sys.stderr)
         else:
             node=next((x for x in route["nodes"] if x["id"]==a.node),None)
             if not node: raise SystemExit("unknown route node")
