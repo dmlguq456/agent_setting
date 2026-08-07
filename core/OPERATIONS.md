@@ -42,7 +42,7 @@ For a read-only check before touching the spec:
 
 ```bash
 REPORTS_DIR=$("${AGENT_HOME:-$HOME/agent_setting}/utilities/artifact-root.sh" "$PWD") || exit
-[ -f "$REPORTS_DIR/.pipeline-lock" ] && cat "$REPORTS_DIR/.pipeline-lock" || echo "no active edit"
+[ -s "$REPORTS_DIR/.pipeline-lock" ] && cat "$REPORTS_DIR/.pipeline-lock" || echo "no active edit"
 ```
 
 In a single-checkout environment the same helper and sequence still apply.

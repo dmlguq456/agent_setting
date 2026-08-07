@@ -19,17 +19,18 @@ read as "the stage succeeded".
   workflow-supervisor.py gate    --route R --gate G --release|--block
   workflow-supervisor.py status  --route R [--json]
   workflow-supervisor.py complete --route R
+  workflow-supervisor.py survey  --artifact-root ROOT [--stale-after-seconds S] [--json]
 """
 from __future__ import annotations
 
 import argparse
-import hashlib
 import importlib.util
 import json
 import os
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,6 +43,15 @@ ARMED_SCHEMA_VERSION = 1
 PREDECESSOR_KINDS = ("resource", "registered")
 DEFAULT_POLL_INTERVAL = 5.0
 MAX_WATCH_SECONDS = 86400.0
+SURVEY_SCHEMA_VERSION = 1
+DEFAULT_STALE_AFTER_SECONDS = 86400.0
+# Highest risk first. `complete` is not one of the plan's six ranked tiers -- it is the
+# positively-proven safe label, so it sorts last, below `unknown`.
+RISK_TIER_ORDER = (
+    "abandoned", "closure-mismatch", "stale-open", "active-or-owned", "parked",
+    "unknown", "complete",
+)
+RISK_TIER_RANK = {tier: index for index, tier in enumerate(RISK_TIER_ORDER)}
 
 
 class SupervisorError(ValueError):
@@ -57,6 +67,7 @@ def _load_module(name, relative):
 
 
 _RUNNER = None
+_ROUTE = None
 
 
 def runner():
@@ -65,6 +76,19 @@ def runner():
     if _RUNNER is None:
         _RUNNER = _load_module("resource_runner_cli", "utilities/resource-runner.py")
     return _RUNNER
+
+
+def route_module():
+    """Load `capability-route.py` for the shared read-only terminal-gate seam.
+
+    One-way dependency only: this module reaches into `capability-route.py`, which
+    must never import anything from `workflow_state`/`workflow-supervisor`/
+    `resource-runner` back.
+    """
+    global _ROUTE
+    if _ROUTE is None:
+        _ROUTE = _load_module("capability_route_cli", "utilities/capability-route.py")
+    return _ROUTE
 
 
 def load_route(path):
@@ -224,41 +248,13 @@ def artifact_evidence(armed):
 # completion markers
 # --------------------------------------------------------------------------------
 
-def completion_dir(route):
-    home = os.environ.get("AGENT_HOME")
-    base = Path(home).expanduser() if home else ROOT
-    return base / ".dispatch" / "completion" / route["route_id"]
-
-
 def terminal_gate_state(route):
-    """Report, per terminal node, whether its completion gate is actually proven."""
-    rows = {}
-    for node_id in WS.route_terminal_nodes(route):
-        node = WS.route_node(route, node_id) or {}
-        path = completion_dir(route) / f"{node_id}.json"
-        try:
-            marker = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            rows[node_id] = {"passed": False, "reason": "completion-marker-absent"}
-            continue
-        if (marker.get("route_id") != route["route_id"]
-                or marker.get("route_hash") != route.get("route_hash")
-                or marker.get("node_id") != node_id
-                or marker.get("completion_gate") != node.get("terminal_gate")):
-            rows[node_id] = {"passed": False, "reason": "completion-marker-identity-mismatch"}
-            continue
-        evidence = marker.get("evidence") or {}
-        try:
-            digest = hashlib.sha256(Path(evidence["path"]).read_bytes()).hexdigest()
-        except (OSError, KeyError, TypeError):
-            rows[node_id] = {"passed": False, "reason": "completion-evidence-unreadable"}
-            continue
-        if digest != evidence.get("sha256"):
-            rows[node_id] = {"passed": False, "reason": "completion-evidence-hash-mismatch"}
-            continue
-        rows[node_id] = {"passed": True, "reason": "completion-marker-verified",
-                         "evidence": evidence.get("path")}
-    return rows
+    """Report, per terminal node, whether its completion gate is actually proven.
+
+    Delegates to the shared `capability-route.py` seam so `status`/`complete` here and
+    `close`'s outcome sidecar always agree on gate truth from the same evidence.
+    """
+    return route_module().terminal_gate_observation(route)
 
 
 # --------------------------------------------------------------------------------
@@ -596,17 +592,13 @@ def resource_children(route, ledger):
     return [unique[key] for key in sorted(unique)]
 
 
-def cmd_status(args):
-    route = load_route(args.route)
-    ledger = ledger_for(route)
-    state = ledger.state()
-    armed = read_armed(ledger)
-    terminal_nodes = WS.route_terminal_nodes(route)
-    gates = terminal_gate_state(route)
-    node_states = state["nodes"]
-    running = [node for node, row in node_states.items() if row.get("state") == "RUNNING"]
-    failed = {node: row for node, row in node_states.items()
-              if str(row.get("state", "")).startswith("FAILED")}
+def _stage_projection(route, node_states):
+    """Current running nodes and the declared-but-not-yet-satisfied next stage.
+
+    Shared by `status` and `survey` so both report the same stage projection from the
+    same node-state dict, instead of two independently maintained copies drifting apart.
+    """
+    running = sorted(node for node, row in node_states.items() if row.get("state") == "RUNNING")
     next_stage = sorted({successor
                          for node, row in node_states.items()
                          if row.get("state") == "STAGE_SUCCEEDED"
@@ -620,6 +612,20 @@ def cmd_status(args):
             if node["id"] not in node_states
             and set(node.get("depends_on") or []) <= satisfied
         })
+    return running, next_stage
+
+
+def cmd_status(args):
+    route = load_route(args.route)
+    ledger = ledger_for(route)
+    state = ledger.state()
+    armed = read_armed(ledger)
+    terminal_nodes = WS.route_terminal_nodes(route)
+    gates = terminal_gate_state(route)
+    node_states = state["nodes"]
+    failed = {node: row for node, row in node_states.items()
+              if str(row.get("state", "")).startswith("FAILED")}
+    running, next_stage = _stage_projection(route, node_states)
     derived = WS.derive_workflow_state(
         node_states, terminal_nodes,
         terminal_gates_passed=bool(gates) and all(row["passed"] for row in gates.values()),
@@ -699,6 +705,281 @@ def cmd_complete(args):
     return 0
 
 
+# --------------------------------------------------------------------------------
+# survey: read-only, root-scoped "what is stuck" report
+# --------------------------------------------------------------------------------
+
+def _iso_to_epoch(value):
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def resource_liveness_readonly(armed):
+    """Read-only liveness for a resource predecessor: registry parse + `classify_identity()`
+    only. Never calls `runner().settle()` -- settling can persist terminal state, which a
+    read-only survey must not do."""
+    registry_path = armed.get("resource_registry")
+    if not registry_path:
+        return {"liveness": "unknown", "reason": "resource-registry-not-recorded"}
+    try:
+        data = json.loads(Path(registry_path).read_text(encoding="utf-8"))
+        row = (data.get("runs") or {}).get(armed.get("predecessor_id"))
+    except (OSError, ValueError) as exc:
+        return {"liveness": "unknown", "reason": f"resource-registry-unreadable:{exc}"}
+    if not isinstance(row, dict):
+        return {"liveness": "unknown", "reason": "resource-run-absent"}
+    liveness, _current, reason = RR.classify_identity(row)
+    return {"liveness": liveness, "reason": reason}
+
+
+def predecessor_liveness_readonly(armed):
+    """Read-only liveness for either predecessor kind, without settling anything.
+
+    `registered_evidence()` is already a pure read (jobs-registry parse plus a live PID
+    probe), so it is reused as-is; only the resource path needed a settle-free variant.
+    """
+    if armed.get("predecessor_kind") == "resource":
+        info = resource_liveness_readonly(armed)
+        return {"kind": "resource", "liveness": info["liveness"], "reason": info["reason"]}
+    evidence = registered_evidence(armed)
+    if not evidence.get("terminal"):
+        liveness = "working"
+    elif evidence.get("quiescent") is False:
+        liveness = "working"
+    else:
+        liveness = "exited"
+    return {"kind": "registered", "liveness": liveness, "reason": evidence.get("reason")}
+
+
+def _has_claim_or_progress(node_states, claims, node_id, successors):
+    """A claim naming this predecessor/successor pair, or any recorded successor node
+    state at all, both mean something already owns the advance -- read-only, no exact
+    predecessor-identity recomputation required."""
+    for row in claims.values():
+        if isinstance(row, dict) and row.get("predecessor") == node_id and row.get("successor") in successors:
+            return True
+    return any((node_states.get(successor) or {}).get("state") for successor in successors)
+
+
+def _diagnostic_row(diagnostic):
+    """A malformed/unreadable route candidate stays visible as its own `unknown` row --
+    D-2 discovery drops it silently today; survey must not repeat that silence."""
+    location = diagnostic.get("location")
+    return {
+        "route_id": None, "route_file": diagnostic.get("path"), "location": location,
+        "read_only": location in route_module()._LEGACY_LOCATIONS if location else None,
+        "closed": None, "route_read": {"status": "unknown", "reason": diagnostic.get("reason")},
+        "workflow_state": "unknown", "derived_workflow_state": "unknown",
+        "current_stage": [], "next_stage": [], "terminal_nodes": [],
+        "terminal_gate_proven": None, "terminal_gates": {},
+        "armed": {}, "claims": {},
+        "evidence_freshness": {"newest_at": None, "age_seconds": None, "stale": True},
+        "risk": {"tier": "unknown", "score": 0, "reasons": [diagnostic.get("reason")]},
+    }
+
+
+def _survey_route_row(route_row, stale_after_seconds, now):
+    """One ranked survey row for one route candidate `route_status()` already found.
+
+    Re-reads the route file (read-only) for its node graph, recomputes the terminal
+    gate live through the shared `capability-route.py` seam (never from a stored outcome
+    sidecar -- a pre-existing v2 sidecar has no gate fields at all), and derives workflow
+    state through `WorkflowLedger.read_only_state()`, which mutates nothing.
+    """
+    path = route_row["route_file"]
+    try:
+        route = json.loads(Path(path).read_text(encoding="utf-8"))
+        if not isinstance(route, dict) or "route_id" not in route or "nodes" not in route:
+            raise ValueError("route-malformed-missing-required-keys")
+    except (OSError, ValueError) as exc:
+        return {
+            "route_id": route_row.get("route_id"), "route_file": path,
+            "location": route_row.get("location"), "read_only": route_row.get("read_only"),
+            "closed": route_row.get("closed"),
+            "route_read": {"status": "unknown", "reason": f"route-unreadable:{exc}"},
+            "workflow_state": "unknown", "derived_workflow_state": "unknown",
+            "current_stage": [], "next_stage": [], "terminal_nodes": [],
+            "terminal_gate_proven": None, "terminal_gates": {},
+            "armed": {}, "claims": {},
+            "evidence_freshness": {"newest_at": None, "age_seconds": None, "stale": True},
+            "risk": {"tier": "unknown", "score": 0, "reasons": [f"route-unreadable:{exc}"]},
+        }
+
+    terminal_nodes = WS.route_terminal_nodes(route)
+    gates = route_module().terminal_gate_observation(route)
+    proven = route_module().terminal_gate_proven(gates)
+
+    ledger = ledger_for(route)
+    ledger_state = ledger.read_only_state()
+    entries = ledger.journal()
+    armed = read_armed(ledger)
+    claims = ledger.claims()
+    node_states = ledger_state.get("nodes", {})
+
+    reasons = []
+    ledger_known = True
+    if not ledger_state.get("ledger_dir_exists"):
+        ledger_known = False
+        reasons.append("ledger-absent")
+    elif ledger_state.get("journal_unreadable"):
+        ledger_known = False
+        reasons.append("ledger-unreadable")
+    elif route.get("route_hash") and any(
+            entry.get("route_hash") and entry.get("route_hash") != route.get("route_hash")
+            for entry in entries):
+        ledger_known = False
+        reasons.append("route-hash-mismatch")
+
+    candidates = [t for t in (
+        [_iso_to_epoch(ledger_state.get("updated_at"))]
+        + [_iso_to_epoch(row.get("armed_at")) for row in armed.values()]
+        + [_iso_to_epoch(row.get("claimed_at")) for row in claims.values() if isinstance(row, dict)]
+    ) if t is not None]
+    newest_epoch = max(candidates) if candidates else None
+    age_seconds = (now - newest_epoch) if newest_epoch is not None else None
+    stale = bool(ledger_known and entries and age_seconds is not None
+                and age_seconds > stale_after_seconds)
+    if stale:
+        ledger_known = False
+        reasons.append("evidence-stale")
+    evidence_freshness = {
+        "newest_at": (
+            datetime.fromtimestamp(newest_epoch, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+            if newest_epoch is not None else None
+        ),
+        "age_seconds": age_seconds,
+        "stale": stale,
+    }
+
+    if ledger_known:
+        workflow_state = ledger_state.get("workflow_state", "CREATED")
+        running, next_stage = _stage_projection(route, node_states)
+        derived = WS.derive_workflow_state(
+            node_states, terminal_nodes,
+            terminal_gates_passed=bool(gates) and proven is True,
+            pending_claims=len(claims))
+    else:
+        workflow_state, derived, running, next_stage = "unknown", "unknown", [], []
+
+    open_gate = ledger_known and workflow_state == "BLOCKED_HUMAN_GATE"
+
+    armed_out = {}
+    any_abandoned = False
+    abandoned_external = False
+    any_active = False
+    for node_id, row in armed.items():
+        if ledger_known:
+            liveness_info = predecessor_liveness_readonly(row)
+            claimed_or_progressed = _has_claim_or_progress(
+                node_states, claims, node_id, row.get("successors") or [])
+        else:
+            liveness_info = {"liveness": "unknown", "reason": "ledger-unknown"}
+            claimed_or_progressed = False
+        successor_external = bool(row.get("successor_external"))
+        armed_out[node_id] = {
+            "continuation_kind": row.get("continuation_kind"),
+            "predecessor_kind": row.get("predecessor_kind"),
+            "predecessor_id": row.get("predecessor_id"),
+            "predecessor_liveness": liveness_info.get("liveness"),
+            "successors": row.get("successors") or [],
+            "successor_external": successor_external,
+            "claimed_or_progressed": claimed_or_progressed,
+        }
+        settled = node_states.get(node_id, {}).get("state") in (
+            "STAGE_SUCCEEDED", "FAILED_TERMINAL", "CANCELLED")
+        if (ledger_known and not open_gate and not settled
+                and row.get("continuation_kind") == "supervised"
+                and liveness_info.get("liveness") == "exited"
+                and not claimed_or_progressed):
+            any_abandoned = True
+            abandoned_external = abandoned_external or successor_external
+        if liveness_info.get("liveness") == "working" or claimed_or_progressed:
+            any_active = True
+
+    reasons_out = list(reasons)
+    if any_abandoned:
+        tier = "abandoned"
+        score = 10 + (5 if abandoned_external else 0)
+        reasons_out.append("supervised-predecessor-exited-unclaimed")
+        if abandoned_external:
+            reasons_out.append("successor-external")
+    elif route_row.get("closed") and proven is False:
+        tier, score = "closure-mismatch", 8
+        reasons_out.append("closed-with-unproven-terminal-gate")
+    elif (not route_row.get("closed")) and terminal_nodes and proven is False and ledger_known:
+        tier, score = "stale-open", 5
+        reasons_out.append("open-with-unproven-terminal-gate")
+    elif any_active:
+        tier, score = "active-or-owned", 3
+        reasons_out.append("live-predecessor-or-claimed-successor")
+    elif open_gate:
+        tier, score = "parked", 2
+        reasons_out.append("blocked-human-gate")
+    elif proven is True and (route_row.get("closed") or derived == "COMPLETE"):
+        tier, score = "complete", 0
+        reasons_out.append("terminal-gate-proven")
+    elif not ledger_known:
+        tier, score = "unknown", 1
+    else:
+        tier, score = "unknown", 0
+        reasons_out.append("no-actionable-risk-signal")
+
+    row = {
+        "route_id": route.get("route_id"), "route_file": path,
+        "location": route_row.get("location"), "read_only": route_row.get("read_only"),
+        "closed": route_row.get("closed"), "route_read": {"status": "ok", "reason": None},
+        "workflow_state": workflow_state, "derived_workflow_state": derived,
+        "current_stage": running, "next_stage": next_stage, "terminal_nodes": terminal_nodes,
+        "terminal_gate_proven": proven, "terminal_gates": gates,
+        "armed": armed_out, "claims": claims,
+        "evidence_freshness": evidence_freshness,
+        "risk": {"tier": tier, "score": score, "reasons": reasons_out},
+    }
+    if "duplicate_locations" in route_row:
+        row["duplicate_locations"] = route_row["duplicate_locations"]
+    return row
+
+
+def _survey_sort_key(row):
+    risk = row["risk"]
+    return (RISK_TIER_RANK.get(risk["tier"], len(RISK_TIER_ORDER)), -risk["score"],
+            row.get("route_id") or "", row["route_file"])
+
+
+def cmd_survey(args):
+    if args.stale_after_seconds <= 0:
+        raise SupervisorError("--stale-after-seconds must be a positive float")
+    artifact_root = Path(args.artifact_root).resolve()
+    diagnostics = []
+    route_rows = route_module().route_status(str(artifact_root), diagnostics=diagnostics)
+    now = time.time()
+    rows = [_survey_route_row(row, args.stale_after_seconds, now) for row in route_rows]
+    rows.extend(_diagnostic_row(diagnostic) for diagnostic in diagnostics)
+    rows.sort(key=_survey_sort_key)
+    payload = {
+        "schema_version": SURVEY_SCHEMA_VERSION,
+        "artifact_root": str(artifact_root),
+        "ledger_root": str(WS.default_ledger_root()),
+        "completion_root": str(route_module().resolve_agent_home() / ".dispatch" / "completion"),
+        "stale_after_seconds": args.stale_after_seconds,
+        "rows": rows,
+        "diagnostics": diagnostics,
+    }
+    if args.json:
+        print(json.dumps(payload, sort_keys=True, indent=2))
+    else:
+        for row in rows:
+            print(f"{row['risk']['tier']:16} score={row['risk']['score']:<3} "
+                  f"{row.get('route_id') or row['route_file']} "
+                  f"workflow={row['workflow_state']} closed={row['closed']} "
+                  f"reasons={row['risk']['reasons']}")
+    return 0
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="workflow-supervisor")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -740,6 +1021,11 @@ def build_parser():
 
     complete = sub.add_parser("complete", help="verify terminal gates, then close the workflow")
     complete.add_argument("--route", required=True)
+
+    survey = sub.add_parser("survey", help="read-only, root-scoped abandoned/stuck workflow report")
+    survey.add_argument("--artifact-root", required=True)
+    survey.add_argument("--stale-after-seconds", type=float, default=DEFAULT_STALE_AFTER_SECONDS)
+    survey.add_argument("--json", action="store_true")
     return parser
 
 
@@ -747,7 +1033,7 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
     handler = {
         "arm": cmd_arm, "poll": cmd_poll, "watch": cmd_watch, "gate": cmd_gate,
-        "status": cmd_status, "complete": cmd_complete,
+        "status": cmd_status, "complete": cmd_complete, "survey": cmd_survey,
     }[args.command]
     return handler(args)
 

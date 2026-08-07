@@ -22,12 +22,16 @@ import fcntl
 import hashlib
 import json
 import os
+import sys
 import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "utilities"))
+from dispatch_contract import resolve_agent_home  # noqa: E402
+
 LEDGER_SCHEMA_VERSION = 1
 
 #: Node-level states are the subset of the portable vocabulary one stage can occupy.
@@ -141,12 +145,19 @@ def _atomic_write(path: Path, text: str) -> None:
 
 
 def default_ledger_root() -> Path:
+    """`AGENT_WORKFLOW_ROOT` stays the explicit override; otherwise the ledger root is
+    the same validated agent-home every other dispatch-state writer/reader agrees on.
+
+    A bare `AGENT_HOME`-or-`ROOT` fallback resolves to the *caller's own worktree* when
+    `AGENT_HOME` is unset, silently splitting the ledger from the real install — this is
+    the exact false-clean bug this cycle exists to fix (a linked worktree running
+    `workflow-supervisor.py status` reported `CREATED`/empty instead of the real
+    `RUNNING` state recorded under the actual `AGENT_HOME`).
+    """
     override = os.environ.get("AGENT_WORKFLOW_ROOT")
     if override:
         return Path(override).expanduser()
-    home = os.environ.get("AGENT_HOME")
-    base = Path(home).expanduser() if home else ROOT
-    return base / ".dispatch" / "workflow"
+    return resolve_agent_home() / ".dispatch" / "workflow"
 
 
 class WorkflowLedger:
@@ -242,6 +253,40 @@ class WorkflowLedger:
         if cached != rebuilt and entries:
             _atomic_write(self.state_path, json.dumps(rebuilt, indent=2, sort_keys=True) + "\n")
         return rebuilt
+
+    def read_only_state(self) -> dict:
+        """Derive workflow state from the journal alone, mutating nothing on disk.
+
+        Unlike `state()`, this never repairs `state.json`, never creates the ledger root
+        directory, and never touches locks, claims, armed rows, registry entries, or
+        outcome files -- `journal()` only reads, and `_rebuild()` is pure computation. A
+        read-only survey over a whole artifact root must use this, not `state()`: calling
+        `state()` on a route with a stale cache silently writes a repair, which is a
+        mutation a survey has no business making.
+
+        The returned dict adds three typed markers `state()` does not need:
+        - `ledger_dir_exists`: the route's ledger directory is present at all.
+        - `journal_exists`: `journal.jsonl` specifically is present.
+        - `journal_unreadable`: the journal file exists but every line failed to parse
+          (as opposed to a legitimately empty/absent journal), so a caller can tell
+          "no history yet" from "history is corrupt" instead of treating both as CREATED.
+        """
+        journal_exists = self.journal_path.is_file()
+        entries = self.journal()
+        rebuilt = self._rebuild(entries)
+        raw_nonblank = False
+        if journal_exists:
+            try:
+                raw = self.journal_path.read_text(encoding="utf-8", errors="replace")
+                raw_nonblank = any(line.strip() for line in raw.splitlines())
+            except OSError:
+                raw_nonblank = False
+        return {
+            **rebuilt,
+            "ledger_dir_exists": self.root.is_dir(),
+            "journal_exists": journal_exists,
+            "journal_unreadable": journal_exists and raw_nonblank and not entries,
+        }
 
     def record(self, node: str, state: str, *, evidence=None, workflow_state=None,
                actor="workflow-supervisor") -> dict:

@@ -8,8 +8,10 @@ forward by the supervisor.
 """
 from __future__ import annotations
 
+import contextlib
 import copy
 import importlib.util
+import io
 import json
 import os
 import subprocess
@@ -82,6 +84,15 @@ class WorkflowFixture(unittest.TestCase):
         self.workflow_root = self.base / "workflow"
         self._previous = os.environ.get("AGENT_WORKFLOW_ROOT")
         os.environ["AGENT_WORKFLOW_ROOT"] = str(self.workflow_root)
+        # `terminal_gate_state()` now reads completion markers through
+        # `capability-route.py`'s `resolve_agent_home()`; pin AGENT_HOME to an isolated
+        # temp dir (with the fixture `core/CORE.md` `resolve_agent_home()` requires to
+        # honor the override) so gate reads never touch the real installed home.
+        self.agent_home = self.base / "agent-home"
+        (self.agent_home / "core").mkdir(parents=True)
+        (self.agent_home / "core" / "CORE.md").write_text("fixture\n", encoding="utf-8")
+        self._previous_agent_home = os.environ.get("AGENT_HOME")
+        os.environ["AGENT_HOME"] = str(self.agent_home)
         self.addCleanup(self._restore)
         self.addCleanup(self.tmp.cleanup)
 
@@ -90,6 +101,10 @@ class WorkflowFixture(unittest.TestCase):
             os.environ.pop("AGENT_WORKFLOW_ROOT", None)
         else:
             os.environ["AGENT_WORKFLOW_ROOT"] = self._previous
+        if self._previous_agent_home is None:
+            os.environ.pop("AGENT_HOME", None)
+        else:
+            os.environ["AGENT_HOME"] = self._previous_agent_home
 
     # -- fixtures -------------------------------------------------------------
     def write_route(self, nodes, route_id="rt-fixture0000000", route_hash="sha256:fixture"):
@@ -103,8 +118,8 @@ class WorkflowFixture(unittest.TestCase):
         path.write_text(json.dumps(route, indent=2), encoding="utf-8")
         return route, path
 
-    def two_stage_route(self, continuation=None, human_gate=None):
-        nodes = [
+    def _two_stage_nodes(self, continuation=None):
+        return [
             {"id": "run", "kind": "resource-runner", "depends_on": [],
              "outputs": ["run.json"], "write_scope": ["run.json"],
              "completion_gate": "fixture-run",
@@ -114,7 +129,11 @@ class WorkflowFixture(unittest.TestCase):
              "completion_gate": "fixture-verify", "dispatch_depth": 2,
              "terminal": True, "terminal_gate": "fixture-verify"},
         ]
-        route, path = self.write_route(nodes)
+
+    def two_stage_route(self, continuation=None, human_gate=None,
+                        route_id="rt-fixture0000000", route_hash="sha256:fixture"):
+        nodes = self._two_stage_nodes(continuation)
+        route, path = self.write_route(nodes, route_id=route_id, route_hash=route_hash)
         if human_gate:
             route["human_gates"] = [human_gate]
             route["human_gate_bindings"] = [
@@ -161,6 +180,33 @@ class WorkflowFixture(unittest.TestCase):
         ]
         SUP.main(args)
         return marker
+
+    def arm_external(self, route_path, registry, *, node="run", extra=()):
+        """Arm a supervised watch with no way to start the successor -- the exact
+        BC_ResNet_tf shape: another checked surface is declared to own the start, and
+        nothing actually starts it."""
+        SUP.main([
+            "arm", "--route", str(route_path), "--node", node,
+            "--predecessor-kind", "resource", "--predecessor-id", "fixture-run",
+            "--resource-registry", str(registry), "--successor-external", *extra,
+        ])
+
+    class _SurveyArgs:
+        def __init__(self, artifact_root, stale_after_seconds, json_output):
+            self.artifact_root = str(artifact_root)
+            self.stale_after_seconds = stale_after_seconds
+            self.json = json_output
+
+    def run_survey(self, artifact_root=None, *, stale_after_seconds=None):
+        args = self._SurveyArgs(
+            artifact_root if artifact_root is not None else self.base,
+            stale_after_seconds if stale_after_seconds is not None else SUP.DEFAULT_STALE_AFTER_SECONDS,
+            True,
+        )
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = SUP.cmd_survey(args)
+        return code, json.loads(buf.getvalue())
 
 
 # ---------------------------------------------------------------------------
@@ -845,6 +891,24 @@ class TestCapabilityIntegration(WorkflowFixture):
 class TestRouteClosure(unittest.TestCase):
     """A cycle that edits the registry must still be able to close its own route."""
 
+    def setUp(self):
+        # `close_route`/`route_status` now read completion markers through
+        # `resolve_agent_home()`; isolate AGENT_HOME so those reads never touch the
+        # real installed home.
+        self.tmp_home = tempfile.TemporaryDirectory()
+        (Path(self.tmp_home.name) / "core").mkdir(parents=True)
+        (Path(self.tmp_home.name) / "core" / "CORE.md").write_text("fixture\n", encoding="utf-8")
+        self._previous_agent_home = os.environ.get("AGENT_HOME")
+        os.environ["AGENT_HOME"] = self.tmp_home.name
+        self.addCleanup(self._restore_agent_home)
+
+    def _restore_agent_home(self):
+        if self._previous_agent_home is None:
+            os.environ.pop("AGENT_HOME", None)
+        else:
+            os.environ["AGENT_HOME"] = self._previous_agent_home
+        self.tmp_home.cleanup()
+
     def compile(self, cwd):
         return compile_fixture("autopilot-code", "dev", cwd, ["shared-contract"])
 
@@ -905,6 +969,205 @@ class TestParentResumeOncePerBatch(unittest.TestCase):
                              "a delivered receipt may not wake the parent twice")
             self.assertTrue(join.consume_parent_session_attempt(path, session, "att-two"))
             self.assertFalse(path.exists())
+
+
+# ---------------------------------------------------------------------------
+# D. root-scoped read-only survey (P3)
+# ---------------------------------------------------------------------------
+class TestSurveyLedgerRoot(unittest.TestCase):
+    """`default_ledger_root()` must resolve through the validated agent-home resolver,
+    not a bare `AGENT_HOME`-or-checkout-`ROOT` fallback -- the exact bug that made a
+    linked-worktree `status` call report `CREATED`/empty for a route that was really
+    `RUNNING` under the actual installed `AGENT_HOME`."""
+
+    def setUp(self):
+        self._previous = {key: os.environ.get(key)
+                          for key in ("AGENT_WORKFLOW_ROOT", "AGENT_HOME", "CLAUDE_HOME", "HOME")}
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        for key, value in self._previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+    def test_default_ledger_root_uses_validated_agent_home(self):
+        for key in ("AGENT_WORKFLOW_ROOT", "AGENT_HOME", "CLAUDE_HOME"):
+            os.environ.pop(key, None)
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "agent_setting" / "core").mkdir(parents=True)
+            (home / "agent_setting" / "core" / "CORE.md").write_text("fixture\n", encoding="utf-8")
+            os.environ["HOME"] = str(home)
+            # Red before P3: the old fallback returned the utility checkout `ROOT`
+            # (this repo's own worktree), never the real installed `agent_setting`.
+            self.assertEqual(WS.default_ledger_root(),
+                             home / "agent_setting" / ".dispatch" / "workflow")
+            self.assertNotEqual(WS.default_ledger_root(), WS.ROOT / ".dispatch" / "workflow")
+
+    def test_agent_workflow_root_override_still_takes_precedence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            override = Path(tmp) / "explicit-workflow-root"
+            os.environ["AGENT_WORKFLOW_ROOT"] = str(override)
+            os.environ["AGENT_HOME"] = str(Path(tmp) / "unrelated-home")
+            self.assertEqual(WS.default_ledger_root(), override)
+
+
+class TestSurvey(WorkflowFixture):
+    def test_survey_ranks_exited_unclaimed_external_watch_as_abandoned(self):
+        # The exact BC_ResNet_tf shape: a fresh supervised watch, exact exited resource
+        # predecessor, `successor_external: true`, no claim, no successor progress, and
+        # an unproven terminal gate.
+        route, path = self.two_stage_route()
+        registry = self.resource_registry(exit_code=0)
+        self.arm_external(path, registry)
+        code, payload = self.run_survey()
+        self.assertEqual(code, 0)
+        self.assertTrue(payload["rows"])
+        top = payload["rows"][0]
+        self.assertEqual(top["route_id"], route["route_id"])
+        self.assertEqual(top["risk"]["tier"], "abandoned")
+        self.assertTrue(top["armed"]["run"]["successor_external"])
+        self.assertEqual(top["armed"]["run"]["predecessor_liveness"], "exited")
+        self.assertFalse(top["armed"]["run"]["claimed_or_progressed"])
+        self.assertIs(top["terminal_gate_proven"], False)
+        self.assertEqual(payload["ledger_root"], str(self.workflow_root))
+        self.assertEqual(payload["completion_root"],
+                         str(self.agent_home / ".dispatch" / "completion"))
+
+    def test_survey_false_positive_matrix(self):
+        # (a) an open human gate must never rank abandoned, even with an otherwise
+        # identical exited/external/unclaimed watch.
+        route_a, path_a = self.two_stage_route(human_gate="run-authorization")
+        registry_a = self.resource_registry(exit_code=0)
+        self.arm_external(path_a, registry_a)
+        SUP.main(["gate", "--route", str(path_a), "--gate", "run-authorization", "--block"])
+        _code, payload_a = self.run_survey()
+        row_a = next(row for row in payload_a["rows"] if row["route_id"] == route_a["route_id"])
+        self.assertNotEqual(row_a["risk"]["tier"], "abandoned")
+
+        # (b) a matching claim for the successor is a claimed external handoff, not
+        # abandonment.
+        route_b, path_b = self.two_stage_route(
+            route_id="rt-fixtureclaimedb", route_hash="sha256:fixtureclaimedb")
+        registry_b = self.resource_registry(exit_code=0)
+        self.arm_external(path_b, registry_b)
+        ledger_b = SUP.ledger_for(route_b)
+        ledger_b.claim("b" * 32, {"route_id": route_b["route_id"], "predecessor": "run",
+                                  "successor": "verify"})
+        _code, payload_b = self.run_survey()
+        row_b = next(row for row in payload_b["rows"] if row["route_id"] == route_b["route_id"])
+        self.assertNotEqual(row_b["risk"]["tier"], "abandoned")
+        self.assertTrue(row_b["armed"]["run"]["claimed_or_progressed"])
+
+        # (c) evidence older than the stale bound demotes to unknown, never abandoned.
+        route_c, path_c = self.two_stage_route(
+            route_id="rt-fixturestalec0", route_hash="sha256:fixturestalec0")
+        registry_c = self.resource_registry(exit_code=0)
+        self.arm_external(path_c, registry_c)
+        _code, payload_c = self.run_survey(stale_after_seconds=1e-6)
+        row_c = next(row for row in payload_c["rows"] if row["route_id"] == route_c["route_id"])
+        self.assertNotEqual(row_c["risk"]["tier"], "abandoned")
+        self.assertTrue(row_c["evidence_freshness"]["stale"])
+
+        # `successor_external` changes score, never tier, among genuinely abandoned rows.
+        route_d, path_d = self.two_stage_route(
+            route_id="rt-fixtureexternal", route_hash="sha256:fixtureexternal")
+        registry_d = self.resource_registry(exit_code=0)
+        self.arm_external(path_d, registry_d)
+        route_e, path_e = self.two_stage_route(
+            route_id="rt-fixturenoexternal", route_hash="sha256:fixturenoexternal")
+        registry_e = self.resource_registry(exit_code=0)
+        marker = self.base / "successor-started-e"
+        SUP.main([
+            "arm", "--route", str(path_e), "--node", "run",
+            "--predecessor-kind", "resource", "--predecessor-id", "fixture-run",
+            "--resource-registry", str(registry_e),
+            "--successor-command", json.dumps([
+                sys.executable, "-c",
+                f"import contextlib\nwith contextlib.suppress(OSError):\n"
+                f"    open({str(marker)!r},'a').write('x')",
+            ]),
+        ])
+        _code, payload_de = self.run_survey()
+        row_d = next(row for row in payload_de["rows"] if row["route_id"] == route_d["route_id"])
+        row_e = next(row for row in payload_de["rows"] if row["route_id"] == route_e["route_id"])
+        self.assertEqual(row_d["risk"]["tier"], "abandoned")
+        self.assertEqual(row_e["risk"]["tier"], "abandoned")
+        self.assertGreater(row_d["risk"]["score"], row_e["risk"]["score"])
+
+    def test_survey_keeps_unknown_and_corrupt_rows_fail_soft(self):
+        good_route, _good_path = self.two_stage_route(
+            route_id="rt-fixturenoledger", route_hash="sha256:fixturenoledger")
+        corrupt_route, _corrupt_path = self.two_stage_route(
+            route_id="rt-fixturecorrupt0", route_hash="sha256:fixturecorrupt0")
+        corrupt_ledger = SUP.ledger_for(corrupt_route)
+        corrupt_ledger.journal_path.parent.mkdir(parents=True, exist_ok=True)
+        corrupt_ledger.journal_path.write_text("not-json\nnot-json-either\n", encoding="utf-8")
+        malformed_path = self.base / "not-a-route.json"
+        malformed_path.write_text(json.dumps({"note": "not a compiled route"}), encoding="utf-8")
+
+        code, payload = self.run_survey()
+        self.assertEqual(code, 0)
+        rows_by_id = {row["route_id"]: row for row in payload["rows"]}
+        self.assertEqual(rows_by_id[good_route["route_id"]]["risk"]["tier"], "unknown")
+        self.assertIn("ledger-absent", rows_by_id[good_route["route_id"]]["risk"]["reasons"])
+        self.assertEqual(rows_by_id[corrupt_route["route_id"]]["risk"]["tier"], "unknown")
+        self.assertIn("ledger-unreadable", rows_by_id[corrupt_route["route_id"]]["risk"]["reasons"])
+        unknown_paths = {row["route_file"] for row in payload["rows"] if row["route_id"] is None}
+        self.assertIn(str(malformed_path), unknown_paths)
+        self.assertTrue(any(d["path"] == str(malformed_path) for d in payload["diagnostics"]))
+
+    def test_survey_is_read_only_on_cache_mismatch(self):
+        route, path = self.two_stage_route()
+        registry = self.resource_registry(exit_code=0)
+        self.arm_external(path, registry)
+        ledger = SUP.ledger_for(route)
+        ledger.claim("a" * 32, {"route_id": route["route_id"], "predecessor": "run",
+                                "successor": "verify"})
+        stale_cache = {
+            "schema_version": WS.LEDGER_SCHEMA_VERSION, "route_id": route["route_id"],
+            "route_hash": route.get("route_hash", ""), "workflow_state": "CREATED",
+            "nodes": {}, "journal_entries": 0, "updated_at": None,
+        }
+        ledger.state_path.write_text(json.dumps(stale_cache), encoding="utf-8")
+
+        def snapshot():
+            rows = {}
+            for candidate in sorted(self.base.rglob("*")):
+                if candidate.is_file():
+                    info = candidate.stat()
+                    rows[str(candidate)] = (candidate.read_bytes(), info.st_size, info.st_mtime_ns)
+            return rows
+
+        before = snapshot()
+        code, _payload = self.run_survey()
+        after = snapshot()
+        self.assertEqual(code, 0)
+        self.assertEqual(before, after)
+        # `state()` (the mutating path) would have repaired this cache; confirm the
+        # read-only survey really left it exactly as planted.
+        self.assertEqual(json.loads(ledger.state_path.read_text(encoding="utf-8")), stale_cache)
+
+    def test_survey_preserves_canonical_and_legacy_discovery(self):
+        route = compile_fixture("autopilot-lab", "setup", str(self.base), ["resource-run"])
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            canonical = ROUTE.canonical_routes_dir(root) / f"{route['route_id']}.json"
+            ROUTE.write_once(canonical, route)
+            legacy = root / "routes" / f"{route['route_id']}.json"
+            ROUTE.write_once(legacy, route)
+            _code, payload = self.run_survey(artifact_root=root)
+            rows = {row["route_file"]: row for row in payload["rows"]}
+            c_row = rows[str(canonical)]
+            l_row = rows[str(legacy)]
+            self.assertEqual(c_row["location"], "canonical")
+            self.assertFalse(c_row["read_only"])
+            self.assertEqual(l_row["location"], "legacy-routes")
+            self.assertTrue(l_row["read_only"])
+            self.assertIn("duplicate_locations", c_row)
+            self.assertIn("duplicate_locations", l_row)
 
 
 if __name__ == "__main__":
