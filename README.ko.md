@@ -136,36 +136,22 @@ curl -fsSL https://github.com/dmlguq456/hearting/releases/download/v2.0.0/instal
 세 런타임의 대화형 session과 dispatch된 worker를 **하나의 트리**로 보여줍니다 —
 대시보드 세 개를 서로 맞춰볼 필요가 없습니다.
 
-```text
- usage  claude  5h ━━━━━━━━──── 71%   7d ━━━━━━━━━━── 88% ↻ 3d23h
-        codex   5h ────────────  —    7d ━━━━━━━━━━━━ 100% ↻ 2d16h
- fleet  ⠧ 2 working   ● 12 idle   ↳ 4 jobs (3 working)
-────────────────────────────────────────────────────────────────────────────
- SESSIONS
+<p align="center">
+  <img src="docs/fleet.svg" alt="fleet — a live cross-harness view. An owner session dispatches execute, impl-review and failure-mode workers at depth two, each with its own sealed model profile and context gauge." width="100%">
+</p>
 
- ● hearting/  🚧 3  🧠 1
- ▍ ⠧ claude code   Promote Fleet on the landing page        (main)
- ▍   16h01m        Opus 5 (xhigh)
- ▍   working  ━━━━━━━━──────── 53%
- ▍ ● codex         Dispatch column widths                   (main)
- ▍   1d6h          gpt-5.6 (xhigh)
- ▍   idle     ━─────────────── 12%
- ▍ ● claude code   OpenCode parity fixes  ▾2    (opencode-parity)
- ▍   7h18m         Fable 5 (high)                    ⚙ python3 1h43m
- ▍   idle     ━━━━━━━───────── 46%
- ▍     ⠧ claude code  Execute stage           (opencode-parity)
- ▍        code(debug·standard·owner) / mp:deep / unit:_kernel/owner
- ▍        execute › impl-review › test › report
- ▍        working ━━━───────────── 21%
- ▍        ↳ ⠧ claude code  dispatch_v20 regression
- ▍             code-execute(standard) / mp:light / unit:dev/backend
- ▍             working ━━────────────── 11%
-```
+가운데를 위에서 아래로 훑으면 dispatch 계약이 한 그림에 들어옵니다. 밝은 행이
+depth 0의 메인 session입니다. 그 아래 레일에 붙은 것이 depth 1로 분사된 owner —
+봉인된 route와 `mp:deep`, 그리고 `execute`에 체크가 찍힌 stage 파이프라인을
+달고 있습니다. 다시 그 아래, 한 단계 더 어두운 것들이 그 owner가 띄운 depth 2
+stage worker입니다. `mp:light`로 도는 `code-execute`는 아직 실행 중,
+`impl-review`는 다른 harness에서 완료, `failure-mode`는 입력 대기로 blocked.
+**depth가 밝기로 읽히기 때문에** 연결선 하나 없이도 3단 트리가 그대로 보입니다.
 
 각 행은 어느 harness에서 도는지, 그 노드의 route가 봉인한 model profile이
 무엇인지, context가 얼마나 남았는지, 얼마나 오래 붙잡고 있는지를 함께 보여줍니다.
-dispatch된 stage는 자기를 띄운 owner 아래에 중첩되므로, 멈춘 worker가 "조용해진
-session"이 아니라 **worker로** 드러납니다. 고아 행도 버리지 않고 표시합니다.
+멈춘 worker가 "조용해진 session"이 아니라 **worker로** 드러나고, 고아 행도
+버리지 않고 표시합니다.
 
 전체 화면 뷰에는 `curses`가 필요합니다. `fleet --once`는 단순 스냅숏을,
 `fleet --json`은 같은 상태를 기계 판독 형태로 내보내므로 Python이 도는 곳이면

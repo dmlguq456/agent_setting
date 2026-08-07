@@ -141,37 +141,23 @@ See [capabilities/README.md](capabilities/README.md) for every entrypoint and
 so it shows interactive sessions and dispatched workers from all three runtimes
 in one tree — not three dashboards you have to reconcile.
 
-```text
- usage  claude  5h ━━━━━━━━──── 71%   7d ━━━━━━━━━━── 88% ↻ 3d23h
-        codex   5h ────────────  —    7d ━━━━━━━━━━━━ 100% ↻ 2d16h
- fleet  ⠧ 2 working   ● 12 idle   ↳ 4 jobs (3 working)
-────────────────────────────────────────────────────────────────────────────
- SESSIONS
+<p align="center">
+  <img src="docs/fleet.svg" alt="fleet — a live cross-harness view. An owner session dispatches execute, impl-review and failure-mode workers at depth two, each with its own sealed model profile and context gauge." width="100%">
+</p>
 
- ● hearting/  🚧 3  🧠 1
- ▍ ⠧ claude code   Promote Fleet on the landing page        (main)
- ▍   16h01m        Opus 5 (xhigh)
- ▍   working  ━━━━━━━━──────── 53%
- ▍ ● codex         Dispatch column widths                   (main)
- ▍   1d6h          gpt-5.6 (xhigh)
- ▍   idle     ━─────────────── 12%
- ▍ ● claude code   OpenCode parity fixes  ▾2    (opencode-parity)
- ▍   7h18m         Fable 5 (high)                    ⚙ python3 1h43m
- ▍   idle     ━━━━━━━───────── 46%
- ▍     ⠧ claude code  Execute stage           (opencode-parity)
- ▍        code(debug·standard·owner) / mp:deep / unit:_kernel/owner
- ▍        execute › impl-review › test › report
- ▍        working ━━━───────────── 21%
- ▍        ↳ ⠧ claude code  dispatch_v20 regression
- ▍             code-execute(standard) / mp:light / unit:dev/backend
- ▍             working ━━────────────── 11%
-```
+Read the middle of that view top to bottom and you have the dispatch contract
+in one picture. The bright row is a main session at depth 0. Under it, on the
+rail, sits the owner it dispatched at depth 1 — carrying its sealed route,
+`mp:deep`, and the stage pipeline with `execute` already ticked. Under that,
+dimmer again, are the depth-2 stage workers that owner started: `code-execute`
+on `mp:light` still running, `impl-review` done on a different harness,
+`failure-mode` blocked and waiting. Depth reads as brightness, so a three-level
+tree stays legible without a single connector line.
 
 Each row carries the harness it runs on, the model profile its route sealed for
 that node, how much context it has left, and how long it has been at it. A
-dispatched stage nests under the owner that started it, so a stalled worker is
-visible as a worker rather than as a session that mysteriously went quiet.
-Orphaned rows are surfaced instead of dropped.
+stalled worker is visible as a worker rather than as a session that
+mysteriously went quiet, and orphaned rows are surfaced instead of dropped.
 
 The full-screen view needs `curses`. `fleet --once` prints a plain snapshot and
 `fleet --json` emits the same state for scripting, so both work anywhere Python
