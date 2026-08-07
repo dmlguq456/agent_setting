@@ -13,7 +13,7 @@
 
 <p align="center"><strong>English</strong> · <a href="README.ko.md">한국어</a></p>
 
-<p align="center"><a href="https://dmlguq456.github.io/agent_setting/"><strong>Landing page & agent map ↗</strong></a></p>
+<p align="center"><a href="https://dmlguq456.github.io/hearting/"><strong>Landing page & agent map ↗</strong></a></p>
 
 Hearting closes research, planning, implementation, and verification work
 consistently across supported coding-agent runtimes. It is **not a setup for a
@@ -156,7 +156,7 @@ inline` — preserving the route id, write scope, completion gate, and attempt
 identity. The degradation is recorded with its failure class; it is never
 silent.
 
-The [landing page and agent map](https://dmlguq456.github.io/agent_setting/)
+The [landing page and agent map](https://dmlguq456.github.io/hearting/)
 shows the same structure as a diagram.
 
 ## How it works
