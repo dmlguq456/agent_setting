@@ -10,7 +10,9 @@ import unittest
 from unittest import mock
 
 import codex_dispatch_terminal as terminal
-from codex_dispatch_terminal import inspect_terminal_attempt, inspect_terminal_log
+from codex_dispatch_terminal import inspect_terminal_attempt, inspect_terminal_log, wire_record
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures" / "opencode"
 
 
 class CodexDispatchTerminalTest(unittest.TestCase):
@@ -417,6 +419,53 @@ class CodexDispatchTerminalTest(unittest.TestCase):
             (over_broad["exit_code"], over_broad["state"], over_broad["artifact_state"]),
             (4, "error", "unsafe-root"),
         )
+
+
+class OpencodeTerminalRecognitionTest(unittest.TestCase):
+    """Gap 1 (C2): codex_dispatch_terminal now recognizes the opencode
+    step_finish/stop terminal via the shared opencode_terminal_boundary
+    helper (R1 wired into codex_dispatch_terminal._read_terminal)."""
+
+    def test_terminal_stop_fixture_is_verdict_pass(self):
+        parsed = inspect_terminal_log(str(FIXTURES / "terminal-stop.jsonl"))
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed["verdict"], "PASS")
+        self.assertEqual(parsed["terminal_event"], "step_finish")
+
+    def test_terminal_stop_wire_record_is_not_silently_overwritten_to_error(self):
+        # R1: exact-step-finish-stop must be registered in _TERMINAL_SOURCES,
+        # or wire_record() falls through to the catch-all (4, error, ...) row.
+        # Go through inspect_terminal_attempt (as real callers do) so
+        # artifact_state is resolved ("none" here) instead of "unchecked" —
+        # needs a real git worktree + artifact root for _resolve_safe_root.
+        with tempfile.TemporaryDirectory() as base_dir:
+            worktree = Path(base_dir) / "repo"
+            worktree.mkdir()
+            subprocess.run(["git", "init", "-q", str(worktree)], check=True)
+            root = Path(base_dir) / ".agent_reports"
+            root.mkdir()
+            with mock.patch.dict(os.environ, {"AGENT_ARTIFACT_ROOT": str(root)}, clear=False):
+                result = inspect_terminal_attempt(
+                    str(FIXTURES / "terminal-stop.jsonl"),
+                    worktree=worktree,
+                    artifact_root_metadata=root,
+                )
+        self.assertEqual(result["state"], "valid")
+        record = wire_record(result)
+        self.assertNotIn("error\trunt", record)
+        self.assertIn("valid", record)
+        self.assertIn("PASS", record)
+
+    def test_broken_stream_fixture_has_no_terminal_event(self):
+        parsed = inspect_terminal_log(str(FIXTURES / "broken-stream.jsonl"))
+        self.assertIsNone(parsed)
+
+    def test_truncated_permission_reject_fixture_has_no_terminal_event(self):
+        # R2 (dead-permission-reject) is not wired into this reader in C2 —
+        # only the post-exit watcher (dispatch_supervisor_terminal) gains it
+        # in C3. Here the fixture correctly reads as "no exact terminal".
+        parsed = inspect_terminal_log(str(FIXTURES / "truncated-permission-reject.jsonl"))
+        self.assertIsNone(parsed)
 
 
 if __name__ == "__main__":

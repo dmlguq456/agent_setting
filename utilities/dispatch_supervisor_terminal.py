@@ -341,6 +341,20 @@ def classify_supervisor_log(path: str | Path | None, harness: str) -> Supervisor
         rows, _raw_lines = _tail_rows(Path(path))
     except OSError:
         return classify_supervisor_error(harness, "terminal-log-unreadable")
+    if harness == "opencode":
+        # R1 (Gap 1): last step_finish.reason=="stop" is the exact opencode
+        # success terminal. R1 must precede R2 (auto-reject, added in C3) —
+        # once item 1(b) lands, "reject then recover to reason=stop" becomes
+        # the normal path and must not be misclassified as a death. If R1
+        # does not match, fall through to the shared claude/codex loop below
+        # (R3 dispatch.supervisor.error, else R4 terminal-event-missing);
+        # opencode rows never match turn.completed/result so that loop is
+        # harness-safe as-is.
+        boundary_index, final_text = opencode_terminal_boundary(rows)
+        if boundary_index is not None:
+            return _handoff_terminal(
+                final_text, event="step_finish.stop", process_exit=0
+            )
     for index in range(len(rows) - 1, -1, -1):
         row = rows[index]
         event = row.get("type")

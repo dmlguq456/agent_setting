@@ -358,7 +358,7 @@ def main(argv: list[str]) -> int:
             metadata = parse_metadata(pipe)
             harness = metadata.get("harness", "")
             terminal = None
-            if harness in {"", "codex", "claude"} and metadata.get("log_file"):
+            if harness in {"", "codex", "claude", "opencode"} and metadata.get("log_file"):
                 terminal = inspect_terminal_attempt(
                     metadata.get("log_file"),
                     worktree=worktree,

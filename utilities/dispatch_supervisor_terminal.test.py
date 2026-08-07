@@ -180,15 +180,46 @@ class OpencodeTerminalVocabularyTest(unittest.TestCase):
         self.assertIsNone(SUPERVISOR.opencode_last_step_finish_reason(rows))
         self.assertEqual(SUPERVISOR.opencode_truncation_evidence(raw), "")
 
-    def test_classify_supervisor_log_is_unchanged_for_claude_and_codex(self):
-        # C1 is action-neutral: classify_supervisor_log does not yet consult
-        # the new opencode helpers (that lands in C2). This locks the
-        # pre-Gap-1 fallback for opencode paths too, so the C2 diff is visible.
+class OpencodeGap1TerminalClassificationTest(unittest.TestCase):
+    """Gap 1 (C2): classify_supervisor_log now recognizes the opencode
+    step_finish/stop terminal (R1) via the harness=="opencode" branch."""
+
+    def test_terminal_stop_classifies_as_completed_supervisor_pass(self):
         result = SUPERVISOR.classify_supervisor_log(
             str(FIXTURES / "terminal-stop.jsonl"), "opencode"
         )
+        self.assertEqual(result.note, "completed-supervisor")
+        self.assertEqual(result.failure_class, "pass")
+        self.assertEqual(result.reconcile_reason, "exact-final-handoff")
+
+    def test_broken_stream_still_classifies_as_dead_protocol(self):
+        result = SUPERVISOR.classify_supervisor_log(
+            str(FIXTURES / "broken-stream.jsonl"), "opencode"
+        )
         self.assertEqual(result.note, "dead-protocol")
         self.assertEqual(result.reconcile_reason, "terminal-event-missing")
+
+    def test_truncated_permission_reject_still_falls_to_dead_protocol_pre_c3(self):
+        # R2 (typed dead-permission-reject) is not wired in yet — that is
+        # Step 3.1 (C3). Until then this fixture correctly falls through R1
+        # (no reason==stop) to R4 (no dispatch.supervisor.error row either).
+        result = SUPERVISOR.classify_supervisor_log(
+            str(FIXTURES / "truncated-permission-reject.jsonl"), "opencode"
+        )
+        self.assertEqual(result.note, "dead-protocol")
+        self.assertEqual(result.reconcile_reason, "terminal-event-missing")
+
+    def test_claude_and_codex_classification_is_unaffected(self):
+        # The opencode branch is gated on harness=="opencode"; feeding the
+        # same opencode-shaped fixture through the claude/codex harness
+        # labels must still fall through to the pre-existing loop untouched.
+        for harness in ("claude", "codex"):
+            with self.subTest(harness=harness):
+                result = SUPERVISOR.classify_supervisor_log(
+                    str(FIXTURES / "terminal-stop.jsonl"), harness
+                )
+                self.assertEqual(result.note, "dead-protocol")
+                self.assertEqual(result.reconcile_reason, "terminal-event-missing")
 
 
 if __name__ == "__main__":
