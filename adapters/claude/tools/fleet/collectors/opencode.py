@@ -27,6 +27,20 @@ _REG_TTL = 300.0
 _MESSAGE_TABLES = ("message", "session_message", "part")
 
 
+def _attempt_sidecar_fallback(sess):
+    """Exact-attempt sidecar fallback (SD-95): a registered dispatch session has
+    no statusline producer for its runtime sid; the dispatch summary owner
+    writes under the attempt sid. attempt_id is exact env/registry identity."""
+    attempt_sid = titles.attempt_sid(getattr(sess, "attempt_id", None))
+    if not attempt_sid:
+        return
+    if not getattr(sess, "title", None):
+        sess.title = titles.fresh_title(attempt_sid, harness="opencode")
+    if not getattr(sess, "summary", None):
+        sess.summary, sess.summary_ts = titles.fresh_summary_with_ts(
+            attempt_sid, harness="opencode")
+
+
 def _message_table(con):
     """Choose one compatible table in fixed order; no schema guessing by recency."""
     for table in _MESSAGE_TABLES:
@@ -198,6 +212,7 @@ def enrich(sess):
         if con is not None:
             con.close()
     if not row:
+        _attempt_sidecar_fallback(sess)
         return
     sid, slug, agent, model_j, cost, ti, to, tr, tupd, _parent = row
     sidecar_title = titles.fresh_title(sid, harness="opencode")
@@ -208,6 +223,7 @@ def enrich(sess):
     if sidecar_summary:
         sess.summary = sidecar_summary
         sess.summary_ts = sidecar_summary_ts
+    _attempt_sidecar_fallback(sess)
     sess.subagents = subagents
     if sid:
         sess.session_id = sid

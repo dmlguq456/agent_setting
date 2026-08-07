@@ -58,6 +58,18 @@ def lock_path(sid, harness="claude"):
     return os.path.join(titles_dir(harness), ".lock-" + _safe_key(sid, "session id"))
 
 
+def attempt_sid(attempt_id):
+    """Sidecar sid the dispatch summary owner (SD-95) writes for one exact
+    registered attempt, or ``None`` for a missing/malformed attempt id.
+
+    A registered worker session runs no statusline producer, so its own runtime
+    sid never gains a sidecar; the attempt-owned record is the only producer.
+    """
+    if not isinstance(attempt_id, str) or not _SAFE_KEY_RE.match(attempt_id):
+        return None
+    return "dispatch-" + attempt_id
+
+
 def _legacy_claude_path(sid):
     home = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
     return os.path.join(home, ".fleet-titles", _safe_key(sid, "session id") + ".json")

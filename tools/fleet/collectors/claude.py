@@ -559,6 +559,13 @@ def enrich(sess):
     # 3a) A fresh neutral sidecar overrides the AI title; failures pass through safely.
     from fleet import titles                      # Deferred import; no cycle, standard library only.
     st = titles.fresh_title(sid, harness="claude") if sid else None
+    # 3a') Exact-attempt fallback: a registered dispatch session (depth-1 owner or
+    # depth-2 worker) runs no statusline producer, so its runtime sid has no
+    # sidecar — the SD-95 dispatch summary owner writes under the attempt sid
+    # instead. attempt_id is exact env/registry identity, never a cwd/pid guess.
+    attempt_sid = titles.attempt_sid(sess.attempt_id)
+    if not st and attempt_sid:
+        st = titles.fresh_title(attempt_sid, harness="claude")
     if st:
         sess.title = st
     # 3b) F-14 ai-title fallback — own `<sid>.jsonl` only. A sid-less row's `path` is the
@@ -574,6 +581,9 @@ def enrich(sess):
     # 3c) F-16/F-17 merge — live one-sentence subtitle from the same sidecar/haiku call.
     sess.summary, sess.summary_ts = (
         titles.fresh_summary_with_ts(sid, harness="claude") if sid else (None, None))
+    if sess.summary is None and attempt_sid:
+        sess.summary, sess.summary_ts = titles.fresh_summary_with_ts(
+            attempt_sid, harness="claude")
 
     # 4) provenance (F-26) — resolved LAST, and only for a session that has no title. A titled
     # session already says what it is; "who launched this?" is only an open question for a row

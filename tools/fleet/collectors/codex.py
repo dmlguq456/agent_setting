@@ -1065,6 +1065,18 @@ def enrich(sess, tick=None):
         )
         if subagent_index is not None:
             sess.subagents = subagent_index.get(sess.session_id, [])
+    # Exact-attempt fallback (SD-95): a registered dispatch session has no
+    # statusline producer for its runtime sid; the dispatch summary owner
+    # writes under the attempt sid. attempt_id is exact env/registry identity.
+    if not getattr(sess, "summary", None) or not getattr(sess, "title", None):
+        from fleet import titles
+        attempt_sid = titles.attempt_sid(getattr(sess, "attempt_id", None))
+        if attempt_sid:
+            if not sess.title:
+                sess.title = titles.fresh_title(attempt_sid, harness="codex")
+            if not sess.summary:
+                sess.summary, sess.summary_ts = titles.fresh_summary_with_ts(
+                    attempt_sid, harness="codex")
     try:
         sess.mtime = os.path.getmtime(path)
     except OSError:
