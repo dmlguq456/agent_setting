@@ -1277,6 +1277,13 @@ def _parse_opencode_attempt_tail(path):
     the prompt the model actually saw on that request — the same context-side definition
     the session-level opencode collector uses.  ``output``/``reasoning`` are excluded, and
     the per-step numbers are never summed: a bounded tail cannot prove a session total.
+
+    No ``exec_tool`` is derived here, and that is a schema fact rather than an omission:
+    opencode publishes a ``tool_use`` event only once the call has already finished.
+    Across six real attempt logs every one of 400+ tool events carried a ``state.status``
+    of ``completed`` or ``error`` and never an in-flight state, so claude's tool_use ↔
+    tool_result pairing has no opencode counterpart.  Reporting the last finished tool as
+    ``exec`` would assert it is still running, so the field stays absent instead.
     """
     try:
         st = os.stat(path)

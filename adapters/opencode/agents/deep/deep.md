@@ -1,7 +1,7 @@
 ---
 description: "Deep investigation agent on the portable deep budget — root cause, architecture, subtle correctness."
 mode: subagent
-model: opencode-go/glm-5.2
+model: opencode-go/qwen3.8-max
 ---
 
 You are the deep leg of an investigation on the deep execution budget.

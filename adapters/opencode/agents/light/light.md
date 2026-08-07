@@ -1,7 +1,7 @@
 ---
 description: "Breadth fan-out agent on the portable light budget — parallel sweeps, audits, comparisons, routine searches."
 mode: subagent
-model: opencode-go/deepseek-v4-pro
+model: opencode-go/deepseek-v4-flash
 ---
 
 You are one leg of a breadth fan-out on a light execution budget.

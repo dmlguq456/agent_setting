@@ -50,20 +50,30 @@ def args(adapter: str, profile: str, **overrides):
 class ModelProfileTest(unittest.TestCase):
     def test_portable_profiles_resolve_to_declared_adapter_budgets(self):
         expected = {
+            # mini shares the light model at a lower effort — four profiles, four
+            # distinct operating points, three concrete models.
             "claude": {
                 "deep": ("opus", "xhigh"),
                 "balanced-deep": ("opus", "medium"),
                 "light": ("sonnet", "medium"),
+                "mini": ("sonnet", "low"),
             },
             "codex": {
                 "deep": ("gpt-5.6-sol", "xhigh"),
                 "balanced-deep": ("gpt-5.6-sol", "medium"),
                 "light": ("gpt-5.6-luna", "medium"),
+                "mini": ("gpt-5.6-luna", "low"),
             },
+            # OpenCode's ladder is two operating points, not four: no effort axis
+            # collapses balanced-deep into deep, and this account's tier choice puts
+            # light and mini on the same model. `mini` is asserted here (unlike the
+            # other adapters, where the shared-model case cannot arise) precisely
+            # because that collapse must stay visible if someone re-splits the tiers.
             "opencode": {
-                "deep": ("opencode-go/glm-5.2", "runtime-default"),
+                "deep": ("opencode-go/qwen3.8-max", "runtime-default"),
                 "balanced-deep": ("opencode-go/glm-5.2", "runtime-default"),
-                "light": ("opencode-go/deepseek-v4-pro", "runtime-default"),
+                "light": ("opencode-go/deepseek-v4-flash", "runtime-default"),
+                "mini": ("opencode-go/deepseek-v4-flash", "runtime-default"),
             },
         }
         for adapter, profiles in expected.items():
