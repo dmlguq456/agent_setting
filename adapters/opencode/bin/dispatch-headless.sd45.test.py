@@ -116,8 +116,139 @@ class OpenCodeSD45(unittest.TestCase):
    args=[sys.executable,str(ROOT/"adapters/opencode/bin/dispatch-headless.py"),"--register","--worktree",str(repo),"--slug","opencode-sd45","--capability","autopilot-code","--capability-mode","dev","--worker-mode",node["unit"],"--qa","standard","--intensity","strong","--dispatch-depth","2","--parent","owner","--parent-harness","opencode","--parent-transport","headless","--parent-sandbox","adapter-default","--nested-eligibility","supported","--eligibility-source","opencode-fixture","--fallback-ordinal","1","--route-file",str(path),"--route-id",route["route_id"],"--route-hash",route["route_hash"],"--route-node","execute","--unit",node["unit"],"--registry-digest",route["registry_digest"],"--write-scope",";".join(node["write_scope"]),"--completion-gate",node["completion_gate"],"--model-role",node["role"],"--model-profile",node["model_profile"],"--jobs",str(jobs),"--log-dir",str(logs)]
    env={**{k:v for k,v in os.environ.items() if k!="AGENT_DISPATCH_JOBS"},"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),"OPENCODE_CONFIG_CONTENT":"{}"}
    dry=args.copy(); dry[dry.index("--register")]="--dry-run"; ok=subprocess.run(dry,text=True,capture_output=True,env=env); self.assertEqual(ok.returncode,0,ok.stderr); self.assertIn(f"unit={node['unit']}",ok.stdout)
-   blocked=subprocess.run(args,text=True,capture_output=True,env=env); self.assertEqual(blocked.returncode,69); self.assertIn("reason=opencode-standard-depth2-unsupported",blocked.stdout+blocked.stderr); self.assertFalse(jobs.exists()); self.assertFalse(logs.exists())
+   blocked=subprocess.run(args,text=True,capture_output=True,env=env); self.assertEqual(blocked.returncode,73); self.assertIn("reason=live-parent-not-found",blocked.stdout+blocked.stderr); self.assertFalse(jobs.exists() and jobs.read_text(encoding="utf-8").strip()); self.assertFalse(logs.exists())
    bad=dry.copy(); bad[bad.index("autopilot-code")]="autopilot-lab"; bad[bad.index("dev")]="eval"; denied=subprocess.run(bad,text=True,capture_output=True,env=env); self.assertEqual(denied.returncode,65); self.assertIn("route-capability-mode-mismatch",denied.stdout+denied.stderr)
    legacy=[sys.executable,str(ROOT/"adapters/opencode/bin/dispatch-headless.py"),"--dry-run","--worktree",str(repo),"--slug","opencode-legacy-scope","--capability","autopilot-code","--mode","dev","--qa","standard","--write-scope","source/**","--model","provider/test","--variant","low"]
    compatible=subprocess.run(legacy,text=True,capture_output=True,env=env); self.assertEqual(compatible.returncode,0,compatible.stderr); self.assertIn("status=dry-run",compatible.stdout)
+def delivery_args(**overrides):
+    base = dict(
+        action="start", dispatch_depth=1, launch_lifecycle=WH.DETACHED,
+        execution_surface="registered-headless", registered_worker=True,
+        parent_session_id="sess-parent-1", parent_harness="claude",
+    )
+    base.update(overrides)
+    return argparse.Namespace(**base)
+
+
+class OpenCodeParentCompletionDelivery(unittest.TestCase):
+    # Item 2: opencode's own parent-runtime completion delivery contract,
+    # ported from adapters/codex/bin/dispatch-headless.py minus the
+    # Codex-only managed single-ingress gateway branch.
+    def test_direct_registered_claude_parent_gets_claude_parent_runtime(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            args = delivery_args()
+            self.assertEqual(WH.resolve_parent_completion_delivery(args), "claude-parent-runtime")
+            self.assertEqual(args.parent_completion_reason, "claude-async-rewake-resume")
+
+    def test_direct_registered_non_claude_parent_gets_poll_fallback(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            args = delivery_args(parent_harness="opencode")
+            self.assertEqual(WH.resolve_parent_completion_delivery(args), "poll-fallback")
+            self.assertEqual(args.parent_completion_reason, "parent-identity-unmatched")
+
+    def test_depth_2_child_gets_parent_runtime_supervised(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            args = delivery_args(dispatch_depth=2)
+            self.assertEqual(WH.resolve_parent_completion_delivery(args), "parent-runtime-supervised")
+            self.assertEqual(args.parent_completion_reason, "parent-attempt-owned")
+
+    def test_child_process_marker_forces_parent_runtime_supervised(self):
+        with mock.patch.dict(os.environ, {"AGENT_DISPATCH_CHILD": "1"}, clear=True):
+            args = delivery_args()
+            self.assertEqual(WH.resolve_parent_completion_delivery(args), "parent-runtime-supervised")
+
+    def test_register_action_stdout_carries_the_delivery_receipt(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td); repo = base / "repo"; repo.mkdir()
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            subprocess.run(["git", "-C", str(repo), "config", "user.email", "fixture@example.com"], check=True)
+            subprocess.run(["git", "-C", str(repo), "config", "user.name", "Fixture"], check=True)
+            (repo / "x").write_text("x")
+            subprocess.run(["git", "-C", str(repo), "add", "x"], check=True)
+            subprocess.run(["git", "-C", str(repo), "commit", "-qm", "init"], check=True)
+            art = base / ".agent_reports"; art.mkdir()
+            jobs = base / "jobs.log"; logs = base / "logs"
+            cmd = [
+                sys.executable, str(ROOT / "adapters/opencode/bin/dispatch-headless.py"),
+                "--dry-run", "--worktree", str(repo), "--slug", "oc-delivery-fixture",
+                "--capability", "autopilot-code", "--mode", "dev", "--qa", "standard",
+                "--write-scope", "source/**", "--model", "provider/test", "--variant", "low",
+                "--parent-session-id", "sess-parent-2", "--parent-harness", "claude",
+            ]
+            # Filter AGENT_DISPATCH_JOBS and AGENT_MODEL_GOVERNOR_ROOT: an
+            # inherited ambient value for either points at this session's
+            # real artifact root, not the tmp fixture root, and would fail
+            # resolve_model_governor_root's split-brain check unrelated to
+            # what this test is checking.
+            env = {
+                **{
+                    k: v for k, v in os.environ.items()
+                    if k not in {"AGENT_DISPATCH_JOBS", "AGENT_MODEL_GOVERNOR_ROOT"}
+                },
+                "AGENT_HOME": str(ROOT), "AGENT_ARTIFACT_ROOT": str(art),
+                "OPENCODE_CONFIG_CONTENT": "{}", "AGENT_DISPATCH_CURRENT_HARNESS": "claude",
+            }
+            result = subprocess.run(cmd, text=True, capture_output=True, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("parent_completion_delivery=", result.stdout)
+        self.assertIn("parent_completion_reason=", result.stdout)
+
+
+class OpenCodeParentBindingDryRun(unittest.TestCase):
+    # Item 5-1: the exact parent-binding machinery is ported and wired, but
+    # unreachable while the dispatch_depth==2 fail-closed gate stays in
+    # place (item 5-2/gate lift). At dispatch_depth==1, --parent-attempt-id
+    # must at least parse and echo through stdout as "-" (no binding
+    # attempted at depth 1) without erroring -- that's what this locks.
+    def test_dry_run_accepts_parent_attempt_id_and_echoes_it(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td); repo = base / "repo"; repo.mkdir()
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            subprocess.run(["git", "-C", str(repo), "config", "user.email", "fixture@example.com"], check=True)
+            subprocess.run(["git", "-C", str(repo), "config", "user.name", "Fixture"], check=True)
+            (repo / "x").write_text("x")
+            subprocess.run(["git", "-C", str(repo), "add", "x"], check=True)
+            subprocess.run(["git", "-C", str(repo), "commit", "-qm", "init"], check=True)
+            art = base / ".agent_reports"; art.mkdir()
+            cmd = [
+                sys.executable, str(ROOT / "adapters/opencode/bin/dispatch-headless.py"),
+                "--dry-run", "--worktree", str(repo), "--slug", "oc-parent-binding-fixture",
+                "--capability", "autopilot-code", "--mode", "dev", "--qa", "standard",
+                "--write-scope", "source/**", "--model", "provider/test", "--variant", "low",
+                "--parent-attempt-id", "att-parent-fixture-1",
+            ]
+            env = {
+                **{
+                    k: v for k, v in os.environ.items()
+                    if k not in {"AGENT_DISPATCH_JOBS", "AGENT_MODEL_GOVERNOR_ROOT"}
+                },
+                "AGENT_HOME": str(ROOT), "AGENT_ARTIFACT_ROOT": str(art),
+                "OPENCODE_CONFIG_CONTENT": "{}",
+            }
+            result = subprocess.run(cmd, text=True, capture_output=True, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # dispatch_depth defaults to 1 here, so no binding is attempted --
+        # the parser accepted the flag but there is nothing to resolve yet.
+        self.assertIn("parent_attempt_id=-", result.stdout)
+
+
+class OpenCodePermissionDefault(unittest.TestCase):
+    # Item 1(b): headless "ask" auto-rejects and truncates the session; "deny"
+    # returns a structured tool error instead. Measured 2026-08-07
+    # (dev_logs/section4_permission_deny_experiment.md).
+    def test_default_external_directory_rule_is_deny_not_ask(self):
+        with mock.patch.dict(os.environ, {"OPENCODE_CONFIG_CONTENT": ""}, clear=False):
+            config = json.loads(WH.scoped_external_directory_config("/tmp/fixture-artifact-root"))
+        self.assertEqual(config["permission"]["external_directory"]["*"], "deny")
+
+    def test_explicit_caller_rule_is_preserved(self):
+        with mock.patch.dict(
+            os.environ,
+            {"OPENCODE_CONFIG_CONTENT": json.dumps({"permission": {"external_directory": {"*": "allow"}}})},
+            clear=False,
+        ):
+            config = json.loads(WH.scoped_external_directory_config("/tmp/fixture-artifact-root"))
+        self.assertEqual(config["permission"]["external_directory"]["*"], "allow")
+
+
 if __name__=="__main__": unittest.main()

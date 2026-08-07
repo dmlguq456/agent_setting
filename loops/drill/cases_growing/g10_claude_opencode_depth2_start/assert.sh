@@ -1,5 +1,8 @@
 #!/bin/bash
-# Negative contract: OpenCode standard+ depth-2 creates no row or runtime.
+# Contract: OpenCode standard+ depth-2 is eligible, but without a live
+# depth-1 owner row to bind, exact-parent-binding refuses before any
+# registry row, governor state, or runtime process is created -- the same
+# contract codex/claude depth-2 already enforce.
 set -eu
 WORK=$1
 REPO="$WORK/repo"
@@ -39,9 +42,9 @@ RC=$?
 set -e
 
 printf '%s\n' "$OUTPUT"
-[ "$RC" -eq 69 ] || { echo "FAIL: expected exit 69, got $RC"; exit 1; }
+[ "$RC" -eq 73 ] || { echo "FAIL: expected exit 73, got $RC"; exit 1; }
 printf '%s\n' "$OUTPUT" | grep -qx 'check=failed'
-printf '%s\n' "$OUTPUT" | grep -qx 'reason=opencode-standard-depth2-unsupported'
+printf '%s\n' "$OUTPUT" | grep -qx 'reason=live-parent-not-found'
 printf '%s\n' "$OUTPUT" | grep -qx 'child_spawned=0'
 
 if [ -e "$GOVERNOR_ROOT" ]; then
@@ -52,8 +55,8 @@ if [ -e "$RUNTIME_SENTINEL" ]; then
   echo "FAIL: blocked OpenCode child started a runtime process"
   exit 1
 fi
-if [ -e "$JOBS" ]; then
-  echo "FAIL: blocked OpenCode child created a registry"
+if [ -s "$JOBS" ]; then
+  echo "FAIL: blocked OpenCode child wrote a registry row"
   exit 1
 fi
 if find "$LOG_DIR" -type f -print -quit | grep -q .; then
@@ -72,5 +75,5 @@ from fleet.collectors import dispatch
 
 jobs = dispatch.collect(jobs_path=os.environ["JOBS"])
 assert all(job.slug != os.environ["SLUG"] for job in jobs)
-print("PASS: OpenCode dispatch-depth-2 --start fails closed with zero registry/governor/runtime/prompt/log/Fleet child")
+print("PASS: OpenCode dispatch-depth-2 --start without a live parent fails closed with zero registry/governor/runtime/prompt/log/Fleet child")
 PY

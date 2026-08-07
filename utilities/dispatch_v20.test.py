@@ -431,7 +431,7 @@ class DispatchV20ConformanceTest(unittest.TestCase):
         g10 = (
             ROOT / "loops/drill/cases_growing/g10_claude_opencode_depth2_start/assert.sh"
         ).read_text(encoding="utf-8")
-        self.assertIn("opencode-standard-depth2-unsupported", g10)
+        self.assertIn("live-parent-not-found", g10)
         self.assertIn("child_spawned=0", g10)
         self.assertIn("zero registry/governor/runtime/prompt/log/Fleet child", g10)
 

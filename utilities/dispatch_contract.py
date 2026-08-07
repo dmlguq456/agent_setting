@@ -2448,6 +2448,8 @@ def headless_attempt_policy(
         "fallback_ordinal": fallback_ordinal,
         "quick": False,
         "terminal_attempt_limit": None,
+        "replacement_attempt_limit": 0,
+        "replacement_notes": frozenset(),
     }
 
     if not route_file:
@@ -2493,7 +2495,12 @@ def headless_attempt_policy(
         ]
         if not candidates:
             raise DispatchContractError("quick-headless-unavailable", harness)
-        policy.update(quick=True, terminal_attempt_limit=len(candidates))
+        policy.update(
+            quick=True,
+            terminal_attempt_limit=len(candidates),
+            replacement_attempt_limit=1,
+            replacement_notes=frozenset({"dead-protocol", "dead-permission-reject"}),
+        )
         return policy
 
     chain = node.get("fallback_hops")
@@ -3187,6 +3194,8 @@ def claim_attempt_row(
     exclusive_metadata: dict[str, str] | None = None,
     exclusive_live_metadata: dict[str, str] | None = None,
     terminal_attempt_limit: int | None = None,
+    replacement_attempt_limit: int = 0,
+    replacement_notes: frozenset[str] = frozenset(),
     preclaim: Callable[[list[str]], None] | None = None,
 ) -> bool:
     """Atomically register ``attempt_id`` and claim its launch at most once.
@@ -3239,6 +3248,7 @@ def claim_attempt_row(
                     return False
         if exclusive_live_metadata:
             matching_terminal_attempts = set()
+            replacement_attempts = set()
             for existing in lines:
                 fields = existing.split("\t")
                 if len(fields) != 6:
@@ -3253,7 +3263,16 @@ def claim_attempt_row(
                 if fields[1] in {"open", "running"}:
                     return False
                 if fields[1] == "done" and metadata.get("attempt_id"):
-                    matching_terminal_attempts.add(metadata["attempt_id"])
+                    # A failed terminal note in replacement_notes counts
+                    # against the separate replacement budget instead of the
+                    # ordinary terminal_attempt_limit -- a success (note
+                    # absent, or a passing note like completed-marker /
+                    # completed-supervisor) still counts as ordinary so a
+                    # duplicate launch after success stays refused.
+                    if metadata.get("note") in replacement_notes:
+                        replacement_attempts.add(metadata["attempt_id"])
+                    else:
+                        matching_terminal_attempts.add(metadata["attempt_id"])
             if (
                 terminal_attempt_limit is not None
                 and len(matching_terminal_attempts) >= terminal_attempt_limit
@@ -3261,6 +3280,11 @@ def claim_attempt_row(
                 raise DispatchContractError(
                     "quick-registered-headless-exhausted",
                     f"terminal_attempts={len(matching_terminal_attempts)} limit={terminal_attempt_limit}",
+                )
+            if len(replacement_attempts) > replacement_attempt_limit:
+                raise DispatchContractError(
+                    "quick-replacement-attempts-exhausted",
+                    f"replacement_attempts={len(replacement_attempts)} limit={replacement_attempt_limit}",
                 )
         if launch and preclaim is not None:
             preclaim(lines)

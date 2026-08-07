@@ -37,8 +37,10 @@ from dispatch_contract import (  # noqa: E402
     headless_attempt_policy,
     launch_orphan_watch,
     new_attempt_id,
+    parent_attempt_binding_is_live,
     parse_registry_metadata,
     resolve_global_registry,
+    resolve_live_parent_attempt,
     resolve_model_governor_root,
     reserve_governor_token,
     spawn_claimed_attempt,
@@ -113,7 +115,9 @@ DEATH_PATTERNS = [
      r"rate limit(?:ed)?|provider rate limit|exceeded retry limit|\b429\b"),
     ("auth", r"invalid api key|authentication_error|not logged in|please run /login|unauthorized|\b401\b"),
     ("credit", r"credit balance is too low|insufficient (?:credit|quota|funds)"),
+    ("permission-reject", r"permission requested:.*auto-rejecting"),
 ]
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 _RESET_RE = re.compile(
     r"resets?(?:\s+at)?\s+([0-9]{1,2}:[0-9]{2}\s*(?:am|pm)?|[0-9]{1,2}\s*(?:am|pm))",
     re.I,
@@ -142,7 +146,7 @@ def scan_death(text: str) -> tuple[str, str] | None:
 def scan_anchored_death(text: str) -> tuple[str, str] | None:
     """Inspect only terse terminal CLI lines, never completion-report prose."""
     for line in [line.strip() for line in text.splitlines() if line.strip()][-3:]:
-        if len(line) > 200:
+        if len(_ANSI_RE.sub("", line)) > 200:
             continue
         death = scan_death(line)
         if death:
@@ -182,6 +186,11 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--parent", dest="parent_slug",
         help="logical parent slug (never an attempt id)",
+    )
+    p.add_argument(
+        "--parent-attempt-id",
+        default=os.environ.get("AGENT_DISPATCH_ATTEMPT_ID") or None,
+        help="exact parent attempt id (never a slug)",
     )
     p.add_argument(
         "--parent-session-id",
@@ -439,7 +448,15 @@ def scoped_external_directory_config(artifact_root: str) -> str:
 
     external = permission.get("external_directory")
     if external is None:
-        rules: dict[str, str] = {"*": "ask"}
+        # SD-15/1(b): headless has no human to answer an "ask" prompt, so the
+        # runtime auto-rejects it -- and that auto-reject truncates the
+        # session outright (no terminal envelope, exit varies). "deny"
+        # instead returns a structured tool error to the model, which the
+        # model can recover from and keep working; measured 2026-08-07
+        # (dev_logs/section4_permission_deny_experiment.md): identical
+        # out-of-scope-path prompt died right after auto-reject under "ask"
+        # (no completion) and reached the final handoff under "deny".
+        rules: dict[str, str] = {"*": "deny"}
     elif isinstance(external, str):
         rules = {"*": external}
     elif isinstance(external, dict):
@@ -580,6 +597,37 @@ def _effective_parent_cwd(args):
     return cwd
 
 
+def resolve_parent_completion_delivery(args: argparse.Namespace) -> str:
+    """Select the checked parent-runtime completion-delivery adapter.
+
+    Ported from the Codex wrapper's resolve_parent_completion_delivery
+    (adapters/codex/bin/dispatch-headless.py), minus the Codex-only managed
+    single-ingress gateway branch -- an OpenCode parent is never a managed
+    Codex gateway target, so that probe never applies here.
+    """
+    direct_registered = (
+        getattr(args, "action", "") in {"register", "start"}
+        and args.dispatch_depth == 1
+        and args.launch_lifecycle == DETACHED
+        and args.execution_surface == "registered-headless"
+        and bool(args.registered_worker)
+        and bool(args.parent_session_id)
+        and os.environ.get("AGENT_DISPATCH_CHILD") != "1"
+    )
+    if direct_registered and args.parent_harness == "claude":
+        args.parent_completion_reason = "claude-async-rewake-resume"
+        return "claude-parent-runtime"
+    if direct_registered:
+        args.parent_completion_reason = "parent-identity-unmatched"
+        return "poll-fallback"
+    args.parent_completion_reason = "parent-attempt-owned"
+    return "parent-runtime-supervised"
+
+
+def bind_parent_completion_delivery(args: argparse.Namespace) -> None:
+    args.parent_completion_delivery = resolve_parent_completion_delivery(args)
+
+
 def append_job(jobs: Path, args: argparse.Namespace) -> bool:
     jobs.parent.mkdir(parents=True, exist_ok=True)
     repo = subprocess.check_output(["git", "-C", args.worktree, "rev-parse", "--show-toplevel"], text=True).strip()
@@ -595,6 +643,19 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         pipe += f",worker_mode={args.worker_mode}"
     if args.parent_slug:
         pipe += f",parent={args.parent_slug}"
+    if getattr(args, "parent_binding", None) is not None:
+        binding = args.parent_binding
+        pipe += (
+            f",parent_attempt_id={binding.attempt_id}"
+            f",parent_pid={binding.pid},parent_pid_start={binding.pid_start}"
+            f",parent_pid_scope={binding.pid_scope}"
+            f",parent_liveness_source={binding.liveness_source}"
+        )
+        if binding.pid_host is not None:
+            pipe += (
+                f",parent_pid_host={binding.pid_host}"
+                f",parent_pid_host_start={binding.pid_host_start}"
+            )
     if args.parent_session_id:
         pipe += f",parent_sid={args.parent_session_id}"
     if args.parent_slug or args.parent_session_id:
@@ -638,6 +699,10 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         f",profile_granularity={settings['granularity']}"
         f",model={settings['model']},variant={settings['variant']}"
     )
+    pipe += (
+        f",parent_completion_delivery={args.parent_completion_delivery}"
+        f",parent_completion_reason={getattr(args, 'parent_completion_reason', 'unspecified')}"
+    )
     pipe += f",artifact_root={args.artifact_root},log_file={args.log_path}"
     pipe += stage_session_metadata(args)
     if args.attempt_id:
@@ -675,6 +740,8 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         exclusive_metadata=exclusive,
         exclusive_live_metadata=quick_exclusive,
         terminal_attempt_limit=getattr(args, "quick_attempt_limit", None),
+        replacement_attempt_limit=getattr(args, "replacement_attempt_limit", 0),
+        replacement_notes=getattr(args, "replacement_notes", frozenset()),
         preclaim=None,
     )
 
@@ -1131,13 +1198,6 @@ def main(argv: list[str]) -> int:
     rc = validate_route_record(args)
     if rc != 0:
         return rc
-    if args.dispatch_depth == 2 and action in {"register", "start"}:
-        return fail(
-            "opencode-standard-depth2-unsupported",
-            69,
-            detail=("OpenCode lacks exact parent binding and supervisor snapshot parity"),
-            child_spawned="0",
-        )
     try:
         attempt_policy = headless_attempt_policy(
             route_file=args.route_file, route_node=args.route_node,
@@ -1158,6 +1218,9 @@ def main(argv: list[str]) -> int:
     args.fallback_ordinal = int(attempt_policy["fallback_ordinal"])
     args.quick_attempt = bool(attempt_policy["quick"])
     args.quick_attempt_limit = attempt_policy["terminal_attempt_limit"]
+    args.replacement_attempt_limit = attempt_policy["replacement_attempt_limit"]
+    args.replacement_notes = attempt_policy["replacement_notes"]
+    bind_parent_completion_delivery(args)
     try:
         args.resolved_model_settings = resolve_model_settings(args)
     except ModelSelectionError as e:
@@ -1193,6 +1256,29 @@ def main(argv: list[str]) -> int:
     except DispatchContractError as e:
         return fail(e.reason, 78 if e.reason in PRELAUNCH_PROCESS_BLOCK_REASONS else 65,
                     detail=e.detail, child_spawned="0")
+    # Item 5-1 (SD-48~50 exact parent binding), ported from the Claude wrapper.
+    args.parent_binding = None
+    if args.dispatch_depth == 2 and action in ("register", "start"):
+        try:
+            repo = subprocess.check_output(
+                ["git", "-C", args.worktree, "rev-parse", "--show-toplevel"],
+                text=True,
+            ).strip()
+            args.parent_binding = resolve_live_parent_attempt(
+                jobs,
+                parent_slug=args.parent_slug or "",
+                repo=repo,
+                worktree=args.worktree,
+                expected_attempt_id=args.parent_attempt_id,
+                expected_harness=args.parent_harness,
+                expected_transport=args.parent_transport,
+                expected_sandbox=args.parent_sandbox,
+            )
+            args.parent_attempt_id = args.parent_binding.attempt_id
+        except (DispatchContractError, subprocess.SubprocessError) as e:
+            reason = e.reason if isinstance(e, DispatchContractError) else "parent-repo-unreadable"
+            detail = e.detail if isinstance(e, DispatchContractError) else str(e)
+            return fail(reason, 73, detail=detail, child_spawned="0")
     log_dir = Path(args.log_dir) if args.log_dir else agent_home / ".dispatch" / "logs"
     prompt_text, prompt_source = prompt(args)
     prompt_name = (
@@ -1272,7 +1358,7 @@ def main(argv: list[str]) -> int:
             "AGENT_DISPATCH_SELF_SLUG": args.slug,
             "AGENT_DISPATCH_PARENT_SLUG": args.parent_slug or "",
             "AGENT_DISPATCH_ATTEMPT_ID": args.attempt_id,
-            "AGENT_DISPATCH_PARENT_ATTEMPT_ID": "",
+            "AGENT_DISPATCH_PARENT_ATTEMPT_ID": args.parent_attempt_id or "",
             "AGENT_DISPATCH_PARENT_SESSION_ID": args.parent_session_id or "",
             "AGENT_DISPATCH_PARENT_CWD": (_effective_parent_cwd(args) if (args.parent_slug or args.parent_session_id) else ""),
             "AGENT_DISPATCH_WORKER_TYPE": args.worker_type,
@@ -1339,7 +1425,7 @@ def main(argv: list[str]) -> int:
             proc, launch_metadata = spawn_claimed_attempt(
                 jobs,
                 args.attempt_id,
-                parent_binding=None,
+                parent_binding=args.parent_binding,
                 spawn=spawn_worker,
                 launch_metadata=launch_metadata,
                 preclaim=getattr(args, "launch_preclaim", None),
@@ -1438,7 +1524,18 @@ def main(argv: list[str]) -> int:
         args.child_pid_start = start_ticks
         args.launch_heartbeat = seed_launch_heartbeat(args, jobs, proc.pid, start_ticks)
         if args.launch_lifecycle == FOREGROUND_SCOPED:
-            outcome = wait_foreground(proc, args.foreground_timeout)
+            binding = args.parent_binding
+            outcome = wait_foreground(
+                proc,
+                args.foreground_timeout,
+                parent_pid=binding.observed_pid if binding else None,
+                parent_pid_start=binding.observed_pid_start if binding else None,
+                parent_is_live=(
+                    (lambda: parent_attempt_binding_is_live(jobs, binding))
+                    if binding
+                    else None
+                ),
+            )
             annotate_attempt_row(
                 jobs,
                 args.attempt_id,
@@ -1486,6 +1583,9 @@ def main(argv: list[str]) -> int:
     print(f"eligibility_probe={getattr(args, 'eligibility_probe', None) or '-'}")
     print(f"parent={args.parent_slug or '-'}")
     print(f"parent_session_id={args.parent_session_id or '-'}")
+    print(f"parent_attempt_id={args.parent_binding.attempt_id if getattr(args, 'parent_binding', None) else '-'}")
+    print(f"parent_completion_delivery={args.parent_completion_delivery}")
+    print(f"parent_completion_reason={getattr(args, 'parent_completion_reason', 'unspecified')}")
     print(f"worker_role={args.worker_role or '-'}")
     print(f"worker_type={args.worker_type}")
     print(f"assigned_contract={args.assigned_contract}")

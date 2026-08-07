@@ -1,0 +1,6 @@
+{"type": "step_start", "timestamp": 1, "sessionID": "ses_test", "part": {"id": "prt_1", "type": "step-start"}}
+{"type": "text", "timestamp": 2, "sessionID": "ses_test", "part": {"id": "prt_2", "type": "text", "text": "Attempting a write outside the worktree."}}
+{"type": "tool_use", "timestamp": 3, "sessionID": "ses_test", "part": {"id": "prt_3", "type": "tool", "tool": "write", "state": {"status": "pending", "input": {"filePath": "/tmp/opencode/outside.txt"}}}}
+[93m[1m! [0mpermission requested: external_directory (/tmp/opencode/*); auto-rejecting
+{"type": "tool_use", "timestamp": 4, "sessionID": "ses_test", "part": {"id": "prt_4", "type": "tool", "tool": "write", "state": {"status": "error", "error": "The user rejected permission to use this specific tool call.", "input": {"filePath": "/tmp/opencode/outside.txt"}}}}
+{"type": "step_finish", "timestamp": 5, "sessionID": "ses_test", "part": {"id": "prt_5", "type": "step-finish", "reason": "tool-calls"}}

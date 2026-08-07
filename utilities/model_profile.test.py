@@ -127,6 +127,61 @@ class ModelProfileTest(unittest.TestCase):
             self.assertEqual(resolved["source"], "profile+capacity")
             self.assertEqual(resolved["model"], concrete["model"])
 
+    def test_opencode_live_conf_resolves_deep_and_balanced_deep_distinctly(self):
+        # 66e38467 (2026-08-07 사용자 결정): deep=qwen3.8-max, balanced-deep=glm-5.2.
+        # The earlier vacant-deep demotion premise is superseded; only `mini`
+        # still collapses (into light), named by CFG_MODEL_PROFILE_GRANULARITY.
+        conf = ROOT / "adapters" / "opencode" / "config" / "models.conf"
+        balanced = PROFILE.resolve_profile("opencode", conf, "balanced-deep")
+        self.assertEqual(balanced["tier"], "balanced-deep")
+        self.assertEqual(balanced["model"], "opencode-go/glm-5.2")
+
+        deep = PROFILE.resolve_profile("opencode", conf, "deep")
+        self.assertEqual(deep["tier"], "deep")
+        self.assertEqual(deep["model"], "opencode-go/qwen3.8-max")
+        self.assertEqual(deep["granularity"], "collapsed-mini")
+
+    def test_per_profile_granularity_key_supports_typed_demotion(self):
+        # Mechanism guard for CFG_MODEL_PROFILE_GRANULARITY_<PROFILE>: an adapter
+        # with a vacant tier may demote a profile and record it per-profile
+        # without touching the file-wide granularity value.
+        import os
+        import tempfile
+        conf_text = (
+            "CFG_TIER_BALANCED_DEEP_MODEL=opencode-go/glm-5.2\n"
+            "CFG_TIER_BALANCED_DEEP_VARIANT=runtime-default\n"
+            "CFG_TIER_LIGHT_MODEL=opencode-go/deepseek-v4-flash\n"
+            "CFG_TIER_LIGHT_VARIANT=runtime-default\n"
+            "CFG_TIER_MINI_MODEL=opencode-go/deepseek-v4-flash\n"
+            "CFG_TIER_MINI_VARIANT=runtime-default\n"
+            "CFG_MODEL_PROFILE_DEEP=balanced-deep:runtime-default\n"
+            "CFG_MODEL_PROFILE_BALANCED_DEEP=balanced-deep:runtime-default\n"
+            "CFG_MODEL_PROFILE_LIGHT=light:runtime-default\n"
+            "CFG_MODEL_PROFILE_MINI=mini:runtime-default\n"
+            "CFG_MODEL_PROFILE_GRANULARITY=exact\n"
+            "CFG_MODEL_PROFILE_GRANULARITY_DEEP=deep-vacant-demoted-to-balanced-deep\n"
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".conf", delete=False) as handle:
+            handle.write(conf_text)
+            path = handle.name
+        try:
+            deep = PROFILE.resolve_profile("opencode", path, "deep")
+            self.assertEqual(deep["tier"], "balanced-deep")
+            self.assertEqual(deep["model"], "opencode-go/glm-5.2")
+            self.assertEqual(deep["granularity"], "deep-vacant-demoted-to-balanced-deep")
+            balanced = PROFILE.resolve_profile("opencode", path, "balanced-deep")
+            self.assertEqual(balanced["granularity"], "exact")
+        finally:
+            os.unlink(path)
+
+    def test_claude_codex_granularity_unaffected_by_per_profile_key(self):
+        for adapter, expected in {"claude": "full", "codex": "full"}.items():
+            conf = ROOT / "adapters" / adapter / "config" / "models.conf"
+            for profile in ("deep", "balanced-deep"):
+                with self.subTest(adapter=adapter, profile=profile):
+                    resolved = PROFILE.resolve_profile(adapter, conf, profile)
+                    self.assertEqual(resolved["granularity"], expected)
+
     def test_opencode_runtime_default_omits_unverified_variant_flag(self):
         wrapper = WRAPPERS["opencode"]
         resolved = wrapper.resolve_model_settings(args("opencode", "balanced-deep"))

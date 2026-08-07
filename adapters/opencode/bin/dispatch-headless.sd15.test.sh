@@ -24,6 +24,7 @@ cases = {
   "Provider Rate Limit exceeded [retrying in 15s attempt #5]": ("usage-limit", ""),
   "API rate limited (429)": ("usage-limit", ""),
   "not logged in": ("auth", ""),
+  "permission requested: external_directory (/tmp/opencode/*); auto-rejecting": ("permission-reject", ""),
   "all good, work complete": None,
 }
 bad = 0
@@ -39,6 +40,16 @@ if dh.scan_anchored_death(short_prose) is not None:
     print("MISMATCH short capacity report prose was treated as terminal"); bad += 1
 if dh.scan_anchored_death('{"type":"error","message":"Selected model is at capacity"}') != ("capacity", ""):
     print("MISMATCH structured terminal capacity event was missed"); bad += 1
+# R10: an ANSI-decorated reject line must not be dropped by the 200-char cut
+# just because the escape codes push its raw length over 200 -- the line is
+# tuned so raw length > 200 but ANSI-stripped length <= 200.
+ansi_line = "\x1b[93m\x1b[1m! \x1b[0mpermission requested: external_directory (" + ("x" * 134) + "/*); auto-rejecting"
+if len(ansi_line) <= 200:
+    print("MISMATCH fixture line is not actually over 200 raw bytes"); bad += 1
+if len(dh._ANSI_RE.sub("", ansi_line)) > 200:
+    print("MISMATCH fixture line is not actually <=200 bytes after stripping ANSI"); bad += 1
+if dh.scan_anchored_death(ansi_line) != ("permission-reject", ""):
+    print(f"MISMATCH ANSI-decorated long reject line was dropped: {dh.scan_anchored_death(ansi_line)!r}"); bad += 1
 print("SCAN_OK" if bad == 0 else "SCAN_FAIL")
 PY
 )

@@ -50,7 +50,10 @@ def resolve_profile(adapter: str, config_path: str | Path, profile: str) -> dict
     model = config.get(f"CFG_TIER_{tier_key}_MODEL")
     budget_suffix = "VARIANT" if adapter == "opencode" else "EFFORT"
     declared_default = config.get(f"CFG_TIER_{tier_key}_{budget_suffix}")
-    granularity = config.get("CFG_MODEL_PROFILE_GRANULARITY", "unknown")
+    profile_granularity_key = "CFG_MODEL_PROFILE_GRANULARITY_" + profile.upper().replace("-", "_")
+    granularity = config.get(profile_granularity_key) or config.get(
+        "CFG_MODEL_PROFILE_GRANULARITY", "unknown"
+    )
     if adapter not in {"claude", "codex", "opencode"}:
         raise ModelProfileError(f"unknown adapter: {adapter!r}")
     if not model or not declared_default:

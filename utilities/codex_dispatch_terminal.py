@@ -17,6 +17,8 @@ import re
 import subprocess
 import sys
 
+from dispatch_supervisor_terminal import opencode_terminal_boundary
+
 
 ROOT = Path(__file__).resolve().parents[1]
 # The handoff is the trailing three lines of the final message. Anchoring at the
@@ -42,7 +44,11 @@ _DETAIL_LIMIT = 512
 ARTIFACT_STATES = frozenset(
     {"unchecked", "none", "readable", "missing", "outside-root", "unsafe-root"}
 )
-_TERMINAL_SOURCES = ("exact-turn-completed", "exact-claude-result")
+_TERMINAL_SOURCES = (
+    "exact-turn-completed",
+    "exact-claude-result",
+    "exact-step-finish-stop",
+)
 _LEGAL_WIRE = frozenset(
     {
         *(
@@ -143,6 +149,9 @@ def _read_terminal(path: str | Path | None) -> dict[str, object]:
         ),
         None,
     )
+    opencode_final_message: str | None = None
+    if terminal_index is None:
+        terminal_index, opencode_final_message = opencode_terminal_boundary(rows)
     if terminal_index is None:
         return _result(
             2, "absent", "none", "-", "unchecked", "-", reason="terminal-event-absent"
@@ -150,11 +159,12 @@ def _read_terminal(path: str | Path | None) -> dict[str, object]:
 
     terminal_row = rows[terminal_index]
     terminal_event = str(terminal_row.get("type"))
-    terminal_source = (
-        "exact-turn-completed"
-        if terminal_event == "turn.completed"
-        else "exact-claude-result"
-    )
+    if terminal_event == "turn.completed":
+        terminal_source = "exact-turn-completed"
+    elif terminal_event == "step_finish":
+        terminal_source = "exact-step-finish-stop"
+    else:
+        terminal_source = "exact-claude-result"
     final_message: str | None = None
     if terminal_event == "result":
         subtype = terminal_row.get("subtype")
@@ -170,6 +180,8 @@ def _read_terminal(path: str | Path | None) -> dict[str, object]:
             )
         text = terminal_row.get("result")
         final_message = text if isinstance(text, str) else None
+    elif terminal_event == "step_finish":
+        final_message = opencode_final_message
     else:
         final_row = rows[terminal_index - 1] if terminal_index > 0 else None
         if isinstance(final_row, dict) and final_row.get("type") == "item.completed":
@@ -518,12 +530,14 @@ def terminal_envelope_observed(path: str | Path | None) -> bool:
             value = json.loads(line)
         except (TypeError, ValueError):
             continue
-        if isinstance(value, dict) and value.get("type") in {
-            "turn.completed",
-            "result",
-            "dispatch.supervisor.error",
-        }:
+        if not isinstance(value, dict):
+            continue
+        if value.get("type") in {"turn.completed", "result", "dispatch.supervisor.error"}:
             return True
+        if value.get("type") == "step_finish":
+            part = value.get("part")
+            if isinstance(part, dict) and part.get("reason") == "stop":
+                return True
     return False
 
 

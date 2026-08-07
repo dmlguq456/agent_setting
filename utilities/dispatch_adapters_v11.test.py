@@ -42,7 +42,7 @@ class AdapterV11Test(unittest.TestCase):
   wrapper,model=ADAPTERS[harness]
   return wrapper+[f"--{action}","--worktree",str(repo),"--slug",f"{harness}-v11","--capability","autopilot-code","--capability-mode","dev","--worker-mode","dev/backend","--intensity","standard","--dispatch-depth","2","--parent","owner","--worker-role","code-plan","--owner","autopilot-code","--jobs",str(jobs),"--log-dir",str(logs),"--attempt-id",f"att-{harness}-fixture-0001","--parent-harness",harness,"--parent-transport","headless","--parent-sandbox","fixture","--launch-authority","conductor","--nested-eligibility",status,"--eligibility-source",f"{harness}-fixture","--fallback-ordinal","1"]+model
  def test_sibling_registry_rows_and_nested_refusal(self):
-  for harness in ("codex", "claude"):
+  for harness in ("codex", "claude", "opencode"):
    with self.subTest(harness=harness), tempfile.TemporaryDirectory() as td:
     root=Path(td); repo,art=self.fixture(root); jobs=root/"jobs.log"; logs=root/"logs"
     env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),
@@ -71,19 +71,22 @@ class AdapterV11Test(unittest.TestCase):
     self.assertEqual(blocked.returncode,73,blocked.stdout+blocked.stderr)
     self.assertIn("reason=global-registry-unwritable",blocked.stdout)
     self.assertIn("child_spawned=0",blocked.stdout)
- def test_opencode_depth_two_fails_closed_before_registry_or_runtime_probe(self):
+ def test_opencode_depth_two_fails_closed_without_a_live_parent(self):
+  # register only, mirroring the codex/claude sibling contract test above:
+  # --start also probes the real local opencode runtime projection
+  # (adapters/opencode/bin/preflight.sh headless --check) before parent
+  # binding is resolved, which is an environment prerequisite orthogonal to
+  # exact-parent-binding and not something a unit fixture should fake.
   with tempfile.TemporaryDirectory() as td:
    root=Path(td); repo,art=self.fixture(root); jobs=root/"jobs.log"; logs=root/"logs"
    env={**os.environ,"AGENT_HOME":str(ROOT),"AGENT_ARTIFACT_ROOT":str(art),
         "AGENT_DISPATCH_JOBS":str(jobs),"OPENCODE_CONFIG_CONTENT":"{}"}
-   for action in ("register", "start"):
-    with self.subTest(action=action):
-     result=subprocess.run(self.command("opencode",action,repo,jobs,logs),
-                           text=True,capture_output=True,env=env)
-     self.assertEqual(result.returncode,69,result.stdout+result.stderr)
-     self.assertIn("reason=opencode-standard-depth2-unsupported",result.stdout)
-     self.assertIn("child_spawned=0",result.stdout)
-     self.assertFalse(jobs.exists() and jobs.read_text().strip())
+   result=subprocess.run(self.command("opencode","register",repo,jobs,logs),
+                         text=True,capture_output=True,env=env)
+   self.assertEqual(result.returncode,73,result.stdout+result.stderr)
+   self.assertIn("reason=live-parent-not-found",result.stdout)
+   self.assertIn("child_spawned=0",result.stdout)
+   self.assertFalse(jobs.exists() and jobs.read_text().strip())
  def test_codex_owner_gets_scoped_nested_network_only_at_depth_one(self):
   with tempfile.TemporaryDirectory() as td:
    root=Path(td); repo,art=self.fixture(root); logs=root/"logs";jobs=root/"jobs.log"

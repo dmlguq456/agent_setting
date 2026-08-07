@@ -83,8 +83,8 @@ read-only metadata, not bootstrap identity. Monitor
 `preflight.sh liveness [jobs.log]`; harvest via `preflight.sh harvest`.
 Conductors use `dispatch-chain` for ordinary checked dispatch-depth-2 nodes. A sealed
 2–4-way `parallel_group` uses one `dispatch-batch --parallel-group` call;
-OpenCode remains ineligible for that registered standard+ dispatch-depth-2 path
-until exact parent, foreground lifecycle, and supervisor parity are verified.
+OpenCode is eligible for that registered standard+ dispatch-depth-2 path —
+exact parent binding, foreground lifecycle, and supervisor parity are implemented.
 Dispatch contract v3 atomically claims one stable
 attempt row before spawn and starts no child for a duplicate claim. Broker v1/v2
 routes are read-only migration inputs; the retired broker exposes only legacy
@@ -118,10 +118,9 @@ terminal. Route compile and launch refuse a graph that breaks this.
 Do not end a turn while a stage has no registered continuation: arm
 `utilities/workflow-supervisor.py`, dispatch the next stage, or record the human
 gate in the same turn, and otherwise say plainly that automatic follow-up is
-impossible and name the checked fallback. OpenCode remains ineligible for
-registered standard+ dispatch-depth-2, so its continuations use the shared
-external supervisor rather than a runtime bridge. `OPERATIONS §5.12` owns the
-mechanics.
+impossible and name the checked fallback. OpenCode's registered standard+
+dispatch-depth-2 continuations use the shared external supervisor rather than a
+runtime bridge. `OPERATIONS §5.12` owns the mechanics.
 
 ## Memory and Context
 
