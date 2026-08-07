@@ -233,7 +233,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, str]:
         status, source, failure = (
             "unsupported",
             "codex-prospective-standard-owner-contract",
-            "prospective-owner-profile-inapplicable",
+            "prospective-owner-codex-only",
         )
     elif args.child_harness == "opencode":
         status, source, failure = (
@@ -292,10 +292,13 @@ def main() -> int:
     p.add_argument("--launch-authority", required=True, choices=("conductor", "ancestor-broker"))
     p.add_argument("--worktree", required=True)
     p.add_argument(
-        "--prospective-standard-owner",
+        "--prospective-standard-owner", "--prospective-codex-standard-owner",
+        dest="prospective_standard_owner",
         action="store_true",
-        help="check the standard+ depth-1 Codex owner profile before that owner exists;"
-             " inside an active owner, omit this and require its runtime network marker",
+        help="codex-only: check the standard+ depth-1 Codex owner profile before that"
+             " owner exists; inside an active owner, omit this and require its runtime"
+             " network marker. A non-codex parent harness always reports"
+             " prospective-owner-codex-only regardless of this flag.",
     )
     p.add_argument("--json", action="store_true")
     args = p.parse_args()

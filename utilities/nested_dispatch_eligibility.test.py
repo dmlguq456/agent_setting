@@ -94,6 +94,7 @@ class NestedEligibilityTest(unittest.TestCase):
 
     def test_prospective_owner_mode_rejects_a_non_codex_owner_tuple(self):
         with tempfile.TemporaryDirectory() as worktree, \
+             mock.patch.dict(os.environ, {}, clear=True), \
              mock.patch.object(N, "command_check") as checked:
             args = self.args(worktree)
             args.parent_harness = "claude"
@@ -101,8 +102,47 @@ class NestedEligibilityTest(unittest.TestCase):
             args.prospective_standard_owner = True
             row = N.evaluate(args)
         self.assertEqual(row["status"], "unsupported")
-        self.assertEqual(row["failure_class"], "prospective-owner-profile-inapplicable")
+        self.assertEqual(row["failure_class"], "prospective-owner-codex-only")
         checked.assert_not_called()
+
+    def test_prospective_owner_flag_alias_shares_the_same_dest(self):
+        p = argparse.ArgumentParser()
+        p.add_argument(
+            "--prospective-standard-owner", "--prospective-codex-standard-owner",
+            dest="prospective_standard_owner", action="store_true",
+        )
+        parsed = p.parse_args(["--prospective-codex-standard-owner"])
+        self.assertTrue(parsed.prospective_standard_owner)
+
+    def test_prospective_owner_probe_is_typed_codex_only_for_every_parent_harness(self):
+        expectations = {
+            "codex": "prospective-owner-codex-only",
+            "claude": "prospective-owner-codex-only",
+            "opencode": "prospective-owner-codex-only",
+        }
+        for parent_harness, expected_failure in expectations.items():
+            with self.subTest(parent_harness=parent_harness):
+                with tempfile.TemporaryDirectory() as worktree, \
+                     mock.patch.dict(os.environ, {}, clear=True), \
+                     mock.patch.object(
+                         N, "command_check",
+                         return_value=("supported", "direct-auth+headless-check", ""),
+                     ) as checked:
+                    args = self.args(worktree)
+                    args.parent_harness = parent_harness
+                    args.parent_sandbox = (
+                        "workspace-write" if parent_harness == "codex" else "adapter-default"
+                    )
+                    args.prospective_standard_owner = True
+                    row = N.evaluate(args)
+                if parent_harness == "codex":
+                    # the codex owner tuple is well-formed here, so the prospective
+                    # check proceeds past the codex-only gate into command_check.
+                    self.assertNotEqual(row["failure_class"], expected_failure)
+                else:
+                    self.assertEqual(row["status"], "unsupported")
+                    self.assertEqual(row["failure_class"], expected_failure)
+                    checked.assert_not_called()
 
     def test_prospective_owner_mode_cannot_bypass_an_active_dispatch_marker(self):
         with tempfile.TemporaryDirectory() as worktree, \

@@ -462,6 +462,9 @@ eligibility probe therefore returns
 the OpenCode wrapper starts zero dispatch-depth-2 children. A standard+ owner must select
 a checked Codex or Claude target; otherwise it records an inline/quick fallback.
 The adapter's `nested-headless` diagnostic does not establish dispatch-depth-2 parity.
+`nested-dispatch-eligibility.py --prospective-standard-owner` is a Codex-only probe
+(`failure_class=prospective-owner-codex-only` under any other parent harness, including
+OpenCode); it does not check OpenCode owner eligibility.
 
 ### SD-62 direct headless delegation — realized
 
