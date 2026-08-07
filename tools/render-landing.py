@@ -496,6 +496,23 @@ CSS = r"""
   .term .w { color: var(--ok); } .term .i2 { color: #6E6E80; }
   .term .b2 { color: var(--warn); } .term .dn { color: var(--info); }
   .term .hd { color: #55556A; border-bottom: 1px dashed rgba(255,255,255,.08); padding-bottom: 4px; margin-bottom: 5px; display: block; }
+  .term .r .g { color: #4A4A5E; letter-spacing: -1px; flex: none; }
+  .term .r .pc { color: #6E6E80; width: 34px; text-align: right; flex: none; }
+  .term .r.deep .nmx { padding-left: 14px; }
+  .term .usage {
+    color: #6E6E80; font-size: 11.5px; line-height: 1.9; padding-bottom: 7px; margin-bottom: 6px;
+    border-bottom: 1px dashed rgba(255,255,255,.08);
+  }
+  .term .usage .ul { color: #55556A; letter-spacing: .08em; text-transform: uppercase; }
+  .term .usage .uh { color: #9C9CB0; display: inline-block; width: 52px; }
+  .term .usage .ur { white-space: nowrap; }
+  .term .usage .ul { display: inline-block; width: 46px; }
+  .term .usage .rs { color: #4A4A5E; }
+  .term .usage b { color: #7C7C92; font-weight: 400; letter-spacing: -1px; }
+  /* Fleet earns a standing block: it is the one surface that shows the harness working. */
+  .fleetnode { border-color: var(--border-2); background: linear-gradient(160deg, var(--panel-2), var(--panel)); }
+  .fleetnode > .head .lv { color: var(--ok); border-color: var(--ok); }
+  .fleetnode .term { margin-top: 16px; }
   .term .ft { color: #55556A; border-top: 1px dashed rgba(255,255,255,.08); padding-top: 5px; margin-top: 5px; display: block; }
 
   /* model tier matrix */
@@ -768,12 +785,14 @@ STAGE_MODEL_MAP = [
     ("test · report", "fast reviewer / writer", "light"),
 ]
 
+# One repo group with a live owner and its dispatched stages, plus a second repo
+# sitting idle — the shape the real view takes, with synthetic names.
 FLEET_ROWS = [
-    ("w", "●", "hearting", "claude · owner d1", "working", "12m", False),
-    ("w", "│", "code-execute", "claude · light", "working", "4m", True),
-    ("dn", "│", "impl-review", "codex · light", "done", "2m", True),
-    ("b2", "│", "failure-mode", "codex · deep", "blocked", "1m", True),
-    ("i2", "○", "sr_corrnet_runtime", "interactive", "idle", "38m", False),
+    ("w",  "●", 0, "hearting", "claude · owner d1", "working", 53, "16h"),
+    ("w",  "│", 1, "code-execute", "claude · light", "working", 21, "4m"),
+    ("dn", "│", 1, "impl-review", "codex · light", "done", 34, "2m"),
+    ("b2", "│", 1, "failure-mode", "codex · deep", "blocked", 11, "1m"),
+    ("i2", "○", 0, "corrnet_runtime", "interactive", "idle", 12, "38m"),
 ]
 
 
@@ -1008,11 +1027,17 @@ def build_canvas(d: dict) -> str:
         f'<button class="chip" data-info="md:role">{html.escape(r)}</button>' for r in d["roles"]
     )
 
+    def gauge(pct: int) -> str:
+        filled = max(1, round(pct / 100 * 12))
+        return ("&#9473;" * filled) + ("&#9472;" * (12 - filled))
+
     fleet_rows = "".join(
-        f'<div class="r{" child" if child else ""}"><span class="s {cls}">{dot}</span>'
+        f'<div class="r{" child" if depth else ""}{" deep" if depth > 1 else ""}">'
+        f'<span class="s {cls}">{dot}</span>'
         f'<span class="nmx">{name}</span><span class="tag">{tag}</span>'
+        f'<span class="g">{gauge(pct)}</span><span class="pc">{pct}%</span>'
         f'<span class="{cls}">{state}</span><span class="t">{age}</span></div>'
-        for cls, dot, name, tag, state, age, child in FLEET_ROWS
+        for cls, dot, depth, name, tag, state, pct, age in FLEET_ROWS
     )
 
     return f"""
@@ -1118,7 +1143,7 @@ def build_canvas(d: dict) -> str:
           </div>
 
           <div class="node solid foldable" id="n-fabric">
-            <div class="head"><span class="lv">L3</span><h3>Dispatch fabric &amp; Fleet</h3>{CHEV}</div>
+            <div class="head"><span class="lv">L3</span><h3>Dispatch fabric</h3>{CHEV}</div>
             {fold_sum("n-fabric", d)}
             <div class="fold-body"><div class="fold-inner">
             <div class="fabric">
@@ -1161,19 +1186,37 @@ def build_canvas(d: dict) -> str:
               </div>
             </div>
 
+            </div></div>
+          </div>
+
+          <div class="node fleetnode" id="n-fleetblock">
+            <div class="head"><span class="lv">LIVE</span><h3>Fleet</h3>
+              <span class="note">one word: <code>fleet</code></span></div>
+            <div class="fold-sum">Every session and every dispatched worker across the three
+            runtimes, in one tree — with the sealed model profile each one is running under and
+            how much context it has left.</div>
+
             <div class="term" id="n-fleet">
-              <div class="tb"><i></i><i></i><i></i><span class="nm">fleet &mdash; live cross-harness view</span>
+              <div class="tb"><i></i><i></i><i></i><span class="nm">fleet</span>
                 <span class="live"><i></i>LIVE</span></div>
               <div class="body">
-                <span class="hd">session / node&nbsp;&nbsp;&middot;&nbsp;&nbsp;harness &middot; profile&nbsp;&nbsp;&middot;&nbsp;&nbsp;state</span>
+                <div class="usage">
+                  <div class="ur"><span class="ul">usage</span><span class="uh">claude</span>
+                    5h <b>&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9472;&#9472;&#9472;&#9472;</b> 71%
+                    &nbsp; 7d <b>&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9472;&#9472;</b> 88% <span class="rs">&#8631; 3d23h</span></div>
+                  <div class="ur"><span class="ul"></span><span class="uh">codex</span>
+                    5h <b>&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;</b> &nbsp;&mdash;
+                    &nbsp; 7d <b>&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;</b> 100% <span class="rs">&#8631; 2d16h</span></div>
+                </div>
+                <span class="hd">session / node&nbsp;&nbsp;&middot;&nbsp;&nbsp;harness &middot; sealed profile
+                &nbsp;&nbsp;&middot;&nbsp;&nbsp;context&nbsp;&nbsp;&middot;&nbsp;&nbsp;state</span>
                 {fleet_rows}
-                <span class="ft">orphan rows surfaced &middot; context gauge &middot; token accounting per session<br />
-                run it with <b style="color:#9C9CB0">fleet</b> &middot; <b style="color:#9C9CB0">--once</b> for a plain snapshot &middot;
-                <b style="color:#9C9CB0">--json</b> to script it</span>
+                <span class="ft">the owner and its dispatched stages under one repo &middot; orphaned
+                rows surfaced, never dropped &middot; per-session token accounting<br />
+                <b style="color:#9C9CB0">fleet</b> &middot; <b style="color:#9C9CB0">--once</b> for a
+                plain snapshot &middot; <b style="color:#9C9CB0">--json</b> to script it</span>
               </div>
             </div>
-
-            </div></div>
           </div>
 
           <div class="node foldable" id="n-tiers">
@@ -1253,7 +1296,8 @@ CANVAS_JS = r"""
     ["n-utter", "n-route"],
     ["n-route", "n-tracks"],
     ["n-tracks", "n-fabric"],
-    ["n-fabric", "n-tiers"],
+    ["n-fabric", "n-fleetblock"],
+    ["n-fleetblock", "n-tiers"],
     ["n-tiers", "n-art"]
   ];
   // The rails flank every layer, so a literal edge to one of them would misread as
@@ -1458,7 +1502,8 @@ def render_index(d: dict) -> str:
         <a href="#n-utter" data-target="n-utter" class="on"><span class="n">L0</span>One sentence in</a>
         <a href="#n-route" data-target="n-route"><span class="n">L1</span>Routing contract</a>
         <a href="#n-tracks" data-target="n-tracks"><span class="n">L2</span>Pipelines</a>
-        <a href="#n-fabric" data-target="n-fabric"><span class="n">L3</span>Dispatch fabric &amp; Fleet</a>
+        <a href="#n-fabric" data-target="n-fabric"><span class="n">L3</span>Dispatch fabric</a>
+        <a href="#n-fleetblock" data-target="n-fleetblock"><span class="n">LIVE</span>Fleet</a>
         <a href="#n-tiers" data-target="n-tiers"><span class="n">L4</span>Model tier per role</a>
         <a href="#n-art" data-target="n-art"><span class="n">L5</span>Fixed artifact system</a>
         <a href="#n-loops" data-target="n-loops"><span class="n">L6</span>Self-watching loops</a>

@@ -27,6 +27,8 @@ Hearting은 지원되는 코딩 에이전트 런타임에서 조사, 계획, 구
 "로그인 API를 구현하고 테스트한 뒤 변경 보고서까지 남겨줘."
                                   ↓
        계획 → 실행 → 테스트 → 보고 + 지속 가능한 근거
+                                  ↓
+            그 모든 단계를 `fleet`에서 실시간으로 확인
 ```
 
 ## Hearting을 쓰는 이유
@@ -127,6 +129,47 @@ curl -fsSL https://github.com/dmlguq456/hearting/releases/download/v2.0.0/instal
 
 전체 진입점은 [capabilities/README.md](capabilities/README.md), portable role
 모델은 [roles/README.md](roles/README.md)를 참고하세요.
+
+## 함대 전체를 한눈에
+
+`fleet`은 dispatcher가 기록하는 바로 그 attempt registry 위의 라이브 뷰입니다.
+세 런타임의 대화형 session과 dispatch된 worker를 **하나의 트리**로 보여줍니다 —
+대시보드 세 개를 서로 맞춰볼 필요가 없습니다.
+
+```text
+ usage  claude  5h ━━━━━━━━──── 71%   7d ━━━━━━━━━━── 88% ↻ 3d23h
+        codex   5h ────────────  —    7d ━━━━━━━━━━━━ 100% ↻ 2d16h
+ fleet  ⠧ 2 working   ● 12 idle   ↳ 4 jobs (3 working)
+────────────────────────────────────────────────────────────────────────────
+ SESSIONS
+
+ ● hearting/  🚧 3  🧠 1
+ ▍ ⠧ claude code   Promote Fleet on the landing page        (main)
+ ▍   16h01m        Opus 5 (xhigh)
+ ▍   working  ━━━━━━━━──────── 53%
+ ▍ ● codex         Dispatch column widths                   (main)
+ ▍   1d6h          gpt-5.6 (xhigh)
+ ▍   idle     ━─────────────── 12%
+ ▍ ● claude code   OpenCode parity fixes  ▾2    (opencode-parity)
+ ▍   7h18m         Fable 5 (high)                    ⚙ python3 1h43m
+ ▍   idle     ━━━━━━━───────── 46%
+ ▍     ⠧ claude code  Execute stage           (opencode-parity)
+ ▍        code(debug·standard·owner) / mp:deep / unit:_kernel/owner
+ ▍        execute › impl-review › test › report
+ ▍        working ━━━───────────── 21%
+ ▍        ↳ ⠧ claude code  dispatch_v20 regression
+ ▍             code-execute(standard) / mp:light / unit:dev/backend
+ ▍             working ━━────────────── 11%
+```
+
+각 행은 어느 harness에서 도는지, 그 노드의 route가 봉인한 model profile이
+무엇인지, context가 얼마나 남았는지, 얼마나 오래 붙잡고 있는지를 함께 보여줍니다.
+dispatch된 stage는 자기를 띄운 owner 아래에 중첩되므로, 멈춘 worker가 "조용해진
+session"이 아니라 **worker로** 드러납니다. 고아 행도 버리지 않고 표시합니다.
+
+전체 화면 뷰에는 `curses`가 필요합니다. `fleet --once`는 단순 스냅숏을,
+`fleet --json`은 같은 상태를 기계 판독 형태로 내보내므로 Python이 도는 곳이면
+어디서든 동작합니다 — Git Bash 위의 네이티브 Windows 포함.
 
 ## 요청을 실제로 처리하는 것들
 

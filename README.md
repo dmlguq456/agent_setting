@@ -25,6 +25,8 @@ actually discovers.
 "Implement and test the login API, then leave a change report."
                                   ↓
        plan → execute → test → report + durable evidence
+                                  ↓
+              watch every stage of it live in `fleet`
 ```
 
 ## Why Hearting
@@ -132,6 +134,48 @@ or artifact language instead of inheriting the language of this README.
 
 See [capabilities/README.md](capabilities/README.md) for every entrypoint and
 [roles/README.md](roles/README.md) for the portable role model.
+
+## See the whole fleet
+
+`fleet` is a live view over the same attempt registry the dispatcher writes to,
+so it shows interactive sessions and dispatched workers from all three runtimes
+in one tree — not three dashboards you have to reconcile.
+
+```text
+ usage  claude  5h ━━━━━━━━──── 71%   7d ━━━━━━━━━━── 88% ↻ 3d23h
+        codex   5h ────────────  —    7d ━━━━━━━━━━━━ 100% ↻ 2d16h
+ fleet  ⠧ 2 working   ● 12 idle   ↳ 4 jobs (3 working)
+────────────────────────────────────────────────────────────────────────────
+ SESSIONS
+
+ ● hearting/  🚧 3  🧠 1
+ ▍ ⠧ claude code   Promote Fleet on the landing page        (main)
+ ▍   16h01m        Opus 5 (xhigh)
+ ▍   working  ━━━━━━━━──────── 53%
+ ▍ ● codex         Dispatch column widths                   (main)
+ ▍   1d6h          gpt-5.6 (xhigh)
+ ▍   idle     ━─────────────── 12%
+ ▍ ● claude code   OpenCode parity fixes  ▾2    (opencode-parity)
+ ▍   7h18m         Fable 5 (high)                    ⚙ python3 1h43m
+ ▍   idle     ━━━━━━━───────── 46%
+ ▍     ⠧ claude code  Execute stage           (opencode-parity)
+ ▍        code(debug·standard·owner) / mp:deep / unit:_kernel/owner
+ ▍        execute › impl-review › test › report
+ ▍        working ━━━───────────── 21%
+ ▍        ↳ ⠧ claude code  dispatch_v20 regression
+ ▍             code-execute(standard) / mp:light / unit:dev/backend
+ ▍             working ━━────────────── 11%
+```
+
+Each row carries the harness it runs on, the model profile its route sealed for
+that node, how much context it has left, and how long it has been at it. A
+dispatched stage nests under the owner that started it, so a stalled worker is
+visible as a worker rather than as a session that mysteriously went quiet.
+Orphaned rows are surfaced instead of dropped.
+
+The full-screen view needs `curses`. `fleet --once` prints a plain snapshot and
+`fleet --json` emits the same state for scripting, so both work anywhere Python
+does — including native Windows under Git Bash.
 
 ## What actually runs your request
 
