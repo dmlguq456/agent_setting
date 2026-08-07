@@ -511,11 +511,29 @@ _ROLE_MODEL_NAME = {"opus": "Opus", "sonnet": "Sonnet", "haiku": "Haiku", "fable
 
 def _clean_model(name):
     """'Opus 4.8 (1M context)' → 'Opus 4.8' (drop the trailing parenthetical — redundant, ugly
-    when truncated); bare role tokens 'opus'/'sonnet' → 'Opus'/'Sonnet' (user 2026-07-20)."""
+    when truncated); bare role tokens 'opus'/'sonnet' → 'Opus'/'Sonnet' (user 2026-07-20);
+    'opencode-go/glm-5.2' → 'glm-5.2' (user 2026-08-07).
+
+    The provider segment is dropped because the harness cell one column over already says
+    `opencode`, so the prefix spends 12 of the model cell's 23 characters restating it —
+    and it was the name, not the prefix, that got clipped away to pay for it."""
     if not name:
         return name
     name = name.split(" (", 1)[0]
+    if "/" in name:
+        name = name.split("/", 1)[1]
     return _ROLE_MODEL_NAME.get(name.lower(), name)
+
+
+# Variant/effort tokens that carry no information: the runtime picked its own default and
+# never told us which. Rendering the word costs most of the model cell to say nothing (and
+# clipped 'opencode-go/glm-5.2' down to 'open'), so these render as no effort at all —
+# the same honest blank a missing effort already gets.
+_EMPTY_EFFORT = {"runtime-default", "inherit", "unknown", "default"}
+
+
+def _effort_text(effort):
+    return "" if not effort or str(effort).strip().lower() in _EMPTY_EFFORT else str(effort)
 
 
 _MODEL_ID_RE = re.compile(r"^claude-(opus|sonnet|haiku|fable)-(\d+)(?:-(\d+))?(?:-\d{8})?$")
@@ -816,7 +834,7 @@ _EFF_SHORT = {"low": "lo", "medium": "md", "high": "hi", "xhigh": "xh", "max": "
 def _model_cell(model, effort, width, dim=False):
     """Render model and effort together as one flowing phrase, padded to width."""
     name = _clean_model(dash(model)) or "—"
-    sfx = effort or ""
+    sfx = _effort_text(effort)
     lkey = _model_key(model, dim=dim)
     if sfx:
         name = name[: max(1, width - len(sfx) - 4)]
@@ -846,7 +864,7 @@ def _harness_model_cell(harness, model, effort, width, hkey, dim=False, unknown=
         # model name outranks the effort word: effort shortens to its 2-char form, then
         # drops whole, before the model name loses a single character. Color keys stay
         # keyed by the full effort value even when the short form is shown.
-        eff_full = effort or ""
+        eff_full = _effort_text(effort)
         eff = eff_full
         if eff and room < len(name) + 1 + len(eff):
             eff = _EFF_SHORT.get(eff_full, eff_full)
@@ -2699,7 +2717,12 @@ def _dispatch_summary_detail_row(job, depth=1, term_width=None, orphan=False):
     """Use the main-session detail grammar for every live model dispatch."""
     if getattr(job, "liveness", None) in ("stale", "dead"):
         return []
-    is_model_dispatch = getattr(job, "harness", None) in ("claude", "codex")
+    # opencode belongs here too: its attempt stream carries per-step context tokens, so an
+    # opencode job has exactly the gauge evidence claude/codex rows do. Leaving it out of
+    # this allowlist dropped the entire detail line — the row rendered as bare identity
+    # with no ctx and no NOW, which reads as "nothing is known about this worker" rather
+    # than "this worker is live". The collector-side allowlist had the same gap.
+    is_model_dispatch = getattr(job, "harness", None) in ("claude", "codex", "opencode")
     if is_model_dispatch and not getattr(job, "afterglow", False):
         # F-65: a missing first-turn denominator is an unknown gauge, not a missing row.
         # Dispatch rows retain their dim visual weight and sit two cells AFTER their own
