@@ -343,18 +343,32 @@ def classify_supervisor_log(path: str | Path | None, harness: str) -> Supervisor
         return classify_supervisor_error(harness, "terminal-log-unreadable")
     if harness == "opencode":
         # R1 (Gap 1): last step_finish.reason=="stop" is the exact opencode
-        # success terminal. R1 must precede R2 (auto-reject, added in C3) —
-        # once item 1(b) lands, "reject then recover to reason=stop" becomes
-        # the normal path and must not be misclassified as a death. If R1
-        # does not match, fall through to the shared claude/codex loop below
-        # (R3 dispatch.supervisor.error, else R4 terminal-event-missing);
-        # opencode rows never match turn.completed/result so that loop is
-        # harness-safe as-is.
+        # success terminal. R1 must precede R2 (auto-reject) — once item 1(b)
+        # (deny instead of ask) lands, "reject then recover to reason=stop"
+        # becomes the normal path and must not be misclassified as a death.
         boundary_index, final_text = opencode_terminal_boundary(rows)
         if boundary_index is not None:
             return _handoff_terminal(
                 final_text, event="step_finish.stop", process_exit=0
             )
+        # R2 (item 1(a)): no stop boundary, but the retained tail shows a
+        # permission auto-reject line -- the session died right after the
+        # wrapper's headless "ask" rule auto-rejected an external_directory
+        # request (see item 1(b): deny returns a structured tool error
+        # instead and does not truncate the session; R2 stays as a typed
+        # classification for whatever other cause still truncates the log).
+        if opencode_truncation_evidence(_raw_lines):
+            return SupervisorTerminal(
+                "dead-permission-reject",
+                "permission",
+                "step_finish.truncated",
+                "permission-auto-reject",
+                "70",
+            )
+        # If R1/R2 do not match, fall through to the shared claude/codex loop
+        # below (R3 dispatch.supervisor.error, else R4 terminal-event-missing);
+        # opencode rows never match turn.completed/result so that loop is
+        # harness-safe as-is.
     for index in range(len(rows) - 1, -1, -1):
         row = rows[index]
         event = row.get("type")

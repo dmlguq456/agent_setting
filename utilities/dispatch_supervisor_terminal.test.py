@@ -199,15 +199,16 @@ class OpencodeGap1TerminalClassificationTest(unittest.TestCase):
         self.assertEqual(result.note, "dead-protocol")
         self.assertEqual(result.reconcile_reason, "terminal-event-missing")
 
-    def test_truncated_permission_reject_still_falls_to_dead_protocol_pre_c3(self):
-        # R2 (typed dead-permission-reject) is not wired in yet — that is
-        # Step 3.1 (C3). Until then this fixture correctly falls through R1
-        # (no reason==stop) to R4 (no dispatch.supervisor.error row either).
+    def test_truncated_permission_reject_classifies_as_dead_permission_reject(self):
+        # R2 (item 1(a), C3): no stop boundary, but the retained tail shows
+        # the auto-reject line -> typed dead-permission-reject rather than
+        # the generic dead-protocol.
         result = SUPERVISOR.classify_supervisor_log(
             str(FIXTURES / "truncated-permission-reject.jsonl"), "opencode"
         )
-        self.assertEqual(result.note, "dead-protocol")
-        self.assertEqual(result.reconcile_reason, "terminal-event-missing")
+        self.assertEqual(result.note, "dead-permission-reject")
+        self.assertEqual(result.failure_class, "permission")
+        self.assertEqual(result.reconcile_reason, "permission-auto-reject")
 
     def test_claude_and_codex_classification_is_unaffected(self):
         # The opencode branch is gated on harness=="opencode"; feeding the

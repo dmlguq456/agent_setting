@@ -120,4 +120,23 @@ class OpenCodeSD45(unittest.TestCase):
    bad=dry.copy(); bad[bad.index("autopilot-code")]="autopilot-lab"; bad[bad.index("dev")]="eval"; denied=subprocess.run(bad,text=True,capture_output=True,env=env); self.assertEqual(denied.returncode,65); self.assertIn("route-capability-mode-mismatch",denied.stdout+denied.stderr)
    legacy=[sys.executable,str(ROOT/"adapters/opencode/bin/dispatch-headless.py"),"--dry-run","--worktree",str(repo),"--slug","opencode-legacy-scope","--capability","autopilot-code","--mode","dev","--qa","standard","--write-scope","source/**","--model","provider/test","--variant","low"]
    compatible=subprocess.run(legacy,text=True,capture_output=True,env=env); self.assertEqual(compatible.returncode,0,compatible.stderr); self.assertIn("status=dry-run",compatible.stdout)
+class OpenCodePermissionDefault(unittest.TestCase):
+    # Item 1(b): headless "ask" auto-rejects and truncates the session; "deny"
+    # returns a structured tool error instead. Measured 2026-08-07
+    # (dev_logs/section4_permission_deny_experiment.md).
+    def test_default_external_directory_rule_is_deny_not_ask(self):
+        with mock.patch.dict(os.environ, {"OPENCODE_CONFIG_CONTENT": ""}, clear=False):
+            config = json.loads(WH.scoped_external_directory_config("/tmp/fixture-artifact-root"))
+        self.assertEqual(config["permission"]["external_directory"]["*"], "deny")
+
+    def test_explicit_caller_rule_is_preserved(self):
+        with mock.patch.dict(
+            os.environ,
+            {"OPENCODE_CONFIG_CONTENT": json.dumps({"permission": {"external_directory": {"*": "allow"}}})},
+            clear=False,
+        ):
+            config = json.loads(WH.scoped_external_directory_config("/tmp/fixture-artifact-root"))
+        self.assertEqual(config["permission"]["external_directory"]["*"], "allow")
+
+
 if __name__=="__main__": unittest.main()

@@ -113,7 +113,9 @@ DEATH_PATTERNS = [
      r"rate limit(?:ed)?|provider rate limit|exceeded retry limit|\b429\b"),
     ("auth", r"invalid api key|authentication_error|not logged in|please run /login|unauthorized|\b401\b"),
     ("credit", r"credit balance is too low|insufficient (?:credit|quota|funds)"),
+    ("permission-reject", r"permission requested:.*auto-rejecting"),
 ]
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 _RESET_RE = re.compile(
     r"resets?(?:\s+at)?\s+([0-9]{1,2}:[0-9]{2}\s*(?:am|pm)?|[0-9]{1,2}\s*(?:am|pm))",
     re.I,
@@ -142,7 +144,7 @@ def scan_death(text: str) -> tuple[str, str] | None:
 def scan_anchored_death(text: str) -> tuple[str, str] | None:
     """Inspect only terse terminal CLI lines, never completion-report prose."""
     for line in [line.strip() for line in text.splitlines() if line.strip()][-3:]:
-        if len(line) > 200:
+        if len(_ANSI_RE.sub("", line)) > 200:
             continue
         death = scan_death(line)
         if death:
@@ -439,7 +441,15 @@ def scoped_external_directory_config(artifact_root: str) -> str:
 
     external = permission.get("external_directory")
     if external is None:
-        rules: dict[str, str] = {"*": "ask"}
+        # SD-15/1(b): headless has no human to answer an "ask" prompt, so the
+        # runtime auto-rejects it -- and that auto-reject truncates the
+        # session outright (no terminal envelope, exit varies). "deny"
+        # instead returns a structured tool error to the model, which the
+        # model can recover from and keep working; measured 2026-08-07
+        # (dev_logs/section4_permission_deny_experiment.md): identical
+        # out-of-scope-path prompt died right after auto-reject under "ask"
+        # (no completion) and reached the final handoff under "deny".
+        rules: dict[str, str] = {"*": "deny"}
     elif isinstance(external, str):
         rules = {"*": external}
     elif isinstance(external, dict):
