@@ -1013,13 +1013,19 @@ def close_route(route, route_file, commit=None, summary=None):
     atomic_write(target,outcome)
     return outcome, True
 
-def route_status(artifact_root):
+def route_status(artifact_root, *, diagnostics=None):
     """Report every compiled route under one artifact root and whether it is closed.
 
     Scans the canonical `.runtime/routes/` directory plus four legacy locations
     (root-level `*-route.json`, `routes/`, `_routes/`, `.routes/`) read-only —
     D-2 blocks new writes to the legacy locations but `status` still surfaces
     them so open routes there remain discoverable and closeable.
+
+    `diagnostics` is opt-in: when given a list, every candidate that fails to parse as a
+    route (unreadable file, non-dict payload, missing `route_id`/`nodes`) is appended to
+    it as `{"path", "location", "reason"}` instead of being silently skipped -- ordinary
+    `status` callers that omit `diagnostics` keep today's fail-soft `continue` behavior
+    unchanged; the scan itself never terminates on a malformed candidate either way.
     """
     root=Path(artifact_root)
     search_dirs=[canonical_routes_dir(artifact_root),root,root/"routes",root/"_routes",root/".routes"]
@@ -1030,8 +1036,18 @@ def route_status(artifact_root):
         for path in sorted(search_dir.glob("*.json")):
             if path.name.endswith(".outcome.json"): continue
             try: raw=json.loads(path.read_text(encoding="utf-8"))
-            except (OSError,json.JSONDecodeError,UnicodeDecodeError): continue
-            if not isinstance(raw,dict) or "route_id" not in raw or "nodes" not in raw: continue
+            except (OSError,json.JSONDecodeError,UnicodeDecodeError) as exc:
+                if diagnostics is not None:
+                    diagnostics.append({"path":str(path),
+                                         "location":classify_route_location(path,artifact_root),
+                                         "reason":f"route-unreadable:{exc}"})
+                continue
+            if not isinstance(raw,dict) or "route_id" not in raw or "nodes" not in raw:
+                if diagnostics is not None:
+                    diagnostics.append({"path":str(path),
+                                         "location":classify_route_location(path,artifact_root),
+                                         "reason":"route-malformed-missing-required-keys"})
+                continue
             location=classify_route_location(path,artifact_root)
             target=outcome_path(path)
             row={"route_file":str(path),"route_id":raw.get("route_id"),
