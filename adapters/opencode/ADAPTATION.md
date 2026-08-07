@@ -446,22 +446,24 @@ their runtimes exit on limit.) Patterns are conservative per 2026-07 issue evide
 (#8203·#34886·#15890) and kept in sync with the shared list. Conformance (incl. the hang case):
 `adapters/opencode/bin/dispatch-headless.sd15.test.sh`.
 
-### SD-48~50 nested dispatch recovery — parity: partial (fail-closed)
+### SD-48~50 nested dispatch recovery — parity: full
 
 OpenCode participates in the inherited canonical global attempt registry for
-quick and registered dispatch-depth-1 work. It does not yet satisfy the
-registered standard+ dispatch-depth-2 contract: exact parent binding,
-and supervisor snapshot parity are missing. The wrapper does realize the shared
-pre-registration lifecycle recheck for supported dispatch-depth-1 work: a
+quick and registered dispatch-depth-1 work, and now satisfies the registered
+standard+ dispatch-depth-2 contract: exact parent binding and supervisor
+snapshot parity are implemented. The wrapper realizes the shared
+pre-registration lifecycle recheck for dispatch-depth-1 work: a
 transient scope promotes provisional `detached` to `foreground-scoped`, keeps
 the wrapper alive through child exit, and records requested/effective selection
-plus bounded namespace evidence. That does not supply the parent-bound
-foreground supervision required at dispatch-depth-2. The shared
-eligibility probe therefore returns
-`opencode-standard-depth2-unsupported` before any OpenCode runtime probe, and
-the OpenCode wrapper starts zero dispatch-depth-2 children. A standard+ owner must select
-a checked Codex or Claude target; otherwise it records an inline/quick fallback.
-The adapter's `nested-headless` diagnostic does not establish dispatch-depth-2 parity.
+plus bounded namespace evidence. At dispatch-depth-2 it additionally resolves
+exactly one open, live depth-1 owner row (`resolve_live_parent_attempt`,
+ported from the Claude wrapper) before any registry claim or runtime probe;
+a missing or ambiguous live parent fails closed with `live-parent-not-found`
+or `parent-attempt-not-found` and starts zero children. The shared
+eligibility probe now reaches the same `command_check` runtime probe used by
+every other harness instead of a blanket `opencode-standard-depth2-unsupported`
+refusal. The adapter's `nested-headless` diagnostic establishes dispatch-depth-2
+parity together with this binding.
 `nested-dispatch-eligibility.py --prospective-standard-owner` is a Codex-only probe
 (`failure_class=prospective-owner-codex-only` under any other parent harness, including
 OpenCode); it does not check OpenCode owner eligibility.

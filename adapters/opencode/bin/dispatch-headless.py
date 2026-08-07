@@ -1198,13 +1198,6 @@ def main(argv: list[str]) -> int:
     rc = validate_route_record(args)
     if rc != 0:
         return rc
-    if args.dispatch_depth == 2 and action in {"register", "start"}:
-        return fail(
-            "opencode-standard-depth2-unsupported",
-            69,
-            detail=("OpenCode lacks exact parent binding and supervisor snapshot parity"),
-            child_spawned="0",
-        )
     try:
         attempt_policy = headless_attempt_policy(
             route_file=args.route_file, route_node=args.route_node,
@@ -1264,12 +1257,6 @@ def main(argv: list[str]) -> int:
         return fail(e.reason, 78 if e.reason in PRELAUNCH_PROCESS_BLOCK_REASONS else 65,
                     detail=e.detail, child_spawned="0")
     # Item 5-1 (SD-48~50 exact parent binding), ported from the Claude wrapper.
-    # The depth-2 fail-closed gate above always intercepts dispatch_depth==2
-    # register/start before control reaches here, so this block is currently
-    # unreachable for opencode -- it is landed now (implementation-complete,
-    # gate still closed) so the gate lift itself (item 5-2) is a pure deletion
-    # with no new mechanism, per the "gate relief only after implementation"
-    # contract for this item.
     args.parent_binding = None
     if args.dispatch_depth == 2 and action in ("register", "start"):
         try:

@@ -235,12 +235,6 @@ def evaluate(args: argparse.Namespace) -> dict[str, str]:
             "codex-prospective-standard-owner-contract",
             "prospective-owner-codex-only",
         )
-    elif args.child_harness == "opencode":
-        status, source, failure = (
-            "unsupported",
-            "dispatch-contract-v3",
-            "opencode-standard-depth2-unsupported",
-        )
     elif codex_owner_tuple and not owner_marker and not prospective_owner:
         status, source, failure = "unsupported", "codex-owner-network-contract", "nested-network-unconfirmed"
         next_check = "--prospective-standard-owner"

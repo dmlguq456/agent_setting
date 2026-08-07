@@ -205,20 +205,21 @@ class NestedEligibilityTest(unittest.TestCase):
         self.assertEqual(row["failure_class"], "noncanonical-parent-transport")
         checked.assert_not_called()
 
-    def test_opencode_depth2_child_fails_closed_before_runtime_probe(self):
+    def test_opencode_depth2_child_reaches_the_same_runtime_probe(self):
         with tempfile.TemporaryDirectory() as worktree, \
-             mock.patch.dict(os.environ, {"AGENT_NESTED_HEADLESS_NETWORK": "1"}, clear=True), \
-             mock.patch.object(N, "command_check") as checked:
+             mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch.object(
+                 N, "command_check",
+                 return_value=("supported", "direct-auth+headless-check", ""),
+             ) as checked:
             args = self.args(worktree)
+            args.parent_harness = "claude"
+            args.parent_sandbox = "adapter-default"
             args.child_harness = "opencode"
             row = N.evaluate(args)
-        self.assertEqual(row["status"], "unsupported")
-        self.assertEqual(row["probe_source"], "dispatch-contract-v3")
-        self.assertEqual(
-            row["failure_class"],
-            "opencode-standard-depth2-unsupported",
-        )
-        checked.assert_not_called()
+        self.assertEqual(row["status"], "supported")
+        self.assertEqual(row["probe_source"], "direct-auth+headless-check")
+        checked.assert_called_once_with("opencode", args.worktree)
 
     def test_unknown_parent_sandbox_label_fails_before_runtime_probe(self):
         with tempfile.TemporaryDirectory() as worktree, \
