@@ -117,6 +117,26 @@ class ModelProfileTest(unittest.TestCase):
             self.assertEqual(resolved["source"], "profile+capacity")
             self.assertEqual(resolved["model"], concrete["model"])
 
+    def test_opencode_deep_demotes_to_balanced_deep_with_typed_granularity(self):
+        conf = ROOT / "adapters" / "opencode" / "config" / "models.conf"
+        balanced = PROFILE.resolve_profile("opencode", conf, "balanced-deep")
+        self.assertEqual(balanced["tier"], "balanced-deep")
+        self.assertEqual(balanced["model"], "opencode-go/glm-5.2")
+        self.assertEqual(balanced["granularity"], "exact")
+
+        deep = PROFILE.resolve_profile("opencode", conf, "deep")
+        self.assertEqual(deep["tier"], "balanced-deep")
+        self.assertEqual(deep["model"], "opencode-go/glm-5.2")
+        self.assertEqual(deep["granularity"], "deep-vacant-demoted-to-balanced-deep")
+
+    def test_claude_codex_granularity_unaffected_by_per_profile_key(self):
+        for adapter, expected in {"claude": "full", "codex": "full"}.items():
+            conf = ROOT / "adapters" / adapter / "config" / "models.conf"
+            for profile in ("deep", "balanced-deep"):
+                with self.subTest(adapter=adapter, profile=profile):
+                    resolved = PROFILE.resolve_profile(adapter, conf, profile)
+                    self.assertEqual(resolved["granularity"], expected)
+
     def test_opencode_runtime_default_omits_unverified_variant_flag(self):
         wrapper = WRAPPERS["opencode"]
         resolved = wrapper.resolve_model_settings(args("opencode", "balanced-deep"))
