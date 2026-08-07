@@ -111,6 +111,13 @@ cr=$canonical
 case "$fp" in
   "$cr"/spec/*)
     if [ -n "$route_file" ]; then
+      # An owner has no route node (SD-97): it can never declare spec_touch
+      # scope, so reject explicitly instead of falling into the node lookup
+      # below and relying on its blanket `except Exception` to deny it.
+      if [ -z "$route_node" ] || [ "$route_node" = "-" ]; then
+        route_failure "spec-touch-not-declared-or-outside-node-scope"
+        exit 2
+      fi
       if ! python3 - "$route_file" "$route_id" "$route_node" <<'PY'
 import json,sys
 from pathlib import Path
@@ -142,7 +149,16 @@ esac
 case "$fp" in
   "$cr"/*/*)
     if [ -n "$route_file" ]; then
-      if ! python3 - "$route_file" "$route_id" "$route_node" "$cr" "$fp" <<'PY'
+      # An owner has no route node (SD-97, empty AGENT_ROUTE_NODE by
+      # contract): node write_scope is a per-node concept, so there is no
+      # scope to match against. Skip the node-scope lookup instead of
+      # letting it StopIteration through the blanket `except Exception`
+      # below into a false "outside node scope" block. The canonical-root
+      # boundary and the `_internal` exemption above already ran, so this is
+      # not an "owner writes anywhere" carve-out.
+      if [ -z "$route_node" ] || [ "$route_node" = "-" ]; then
+        :
+      elif ! python3 - "$route_file" "$route_id" "$route_node" "$cr" "$fp" <<'PY'
 import fnmatch,json,sys
 from pathlib import Path
 WORKTREE_ONLY={"source-scoped"}

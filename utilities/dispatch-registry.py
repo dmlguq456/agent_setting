@@ -20,6 +20,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / "utilities")]
 from tools.fleet.model import ATTEMPT_CLASSIFIER_SOURCE, classify_attempt_evidence  # noqa: E402
 from dispatch_contract import (DispatchContractError, annotate_attempt_row_if,
                                attempt_process_quiescence,
+                               attempt_tagged_descendants,
                                authoritative_process_identities,
                                close_attempt_row_if,
                                exact_process_group_signal_authority,
@@ -159,6 +160,7 @@ def proc_inputs(row, home=None):
             "pid_host": int(meta["pid_host"]) if meta.get("pid_host", "").isdigit() else None,
             "pid_host_start": meta.get("pid_host_start", ""),
             "pid_scope": meta.get("pid_scope"),
+            "attempt_descendants": attempt_tagged_descendants(meta).state,
             "attempt_id": meta.get("attempt_id"), "route_id": meta.get("route_id"),
             "route_node": meta.get("route_node"),
             "heartbeat": attempt_heartbeat(home, meta),
@@ -465,6 +467,11 @@ def classify(row, args, newest_orders, rows=None):
             incomplete, record_status = route_incomplete(row, args.agent_home, rows)
             if record_status == "ok" and incomplete and has_orphaned_dependents(row, rows, incomplete, args):
                 return "orphan", "dead-parent-orphaned", "dead-parent-orphaned"
+        # Same closure, distinguishable cause: this row died with a fresh
+        # heartbeat and no recorded PID we could read, so an audit that sees
+        # `dead-exact-pid` would go looking for a PID that never meant anything.
+        if exact["source"] == "namespace":
+            return "exact-dead", exact["rule"], "dead-namespace-absent"
         return "exact-dead", exact["rule"], "dead-exact-pid"
     key = fold_key(meta)
     if all(key[:2]) and newest_orders.get(key) == row["order"]:

@@ -105,6 +105,10 @@ if AGENT_ROUTE_FILE="$TMP/route-plan.json" AGENT_ROUTE_ID=rt-fixture AGENT_ROUTE
 else
   bad "dot-prefixed runtime state should be exempt from node scope binding"
 fi
+# NOTE: despite the file name, AGENT_ROUTE_NODE=inline below names a real
+# route node ("inline" is in route["nodes"]), so this exercises the ordinary
+# non-owner node-scope path, not the C-item owner defect (empty
+# AGENT_ROUTE_NODE). See the "owner binding" cases further down for that.
 printf '{"route_id":"rt-fixture","spec_touch":false,"nodes":[{"id":"inline","write_scope":["source-scoped","plans/<cycle>/**"]}]}\n' > "$TMP/route-owner.json"
 if AGENT_ROUTE_FILE="$TMP/route-owner.json" AGENT_ROUTE_ID=rt-fixture AGENT_ROUTE_NODE=inline \
   "$ART" --file "$TMP/proj/.agent_reports/plans/2026-08-03_fixture/plan/plan.md" >/tmp/art_cycle_in.out 2>/tmp/art_cycle_in.err; then
@@ -118,6 +122,59 @@ if AGENT_ROUTE_FILE="$TMP/route-owner.json" AGENT_ROUTE_ID=rt-fixture AGENT_ROUT
 else
   [ "$?" -eq 2 ] && ok "a worktree-only scope does not authorize an unrelated artifact write" \
     || bad "worktree-only scope violation wrong exit"
+fi
+
+# Item C: owner writes (empty AGENT_ROUTE_NODE, per SD-97) must skip node
+# write-scope matching, not fall through the node lookup's StopIteration.
+printf '{"route_id":"rt-owner","spec_touch":false,"nodes":[{"id":"execute","write_scope":["plans/<cycle>/**"]}]}\n' > "$TMP/route-owner-empty.json"
+mkdir -p "$TMP/proj/.agent_reports/plans/owner_cycle/dev_logs"
+if AGENT_ROUTE_FILE="$TMP/route-owner-empty.json" AGENT_ROUTE_ID=rt-owner AGENT_ROUTE_NODE="" \
+  "$ART" --file "$TMP/proj/.agent_reports/plans/owner_cycle/checklist.md" >/tmp/art_owner_ck.out 2>/tmp/art_owner_ck.err; then
+  ok "owner binding (empty route node) can write cycle artifacts"
+else
+  bad "owner binding (empty route node) should be able to write cycle artifacts"
+fi
+if AGENT_ROUTE_FILE="$TMP/route-owner-empty.json" AGENT_ROUTE_ID=rt-owner AGENT_ROUTE_NODE="" \
+  "$ART" --file "$TMP/proj/.agent_reports/plans/owner_cycle/dev_logs/x.md" >/tmp/art_owner_dl.out 2>/tmp/art_owner_dl.err; then
+  ok "owner binding (empty route node) can write dev_logs artifacts"
+else
+  bad "owner binding (empty route node) should be able to write dev_logs artifacts"
+fi
+mkdir -p "$TMP/proj/.agent_reports/spec"
+if AGENT_ROUTE_FILE="$TMP/route-owner-empty.json" AGENT_ROUTE_ID=rt-owner AGENT_ROUTE_NODE="" \
+  "$ART" --file "$TMP/proj/.agent_reports/spec/x.md" >/tmp/art_owner_spec.out 2>/tmp/art_owner_spec.err; then
+  bad "owner binding must still be rejected from spec/ writes"
+else
+  [ "$?" -eq 2 ] && grep -q 'spec-touch-not-declared-or-outside-node-scope' /tmp/art_owner_spec.err \
+    && ok "owner binding is rejected from spec/ writes" \
+    || bad "owner binding spec/ rejection missing structured reason"
+fi
+if AGENT_ROUTE_FILE="$TMP/route-owner-empty.json" AGENT_ROUTE_ID=rt-owner AGENT_ROUTE_NODE=execute \
+  "$ART" --file "$TMP/proj/.agent_reports/documents/fake/doc.md" >/tmp/art_node_scope.out 2>/tmp/art_node_scope.err; then
+  bad "a real node's out-of-scope write must still be rejected"
+else
+  [ "$?" -eq 2 ] && grep -q 'artifact-write-outside-node-scope' /tmp/art_node_scope.err \
+    && ok "a real node's out-of-scope write is still rejected (owner exception did not widen)" \
+    || bad "real node out-of-scope rejection missing structured reason"
+fi
+mkdir -p "$TMP/ownerrepo/.agent_reports/_internal" "$TMP/ownerrepo-wt"
+(
+  cd "$TMP/ownerrepo" || exit 1
+  git init -q
+  git config user.email test@example.com
+  git config user.name Test
+  printf 'canonical\n' > .agent_reports/_internal/marker
+  git add .
+  git commit -q -m init
+  git worktree add -q -b owner-topic "$TMP/ownerrepo-wt/topic"
+)
+if AGENT_ROUTE_FILE="$TMP/route-owner-empty.json" AGENT_ROUTE_ID=rt-owner AGENT_ROUTE_NODE="" \
+  "$ART" --file "$TMP/ownerrepo-wt/topic/.agent_reports/plans/owner_cycle/checklist.md" >/tmp/art_owner_root.out 2>/tmp/art_owner_root.err; then
+  bad "owner binding must still respect the canonical artifact root boundary"
+else
+  [ "$?" -eq 2 ] && grep -q 'canonical-artifact-root-mismatch' /tmp/art_owner_root.err \
+    && ok "owner binding does not bypass the canonical artifact root boundary" \
+    || bad "owner binding canonical-root rejection missing structured reason"
 fi
 
 printf '{"route_id":"rt-refine","route_hash":"sha256:refine","capability":"autopilot-refine","effective_intensity":"standard","spec_touch":false,"nodes":[{"id":"transaction","write_scope":["target-artifact","_internal/versions/**"]}]}\n' > "$TMP/route-refine.json"

@@ -25,6 +25,7 @@ from dispatch_contract import (  # noqa: E402
     attempt_process_quiescence,
     completion_attempt_readiness,
     completion_marker_gate,
+    PRELAUNCH_PROCESS_BLOCK_REASONS,
     completion_marker_is_current,
     parse_registry_metadata,
     recover_unstarted_attempt,
@@ -832,7 +833,7 @@ def main(argv: list[str] | None = None) -> int:
     ) as exc:
         reason = getattr(exc, "reason", "batch-validation-failed")
         detail = getattr(exc, "detail", str(exc))
-        return fail(reason, 78 if reason.startswith("predecessor-process-") else 65, detail=detail)
+        return fail(reason, 78 if reason in PRELAUNCH_PROCESS_BLOCK_REASONS else 65, detail=detail)
 
     lifecycle = select_launch_lifecycle()
     required_axes = list(nodes[0].get("parallel_independence_axes", ["cross-harness"]))
@@ -1074,11 +1075,21 @@ def main(argv: list[str] | None = None) -> int:
                 str(leg["ordinal"]),
             ]
             env = {
-                **os.environ,
+                # This launches a depth-2 node (dispatch-node.py), which
+                # always supplies its own --route via `command` above. An
+                # inherited AGENT_OWNER_ROUTE_* triple (the calling owner's
+                # own identity, per dispatch-owner.py) must not ride along:
+                # the adapter wrapper rejects a node launch that carries an
+                # owner route binding alongside an explicit route file.
+                key: value
+                for key, value in os.environ.items()
+                if not key.startswith("AGENT_OWNER_ROUTE_")
+            }
+            env.update({
                 GOVERNOR_RESERVATION_ENV: token,
                 "AGENT_MODEL_GOVERNOR_ROOT": str(governor_root),
                 "AGENT_DISPATCH_JOBS": str(jobs),
-            }
+            })
             try:
                 proc = subprocess.Popen(
                     command,

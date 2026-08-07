@@ -42,6 +42,7 @@ from dispatch_lifecycle import (  # noqa: E402
     select_launch_lifecycle,
 )
 from dispatch_contract import (  # noqa: E402
+    PRELAUNCH_PROCESS_BLOCK_REASONS,
     DispatchContractError,
     attempt_process_quiescence,
     resolve_live_parent_attempt,
@@ -583,12 +584,17 @@ def wrapper_command(
 
 
 def direct_env() -> dict[str, str]:
-    """Never project a retired broker binding into a direct adapter call."""
+    """Never project a retired broker binding or an owner's own route binding
+    into a direct adapter call. A node launch always supplies its own
+    ``--route-file``, so an inherited ``AGENT_OWNER_ROUTE_*`` triple (set by
+    ``dispatch-owner.py`` for the owner's own identity) makes the wrapper's
+    owner/node tuple check reject the launch outright."""
 
     return {
         key: value
         for key, value in os.environ.items()
         if not key.startswith("AGENT_DISPATCH_BROKER_")
+        and not key.startswith("AGENT_OWNER_ROUTE_")
     }
 
 
@@ -957,10 +963,7 @@ def main() -> int:
                             fields.get("reason")
                             or (worker_failure if worker_failure != "-" else "wrapper-exit")
                         )
-                        if failure_reason in {
-                            "predecessor-process-draining",
-                            "predecessor-process-unverifiable",
-                        }:
+                        if failure_reason in PRELAUNCH_PROCESS_BLOCK_REASONS:
                             return fail(
                                 failure_reason,
                                 78,

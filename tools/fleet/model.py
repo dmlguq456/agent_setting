@@ -944,10 +944,20 @@ def classify_attempt_evidence(ev_in, now=None):
         ):
             state, source = "dead", "proc"
             rule = "namespace-bound authoritative process identity ended or changed"
+        elif ev_in.get("attempt_descendants") == "empty":
+            # SD-58: a heartbeat is the attempt talking about itself, and a row
+            # that stopped mid-sentence keeps a fresh one forever. A proven-empty
+            # scan for the attempt's own tag outranks it -- nothing is running,
+            # whatever the last message said. Freshness alone left these rows
+            # permanently open, because classify() produced no note to close on.
+            state, source = "dead", "namespace"
+            rule = "namespace-local attempt has no surviving attempt-tagged process"
         elif heartbeat and now is not None and now - float(heartbeat["updated_at"]) <= ATTEMPT_HEARTBEAT_LIVE_SEC:
             state, source = "working", "heartbeat"
             rule = "namespace-local attempt has a fresh exact UI heartbeat"
         else:
+            # Reached when the scan itself was impossible (`unverifiable`), or on
+            # an older caller that supplies no probe at all. Both stay fail-closed.
             state, source = "unknown", "namespace"
             rule = "namespace-local process identity has no authoritative observer proof"
     elif not has_process_identity:

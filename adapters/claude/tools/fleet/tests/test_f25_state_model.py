@@ -398,5 +398,63 @@ class AdditiveSchemaTest(unittest.TestCase):
             self.assertIsNone(getattr(s, f), f)
 
 
+class NamespaceLocalDescendantEvidenceTest(unittest.TestCase):
+    """A heartbeat says the attempt spoke; only a scan says it still runs.
+
+    SD-58: a namespace-local row's PID is unreadable here, so freshness was the
+    only thing left to judge it by -- and a worker that stopped mid-sentence
+    keeps a fresh heartbeat forever, leaving the row open with no note to close
+    on. These pin that a proven-empty scan outranks freshness while an
+    impossible scan still does not.
+    """
+
+    def evidence(self, **extra):
+        base = {
+            "pid": None, "proc_start": "", "pid_local": 437, "pid_local_start": "1",
+            "pid_authoritative": False, "pid_alive": False, "proc_start_match": False,
+            "pid_scope": "namespace-local",
+            "attempt_id": "att-ghost", "route_id": "rt-ghost", "route_node": "execute",
+            "heartbeat": {"attempt_id": "att-ghost", "route_id": "rt-ghost",
+                          "route_node": "execute", "phase": "tool", "sequence": 3,
+                          "updated_at": 1000.0},
+        }
+        base.update(extra)
+        return base
+
+    def test_proven_empty_scan_outranks_a_fresh_heartbeat(self):
+        verdict = model.classify_attempt_evidence(
+            self.evidence(attempt_descendants="empty"), now=1060.0)
+        self.assertEqual(verdict["state"], "dead")
+        self.assertEqual(verdict["source"], "namespace")
+        self.assertIn("attempt-tagged", verdict["rule"])
+
+    def test_live_tagged_process_keeps_the_fresh_heartbeat_working(self):
+        verdict = model.classify_attempt_evidence(
+            self.evidence(attempt_descendants="populated"), now=1060.0)
+        self.assertEqual(verdict["state"], "working")
+        self.assertEqual(verdict["source"], "heartbeat")
+
+    def test_unscannable_and_absent_probes_both_stay_fail_closed(self):
+        # An impossible scan, and an older caller that supplies no probe at all.
+        for evidence in (self.evidence(attempt_descendants="unverifiable"),
+                         self.evidence()):
+            stale = model.classify_attempt_evidence(evidence, now=99000.0)
+            self.assertEqual(stale["state"], "unknown", evidence.get("attempt_descendants"))
+            fresh = model.classify_attempt_evidence(evidence, now=1060.0)
+            self.assertEqual(fresh["state"], "working", evidence.get("attempt_descendants"))
+
+    def test_authoritative_process_evidence_still_wins(self):
+        live = model.classify_attempt_evidence(self.evidence(
+            pid=437, proc_start="1", pid_authoritative=True, pid_alive=True,
+            proc_start_match=True, attempt_descendants="empty"), now=1060.0)
+        self.assertEqual((live["state"], live["source"]), ("working", "proc"))
+        terminal = model.classify_attempt_evidence(self.evidence(
+            attempt_descendants="empty",
+            heartbeat={"attempt_id": "att-ghost", "route_id": "rt-ghost",
+                       "route_node": "execute", "phase": "terminal", "sequence": 4,
+                       "updated_at": 1000.0}), now=1060.0)
+        self.assertEqual((terminal["state"], terminal["source"]), ("done", "heartbeat"))
+
+
 if __name__ == "__main__":
     unittest.main()

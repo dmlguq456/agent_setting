@@ -746,6 +746,54 @@ def process_namespace_pids(pid: int) -> tuple[int, ...]:
     return ()
 
 
+def local_identity_namespace_authority(metadata: dict[str, str]) -> bool:
+    """True when the current observer namespace owns this row's local PID."""
+
+    current_namespace = process_namespace_identity()
+    recorded_observer = metadata.get("pid_observer_ns", "")
+    recorded_pid_namespace = metadata.get("pid_ns", "")
+    pid_scope = metadata.get("pid_scope", "host-visible")
+    return bool(
+        recorded_observer
+        and current_namespace == recorded_observer
+        and (
+            not recorded_pid_namespace
+            or recorded_pid_namespace == recorded_observer
+        )
+    ) or (not recorded_observer and pid_scope != "namespace-local")
+
+
+def attempt_scan_namespace_authority(metadata: dict[str, str]) -> bool:
+    """True when *finding nothing* is proof this attempt has no live process.
+
+    Deliberately not the same question as ``local_identity_namespace_authority``.
+    That one asks whether a recorded PID number means anything here; this asks
+    whether a ``/proc`` walk here could have seen the attempt's processes at all.
+    A namespace-local row whose PID is meaningless to us is still fully scannable
+    when we are the namespace that watched it launch -- which is exactly the
+    ghost row SD-58 needs to be able to close.
+
+    Three ways to hold that authority: we are the namespace that recorded the
+    observation; launch proved the procfs-root namespace and we are in it, so
+    every descendant is visible; or the row predates the observer field and was
+    recorded as host-visible. Anything else fails closed, because a narrower or
+    sibling namespace's empty scan is invisibility, not absence.
+    """
+
+    current_namespace = process_namespace_identity()
+    if not current_namespace:
+        return False
+    recorded_observer = metadata.get("pid_observer_ns", "")
+    if recorded_observer:
+        if recorded_observer == current_namespace:
+            return True
+        return (
+            metadata.get("pid_host_proof") == PID_HOST_NAMESPACE_PROOF
+            and metadata.get("pid_host_ns") == current_namespace
+        )
+    return metadata.get("pid_scope", "host-visible") != "namespace-local"
+
+
 def authoritative_process_identities(
     metadata: dict[str, str],
 ) -> tuple[AuthoritativeProcessIdentity, ...]:
@@ -760,24 +808,11 @@ def authoritative_process_identities(
     """
 
     current_namespace = process_namespace_identity()
-    recorded_observer = metadata.get("pid_observer_ns", "")
-    recorded_pid_namespace = metadata.get("pid_ns", "")
-    pid_scope = metadata.get("pid_scope", "host-visible")
     candidates: list[AuthoritativeProcessIdentity] = []
 
     raw_pid = metadata.get("pid", "")
     local_start = metadata.get("pid_start", "")
-    local_authoritative = (
-        bool(
-            recorded_observer
-            and current_namespace == recorded_observer
-            and (
-                not recorded_pid_namespace
-                or recorded_pid_namespace == recorded_observer
-            )
-        )
-        or (not recorded_observer and pid_scope != "namespace-local")
-    )
+    local_authoritative = local_identity_namespace_authority(metadata)
     if raw_pid.isdigit() and local_start and local_authoritative:
         candidates.append(
             AuthoritativeProcessIdentity("local", int(raw_pid), local_start)
@@ -977,6 +1012,82 @@ def process_group_members(pgid: int) -> tuple[tuple[int, str, str], ...]:
     return process_group_observation(pgid).members
 
 
+ATTEMPT_DESCENDANT_ENV = "AGENT_DISPATCH_ATTEMPT_ID"
+
+# Every reason `completion_marker_gate` raises because some process has not
+# stopped yet. They share one exit code (78) and one meaning for the caller:
+# nothing was spawned, and waiting may fix it. Adapters map this set rather
+# than matching a name prefix, so a new member cannot silently fall to 65.
+PRELAUNCH_PROCESS_BLOCK_REASONS = (
+    "predecessor-process-draining",
+    "predecessor-process-unverifiable",
+    "prior-attempt-still-live",
+    "prior-attempt-unverifiable",
+)
+
+
+def attempt_tagged_descendants(metadata: dict[str, str]) -> ProcessGroupObservation:
+    """Find live processes still tagged with this attempt, whatever group they left.
+
+    The recorded leader and process group are the only things SD-79's quiescent
+    verdict looks at, so a descendant that re-``setsid``'d out of that group
+    reads as absence even while it runs. Every dispatched worker carries its
+    attempt id in the environment, so scanning ``/proc/<pid>/environ`` for that
+    tag finds the process wherever it went.
+
+    Emptiness is evidence only from the namespace that recorded the identities;
+    from anywhere else the tagged processes may simply be invisible, so that
+    case is ``unverifiable`` rather than a false death. Another uid's process is
+    never one of this harness's workers, so an unreadable ``environ`` is skipped
+    instead of poisoning the scan.
+    """
+
+    attempt_id = metadata.get("attempt_id", "")
+    if not attempt_id:
+        return ProcessGroupObservation("unverifiable", reason="attempt-id-missing")
+    tag = f"{ATTEMPT_DESCENDANT_ENV}={attempt_id}".encode()
+    members: list[tuple[int, str, str]] = []
+    incomplete_reason = ""
+    try:
+        entries = tuple(Path("/proc").iterdir())
+    except OSError as exc:
+        return ProcessGroupObservation(
+            "unverifiable", reason=f"procfs-enumeration:{exc.errno or 'error'}"
+        )
+    for entry in entries:
+        if not entry.name.isdigit():
+            continue
+        try:
+            raw = (entry / "stat").read_text(encoding="utf-8")
+            tail = raw[raw.rfind(")") + 2 :].split()
+            state, start = tail[0], tail[19]
+            if state == "Z":
+                continue
+            environ = (entry / "environ").read_bytes()
+        except (FileNotFoundError, PermissionError):
+            continue
+        except OSError as exc:
+            if exc.errno in {errno.ENOENT, errno.ESRCH, errno.EACCES, errno.EPERM}:
+                continue
+            incomplete_reason = f"procfs-environ:{entry.name}:{exc.errno or 'error'}"
+            continue
+        except (IndexError, ValueError):
+            incomplete_reason = f"procfs-member:{entry.name}:malformed"
+            continue
+        if tag in environ.split(b"\0"):
+            members.append((int(entry.name), start, state))
+    ordered = tuple(sorted(members, key=lambda member: member[0]))
+    if ordered:
+        return ProcessGroupObservation("populated", ordered, incomplete_reason)
+    if incomplete_reason:
+        return ProcessGroupObservation("unverifiable", (), incomplete_reason)
+    if not attempt_scan_namespace_authority(metadata):
+        return ProcessGroupObservation(
+            "unverifiable", (), "observer-namespace-mismatch"
+        )
+    return ProcessGroupObservation("empty")
+
+
 def _foreground_reap_receipt(metadata: dict[str, str]) -> bool:
     raw_pid = metadata.get("pid", "")
     raw_group = metadata.get("pgid", "")
@@ -996,6 +1107,36 @@ def _foreground_reap_receipt(metadata: dict[str, str]) -> bool:
 
 
 def attempt_process_quiescence(metadata: dict[str, str]) -> ProcessQuiescence:
+    """Classify the exact governed process, then prove no tagged descendant survives.
+
+    The leader/process-group verdict below is left exactly as it was; it is only
+    post-processed on its way to ``quiescent``. That is the one verdict a false
+    negative can turn into a duplicate launch, and it is also the rare one, so
+    the ``/proc`` scan runs only at the moment quiescence is about to be
+    declared and never on a hot path. ``live`` and ``unverifiable`` keep their
+    previous meaning to the letter.
+    """
+
+    result = _attempt_process_quiescence_impl(metadata)
+    if result.state != "quiescent":
+        return result
+    # D-1: a legacy row records no attempt id, so there is no tag to scan for.
+    # Answering `unverifiable` for all of them would retroactively freeze every
+    # successor, join, wait, and cleanup gate that reads an old row, so they
+    # keep the verdict they already had instead.
+    if not metadata.get("attempt_id"):
+        return result
+    probe = attempt_tagged_descendants(metadata)
+    if probe.state == "populated":
+        return ProcessQuiescence(
+            "live", "attempt-descendant-live", probe.members[0][0]
+        )
+    if probe.state == "unverifiable":
+        return ProcessQuiescence("unverifiable", "attempt-descendant-unverifiable")
+    return result
+
+
+def _attempt_process_quiescence_impl(metadata: dict[str, str]) -> ProcessQuiescence:
     """Classify the exact governed process without PID-namespace guessing.
 
     A candidate PID is authoritative only in the namespace that observed it, or
@@ -2557,13 +2698,19 @@ def completion_marker_gate(
     jobs: Path | None = None,
     *,
     registry_lines: list[str] | None = None,
+    attempt_id: str | None = None,
 ) -> None:
     """SD-56 decision gate: a record-bound ``--start`` must not spawn a node
-    whose ``depends_on`` predecessors have no completion marker.
+    whose ``depends_on`` predecessors have no completion marker, nor one whose
+    own previous attempt has not actually stopped.
 
     ``agent_home`` is an explicit argument, not re-read from the environment,
     so the writer (capability-route.py complete) and every reader (this gate,
     called once per wrapper) are structurally forced to agree on one root.
+
+    ``attempt_id`` is the identity about to launch. It is what makes "sibling"
+    mean something: without it the caller's own freshly claimed row is the most
+    recent row for this node and would block every launch.
     """
 
     if not route_file:
@@ -2618,6 +2765,79 @@ def completion_marker_gate(
             f"{dep}:{item.attempt_id or '-'}:{item.reason}" for dep, item in blocked
         )
         raise DispatchContractError(reason, detail)
+    _sibling_attempt_gate(
+        route,
+        route_node,
+        jobs or (Path(agent_home) / ".dispatch" / "jobs.log"),
+        registry_lines=registry_lines,
+        attempt_id=attempt_id,
+    )
+
+
+def _sibling_attempt_gate(
+    route: dict[str, object],
+    route_node: str | None,
+    jobs: Path,
+    *,
+    registry_lines: list[str] | None = None,
+    attempt_id: str | None = None,
+) -> None:
+    """SD-79: refuse to launch over a previous attempt of *this* node that still runs.
+
+    The ``depends_on`` loop above cannot cover this. A retry, a fallback hop, and
+    a capacity re-selection are all further attempts at the *same* node, so they
+    never appear in any node's ``depends_on`` list and that loop structurally
+    never fires for them. This is also not
+    ``completion_attempt_readiness``'s ``conflicting_active`` scan: that one asks
+    whether a *registry status word* says another attempt is still open, while
+    this one asks the operating system whether the previous attempt's processes
+    are still alive. A row closed by a false death verdict looks quiet to the
+    first check and loud to this one -- which is the whole failure this repairs.
+    Do not merge them.
+    """
+
+    if registry_lines is None:
+        try:
+            lines = jobs.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return
+    else:
+        lines = registry_lines
+    sibling: dict[str, str] | None = None
+    for line in lines:
+        fields = line.split("\t")
+        if len(fields) != 6:
+            continue
+        metadata = parse_registry_metadata(fields[5])
+        if (
+            metadata.get("route_id") != route.get("route_id")
+            or metadata.get("route_node") != route_node
+        ):
+            continue
+        candidate = metadata.get("attempt_id", "")
+        if not candidate or candidate == (attempt_id or ""):
+            continue
+        # A row that never recorded a governed process cannot have leaked one,
+        # and judging it `unverifiable` would wedge the node permanently.
+        if not metadata.get("pid"):
+            continue
+        # Only the most recent sibling by registry order is authoritative; older
+        # rows are its lineage, not independent claimants.
+        sibling = metadata
+    if sibling is None:
+        return
+    process = attempt_process_quiescence(sibling)
+    if process.state == "quiescent":
+        return
+    reason = (
+        "prior-attempt-still-live"
+        if process.state == "live"
+        else "prior-attempt-unverifiable"
+    )
+    raise DispatchContractError(
+        reason,
+        f"{route_node}:{sibling.get('attempt_id', '-')}:{process.reason}",
+    )
 
 
 def completion_marker_is_current(
