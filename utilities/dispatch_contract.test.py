@@ -1130,6 +1130,79 @@ class DispatchContractTest(unittest.TestCase):
                         terminal_attempt_limit=2)
    self.assertEqual(caught.exception.reason,"quick-registered-headless-exhausted")
    self.assertEqual(len(jobs.read_text().splitlines()),2)
+ # Item 4: a failed terminal note in replacement_notes gets its own budget
+ # (default 1) separate from terminal_attempt_limit, so one dead-protocol/
+ # dead-permission-reject terminal allows exactly one same-route relaunch
+ # without touching the ordinary success-exhaustion behavior.
+ def test_replacement_attempt_budget_is_separate_from_success_exhaustion(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log"
+   def row(attempt,stamp):
+    return (f"{stamp}\topen\t/r\t/w\tquick\t{CURRENT},route_id=rt-r,"
+            f"route_node=one-shot,attempt_id={attempt}")
+   exclusive={"route_id":"rt-r","route_node":"one-shot"}
+   notes=frozenset({"dead-protocol","dead-permission-reject"})
+   first="att-repl000001"; second="att-repl000002"; third="att-repl000003"
+   self.assertTrue(D.claim_attempt_row(jobs,first,row(first,"2026-07-21T00:00:00Z"),
+                                       launch=True,exclusive_live_metadata=exclusive,
+                                       terminal_attempt_limit=1,
+                                       replacement_attempt_limit=1,replacement_notes=notes))
+   self.assertTrue(D.close_attempt_row(jobs,first,"dead-protocol"))
+   # replacement 1 of 1: same route relaunches once after the failed terminal.
+   self.assertTrue(D.claim_attempt_row(jobs,second,row(second,"2026-07-21T00:00:01Z"),
+                                       launch=True,exclusive_live_metadata=exclusive,
+                                       terminal_attempt_limit=1,
+                                       replacement_attempt_limit=1,replacement_notes=notes))
+   self.assertTrue(D.close_attempt_row(jobs,second,"dead-permission-reject"))
+   # replacement budget now exhausted (2 replacement terminals > limit 1).
+   with self.assertRaises(D.DispatchContractError) as caught:
+    D.claim_attempt_row(jobs,third,row(third,"2026-07-21T00:00:02Z"),
+                        launch=True,exclusive_live_metadata=exclusive,
+                        terminal_attempt_limit=1,
+                        replacement_attempt_limit=1,replacement_notes=notes)
+   self.assertEqual(caught.exception.reason,"quick-replacement-attempts-exhausted")
+ def test_replacement_notes_do_not_relax_post_success_exhaustion(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log"
+   def row(attempt,stamp):
+    return (f"{stamp}\topen\t/r\t/w\tquick\t{CURRENT},route_id=rt-s,"
+            f"route_node=one-shot,attempt_id={attempt}")
+   exclusive={"route_id":"rt-s","route_node":"one-shot"}
+   notes=frozenset({"dead-protocol","dead-permission-reject"})
+   first="att-succ000001"; second="att-succ000002"
+   self.assertTrue(D.claim_attempt_row(jobs,first,row(first,"2026-07-22T00:00:00Z"),
+                                       launch=True,exclusive_live_metadata=exclusive,
+                                       terminal_attempt_limit=1,
+                                       replacement_attempt_limit=1,replacement_notes=notes))
+   # a success note is not in replacement_notes, so it still counts against
+   # the ordinary (unrelaxed) terminal_attempt_limit -- duplicate launch
+   # after success stays refused exactly as before item 4.
+   self.assertTrue(D.close_attempt_row(jobs,first,"completed-marker"))
+   with self.assertRaises(D.DispatchContractError) as caught:
+    D.claim_attempt_row(jobs,second,row(second,"2026-07-22T00:00:01Z"),
+                        launch=True,exclusive_live_metadata=exclusive,
+                        terminal_attempt_limit=1,
+                        replacement_attempt_limit=1,replacement_notes=notes)
+   self.assertEqual(caught.exception.reason,"quick-registered-headless-exhausted")
+ def test_open_running_duplicate_launch_still_refused_with_replacement_budget(self):
+  with tempfile.TemporaryDirectory() as td:
+   jobs=Path(td)/"jobs.log"
+   def row(attempt,stamp):
+    return (f"{stamp}\topen\t/r\t/w\tquick\t{CURRENT},route_id=rt-o,"
+            f"route_node=one-shot,attempt_id={attempt}")
+   exclusive={"route_id":"rt-o","route_node":"one-shot"}
+   notes=frozenset({"dead-protocol"})
+   first="att-open000001"; second="att-open000002"
+   self.assertTrue(D.claim_attempt_row(jobs,first,row(first,"2026-07-23T00:00:00Z"),
+                                       launch=True,exclusive_live_metadata=exclusive,
+                                       terminal_attempt_limit=1,
+                                       replacement_attempt_limit=1,replacement_notes=notes))
+   # first row is still open|running -- immediate refusal, unaffected by the
+   # replacement budget existing at all.
+   self.assertFalse(D.claim_attempt_row(jobs,second,row(second,"2026-07-23T00:00:01Z"),
+                                        launch=True,exclusive_live_metadata=exclusive,
+                                        terminal_attempt_limit=1,
+                                        replacement_attempt_limit=1,replacement_notes=notes))
  def test_orphan_watch_launch_is_exact_and_detached(self):
   fake=mock.Mock(pid=4321)
   with mock.patch.object(D.subprocess,"Popen",return_value=fake) as popen:

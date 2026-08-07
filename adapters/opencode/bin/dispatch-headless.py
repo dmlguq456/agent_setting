@@ -720,6 +720,8 @@ def append_job(jobs: Path, args: argparse.Namespace) -> bool:
         exclusive_metadata=exclusive,
         exclusive_live_metadata=quick_exclusive,
         terminal_attempt_limit=getattr(args, "quick_attempt_limit", None),
+        replacement_attempt_limit=getattr(args, "replacement_attempt_limit", 0),
+        replacement_notes=getattr(args, "replacement_notes", frozenset()),
         preclaim=None,
     )
 
@@ -1203,6 +1205,8 @@ def main(argv: list[str]) -> int:
     args.fallback_ordinal = int(attempt_policy["fallback_ordinal"])
     args.quick_attempt = bool(attempt_policy["quick"])
     args.quick_attempt_limit = attempt_policy["terminal_attempt_limit"]
+    args.replacement_attempt_limit = attempt_policy["replacement_attempt_limit"]
+    args.replacement_notes = attempt_policy["replacement_notes"]
     bind_parent_completion_delivery(args)
     try:
         args.resolved_model_settings = resolve_model_settings(args)
