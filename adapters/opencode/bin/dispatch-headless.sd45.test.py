@@ -194,6 +194,44 @@ class OpenCodeParentCompletionDelivery(unittest.TestCase):
         self.assertIn("parent_completion_reason=", result.stdout)
 
 
+class OpenCodeParentBindingDryRun(unittest.TestCase):
+    # Item 5-1: the exact parent-binding machinery is ported and wired, but
+    # unreachable while the dispatch_depth==2 fail-closed gate stays in
+    # place (item 5-2/gate lift). At dispatch_depth==1, --parent-attempt-id
+    # must at least parse and echo through stdout as "-" (no binding
+    # attempted at depth 1) without erroring -- that's what this locks.
+    def test_dry_run_accepts_parent_attempt_id_and_echoes_it(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td); repo = base / "repo"; repo.mkdir()
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            subprocess.run(["git", "-C", str(repo), "config", "user.email", "fixture@example.com"], check=True)
+            subprocess.run(["git", "-C", str(repo), "config", "user.name", "Fixture"], check=True)
+            (repo / "x").write_text("x")
+            subprocess.run(["git", "-C", str(repo), "add", "x"], check=True)
+            subprocess.run(["git", "-C", str(repo), "commit", "-qm", "init"], check=True)
+            art = base / ".agent_reports"; art.mkdir()
+            cmd = [
+                sys.executable, str(ROOT / "adapters/opencode/bin/dispatch-headless.py"),
+                "--dry-run", "--worktree", str(repo), "--slug", "oc-parent-binding-fixture",
+                "--capability", "autopilot-code", "--mode", "dev", "--qa", "standard",
+                "--write-scope", "source/**", "--model", "provider/test", "--variant", "low",
+                "--parent-attempt-id", "att-parent-fixture-1",
+            ]
+            env = {
+                **{
+                    k: v for k, v in os.environ.items()
+                    if k not in {"AGENT_DISPATCH_JOBS", "AGENT_MODEL_GOVERNOR_ROOT"}
+                },
+                "AGENT_HOME": str(ROOT), "AGENT_ARTIFACT_ROOT": str(art),
+                "OPENCODE_CONFIG_CONTENT": "{}",
+            }
+            result = subprocess.run(cmd, text=True, capture_output=True, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # dispatch_depth defaults to 1 here, so no binding is attempted --
+        # the parser accepted the flag but there is nothing to resolve yet.
+        self.assertIn("parent_attempt_id=-", result.stdout)
+
+
 class OpenCodePermissionDefault(unittest.TestCase):
     # Item 1(b): headless "ask" auto-rejects and truncates the session; "deny"
     # returns a structured tool error instead. Measured 2026-08-07
