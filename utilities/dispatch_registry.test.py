@@ -391,6 +391,74 @@ class RegistryTest(unittest.TestCase):
    child.wait()
 
 
+ def ghost_row(self,attempt,extra=""):
+  """A namespace-local row whose PID is unreadable here, with a fresh heartbeat.
+
+  This is the shape that stayed open forever: classify_attempt_evidence read
+  the freshness, answered `working`, and reconcile had no note to close on.
+  """
+  observer=os.readlink("/proc/self/ns/pid")
+  heartbeats=self.base/".dispatch/heartbeats";heartbeats.mkdir(parents=True,exist_ok=True)
+  (heartbeats/f"{attempt}.json").write_text(json.dumps(
+   {"attempt_id":attempt,"route_id":"r-ghost","route_node":"execute",
+    "phase":"tool","sequence":3,"updated_at":time.time()}))
+  return (f"2026-07-16T00:00:09Z\topen\t/r\t/w\tghost\t"
+          f"route_id=r-ghost,route_node=execute,attempt_id={attempt},"
+          f"pid=99999996,pid_start=1,pid_scope=namespace-local,"
+          f"pid_ns=pid:[inner],pid_observer_ns={observer}{extra}")
+
+ # B-P1. A fresh heartbeat no longer keeps a row open once the scan for its own
+ # tag is provably empty, and the closure says which rule closed it.
+ def test_fresh_heartbeat_row_closes_when_no_tagged_process_survives(self):
+  attempt="att-ghost000001"
+  self.jobs.write_text(self.ghost_row(attempt)+"\n")
+  dry=json.loads(self.invoke("reconcile","--attempt",attempt).stdout)
+  self.assertEqual(dry["closed"],0)
+  self.assertEqual(dry["decisions"][0]["category"],"exact-dead")
+  applied=json.loads(self.invoke("reconcile","--attempt",attempt,"--apply").stdout)
+  self.assertEqual(applied["closed"],1)
+  text=self.jobs.read_text()
+  self.assertIn("note=dead-namespace-absent",text)
+  self.assertNotIn("note=dead-exact-pid",text)
+
+ # B-N2. The same row with one of its own tagged processes actually running
+ # stays active. This is the "no regression on a healthy worker" control.
+ def test_live_tagged_process_keeps_the_ghost_shaped_row_active(self):
+  attempt="att-ghost000002"
+  child=subprocess.Popen([sys.executable,"-c","import time; time.sleep(30)"],
+                         env={**os.environ,"AGENT_DISPATCH_ATTEMPT_ID":attempt})
+  try:
+   self.jobs.write_text(self.ghost_row(attempt)+"\n")
+   record=json.loads(self.invoke("reconcile","--attempt",attempt,"--apply").stdout)
+   self.assertEqual(record["closed"],0)
+   self.assertEqual(record["decisions"][0]["category"],"active")
+   self.assertIn("\topen\t",self.jobs.read_text())
+  finally:
+   child.terminate();child.wait(timeout=5)
+
+ # B-N1. Authoritative liveness is stronger evidence than any scan and is
+ # consulted first, so a live recorded process is never closed by this rule.
+ def test_authoritative_live_identity_is_never_closed_by_the_scan_rule(self):
+  attempt="att-ghost000003"
+  start=(Path("/proc")/str(self.proc.pid)/"stat").read_text().split()[21]
+  self.jobs.write_text(
+   f"2026-07-16T00:00:09Z\topen\t/r\t/w\tghost\troute_id=r-ghost,route_node=execute,"
+   f"attempt_id={attempt},pid={self.proc.pid},pid_start={start}\n")
+  record=json.loads(self.invoke("reconcile","--attempt",attempt,"--apply").stdout)
+  self.assertEqual(record["closed"],0)
+  self.assertEqual(record["decisions"][0]["category"],"active")
+
+ # B-N3. A scan this observer cannot perform is not a death.
+ def test_unscannable_namespace_row_is_not_closed(self):
+  attempt="att-ghost000004"
+  row=self.ghost_row(attempt).replace(
+   os.readlink("/proc/self/ns/pid"),"pid:[elsewhere]")
+  self.jobs.write_text(row+"\n")
+  record=json.loads(self.invoke("reconcile","--attempt",attempt,"--apply").stdout)
+  self.assertEqual(record["closed"],0)
+  self.assertNotIn("note=dead-namespace-absent",self.jobs.read_text())
+
+
 class MixedRegistryTest(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.base=Path(self.tmp.name);self.home=self.base/"home";self.jobs=self.base/"jobs.log"
